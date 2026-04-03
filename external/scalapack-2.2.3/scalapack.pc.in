@@ -1,0 +1,9 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+
+Name: scalapack
+Description: SCALAPACK reference implementation
+Version: @SCALAPACK_VERSION@
+URL: http://www.netlib.org/scalapack/
+Libs: -L${libdir} -lscalapack
+Requires: mpi lapack blas
