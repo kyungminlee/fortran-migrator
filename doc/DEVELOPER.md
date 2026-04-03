@@ -1,5 +1,12 @@
 # Developer Guide
 
+## Additional Documentation
+
+*   [Usage Guide](USAGE.md) — How to run the `pyengine` CLI.
+*   [Migration Recipes](RECIPES.md) — How to write library recipes.
+*   [Architecture](ARCHITECTURE.md) — Technical overview and component details.
+*   [Convergence Testing](CONVERGENCE_TESTING.md) — The dual-origin verification strategy.
+
 ## Project Goal
 
 **fortran-migrator** converts BLAS, LAPACK, BLACS, ScaLAPACK, and similar
