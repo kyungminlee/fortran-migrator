@@ -228,9 +228,15 @@ for the common case.
 - **Source format**: C (`.c`) with headers
 - **Location**: `external/scalapack-2.2.3/BLACS/SRC/`
 - **Notes**: BLACS is implemented entirely in C. Type-specific routines use
-  `d`/`s`/`c`/`z` in C function names. Migration requires C source handling
-  (different from Fortran migration). May need a separate C migration path
-  or manual handling.
+  `d`/`s`/`c`/`z` in C function names. Migration is done via **templated
+  cloning** (clone `d*` → `q*`, `z*` → `x*` with mechanical text
+  substitution) rather than AST-based transformation. The C code is
+  structurally simpler than Fortran — no column constraints, no multi-word
+  type keywords, and type-specific files are near-identical clones of each
+  other. The header `Bdef.h` must be extended to add `QCOMPLEX`/`QREAL`
+  typedefs, copy macros, and Fortran naming `#define` entries. Custom MPI
+  datatypes must be registered for the extended-precision types. A clang
+  parser is not needed. See `recipes/blacs/README.md` for the full recipe.
 
 ### ScaLAPACK (Scalable LAPACK)
 - **Source format**: Fixed-form Fortran (`.f`) and some C (`.c`)
@@ -376,9 +382,19 @@ LLVM build directory.
 8. **`PARAMETER` constants**: e.g., `PARAMETER (ONE=1.0D+0, ZERO=0.0D+0)` —
    both the literal format and the variable type must be consistent.
 
-9. **C interface files (CBLAS, LAPACKE)**: These are C source files that
-   wrap Fortran routines. They require a separate C migration path and are
-   out of scope for the initial Fortran migrator.
+9. **C source files (BLACS, CBLAS, LAPACKE)**: BLACS is implemented
+   entirely in C and uses a template-clone pattern — type-specific files
+   (`dgebr2d_.c`, `sgebr2d_.c`, etc.) are near-identical and differ only
+   in C type names (`double`→`float`) and MPI datatype constants. Migration
+   is done by cloning `d*`→`q*` / `z*`→`x*` with mechanical text
+   substitution on a fixed set of tokens (`double`→`QREAL`,
+   `MPI_DOUBLE`→`MPI_QREAL`, etc.). No clang parser is needed because C
+   types are unambiguous single tokens, there are no column constraints,
+   and no floating-point literal format issues (C has no `D` exponent).
+   New extended-precision type definitions (`QCOMPLEX`, `QREAL`) and
+   custom MPI datatypes are added to the `Bdef.h` header.
+   CBLAS and LAPACKE are C wrappers around Fortran routines and follow
+   a similar clone pattern.
 
 10. **Non-prefixed helper routines**: Some LAPACK internal routines don't
     follow the prefix convention (e.g., `LSAME`, `XERBLA`, `ILAENV`).
