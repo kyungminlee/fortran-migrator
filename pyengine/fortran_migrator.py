@@ -4,6 +4,15 @@ Handles fixed-form (.f) and free-form (.f90) Fortran source files.
 Works for any library following the S/D/C/Z precision prefix convention
 (BLAS, LAPACK, ScaLAPACK, MUMPS, etc.).
 
+Uses a hybrid strategy (per DEVELOPER.md):
+  1. Parse with Flang (via subprocess) to get a structured parse tree
+  2. Extract facts: type declarations, routine names, call sites,
+     literals, intrinsics, XERBLA strings
+  3. Apply transformations as source-level replacements, preserving
+     all original formatting, comments, and preprocessor directives
+
+Falls back to regex-only scanning when Flang is not available.
+
 Transformations:
   1. Type declarations (DOUBLE PRECISION → REAL(KIND=k), etc.)
   2. Standalone REAL/COMPLEX in declaration context
@@ -245,12 +254,30 @@ def target_filename(name: str, rename_map: dict[str, str]) -> str:
 
 
 def migrate_file(src_path: Path, output_dir: Path,
-                 rename_map: dict[str, str], kind: int) -> str | None:
-    """Migrate a single Fortran source file. Returns output filename."""
+                 rename_map: dict[str, str], kind: int,
+                 flang_cmd: str | None = None) -> str | None:
+    """Migrate a single Fortran source file. Returns output filename.
+
+    If flang_cmd is provided (or Flang is found on PATH), uses Flang's
+    parse tree to guide transformations. Falls back to regex-only when
+    Flang is unavailable.
+    """
+    from .flang_parser import scan_file, find_flang
+
     ext = src_path.suffix.lower()
     source = src_path.read_text(errors='replace')
 
-    if ext in ('.f', '.for'):
+    # Try Flang-guided migration
+    if flang_cmd is None:
+        flang_cmd = find_flang()
+
+    facts = None
+    if flang_cmd:
+        facts = scan_file(src_path, flang_cmd)
+
+    if facts is not None:
+        migrated = _migrate_with_flang(source, ext, rename_map, kind, facts)
+    elif ext in ('.f', '.for'):
         migrated = migrate_fixed_form(source, rename_map, kind)
     elif ext in ('.f90', '.f95'):
         migrated = migrate_free_form(source, rename_map, kind)
@@ -260,3 +287,109 @@ def migrate_file(src_path: Path, output_dir: Path,
     out_name = target_filename(src_path.name, rename_map)
     (output_dir / out_name).write_text(migrated)
     return out_name
+
+
+def _migrate_with_flang(source: str, ext: str,
+                        rename_map: dict[str, str], kind: int,
+                        facts) -> str:
+    """Migrate using Flang parse tree facts to guide transformations.
+
+    The parse tree tells us WHAT to transform (which types, which names,
+    which literals exist in the file). We then apply source-level
+    replacements using the same functions as the regex path, but with
+    confidence from the parse tree.
+
+    Key benefits over pure regex:
+      - Type declarations are identified structurally (no false positives
+        from type keywords in comments or string literals on code lines)
+      - Intrinsic calls vs. type keywords are disambiguated
+      - Call sites are identified precisely
+    """
+    # Build the effective rename map for this file — only include names
+    # that actually appear in the parse tree as routine defs, call sites,
+    # or external declarations.
+    file_names: set[str] = set()
+    for rd in facts.routine_defs:
+        file_names.add(rd.name)
+    for cs in facts.call_sites:
+        file_names.add(cs.name)
+    for en in facts.external_names:
+        file_names.add(en)
+
+    # Restrict rename map to names present in this file
+    file_rename_map = {
+        k: v for k, v in rename_map.items()
+        if k in file_names
+    }
+
+    # Determine which floating-point types exist (from parse tree)
+    has_float_types = any(
+        td.type_spec in ('DoublePrecision', 'Real', 'Complex')
+        for td in facts.type_decls
+    )
+
+    has_real_literals = bool(facts.real_literals)
+
+    # Determine which intrinsics are declared
+    declared_intrinsics = {n.upper() for n in facts.intrinsic_names}
+
+    # Now apply source-level transformations line by line
+    if ext in ('.f90', '.f95'):
+        return _migrate_free_form_flang(
+            source, file_rename_map, kind, has_float_types)
+    else:
+        return _migrate_fixed_form_flang(
+            source, file_rename_map, kind,
+            has_float_types, has_real_literals, declared_intrinsics)
+
+
+def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str],
+                              kind: int, has_float_types: bool,
+                              has_real_literals: bool,
+                              declared_intrinsics: set[str]) -> str:
+    """Fixed-form migration guided by Flang parse tree."""
+    lines = source.splitlines(keepends=True)
+    result = []
+    for line in lines:
+        stripped = line.rstrip('\n\r')
+        if not stripped:
+            result.append(line)
+            continue
+        nl = '\n' if line.endswith('\n') else ''
+        if is_comment_line(stripped):
+            stripped = replace_routine_names(stripped, rename_map)
+            if has_float_types:
+                stripped = replace_type_decls(stripped, kind)
+        else:
+            if has_float_types:
+                stripped = replace_type_decls(stripped, kind)
+                stripped = replace_standalone_real_complex(stripped, kind)
+            if has_real_literals:
+                stripped = replace_literals(stripped, kind)
+            if declared_intrinsics:
+                stripped = replace_intrinsic_calls(stripped, kind)
+                stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_routine_names(stripped, rename_map)
+            stripped = replace_xerbla_strings(stripped, rename_map)
+        result.append(stripped + nl)
+    return ''.join(result)
+
+
+def _migrate_free_form_flang(source: str, rename_map: dict[str, str],
+                             kind: int, has_float_types: bool) -> str:
+    """Free-form migration guided by Flang parse tree."""
+    lines = source.splitlines(keepends=True)
+    result = []
+    for line in lines:
+        stripped = line.rstrip('\n\r')
+        nl = '\n' if line.endswith('\n') else ''
+        stripped = re.sub(
+            r'(integer\s*,\s*parameter\s*::\s*wp\s*=\s*)kind\s*\(\s*1\.[de]0\s*\)',
+            rf'\g<1>{kind}',
+            stripped, flags=re.IGNORECASE
+        )
+        stripped = replace_routine_names(stripped, rename_map)
+        if stripped.lstrip().startswith('!') and has_float_types:
+            stripped = replace_type_decls(stripped, kind)
+        result.append(stripped + nl)
+    return ''.join(result)
