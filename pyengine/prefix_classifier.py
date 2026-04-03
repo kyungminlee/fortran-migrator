@@ -31,11 +31,13 @@ PREFIX_MAP: dict[int, dict[str, str]] = {
     16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'},
 }
 
-# Character → type tag
+# Character → type tag (using # prefix to avoid collision with identifiers)
 CHAR_TYPE: dict[str, str] = {
-    'S': 'R', 'D': 'R',    # real
-    'C': 'C', 'Z': 'C',    # complex
+    'S': '#R', 'D': '#R',    # real
+    'C': '#C', 'Z': '#C',    # complex
 }
+# Combined tag when a slot carries both real and complex variants
+CHAR_TYPE_COMBINED = '#T'
 
 # Two passes: single-precision chars and double-precision chars
 SINGLE_CHARS = {'S', 'C'}
@@ -123,12 +125,14 @@ def _find_families_single_pass(
         # Try all non-empty subsets (limit to 3 positions)
         for r in range(1, min(len(candidate_positions) + 1, 4)):
             for positions in combinations(candidate_positions, r):
-                # Build pattern
+                # Build pattern using null byte as placeholder.
+                # Null cannot appear in Fortran/C identifiers,
+                # so it's collision-free as a grouping key.
                 chars = list(sym)
                 type_tags = []
                 for pos in positions:
                     type_tags.append(CHAR_TYPE[sym[pos]])
-                    chars[pos] = '@'
+                    chars[pos] = '#'
                 pattern = ''.join(chars)
 
                 key = (pattern, positions)
@@ -165,17 +169,17 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
     for key, members in double_groups.items():
         if key in all_groups:
             # Merge passes. Type tags may differ at a position when
-            # one pass sees R (S or D) and the other sees C (C or Z).
+            # one pass sees #R (S or D) and the other sees #C (C or Z).
             # This is fine — it means the slot carries both real and
-            # complex variants (a "T" slot, like in a SDCZ quartet).
-            # We upgrade the tag to 'T' when merging R+C.
+            # complex variants (a #T slot, like in a SDCZ quartet).
+            # We upgrade the tag to #T when merging #R+#C.
             existing = all_groups[key]
             existing_tags = next(iter(existing.values()))
             new_tags = next(iter(members.values()))
 
             # Compute merged type tags
             merged_tags = tuple(
-                'T' if et != nt else et
+                CHAR_TYPE_COMBINED if et != nt else et
                 for et, nt in zip(existing_tags, new_tags)
             )
             # Update all existing members to use merged tags
@@ -223,8 +227,10 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
             prec_key = ''.join(sym[p] for p in positions)
             member_dict[prec_key] = sym
 
+        display_pattern = pattern
+
         family = PrecisionFamily(
-            pattern=pattern,
+            pattern=display_pattern,
             members=member_dict,
             slots=slots,
         )
