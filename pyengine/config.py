@@ -25,6 +25,7 @@ class RecipeConfig:
     library_path: Path | None = None
     prefix_style: str = 'direct'      # "direct" or "scalapack"
     skip_files: set[str] = field(default_factory=set)
+    copy_files: set[str] = field(default_factory=set)  # Copy unchanged (multi-precision utilities)
     copy_all_originals: bool = False  # For C: copy all files, then add clones
     patches: list[str] = field(default_factory=list)
 
@@ -59,6 +60,7 @@ def load_recipe(recipe_path: Path,
         library_path = project_root / symbols_cfg['library_path']
 
     skip = set(s.upper() for s in data.get('skip_files', []))
+    copy = set(s.upper() for s in data.get('copy_files', []))
 
     return RecipeConfig(
         library=data['library'],
@@ -69,6 +71,7 @@ def load_recipe(recipe_path: Path,
         library_path=library_path,
         prefix_style=data.get('prefix', {}).get('style', 'direct'),
         skip_files=skip,
+        copy_files=copy,
         copy_all_originals=data.get('copy_all_originals', False),
         patches=data.get('patches', []),
     )

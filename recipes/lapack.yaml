@@ -1,7 +1,7 @@
 library: lapack
 language: fortran
 source_dir: external/lapack-3.12.1/SRC
-extensions: [.f, .f90]
+extensions: [.f, .f90, .F90]
 
 symbols:
   method: scan_source
@@ -9,7 +9,7 @@ symbols:
 prefix:
   style: direct
 
-# Mixed-precision and iterative-refinement routines
+# Mixed-precision / iterative-refinement / cross-precision conversion
 skip_files:
   - ZCGESV
   - DSGESV
@@ -17,3 +17,15 @@ skip_files:
   - DSPOSV
   - ZCGELS
   - DSGELS
+  # Cross-precision type conversion routines
+  - DLAG2S
+  - SLAG2D
+  - CLAG2Z
+  - ZLAG2C
+  - DLAT2S
+  - ZLAT2C
+
+# Multi-precision utility modules — copy unchanged
+copy_files:
+  - LA_CONSTANTS
+  - LA_XISNAN

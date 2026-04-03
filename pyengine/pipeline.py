@@ -13,6 +13,8 @@ from .prefix_classifier import classify_symbols, build_rename_map
 from .fortran_migrator import migrate_file, target_filename
 from .c_migrator import migrate_c_directory
 
+from tqdm import tqdm
+
 
 def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
                           output_dir: Path, kind: int,
@@ -30,10 +32,14 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     copied_count = 0
     skipped: list[str] = []
 
-    for src_path in sorted(config.source_dir.iterdir()):
-        if src_path.suffix.lower() not in config.extensions:
-            continue
+    # Collect eligible source files
+    src_files = sorted(
+        p for p in config.source_dir.iterdir()
+        if p.suffix.lower() in config.extensions
+    )
 
+    for src_path in tqdm(src_files, desc='  Migrating', unit='file',
+                          mininterval=1.0, miniters=10):
         stem_upper = src_path.stem.upper()
 
         if stem_upper in config.skip_files:
@@ -42,10 +48,10 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
 
         if dry_run:
             out_name = target_filename(src_path.name, rename_map)
-            print(f'  {src_path.name} → {out_name}')
+            tqdm.write(f'  {src_path.name} → {out_name}')
             continue
 
-        if stem_upper in independent:
+        if stem_upper in config.copy_files or stem_upper in independent:
             (output_dir / src_path.name).write_text(
                 src_path.read_text(errors='replace'))
             copied_count += 1
@@ -94,6 +100,7 @@ def run_migration(recipe_path: Path, output_dir: Path,
         Summary dict with migration statistics.
     """
     config = load_recipe(recipe_path, project_root)
+    output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f'Library:     {config.library}')

@@ -94,13 +94,19 @@ def replace_literals(line: str, kind: int) -> str:
 # ---------------------------------------------------------------------------
 
 def replace_intrinsic_calls(line: str, kind: int) -> str:
-    """Replace type-specific intrinsic function calls."""
+    """Replace type-specific intrinsic function calls.
+
+    Only replaces when followed by '(' (function call syntax) to avoid
+    renaming variables that happen to share names with intrinsics
+    (e.g., DMIN1 as a local variable vs. DMIN1() intrinsic).
+    """
     for old_name, (new_name, needs_kind) in INTRINSIC_MAP.items():
+        pattern = re.compile(rf'\b{old_name}\s*\(', re.IGNORECASE)
         if needs_kind:
             # Find call with matching parens and add KIND argument
-            pattern = re.compile(rf'\b{old_name}\s*\(', re.IGNORECASE)
+            search_start = 0
             while True:
-                m = pattern.search(line)
+                m = pattern.search(line, search_start)
                 if not m:
                     break
                 start = m.start()
@@ -115,14 +121,104 @@ def replace_intrinsic_calls(line: str, kind: int) -> str:
                 if depth == 0:
                     close_pos = pos - 1
                     inner = line[paren_start + 1:close_pos]
+                    # Skip type declarations: REAL(KIND=16), REAL(4),
+                    # REAL(wp), COMPLEX(dp), etc.
+                    inner_stripped = inner.strip().upper()
+                    if (re.match(r'KIND\s*=', inner_stripped)
+                            or inner_stripped.isdigit()
+                            or re.match(r'^[A-Z_]\w*$', inner_stripped)):
+                        search_start = pos
+                        continue
+                    # Skip if KIND= already present (from prior replacement)
+                    if re.search(r'\bKIND\s*=', inner, re.IGNORECASE):
+                        search_start = pos
+                        continue
                     replacement = f'{new_name}({inner}, KIND={kind})'
                     line = line[:start] + replacement + line[close_pos + 1:]
+                    search_start = start + len(replacement)
                 else:
+                    # Call spans continuation lines — just replace the name
+                    if old_name.upper() != new_name.upper():
+                        matched = line[start:m.end() - 1]
+                        if matched.isupper():
+                            repl = new_name.upper()
+                        elif matched.islower():
+                            repl = new_name.lower()
+                        else:
+                            repl = new_name.upper()
+                        line = line[:start] + repl + line[start + len(matched):]
                     break
         else:
+            # Replace only the name part before '(', not bare occurrences
+            def _call_replace(m, _new=new_name):
+                matched_name = m.group(1)
+                rest = m.group(2)  # whitespace + '('
+                if matched_name.isupper():
+                    return _new.upper() + rest
+                elif matched_name.islower():
+                    return _new.lower() + rest
+                return _new.upper() + rest
+
             line = re.sub(
-                rf'\b{old_name}\b', new_name, line, flags=re.IGNORECASE
+                rf'\b({old_name})(\s*\()', _call_replace, line,
+                flags=re.IGNORECASE
             )
+    return line
+
+
+def replace_generic_conversions(line: str, kind: int) -> str:
+    """Add KIND to generic REAL() and CMPLX() calls in expression context.
+
+    Distinguishes function calls from type declarations by checking
+    what precedes the call: operators/commas/parens indicate expression
+    context, while line-start indicates a type declaration.
+    """
+    # Pattern: REAL or CMPLX preceded by expression-context character
+    for name in ('REAL', 'CMPLX'):
+        pattern = re.compile(
+            rf'(?<=[=+\-*/,(])\s*\b({name})\s*\(', re.IGNORECASE
+        )
+        search_start = 0
+        while True:
+            m = pattern.search(line, search_start)
+            if not m:
+                break
+            # Find the name start and paren
+            name_start = m.start(1)
+            paren_start = line.index('(', name_start)
+            depth, pos = 1, paren_start + 1
+            while pos < len(line) and depth > 0:
+                if line[pos] == '(':
+                    depth += 1
+                elif line[pos] == ')':
+                    depth -= 1
+                pos += 1
+            if depth != 0:
+                break  # multi-line call, skip
+            close_pos = pos - 1
+            inner = line[paren_start + 1:close_pos]
+            if re.search(r'\bKIND\s*=', inner, re.IGNORECASE):
+                search_start = pos
+                continue
+            # Count top-level commas (not inside nested parens)
+            top_commas = 0
+            d = 0
+            for ch in inner:
+                if ch == '(':
+                    d += 1
+                elif ch == ')':
+                    d -= 1
+                elif ch == ',' and d == 0:
+                    top_commas += 1
+            # REAL(x, kind) already has kind as 2nd arg; skip
+            # CMPLX(x, y, kind) already has kind as 3rd arg; skip
+            max_args = 1 if name == 'REAL' else 2
+            if top_commas >= max_args:
+                search_start = pos
+                continue
+            replacement = f'{name}({inner}, KIND={kind})'
+            line = line[:name_start] + replacement + line[close_pos + 1:]
+            search_start = name_start + len(replacement)
     return line
 
 
@@ -190,6 +286,9 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
         return line
     if is_comment_line(line):
         return line  # Don't split comments
+    # Don't split lines where everything past column 6 is a ! comment
+    if len(line) > 6 and line[6:].lstrip().startswith('!'):
+        return line
 
     # Extract label/continuation prefix (columns 1-6) and statement body
     prefix = line[:6] if len(line) >= 6 else line.ljust(6)
@@ -237,6 +336,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str],
             stripped = replace_literals(stripped, kind)
             stripped = replace_intrinsic_calls(stripped, kind)
             stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_generic_conversions(stripped, kind)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
             # Handle column 72 overflow
@@ -249,13 +349,31 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str],
 # Free-form (.f90) migration
 # ---------------------------------------------------------------------------
 
+# Regex for kind parameter definitions:
+#   integer, parameter :: wp = kind(1.d0)
+#   integer, parameter :: sp = kind(1.e0)
+#   integer, parameter :: dp = real64
+_KIND_PARAM_NAMES = r'(?:wp|sp|dp)'
+_KIND_PARAM_VALUES = r'(?:kind\s*\(\s*1\.[de]0\s*\)|real(?:32|64|128))'
+_KIND_PARAM_RE = re.compile(
+    rf'(integer\s*,\s*parameter\s*::\s*{_KIND_PARAM_NAMES}\s*=\s*){_KIND_PARAM_VALUES}',
+    re.IGNORECASE,
+)
+
+
+def _replace_kind_parameter(line: str, kind: int) -> str:
+    """Replace working-precision parameter definitions."""
+    return _KIND_PARAM_RE.sub(rf'\g<1>{kind}', line)
+
+
 def migrate_free_form(source: str, rename_map: dict[str, str],
                       kind: int) -> str:
     """Migrate a free-form Fortran file (.f90).
 
     These files typically use parameterized types via:
-        integer, parameter :: wp = kind(1.d0)
-    We change the wp definition and rename routines.
+        integer, parameter :: wp = kind(1.d0)  -- or --
+        integer, parameter :: wp = real64       (iso_fortran_env)
+    We change the wp/sp/dp definition and rename routines.
     """
     lines = source.splitlines(keepends=True)
     result = []
@@ -263,12 +381,12 @@ def migrate_free_form(source: str, rename_map: dict[str, str],
         stripped = line.rstrip('\n\r')
         nl = '\n' if line.endswith('\n') else ''
 
-        # Change wp parameter definition
-        stripped = re.sub(
-            r'(integer\s*,\s*parameter\s*::\s*wp\s*=\s*)kind\s*\(\s*1\.[de]0\s*\)',
-            rf'\g<1>{kind}',
-            stripped, flags=re.IGNORECASE
-        )
+        # Change working-precision parameter definition
+        stripped = _replace_kind_parameter(stripped, kind)
+        if not stripped.lstrip().startswith('!'):
+            stripped = replace_intrinsic_calls(stripped, kind)
+            stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_generic_conversions(stripped, kind)
         stripped = replace_routine_names(stripped, rename_map)
 
         # Replace type names in comment lines
@@ -324,7 +442,7 @@ def migrate_file(src_path: Path, output_dir: Path,
         migrated = _migrate_with_flang(source, ext, rename_map, kind, facts)
     elif ext in ('.f', '.for'):
         migrated = migrate_fixed_form(source, rename_map, kind)
-    elif ext in ('.f90', '.f95'):
+    elif ext in ('.f90', '.f95', '.F90'):
         migrated = migrate_free_form(source, rename_map, kind)
     else:
         return None
@@ -375,23 +493,19 @@ def _migrate_with_flang(source: str, ext: str,
 
     has_real_literals = bool(facts.real_literals)
 
-    # Determine which intrinsics are declared
-    declared_intrinsics = {n.upper() for n in facts.intrinsic_names}
-
     # Now apply source-level transformations line by line
-    if ext in ('.f90', '.f95'):
+    if ext in ('.f90', '.f95', '.F90'):
         return _migrate_free_form_flang(
             source, file_rename_map, kind, has_float_types)
     else:
         return _migrate_fixed_form_flang(
             source, file_rename_map, kind,
-            has_float_types, has_real_literals, declared_intrinsics)
+            has_float_types, has_real_literals)
 
 
 def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str],
                               kind: int, has_float_types: bool,
-                              has_real_literals: bool,
-                              declared_intrinsics: set[str]) -> str:
+                              has_real_literals: bool) -> str:
     """Fixed-form migration guided by Flang parse tree."""
     lines = source.splitlines(keepends=True)
     result = []
@@ -411,9 +525,9 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str],
                 stripped = replace_standalone_real_complex(stripped, kind)
             if has_real_literals:
                 stripped = replace_literals(stripped, kind)
-            if declared_intrinsics:
-                stripped = replace_intrinsic_calls(stripped, kind)
-                stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_intrinsic_calls(stripped, kind)
+            stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_generic_conversions(stripped, kind)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
             stripped = reformat_fixed_line(stripped)
@@ -429,11 +543,11 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str],
     for line in lines:
         stripped = line.rstrip('\n\r')
         nl = '\n' if line.endswith('\n') else ''
-        stripped = re.sub(
-            r'(integer\s*,\s*parameter\s*::\s*wp\s*=\s*)kind\s*\(\s*1\.[de]0\s*\)',
-            rf'\g<1>{kind}',
-            stripped, flags=re.IGNORECASE
-        )
+        stripped = _replace_kind_parameter(stripped, kind)
+        if not stripped.lstrip().startswith('!'):
+            stripped = replace_intrinsic_calls(stripped, kind)
+            stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_generic_conversions(stripped, kind)
         stripped = replace_routine_names(stripped, rename_map)
         if stripped.lstrip().startswith('!') and has_float_types:
             stripped = replace_type_decls(stripped, kind)
