@@ -9,22 +9,8 @@ symbols:
 prefix:
   style: direct
 
-# Mixed-precision routines — these mix two precision types and have
-# no straightforward single-kind migration.
+# Cross-precision routines — these mix single and double precision
+# (e.g., double result from single inputs). No single-kind target.
 skip_files:
-  - DSDOT
-  - SDSDOT
-  - CSROT
-  - ZDROT
-  - CSSCAL
-  - ZDSCAL
-  - SCASUM
-  - DZASUM
-  - SCNRM2
-  - DZNRM2
-  - DCABS1
-  - SCABS1
-  - ICAMAX
-  - IZAMAX
-  - ISAMAX
-  - IDAMAX
+  - DSDOT    # double result from single·single dot product
+  - SDSDOT   # single result with double accumulator

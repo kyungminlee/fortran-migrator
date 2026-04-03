@@ -174,6 +174,49 @@ def is_comment_line(line: str) -> bool:
     return bool(line) and line[0] in ('C', 'c', '*', '!')
 
 
+def is_continuation_line(line: str) -> bool:
+    """Check if a fixed-form line is a continuation."""
+    return len(line) > 5 and line[0:5].strip() == '' and line[5] not in (' ', '0', '')
+
+
+def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
+    """Split a fixed-form code line that exceeds column 72.
+
+    Splits the statement portion into chunks that fit within columns 7-72
+    (66 chars per line), using continuation lines with the given character
+    in column 6.
+    """
+    if len(line) <= 72:
+        return line
+    if is_comment_line(line):
+        return line  # Don't split comments
+
+    # Extract label/continuation prefix (columns 1-6) and statement body
+    prefix = line[:6] if len(line) >= 6 else line.ljust(6)
+    body = line[6:]
+
+    # Split body into 66-char chunks
+    chunks = []
+    while len(body) > 66:
+        # Try to break at a comma or space
+        split_pos = 66
+        for i in range(65, max(19, 65 - 30), -1):
+            if body[i] in (',', ' '):
+                split_pos = i + 1
+                break
+        chunks.append(body[:split_pos])
+        body = body[split_pos:]
+    chunks.append(body)
+
+    # Reassemble: first chunk with original prefix, rest with continuation
+    result_lines = [prefix + chunks[0]]
+    cont_prefix = '     ' + cont_char
+    for chunk in chunks[1:]:
+        result_lines.append(cont_prefix + chunk)
+
+    return '\n'.join(result_lines)
+
+
 def migrate_fixed_form(source: str, rename_map: dict[str, str],
                        kind: int) -> str:
     """Migrate a fixed-form Fortran file."""
@@ -196,6 +239,8 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str],
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
+            # Handle column 72 overflow
+            stripped = reformat_fixed_line(stripped)
         result.append(stripped + nl)
     return ''.join(result)
 
@@ -371,6 +416,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str],
                 stripped = replace_intrinsic_decls(stripped)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
+            stripped = reformat_fixed_line(stripped)
         result.append(stripped + nl)
     return ''.join(result)
 

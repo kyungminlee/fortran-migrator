@@ -59,12 +59,12 @@ SKIP=0
 
         if $FC $FFLAGS -o "$obj" "$src" 2>"${base}.err"; then
             echo "  PASS: $base"
-            ((PASS++))
+            PASS=$((PASS+1))
             rm -f "${base}.err"
         else
             echo "  FAIL: $base"
             sed 's/^/    /' "${base}.err"
-            ((FAIL++))
+            FAIL=$((FAIL+1))
         fi
     done
 
