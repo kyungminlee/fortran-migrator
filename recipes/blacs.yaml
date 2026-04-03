@@ -1,0 +1,14 @@
+library: blacs
+language: c
+source_dir: external/scalapack-2.2.3/BLACS/SRC
+extensions: [.c, .h]
+
+symbols:
+  method: scan_source
+
+prefix:
+  style: direct
+
+copy_all_originals: true
+
+skip_files: []

@@ -1,0 +1,12 @@
+library: scalapack
+language: fortran
+source_dir: external/scalapack-2.2.3/SRC
+extensions: [.f, .f90]
+
+symbols:
+  method: scan_source
+
+prefix:
+  style: scalapack  # P + S/D/C/Z
+
+skip_files: []

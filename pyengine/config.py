@@ -1,0 +1,74 @@
+"""Recipe configuration loader.
+
+Recipes are YAML files that describe a library's source layout and
+migration parameters. The engine reads a recipe and performs the
+appropriate migration.
+"""
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    yaml = None  # type: ignore[assignment]
+
+
+@dataclass
+class RecipeConfig:
+    """Configuration for a single library migration."""
+    library: str
+    language: str                     # "fortran" or "c"
+    source_dir: Path
+    extensions: list[str]
+    symbols_method: str = 'scan_source'  # "scan_source" or "nm_library"
+    library_path: Path | None = None
+    prefix_style: str = 'direct'      # "direct" or "scalapack"
+    skip_files: set[str] = field(default_factory=set)
+    copy_all_originals: bool = False  # For C: copy all files, then add clones
+    patches: list[str] = field(default_factory=list)
+
+
+def load_recipe(recipe_path: Path,
+                project_root: Path | None = None) -> RecipeConfig:
+    """Load a recipe YAML file.
+
+    Args:
+        recipe_path: Path to the .yaml recipe file.
+        project_root: Project root for resolving relative paths.
+            Defaults to recipe_path's grandparent.
+    """
+    if yaml is None:
+        raise ImportError(
+            'PyYAML is required to load recipe configs. '
+            'Install it with: pip install pyyaml'
+        )
+
+    if project_root is None:
+        # recipes/*.yaml → project root is two levels up
+        project_root = recipe_path.parent.parent
+
+    with open(recipe_path) as f:
+        data = yaml.safe_load(f)
+
+    source_dir = project_root / data['source_dir']
+
+    library_path = None
+    symbols_cfg = data.get('symbols', {})
+    if symbols_cfg.get('library_path'):
+        library_path = project_root / symbols_cfg['library_path']
+
+    skip = set(s.upper() for s in data.get('skip_files', []))
+
+    return RecipeConfig(
+        library=data['library'],
+        language=data['language'],
+        source_dir=source_dir,
+        extensions=data.get('extensions', ['.f', '.f90']),
+        symbols_method=symbols_cfg.get('method', 'scan_source'),
+        library_path=library_path,
+        prefix_style=data.get('prefix', {}).get('style', 'direct'),
+        skip_files=skip,
+        copy_all_originals=data.get('copy_all_originals', False),
+        patches=data.get('patches', []),
+    )

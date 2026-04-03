@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # 02-migrate.sh — Migrate BLAS source files to extended precision.
 #
-# Uses the Python migration engine (migrate_blas.py) to convert all
-# BLAS source files to the target KIND precision.
+# Uses the general-purpose pyengine pipeline with recipes/blas.yaml.
 #
 # Usage: ./recipes/blas/02-migrate.sh [--kind 10|16] [--dry-run]
 
@@ -34,12 +33,13 @@ echo "Source:  $BLAS_SRC"
 echo "Output:  $OUTPUT_DIR"
 echo ""
 
-# Run the Python migration engine
-python3 "${SCRIPT_DIR}/migrate_blas.py" \
-    --kind "$TARGET_KIND" \
-    $DRY_RUN \
-    "$BLAS_SRC" \
+# Run the general-purpose migration engine
+uv run python -m pyengine \
+    "${PROJECT_ROOT}/recipes/blas.yaml" \
     "$OUTPUT_DIR" \
+    --kind "$TARGET_KIND" \
+    --project-root "$PROJECT_ROOT" \
+    $DRY_RUN \
     2>&1 | tee "${REPORT_DIR}/migrate.log"
 
 # --------------------------------------------------------------------------
@@ -53,7 +53,6 @@ if [[ -z "$DRY_RUN" ]]; then
     echo "Input files:  $input_count"
     echo "Output files: $output_count"
 
-    # List renamed files
     if [[ "$output_count" -gt 0 ]]; then
         echo ""
         echo "Output files:"

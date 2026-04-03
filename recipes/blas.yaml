@@ -1,0 +1,30 @@
+library: blas
+language: fortran
+source_dir: external/lapack-3.12.1/BLAS/SRC
+extensions: [.f, .f90]
+
+symbols:
+  method: scan_source
+
+prefix:
+  style: direct
+
+# Mixed-precision routines — these mix two precision types and have
+# no straightforward single-kind migration.
+skip_files:
+  - DSDOT
+  - SDSDOT
+  - CSROT
+  - ZDROT
+  - CSSCAL
+  - ZDSCAL
+  - SCASUM
+  - DZASUM
+  - SCNRM2
+  - DZNRM2
+  - DCABS1
+  - SCABS1
+  - ICAMAX
+  - IZAMAX
+  - ISAMAX
+  - IDAMAX
