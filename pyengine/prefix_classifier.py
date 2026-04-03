@@ -36,6 +36,11 @@ def classify_prefix(name: str, style: str = 'direct') -> tuple[str, str]:
     if name[0] in PRECISION_CHARS:
         return (name[0], name[1:])
 
+    # I-prefixed routines: ISAMAX, IDAMAX, ICAMAX, IZAMAX
+    # The precision character is at position 1.
+    if len(name) > 2 and name[0] == 'I' and name[1] in PRECISION_CHARS:
+        return (name[1], 'I' + name[2:])
+
     return ('', name)
 
 

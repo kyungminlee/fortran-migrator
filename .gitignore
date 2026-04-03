@@ -1,0 +1,17 @@
+# Build artifacts
+build/
+.cache/
+compile_commands.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# External source tarballs
+external/*.tar.gz
+
+# Work directories (migration output)
+work/
+_build/
+_lib/
