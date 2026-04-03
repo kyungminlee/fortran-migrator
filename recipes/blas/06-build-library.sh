@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# 06-build-library.sh — Build migrated BLAS into a static library.
+# 06-build-library.sh — Build migrated BLAS into static libraries.
 #
-# Compiles all migrated source files and archives them into a static
-# library (e.g., libblas_q.a for KIND=16).
+# Produces two libraries:
+#   libblas_common.a  — type-independent routines (LSAME, XERBLA, ...)
+#   libqblas.a        — precision-specific routines (Q/X/I-prefix)
 #
 # Usage: ./recipes/blas/06-build-library.sh [--kind 10|16]
 
@@ -11,18 +12,20 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/00-setup.sh" "$@"
 
-echo "=== Building BLAS library (KIND=$TARGET_KIND) ==="
+echo "=== Building BLAS libraries (KIND=$TARGET_KIND) ==="
 
 # --------------------------------------------------------------------------
-# Determine library name
+# Determine library names
 # --------------------------------------------------------------------------
 if [[ "$TARGET_KIND" == "10" ]]; then
     LIB_NAME="libeblas.a"
 else
     LIB_NAME="libqblas.a"
 fi
+COMMON_LIB_NAME="libblas_common.a"
 
-LIB_PATH="${BUILD_DIR}/${LIB_NAME}"
+# Type-independent source files (no precision prefix)
+COMMON_FILES="lsame.f xerbla.f xerbla_array.f"
 
 # --------------------------------------------------------------------------
 # Find tools
@@ -38,7 +41,6 @@ fi
 
 echo "Compiler: $FC"
 echo "Archiver: $AR"
-echo "Library:  $LIB_PATH"
 echo ""
 
 # --------------------------------------------------------------------------
@@ -47,7 +49,7 @@ echo ""
 FFLAGS="${FFLAGS:--O2 -w}"
 
 # --------------------------------------------------------------------------
-# Compile
+# Check input
 # --------------------------------------------------------------------------
 if [[ ! -d "$OUTPUT_DIR" ]] || ! ls "$OUTPUT_DIR"/*.f &>/dev/null 2>&1; then
     echo "Error: No migrated files found in $OUTPUT_DIR" >&2
@@ -56,26 +58,73 @@ if [[ ! -d "$OUTPUT_DIR" ]] || ! ls "$OUTPUT_DIR"/*.f &>/dev/null 2>&1; then
 fi
 
 cd "$BUILD_DIR"
-rm -f *.o "$LIB_NAME"
+rm -f *.o *.a
 
-SOURCES=()
+# --------------------------------------------------------------------------
+# Classify source files into common vs precision-specific
+# --------------------------------------------------------------------------
+COMMON_SOURCES=()
+PRECISION_SOURCES=()
+
 for src in "$OUTPUT_DIR"/*.f "$OUTPUT_DIR"/*.f90; do
     [[ -f "$src" ]] || continue
-    SOURCES+=("$src")
+    base=$(basename "$src")
+    is_common=false
+    for cf in $COMMON_FILES; do
+        if [[ "$base" == "$cf" ]]; then
+            is_common=true
+            break
+        fi
+    done
+    if $is_common; then
+        COMMON_SOURCES+=("$src")
+    else
+        PRECISION_SOURCES+=("$src")
+    fi
 done
 
-echo "Compiling ${#SOURCES[@]} files..."
+echo "Common files:    ${#COMMON_SOURCES[@]}"
+echo "Precision files: ${#PRECISION_SOURCES[@]}"
+echo ""
 
+# --------------------------------------------------------------------------
+# Compile and archive common library
+# --------------------------------------------------------------------------
+echo "--- Building $COMMON_LIB_NAME ---"
+COMMON_OBJECTS=()
 FAIL=0
-OBJECTS=()
-for src in "${SOURCES[@]}"; do
+for src in "${COMMON_SOURCES[@]}"; do
     base=$(basename "$src")
     obj="${base%.*}.o"
     if $FC $FFLAGS -c -o "$obj" "$src" 2>/dev/null; then
-        OBJECTS+=("$obj")
+        COMMON_OBJECTS+=("$obj")
     else
         echo "  FAIL: $base"
-        ((FAIL++))
+        FAIL=$((FAIL+1))
+    fi
+done
+
+if [[ ${#COMMON_OBJECTS[@]} -gt 0 ]]; then
+    $AR rcs "$COMMON_LIB_NAME" "${COMMON_OBJECTS[@]}"
+    $RANLIB "$COMMON_LIB_NAME"
+    echo "  Built: $COMMON_LIB_NAME ($(du -h "$COMMON_LIB_NAME" | cut -f1))"
+    nm "$COMMON_LIB_NAME" | grep ' T ' | awk '{print $3}' | sed 's/^_//;s/_$//' | tr 'a-z' 'A-Z' | grep -v LTMP | sort -u | sed 's/^/    /'
+fi
+echo ""
+
+# --------------------------------------------------------------------------
+# Compile and archive precision-specific library
+# --------------------------------------------------------------------------
+echo "--- Building $LIB_NAME ---"
+PRECISION_OBJECTS=()
+for src in "${PRECISION_SOURCES[@]}"; do
+    base=$(basename "$src")
+    obj="prec_${base%.*}.o"  # prefix to avoid name collision with common
+    if $FC $FFLAGS -c -o "$obj" "$src" 2>/dev/null; then
+        PRECISION_OBJECTS+=("$obj")
+    else
+        echo "  FAIL: $base"
+        FAIL=$((FAIL+1))
     fi
 done
 
@@ -86,34 +135,33 @@ if [[ "$FAIL" -gt 0 ]]; then
     exit 1
 fi
 
-# --------------------------------------------------------------------------
-# Archive
-# --------------------------------------------------------------------------
-echo "Archiving ${#OBJECTS[@]} objects into $LIB_NAME..."
-$AR rcs "$LIB_NAME" "${OBJECTS[@]}"
+$AR rcs "$LIB_NAME" "${PRECISION_OBJECTS[@]}"
 $RANLIB "$LIB_NAME"
+echo "  Built: $LIB_NAME ($(du -h "$LIB_NAME" | cut -f1))"
 
 # --------------------------------------------------------------------------
-# Symbol verification
+# Symbol report
 # --------------------------------------------------------------------------
 SYMBOL_REPORT="${REPORT_DIR}/library-symbols.txt"
 
-echo ""
-echo "=== Library Symbol Report ==="
+{
+    echo "# Library Symbol Report"
+    echo "# Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo ""
+    echo "## $COMMON_LIB_NAME"
+    nm "$COMMON_LIB_NAME" | grep ' T ' | awk '{print $3}' | sed 's/^_//;s/_$//' | tr 'a-z' 'A-Z' | grep -v LTMP | sort -u
+    echo ""
+    echo "## $LIB_NAME"
+    nm "$LIB_NAME" | grep ' T ' | awk '{print $3}' | sed 's/^_//;s/_$//' | tr 'a-z' 'A-Z' | grep -v LTMP | sort -u
+} > "$SYMBOL_REPORT"
 
-nm "$LIB_PATH" | grep ' [TtWw] ' | awk '{print $3}' | sort > "$SYMBOL_REPORT"
-
-total=$(wc -l < "$SYMBOL_REPORT" | tr -d ' ')
-echo "Total exported symbols: $total"
-echo "Symbol list: $SYMBOL_REPORT"
-
-# Show a sample
-echo ""
-echo "Sample symbols:"
-head -20 "$SYMBOL_REPORT" | sed 's/^/  /'
-if [[ "$total" -gt 20 ]]; then
-    echo "  ... ($((total - 20)) more)"
-fi
+q_count=$(nm "$LIB_NAME" | grep ' T ' | awk '{print $3}' | sed 's/^_//;s/_$//' | tr 'a-z' 'A-Z' | grep '^Q' | sort -u | wc -l | tr -d ' ')
+x_count=$(nm "$LIB_NAME" | grep ' T ' | awk '{print $3}' | sed 's/^_//;s/_$//' | tr 'a-z' 'A-Z' | grep '^X' | grep -v XERBLA | sort -u | wc -l | tr -d ' ')
+i_count=$(nm "$LIB_NAME" | grep ' T ' | awk '{print $3}' | sed 's/^_//;s/_$//' | tr 'a-z' 'A-Z' | grep '^I' | sort -u | wc -l | tr -d ' ')
 
 echo ""
-echo "Library built: $LIB_PATH ($(du -h "$LIB_PATH" | cut -f1))"
+echo "=== Summary ==="
+echo "  $COMMON_LIB_NAME: type-independent routines"
+echo "  $LIB_NAME:        $q_count Q-prefix + $x_count X-prefix + $i_count I-prefix"
+echo ""
+echo "Symbol report: $SYMBOL_REPORT"

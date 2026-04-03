@@ -442,12 +442,23 @@ gfortran -c -fdefault-real-16 *.f *.f90
 gfortran -c *.f *.f90  # Should work if all types use explicit KIND=16
 ```
 
-### Step 5: Build Library
+### Step 5: Build Libraries
+
+The migrated output is split into two libraries:
+- `libblas_common.a` — type-independent routines (LSAME, XERBLA, XERBLA_ARRAY)
+- `libqblas.a` — precision-specific routines (Q/X/I-prefix)
+
+This separation applies to all libraries (LAPACK, ScaLAPACK, etc.):
+the common library is shared across all precision variants and linked once.
 
 ```bash
-ar rcs libblas_q.a *.o
-# Verify all expected symbols exist:
-nm libblas_q.a | grep ' T ' | sort
+# Archive common (type-independent) objects
+ar rcs libblas_common.a lsame.o xerbla.o xerbla_array.o
+
+# Archive precision-specific objects (everything else)
+ar rcs libqblas.a q*.o x*.o i*.o
+
+# Link order: -lqblas -lblas_common
 ```
 
 ---
