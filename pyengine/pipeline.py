@@ -9,22 +9,22 @@ from pathlib import Path
 
 from .config import RecipeConfig, load_recipe
 from .symbol_scanner import scan_symbols
-from .prefix_classifier import classify_prefix, build_rename_map
+from .prefix_classifier import classify_symbols, build_rename_map
 from .fortran_migrator import migrate_file, target_filename
 from .c_migrator import migrate_c_directory
 
 
 def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
                           output_dir: Path, kind: int,
-                          dry_run: bool = False) -> dict:
+                          dry_run: bool = False,
+                          classification=None) -> dict:
     """Run Fortran migration pipeline."""
     # Identify precision-independent symbols
-    independent: set[str] = set()
-    for sym in scan_symbols(config.source_dir, config.language,
-                            config.extensions, config.library_path):
-        pfx, _ = classify_prefix(sym, config.prefix_style)
-        if not pfx:
-            independent.add(sym)
+    if classification is None:
+        symbols = scan_symbols(config.source_dir, config.language,
+                               config.extensions, config.library_path)
+        classification = classify_symbols(symbols)
+    independent = classification.independent
 
     migrated_count = 0
     copied_count = 0
@@ -103,14 +103,17 @@ def run_migration(recipe_path: Path, output_dir: Path,
     print(f'Prefix:      {config.prefix_style}')
     print()
 
-    # Scan symbols and build rename map
+    # Scan symbols and classify precision families
     print('Scanning symbols...')
     symbols = scan_symbols(
         config.source_dir, config.language,
         config.extensions, config.library_path
     )
-    rename_map = build_rename_map(symbols, target_kind, config.prefix_style)
+    classification = classify_symbols(symbols)
+    rename_map = classification.build_rename_map(target_kind)
     print(f'  {len(symbols)} symbols found')
+    print(f'  {len(classification.families)} precision families')
+    print(f'  {len(classification.independent)} independent symbols')
     print(f'  {len(rename_map)} renames computed')
 
     # Dispatch to language-specific migrator
@@ -118,7 +121,8 @@ def run_migration(recipe_path: Path, output_dir: Path,
 
     if config.language == 'fortran':
         result = run_fortran_migration(
-            config, rename_map, output_dir, target_kind, dry_run
+            config, rename_map, output_dir, target_kind, dry_run,
+            classification=classification
         )
         if not dry_run:
             print(f'\n  Migrated: {result["migrated"]} files')

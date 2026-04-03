@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .config import load_recipe
 from .pipeline import run_migration
-from .prefix_classifier import classify_prefix, build_rename_map, PREFIX_MAP
+from .prefix_classifier import classify_symbols, build_rename_map, PREFIX_MAP
 from .symbol_scanner import scan_symbols
 
 
@@ -167,14 +167,11 @@ def cmd_build(args):
     precision_lib = f'lib{real_pfx}{lib_name}.a'
     common_lib = f'lib{lib_name}_common.a'
 
-    # Identify type-independent files via symbol database
+    # Identify type-independent files via symbol classification
     symbols = scan_symbols(config.source_dir, config.language,
                            config.extensions, config.library_path)
-    independent = set()
-    for sym in symbols:
-        pfx, _ = classify_prefix(sym, config.prefix_style)
-        if not pfx:
-            independent.add(sym)
+    classification = classify_symbols(symbols)
+    independent = classification.independent
 
     # Classify source files
     files = sorted(list(out_dir.glob('*.f')) + list(out_dir.glob('*.f90')))

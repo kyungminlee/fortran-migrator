@@ -2,18 +2,22 @@
 
 Discovers precision structure by analyzing the full symbol set in two passes:
 
-  Pass 1 (single precision): Replace S→@R@, C→@C@ at candidate positions.
-  Pass 2 (double precision): Replace D→@R@, Z→@C@ at candidate positions.
+  Pass 1 (single precision): Replace S→@, C→@ at candidate positions.
+  Pass 2 (double precision): Replace D→@, Z→@ at candidate positions.
 
 Within each pass, symbols are grouped by their normalized pattern.
 Groups of 2+ reveal precision-dependent families. Families from both
-passes that share the same base pattern are merged into a single family.
+passes sharing the same base pattern are merged.
+
+Each replaced position carries a **type tag** (R=real, C=complex) so
+that multi-position patterns like DZNRM2→@@NRM2 know position 0 is
+real and position 1 is complex — not just "some precision char."
 
 This naturally handles any prefix convention without hardcoding:
-  - Direct:      SGEMM/DGEMM/CGEMM/ZGEMM → @T@GEMM
-  - I-prefix:    ISAMAX/IDAMAX/ICAMAX/IZAMAX → I@T@AMAX
-  - ScaLAPACK:   PSGESV/PDGESV → P@T@GESV
-  - Cross-type:  CSROT(pass1)→@@ROT, ZDROT(pass2)→@@ROT → merged
+  - Direct:      SGEMM/DGEMM/CGEMM/ZGEMM → @GEMM
+  - I-prefix:    ISAMAX/IDAMAX/ICAMAX/IZAMAX → I@AMAX
+  - ScaLAPACK:   PSGESV/PDGESV → P@GESV
+  - Cross-type:  CSROT/ZDROT → @@ROT (pos0=C, pos1=R)
 """
 
 from __future__ import annotations
@@ -27,18 +31,35 @@ PREFIX_MAP: dict[int, dict[str, str]] = {
     16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'},
 }
 
+# Character → type tag
+CHAR_TYPE: dict[str, str] = {
+    'S': 'R', 'D': 'R',    # real
+    'C': 'C', 'Z': 'C',    # complex
+}
+
 # Two passes: single-precision chars and double-precision chars
-SINGLE_CHARS = {'S', 'C'}  # S=real, C=complex
-DOUBLE_CHARS = {'D', 'Z'}  # D=real, Z=complex
+SINGLE_CHARS = {'S', 'C'}
+DOUBLE_CHARS = {'D', 'Z'}
+
+
+@dataclass
+class PrecisionSlot:
+    """One position in a symbol that carries a precision character."""
+    position: int
+    type_tag: str    # 'R' (real) or 'C' (complex)
 
 
 @dataclass
 class PrecisionFamily:
     """A group of symbols sharing the same base pattern with
     precision-character variations."""
-    pattern: str                    # e.g., '@GEMM', 'I@AMAX', '@@ROT'
-    members: dict[str, str]         # precision_key → symbol name
-    prefix_positions: list[int]     # positions of precision chars
+    pattern: str                     # e.g., '@GEMM', '@@ROT'
+    members: dict[str, str]          # precision_key → symbol name
+    slots: list[PrecisionSlot]       # positions + type tags
+
+    @property
+    def prefix_positions(self) -> list[int]:
+        return [s.position for s in self.slots]
 
 
 @dataclass
@@ -64,10 +85,10 @@ class SymbolClassification:
 
         pmap = PREFIX_MAP[target_kind]
         result = list(upper)
-        for pos in family.prefix_positions:
-            old_char = upper[pos]
+        for slot in family.slots:
+            old_char = upper[slot.position]
             if old_char in pmap:
-                result[pos] = pmap[old_char]
+                result[slot.position] = pmap[old_char]
         return ''.join(result)
 
     def build_rename_map(self, target_kind: int) -> dict[str, str]:
@@ -83,16 +104,13 @@ class SymbolClassification:
 def _find_families_single_pass(
     symbols: set[str],
     replacement_chars: set[str],
-) -> dict[tuple[str, tuple[int, ...]], set[str]]:
+) -> dict[tuple[str, tuple[int, ...]], dict[str, tuple[str, ...]]]:
     """Run one pass of pattern discovery.
 
-    For each symbol, find positions containing chars from replacement_chars.
-    Try all non-empty subsets of those positions as replacement candidates.
-    Group symbols by their normalized pattern.
-
-    Returns: { (pattern, positions) → set of matching symbols }
+    Returns: { (pattern, positions) → { symbol: type_tags_tuple } }
+    where type_tags_tuple is e.g. ('R',) or ('C', 'R') for each position.
     """
-    groups: dict[tuple[str, tuple[int, ...]], set[str]] = {}
+    groups: dict[tuple[str, tuple[int, ...]], dict[str, tuple[str, ...]]] = {}
 
     for sym in symbols:
         # Find candidate positions
@@ -102,19 +120,21 @@ def _find_families_single_pass(
         if not candidate_positions:
             continue
 
-        # Try all non-empty subsets of candidate positions (limit to 3)
+        # Try all non-empty subsets (limit to 3 positions)
         for r in range(1, min(len(candidate_positions) + 1, 4)):
             for positions in combinations(candidate_positions, r):
-                # Build pattern by replacing selected positions with '@'
+                # Build pattern
                 chars = list(sym)
+                type_tags = []
                 for pos in positions:
+                    type_tags.append(CHAR_TYPE[sym[pos]])
                     chars[pos] = '@'
                 pattern = ''.join(chars)
 
                 key = (pattern, positions)
                 if key not in groups:
-                    groups[key] = set()
-                groups[key].add(sym)
+                    groups[key] = {}
+                groups[key][sym] = tuple(type_tags)
 
     return groups
 
@@ -123,9 +143,11 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
     """Analyze a set of symbols to discover precision families.
 
     Two-pass approach:
-      Pass 1: Replace S and C at candidate positions → find single-precision families
-      Pass 2: Replace D and Z at candidate positions → find double-precision families
-      Merge: Families from both passes with the same base pattern are merged.
+      Pass 1: Replace S and C → find single-precision families
+      Pass 2: Replace D and Z → find double-precision families
+      Merge: Families from both passes with the same pattern are merged,
+             but only if their type tags are consistent (same R/C at
+             each position).
     """
     upper_symbols = {s.upper() for s in symbols}
 
@@ -133,27 +155,45 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
     single_groups = _find_families_single_pass(upper_symbols, SINGLE_CHARS)
     double_groups = _find_families_single_pass(upper_symbols, DOUBLE_CHARS)
 
-    # Merge: groups from both passes with the same (pattern, positions)
-    # key are combined. A family is valid if it has 2+ members from
-    # EITHER pass or from the merged result.
-    all_groups: dict[tuple[str, tuple[int, ...]], set[str]] = {}
+    # Merge: combine groups from both passes with the same (pattern, positions)
+    # Only merge if type tags at each position are consistent.
+    all_groups: dict[tuple[str, tuple[int, ...]], dict[str, tuple[str, ...]]] = {}
 
     for key, members in single_groups.items():
-        all_groups[key] = members
+        all_groups[key] = dict(members)
 
     for key, members in double_groups.items():
         if key in all_groups:
-            all_groups[key] = all_groups[key] | members
+            # Merge passes. Type tags may differ at a position when
+            # one pass sees R (S or D) and the other sees C (C or Z).
+            # This is fine — it means the slot carries both real and
+            # complex variants (a "T" slot, like in a SDCZ quartet).
+            # We upgrade the tag to 'T' when merging R+C.
+            existing = all_groups[key]
+            existing_tags = next(iter(existing.values()))
+            new_tags = next(iter(members.values()))
+
+            # Compute merged type tags
+            merged_tags = tuple(
+                'T' if et != nt else et
+                for et, nt in zip(existing_tags, new_tags)
+            )
+            # Update all existing members to use merged tags
+            for sym in list(existing):
+                existing[sym] = merged_tags
+            # Add new members with merged tags
+            for sym in members:
+                existing[sym] = merged_tags
         else:
-            all_groups[key] = members
+            all_groups[key] = dict(members)
 
     # Keep groups with 2+ members
-    candidates: dict[tuple[str, tuple[int, ...]], set[str]] = {
+    candidates = {
         key: members for key, members in all_groups.items()
         if len(members) >= 2
     }
 
-    # Sort candidates: most members first, then fewest positions (most specific)
+    # Sort: most members first, then fewest positions
     sorted_candidates = sorted(
         candidates.items(),
         key=lambda item: (-len(item[1]), len(item[0][1]))
@@ -164,9 +204,18 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
     result = SymbolClassification()
 
     for (pattern, positions), members in sorted_candidates:
-        unassigned = members - assigned
+        unassigned = {s: t for s, t in members.items() if s not in assigned}
         if len(unassigned) < 2:
             continue
+
+        # Get type tags from any member (they're all consistent)
+        type_tags = next(iter(unassigned.values()))
+
+        # Build slots with type tags
+        slots = [
+            PrecisionSlot(position=pos, type_tag=tag)
+            for pos, tag in zip(positions, type_tags)
+        ]
 
         # Build member dict: precision_key → symbol
         member_dict: dict[str, str] = {}
@@ -177,7 +226,7 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
         family = PrecisionFamily(
             pattern=pattern,
             members=member_dict,
-            prefix_positions=list(positions),
+            slots=slots,
         )
         result.families.append(family)
 
@@ -185,7 +234,6 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
             assigned.add(sym)
             result._symbol_to_family[sym] = family
 
-    # Everything not assigned is independent
     result.independent = upper_symbols - assigned
     return result
 
@@ -194,11 +242,7 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
 
 def build_rename_map(symbols: set[str], target_kind: int,
                      style: str = 'direct') -> dict[str, str]:
-    """Build old_name → new_name mapping.
-
-    The style parameter is accepted for backward compatibility but
-    ignored — the classifier discovers the prefix structure empirically.
-    """
+    """Build old_name → new_name mapping."""
     classification = classify_symbols(symbols)
     return classification.build_rename_map(target_kind)
 
