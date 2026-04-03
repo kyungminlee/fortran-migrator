@@ -17,9 +17,9 @@ echo "=== Building BLAS library (KIND=$TARGET_KIND) ==="
 # Determine library name
 # --------------------------------------------------------------------------
 if [[ "$TARGET_KIND" == "10" ]]; then
-    LIB_NAME="libblas_e.a"
+    LIB_NAME="libeblas.a"
 else
-    LIB_NAME="libblas_q.a"
+    LIB_NAME="libqblas.a"
 fi
 
 LIB_PATH="${BUILD_DIR}/${LIB_NAME}"
