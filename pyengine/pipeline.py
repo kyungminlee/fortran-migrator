@@ -57,6 +57,14 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
             copied_count += 1
             continue
 
+        # Family members that aren't rename targets are S/C-sourced —
+        # their D/Z sibling carries the extension, so skip them.
+        if (classification is not None
+                and classification.is_precision_dependent(stem_upper)
+                and stem_upper not in rename_map):
+            skipped.append(src_path.name)
+            continue
+
         out_name = migrate_file(src_path, output_dir, rename_map, kind)
         if out_name:
             migrated_count += 1

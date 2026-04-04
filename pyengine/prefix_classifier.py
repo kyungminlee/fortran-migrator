@@ -2,22 +2,33 @@
 
 Discovers precision structure by analyzing the full symbol set in two passes:
 
-  Pass 1 (single precision): Replace S→@, C→@ at candidate positions.
-  Pass 2 (double precision): Replace D→@, Z→@ at candidate positions.
-
-Within each pass, symbols are grouped by their normalized pattern.
-Groups of 2+ reveal precision-dependent families. Families from both
-passes sharing the same base pattern are merged.
+  Pass 1 (single precision): Replace S→#R, C→#C at candidate positions.
+  Pass 2 (double precision): Replace D→#R, Z→#C at candidate positions.
 
 Each replaced position carries a **type tag** (R=real, C=complex) so
-that multi-position patterns like DZNRM2→@@NRM2 know position 0 is
-real and position 1 is complex — not just "some precision char."
+that multi-position patterns like DZNRM2→#C#RNRM2 know position 0 is
+complex and position 1 is real — and never collide with an unrelated
+pattern where the two slots carry different types.
+
+A family is formed by overlapping pass-1 and pass-2 results that share
+the same tagged pattern AND the same slot positions. Pass-1 members
+(S/C) come from single-precision source; pass-2 members (D/Z) come
+from double-precision source. **Only the D/Z members drive renames**
+— they are the extension sources (D→Q/E, Z→X/Y). S/C symbols keep
+their original names and are copied through.
+
+Because type tags are part of the grouping key, real and complex
+families are always distinct:
+  - (SGEMM, DGEMM) forms a real family with pattern "#R GEMM".
+  - (CGEMM, ZGEMM) forms a complex family with pattern "#C GEMM".
+  - (CSROT, ZDROT) forms a cross-type family with pattern
+    "#C#R ROT" (pos 0 complex, pos 1 real).
 
 This naturally handles any prefix convention without hardcoding:
-  - Direct:      SGEMM/DGEMM/CGEMM/ZGEMM → @GEMM
-  - I-prefix:    ISAMAX/IDAMAX/ICAMAX/IZAMAX → I@AMAX
-  - ScaLAPACK:   PSGESV/PDGESV → P@GESV
-  - Cross-type:  CSROT/ZDROT → @@ROT (pos0=C, pos1=R)
+  - Direct:      SGEMM/DGEMM, CGEMM/ZGEMM
+  - I-prefix:    ISAMAX/IDAMAX, ICAMAX/IZAMAX
+  - ScaLAPACK:   PSGESV/PDGESV, PCGESV/PZGESV
+  - Cross-type:  CSROT/ZDROT
 """
 
 from __future__ import annotations
@@ -25,19 +36,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from itertools import combinations
 
-# Target prefix mapping by KIND
+# Target prefix mapping by KIND — only D/Z are extension sources.
+# S and C variants keep their original names.
 PREFIX_MAP: dict[int, dict[str, str]] = {
-    10: {'S': 'E', 'D': 'E', 'C': 'Y', 'Z': 'Y'},
-    16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'},
+    10: {'D': 'E', 'Z': 'Y'},
+    16: {'D': 'Q', 'Z': 'X'},
 }
 
-# Character → type tag (using # prefix to avoid collision with identifiers)
+# Character → type tag. Real and complex never merge: pass-1 and pass-2
+# only share a tagged pattern when their tags agree position-by-position.
 CHAR_TYPE: dict[str, str] = {
-    'S': '#R', 'D': '#R',    # real
-    'C': '#C', 'Z': '#C',    # complex
+    'S': 'R', 'D': 'R',    # real
+    'C': 'C', 'Z': 'C',    # complex
 }
-# Combined tag when a slot carries both real and complex variants
-CHAR_TYPE_COMBINED = '#T'
 
 # Two passes: single-precision chars and double-precision chars
 SINGLE_CHARS = {'S', 'C'}
@@ -53,9 +64,8 @@ class PrecisionSlot:
 
 @dataclass
 class PrecisionFamily:
-    """A group of symbols sharing the same base pattern with
-    precision-character variations."""
-    pattern: str                     # e.g., '@GEMM', '@@ROT'
+    """A group of symbols sharing the same tagged pattern."""
+    pattern: str                     # e.g., '#RGEMM', '#C#RROT'
     members: dict[str, str]          # precision_key → symbol name
     slots: list[PrecisionSlot]       # positions + type tags
 
@@ -79,7 +89,12 @@ class SymbolClassification:
         return self._symbol_to_family.get(name.upper())
 
     def target_name(self, name: str, target_kind: int) -> str | None:
-        """Compute the target name for a symbol at the given KIND."""
+        """Compute the target name for a symbol at the given KIND.
+
+        Only D/Z source chars are renamed; an S/C-prefixed symbol
+        returns its original (upper-cased) name unchanged, since the
+        double-precision sibling is what gets extended.
+        """
         upper = name.upper()
         family = self._symbol_to_family.get(upper)
         if family is None:
@@ -94,7 +109,7 @@ class SymbolClassification:
         return ''.join(result)
 
     def build_rename_map(self, target_kind: int) -> dict[str, str]:
-        """Build old_name → new_name mapping for all precision-dependent symbols."""
+        """Build old_name → new_name mapping for D/Z-sourced extensions."""
         rename: dict[str, str] = {}
         for sym in self._symbol_to_family:
             new_name = self.target_name(sym, target_kind)
@@ -103,19 +118,38 @@ class SymbolClassification:
         return rename
 
 
+def _build_tagged_pattern(sym: str, positions: tuple[int, ...]) -> str:
+    """Build a tagged pattern string for sym with the given positions replaced.
+
+    Each replaced char becomes a 2-character marker ``#R`` or ``#C``
+    which encodes the slot's type. The returned string is thus longer
+    than the original symbol by (#positions) characters, and two
+    symbols sharing this string necessarily share both slot positions
+    AND per-position type tags.
+    """
+    out: list[str] = []
+    pos_set = set(positions)
+    for i, ch in enumerate(sym):
+        if i in pos_set:
+            out.append('#' + CHAR_TYPE[ch])
+        else:
+            out.append(ch)
+    return ''.join(out)
+
+
 def _find_families_single_pass(
     symbols: set[str],
     replacement_chars: set[str],
 ) -> dict[tuple[str, tuple[int, ...]], dict[str, tuple[str, ...]]]:
     """Run one pass of pattern discovery.
 
-    Returns: { (pattern, positions) → { symbol: type_tags_tuple } }
-    where type_tags_tuple is e.g. ('R',) or ('C', 'R') for each position.
+    Returns { (tagged_pattern, positions) → { symbol: type_tags } }.
+    ``tagged_pattern`` encodes per-position R/C tags, so two entries
+    with the same key are guaranteed to match slot-for-slot.
     """
     groups: dict[tuple[str, tuple[int, ...]], dict[str, tuple[str, ...]]] = {}
 
     for sym in symbols:
-        # Find candidate positions
         candidate_positions = [
             i for i, ch in enumerate(sym) if ch in replacement_chars
         ]
@@ -125,20 +159,10 @@ def _find_families_single_pass(
         # Try all non-empty subsets (limit to 3 positions)
         for r in range(1, min(len(candidate_positions) + 1, 4)):
             for positions in combinations(candidate_positions, r):
-                # Build pattern using null byte as placeholder.
-                # Null cannot appear in Fortran/C identifiers,
-                # so it's collision-free as a grouping key.
-                chars = list(sym)
-                type_tags = []
-                for pos in positions:
-                    type_tags.append(CHAR_TYPE[sym[pos]])
-                    chars[pos] = '#'
-                pattern = ''.join(chars)
-
+                pattern = _build_tagged_pattern(sym, positions)
+                tags = tuple(CHAR_TYPE[sym[p]] for p in positions)
                 key = (pattern, positions)
-                if key not in groups:
-                    groups[key] = {}
-                groups[key][sym] = tuple(type_tags)
+                groups.setdefault(key, {})[sym] = tags
 
     return groups
 
@@ -146,97 +170,68 @@ def _find_families_single_pass(
 def classify_symbols(symbols: set[str]) -> SymbolClassification:
     """Analyze a set of symbols to discover precision families.
 
-    Two-pass approach:
-      Pass 1: Replace S and C → find single-precision families
-      Pass 2: Replace D and Z → find double-precision families
-      Merge: Families from both passes with the same pattern are merged,
-             but only if their type tags are consistent (same R/C at
-             each position).
+    A family is a (tagged_pattern, positions) group whose members come
+    from BOTH pass 1 (S/C-sourced) AND pass 2 (D/Z-sourced): the two
+    halves form the pairs that the user's algorithm calls for.
     """
     upper_symbols = {s.upper() for s in symbols}
 
-    # Run both passes
     single_groups = _find_families_single_pass(upper_symbols, SINGLE_CHARS)
     double_groups = _find_families_single_pass(upper_symbols, DOUBLE_CHARS)
 
-    # Merge: combine groups from both passes with the same (pattern, positions)
-    # Only merge if type tags at each position are consistent.
-    all_groups: dict[tuple[str, tuple[int, ...]], dict[str, tuple[str, ...]]] = {}
+    # Keep only groups with at least one pass-1 member AND one pass-2
+    # member — that's the "overlap/pair" requirement.
+    candidates: dict[tuple[str, tuple[int, ...]],
+                     tuple[dict[str, tuple[str, ...]],
+                           dict[str, tuple[str, ...]]]] = {}
+    for key, single_members in single_groups.items():
+        double_members = double_groups.get(key)
+        if double_members:
+            candidates[key] = (single_members, double_members)
 
-    for key, members in single_groups.items():
-        all_groups[key] = dict(members)
+    # Sort: most combined members first, then fewest positions. This
+    # gives tighter, higher-coverage families priority under greedy
+    # assignment.
+    def _size(item):
+        (single, double) = item[1]
+        return -(len(single) + len(double)), len(item[0][1])
 
-    for key, members in double_groups.items():
-        if key in all_groups:
-            # Merge passes. Type tags may differ at a position when
-            # one pass sees #R (S or D) and the other sees #C (C or Z).
-            # This is fine — it means the slot carries both real and
-            # complex variants (a #T slot, like in a SDCZ quartet).
-            # We upgrade the tag to #T when merging #R+#C.
-            existing = all_groups[key]
-            existing_tags = next(iter(existing.values()))
-            new_tags = next(iter(members.values()))
+    sorted_candidates = sorted(candidates.items(), key=_size)
 
-            # Compute merged type tags
-            merged_tags = tuple(
-                CHAR_TYPE_COMBINED if et != nt else et
-                for et, nt in zip(existing_tags, new_tags)
-            )
-            # Update all existing members to use merged tags
-            for sym in list(existing):
-                existing[sym] = merged_tags
-            # Add new members with merged tags
-            for sym in members:
-                existing[sym] = merged_tags
-        else:
-            all_groups[key] = dict(members)
-
-    # Keep groups with 2+ members
-    candidates = {
-        key: members for key, members in all_groups.items()
-        if len(members) >= 2
-    }
-
-    # Sort: most members first, then fewest positions
-    sorted_candidates = sorted(
-        candidates.items(),
-        key=lambda item: (-len(item[1]), len(item[0][1]))
-    )
-
-    # Greedily assign symbols to families
     assigned: set[str] = set()
     result = SymbolClassification()
 
-    for (pattern, positions), members in sorted_candidates:
-        unassigned = {s: t for s, t in members.items() if s not in assigned}
-        if len(unassigned) < 2:
+    for (pattern, positions), (single, double) in sorted_candidates:
+        # Skip members already claimed by a larger/tighter family
+        unassigned_single = {s: t for s, t in single.items()
+                             if s not in assigned}
+        unassigned_double = {s: t for s, t in double.items()
+                             if s not in assigned}
+        # Need the pair requirement to still hold after de-dup
+        if not unassigned_single or not unassigned_double:
             continue
 
-        # Get type tags from any member (they're all consistent)
-        type_tags = next(iter(unassigned.values()))
-
-        # Build slots with type tags
+        # Tags are identical for every member (the key encodes them)
+        type_tags = next(iter(unassigned_double.values()))
         slots = [
             PrecisionSlot(position=pos, type_tag=tag)
             for pos, tag in zip(positions, type_tags)
         ]
 
-        # Build member dict: precision_key → symbol
+        all_members = {**unassigned_single, **unassigned_double}
         member_dict: dict[str, str] = {}
-        for sym in sorted(unassigned):
+        for sym in sorted(all_members):
             prec_key = ''.join(sym[p] for p in positions)
             member_dict[prec_key] = sym
 
-        display_pattern = pattern
-
         family = PrecisionFamily(
-            pattern=display_pattern,
+            pattern=pattern,
             members=member_dict,
             slots=slots,
         )
         result.families.append(family)
 
-        for sym in unassigned:
+        for sym in all_members:
             assigned.add(sym)
             result._symbol_to_family[sym] = family
 

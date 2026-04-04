@@ -428,9 +428,19 @@ _LA_CONST_ZP = ['ZZERO', 'ZHALF', 'ZONE', 'ZPREFIX']
 
 
 def _la_constants_rename_map(kind: int) -> dict[str, str]:
-    """Build a rename map for LA_CONSTANTS symbols at a given KIND."""
-    from .prefix_classifier import PREFIX_MAP
-    pmap = PREFIX_MAP[kind]
+    """Build a rename map for LA_CONSTANTS symbols at a given KIND.
+
+    LA_CONSTANTS exposes precision-tagged constants (SZERO/DZERO/CZERO/
+    ZZERO and friends) that all migrate to the extended-precision name.
+    This is a special case — unlike routine renames, all four prefix
+    variants must be remapped, so we use a local S/C/D/Z → Q/X (or
+    E/Y) map independent of the generic PREFIX_MAP.
+    """
+    _LA_FULL_MAP = {
+        10: {'S': 'E', 'D': 'E', 'C': 'Y', 'Z': 'Y'},
+        16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'},
+    }
+    pmap = _LA_FULL_MAP[kind]
     renames: dict[str, str] = {}
     for name in _LA_CONST_SP:
         renames[name] = pmap['S'] + name[1:]
