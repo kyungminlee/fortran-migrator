@@ -262,9 +262,14 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         ),
     )
 
-    def _strip_c_comments(s: str) -> str:
+    def _normalize_for_compare(s: str) -> str:
+        # Strip block + line comments
         s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
         s = re.sub(r'//[^\n]*', '', s)
+        # Canonicalize prefix-dependent identifiers: leading s/d/c/z
+        # becomes '@' so sibling C sources that differ only in the
+        # precision prefix of local names collapse together.
+        s = re.sub(r'\b[sdczSDCZ]+(?=[A-Za-z])', '@', s)
         lines = [ln.rstrip() for ln in s.split('\n')]
         return '\n'.join(ln for ln in lines if ln.strip())
 
@@ -296,7 +301,7 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         text = _rename(text)
         text = _apply_c_type_subs(text, template_vars)
 
-        normalized = _strip_c_comments(text)
+        normalized = _normalize_for_compare(text)
         prior = canonical_normalized.get(new_name)
         if prior is None:
             new_path.write_text(text)

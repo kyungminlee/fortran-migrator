@@ -44,6 +44,37 @@ def _strip_fortran_comments(text: str, ext: str) -> str:
         stripped = _strip_inline_bang(line)
         if stripped.strip():
             out_lines.append(stripped.rstrip())
+
+    # Join fixed-form continuation lines so sibling sources that wrap
+    # at different columns still normalize to the same text. In
+    # fixed-form, column 6 (non-blank, non-zero) indicates a
+    # continuation of the previous line — merge it into its parent
+    # after stripping the continuation marker and surrounding
+    # whitespace.
+    if is_fixed:
+        joined: list[str] = []
+        for ln in out_lines:
+            if len(ln) > 5 and ln[5] not in (' ', '0', '\t') and joined:
+                joined[-1] = joined[-1].rstrip() + ' ' + ln[6:].lstrip()
+            else:
+                joined.append(ln)
+        out_lines = joined
+    else:
+        # Free-form: '&' at end of line continues onto next line.
+        joined: list[str] = []
+        pending = ''
+        for ln in out_lines:
+            if pending:
+                ln = pending + ' ' + ln.lstrip()
+                pending = ''
+            stripped = ln.rstrip()
+            if stripped.endswith('&'):
+                pending = stripped[:-1].rstrip()
+            else:
+                joined.append(stripped)
+        if pending:
+            joined.append(pending)
+        out_lines = joined
     return '\n'.join(out_lines)
 
 
@@ -57,6 +88,62 @@ def _strip_inline_bang(line: str) -> str:
         elif ch == '!' and not in_s and not in_d:
             return line[:i]
     return line
+
+
+def _canonicalize_for_compare(text: str) -> str:
+    """Normalize text to ignore cosmetic precision-specific differences
+    that remain after migration.
+
+    Two sources of benign divergence are masked:
+
+    * Numeric literal formatting — ``0.0``, ``0.0D0``, ``0.0E+0_16``,
+      ``0.5_16`` etc. all represent the same value post-migration, but
+      BLAS/LAPACK write them differently in S vs D sources. We
+      canonicalize to a common form: replace ``[dD]`` exponent
+      markers with ``E``, strip ``_N`` kind suffixes, and drop
+      insignificant exponents (``E0``/``E+0``).
+
+    * Prefix-dependent dummy-argument names — BLAS uses SA/SX/SY in
+      S sources and DA/DX/DY in D sources (similarly CA/CX/CY vs
+      ZA/ZX/ZY). These local names aren't in the rename map so they
+      survive migration literally. We replace the leading S/D/C/Z
+      of any identifier with a placeholder '@' so both halves look
+      the same. (Applied symmetrically, so non-prefix identifiers
+      like ``CALL``, ``COMPLEX``, ``SUBROUTINE`` are also mangled but
+      mangled identically on both sides.)
+    """
+    # 1. d/D exponent → E in numeric literals
+    text = re.sub(r'(\d)[dD]([+-]?\d)', r'\1E\2', text)
+    # 2. Strip _N kind suffixes on literals (suffix after a digit)
+    text = re.sub(r'(\d)_\d+\b', r'\1', text)
+    # 3. Drop insignificant exponents (E0/E+0/e-0/E00 ...)
+    text = re.sub(r'([0-9.])[eE][+-]?0+\b', r'\1', text)
+    # 4. Canonicalize mantissa exponent marker to uppercase E
+    text = re.sub(r'(\d)e([+-]?\d)', r'\1E\2', text)
+    # 5. Canonicalize prefix-dependent identifiers: any run of leading
+    #    S/D/C/Z characters on an identifier collapses to a single '@'.
+    #    This handles both single-letter prefixes (SA vs DA) and
+    #    double-prefix intrinsic names (CMPLX vs DCMPLX, CABS vs
+    #    DCABS). Applied to both halves so the mapping is symmetric.
+    text = re.sub(r'\b[sdczSDCZ]+(?=[A-Za-z])', '@', text)
+    # 6. Collapse runs of whitespace to a single space — BLAS sources
+    #    hand-align declaration lists with varying spacing between
+    #    type keyword and argument list, and indent DO loop bodies
+    #    differently across precision halves.
+    text = re.sub(r'[ \t]+', ' ', text)
+    # 7. Sort items in INTRINSIC / EXTERNAL lists. BLAS sources list
+    #    intrinsics in arbitrary (often precision-specific) order —
+    #    e.g., S source writes "INTRINSIC REAL, CONJG, MAX" while Z
+    #    source writes "INTRINSIC CONJG, MAX, MIN, REAL". Sort both.
+    def _sort_decl(match: re.Match) -> str:
+        kw = match.group(1)
+        items = [s.strip() for s in match.group(2).split(',')]
+        return f'{kw} ' + ', '.join(sorted(items))
+    text = re.sub(
+        r'\b(INTRINSIC|EXTERNAL)\s+([A-Za-z_@][A-Za-z0-9_@,\s]*?)(?=$)',
+        _sort_decl, text, flags=re.MULTILINE,
+    )
+    return text
 
 
 def _strip_c_comments(text: str) -> str:
@@ -135,7 +222,9 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
             continue
         out_name, migrated = result
 
-        normalized = _strip_fortran_comments(migrated, src_path.suffix)
+        normalized = _canonicalize_for_compare(
+            _strip_fortran_comments(migrated, src_path.suffix)
+        )
 
         prior = canonical_normalized.get(out_name)
         if prior is None:

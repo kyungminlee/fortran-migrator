@@ -182,10 +182,12 @@ def replace_generic_conversions(line: str, kind: int) -> str:
     what precedes the call: operators/commas/parens indicate expression
     context, while line-start indicates a type declaration.
     """
-    # Pattern: REAL or CMPLX preceded by expression-context character
+    # Pattern: REAL or CMPLX preceded by expression-context character.
+    # The '.' handles Fortran relational operators (.EQ./.NE./.NOT./etc.)
+    # that precede REAL() as a type-conversion intrinsic call.
     for name in ('REAL', 'CMPLX'):
         pattern = re.compile(
-            rf'(?<=[=+\-*/,(])\s*\b({name})\s*\(', re.IGNORECASE
+            rf'(?<=[=+\-*/,(.])\s*\b({name})\s*\(', re.IGNORECASE
         )
         search_start = 0
         while True:
