@@ -32,7 +32,7 @@ REAL_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
-    (r'MPI_DOUBLE', 'MPI_{REAL_TYPE}'),
+    (r'MPI_DOUBLE', '{MPI_REAL}'),
     # Function name prefixes (allow uppercase after prefix for BI_dMPI_* etc.)
     (r'Cd([a-z])', r'C{RP}\1'),
     (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
@@ -48,14 +48,28 @@ COMPLEX_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types (order matters: DOUBLE_COMPLEX before DOUBLE)
-    (r'MPI_DOUBLE_COMPLEX', 'MPI_{COMPLEX_TYPE}'),
-    (r'MPI_DOUBLE', 'MPI_{REAL_TYPE}'),
-    (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'MPI_{COMPLEX_TYPE}\1'),
+    (r'MPI_DOUBLE_COMPLEX', '{MPI_COMPLEX}'),
+    (r'MPI_DOUBLE', '{MPI_REAL}'),
+    (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'{MPI_COMPLEX}\1'),
     # Function name prefixes (allow uppercase after prefix for BI_zMPI_* etc.)
     (r'Cz([a-z])', r'C{CP}\1'),
     (r'BI_z([a-zA-Z])', r'BI_{CP}\1'),
     (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
 ]
+
+
+# Standard MPI datatype names for each target KIND.
+# KIND=16 (quad precision): MPI_REAL16 / MPI_COMPLEX32 — requires MPI
+#   implementation with quad-precision support.
+# KIND=10 (extended precision): maps to long double on x86.
+_MPI_REAL_TYPE = {
+    16: 'MPI_REAL16',
+    10: 'MPI_LONG_DOUBLE',
+}
+_MPI_COMPLEX_TYPE = {
+    16: 'MPI_COMPLEX32',
+    10: 'MPI_C_LONG_DOUBLE_COMPLEX',
+}
 
 
 def _build_sub_vars(kind: int) -> dict[str, str]:
@@ -68,8 +82,8 @@ def _build_sub_vars(kind: int) -> dict[str, str]:
     return {
         'REAL_TYPE': real_type,
         'COMPLEX_TYPE': complex_type,
-        'MPI_REAL': f'MPI_{real_type}',
-        'MPI_COMPLEX': f'MPI_{complex_type}',
+        'MPI_REAL': _MPI_REAL_TYPE[kind],
+        'MPI_COMPLEX': _MPI_COMPLEX_TYPE[kind],
         'RP': rp,
         'CP': cp,
         'RPU': rp.upper(),
@@ -194,7 +208,56 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                          COMPLEX_CLONE_SUBS, template_vars, renames)
             cloned.append(f'{f.name} → {new_name}')
 
+    # Generate MPI requirement check for KIND=16
+    if kind == 16:
+        _generate_mpi_real16_check(output_dir)
+
     return {
         'cloned': cloned,
         'template_vars': template_vars,
     }
+
+
+def _generate_mpi_real16_check(output_dir: Path) -> None:
+    """Generate a CMake module that verifies MPI_REAL16 support."""
+    cmake = """\
+# CheckMpiReal16.cmake — Verify that the MPI implementation provides
+# MPI_REAL16 and MPI_COMPLEX32, which are required by the migrated
+# quad-precision BLACS routines.
+#
+# Usage:
+#   include(CheckMpiReal16)
+#   check_mpi_real16()          # FATAL_ERROR if unsupported
+#
+# After a successful check the cache variable HAVE_MPI_REAL16 is set.
+
+include(CheckCSourceCompiles)
+
+function(check_mpi_real16)
+    find_package(MPI REQUIRED COMPONENTS C)
+
+    set(CMAKE_REQUIRED_INCLUDES  ${MPI_C_INCLUDE_DIRS})
+    set(CMAKE_REQUIRED_LIBRARIES ${MPI_C_LIBRARIES})
+    set(CMAKE_REQUIRED_FLAGS     ${MPI_C_COMPILE_FLAGS})
+
+    check_c_source_compiles("
+        #include <mpi.h>
+        int main(void) {
+            MPI_Datatype dt_real = MPI_REAL16;
+            MPI_Datatype dt_cplx = MPI_COMPLEX32;
+            (void)dt_real; (void)dt_cplx;
+            return 0;
+        }
+    " HAVE_MPI_REAL16)
+
+    if(NOT HAVE_MPI_REAL16)
+        message(FATAL_ERROR
+            "The MPI implementation does not provide MPI_REAL16 / MPI_COMPLEX32. "
+            "Quad-precision BLACS requires an MPI library built with 128-bit real "
+            "support (e.g. OpenMPI or MPICH compiled with __float128 enabled).")
+    endif()
+
+    set(HAVE_MPI_REAL16 ${HAVE_MPI_REAL16} PARENT_SCOPE)
+endfunction()
+"""
+    (output_dir / 'CheckMpiReal16.cmake').write_text(cmake)
