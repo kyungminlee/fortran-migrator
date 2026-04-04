@@ -112,7 +112,7 @@ def _generate_cmake(output_dir: Path, lib_name: str, kind: int,
                     common_files: list[str], precision_files: list[str]):
     """Generate a self-contained CMakeLists.txt in the output directory."""
     pmap = PREFIX_MAP[kind]
-    real_pfx = pmap['D'].lower()
+    real_pfx = pmap['R'].lower()
     precision_lib = f'{real_pfx}{lib_name}'
     common_lib = f'{lib_name}_common'
 
@@ -257,7 +257,7 @@ def cmd_build(args):
 
     # Report results
     pmap = PREFIX_MAP[kind]
-    real_pfx = pmap['D'].lower()
+    real_pfx = pmap['R'].lower()
     precision_lib_name = f'lib{real_pfx}{lib_name}.a'
     common_lib_name = f'lib{lib_name}_common.a'
 

@@ -240,36 +240,48 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     def _rename(text: str) -> str:
         return rename_pattern.sub(lambda m: combined_map[m.group(0)], text)
 
-    cloned: list[str] = []
-    for f in sorted(src_dir.iterdir()):
-        if f.suffix.lower() != '.c':
-            continue
+    # Process D/Z-sourced files first so they become the canonical
+    # output; S/C co-family members are verified against them.
+    def _is_double_key(routine_upper: str) -> bool:
+        fam = classification.get_family(routine_upper)
+        if fam is None:
+            return False
+        key = next(
+            (k for k, v in fam.members.items() if v == routine_upper),
+            '',
+        )
+        return bool(key) and key[0] in ('D', 'Z')
 
+    entries = sorted(
+        (f for f in src_dir.iterdir() if f.suffix.lower() == '.c'),
+        key=lambda f: (
+            not _is_double_key(
+                (f.stem[:-1] if f.stem.endswith('_') else f.stem).upper()
+            ),
+            f.name,
+        ),
+    )
+
+    cloned: list[str] = []
+    divergences: list[str] = []
+    canonical_text: dict[str, str] = {}
+    canonical_source: dict[str, str] = {}
+
+    for f in entries:
         has_underscore = f.stem.endswith('_')
         routine = f.stem[:-1] if has_underscore else f.stem
         upper_routine = routine.upper()
 
         if upper_routine not in rename_map:
             continue
-
-        family = classification.get_family(upper_routine)
-        if family is None:
-            continue
-
-        # Only clone the D/Z variant (double-precision source) — S/C
-        # stay as originals, avoiding collisions where both PDGEMM and
-        # PSGEMM would target PQGEMM.
-        my_key = next(
-            (k for k, sym in family.members.items() if sym == upper_routine),
-            None,
-        )
-        if my_key is None or not my_key.startswith(('D', 'Z')):
+        if classification.get_family(upper_routine) is None:
             continue
 
         target_upper = rename_map[upper_routine]
         target_lower = target_upper.lower()
         new_stem = target_lower + ('_' if has_underscore else '')
-        new_path = output_dir / (new_stem + f.suffix)
+        new_name = new_stem + f.suffix
+        new_path = output_dir / new_name
 
         text = f.read_text(errors='replace')
         # Apply renames first, then type upgrades — the two domains
@@ -277,11 +289,23 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         # happen to coincide with generic type keywords.
         text = _rename(text)
         text = _apply_c_type_subs(text, template_vars)
-        new_path.write_text(text)
-        cloned.append(f'{f.name} → {new_path.name}')
+
+        prior = canonical_text.get(new_name)
+        if prior is None:
+            new_path.write_text(text)
+            canonical_text[new_name] = text
+            canonical_source[new_name] = f.name
+            cloned.append(f'{f.name} → {new_name}')
+        elif prior == text:
+            pass  # convergence
+        else:
+            divergences.append(
+                f'{f.name} vs {canonical_source[new_name]} → {new_name}'
+            )
 
     return {
         'cloned': cloned,
+        'divergences': divergences,
         'template_vars': template_vars,
     }
 

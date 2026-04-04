@@ -36,11 +36,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from itertools import combinations
 
-# Target prefix mapping by KIND — only D/Z are extension sources.
-# S and C variants keep their original names.
+# Target prefix mapping by KIND, keyed by slot type tag ('R' or 'C').
+# Every family member maps to the SAME target char (determined by the
+# slot's type tag), regardless of whether its source char is S/D (real)
+# or C/Z (complex). So SGEMM and DGEMM both target QGEMM, and the
+# pipeline runs a convergence check to confirm their type-migrated
+# bodies agree.
 PREFIX_MAP: dict[int, dict[str, str]] = {
-    10: {'D': 'E', 'Z': 'Y'},
-    16: {'D': 'Q', 'Z': 'X'},
+    10: {'R': 'E', 'C': 'Y'},
+    16: {'R': 'Q', 'C': 'X'},
 }
 
 # Character → type tag. Real and complex never merge: pass-1 and pass-2
@@ -91,9 +95,11 @@ class SymbolClassification:
     def target_name(self, name: str, target_kind: int) -> str | None:
         """Compute the target name for a symbol at the given KIND.
 
-        Only D/Z source chars are renamed; an S/C-prefixed symbol
-        returns its original (upper-cased) name unchanged, since the
-        double-precision sibling is what gets extended.
+        Every member of a family maps to the same target name: each
+        slot's char is replaced by the type-tag-driven target (R→Q/E,
+        C→X/Y). So SGEMM and DGEMM both map to QGEMM; CGEMM and ZGEMM
+        both map to XGEMM. Collisions between co-family members are
+        expected and checked for convergence at migration time.
         """
         upper = name.upper()
         family = self._symbol_to_family.get(upper)
@@ -103,13 +109,11 @@ class SymbolClassification:
         pmap = PREFIX_MAP[target_kind]
         result = list(upper)
         for slot in family.slots:
-            old_char = upper[slot.position]
-            if old_char in pmap:
-                result[slot.position] = pmap[old_char]
+            result[slot.position] = pmap[slot.type_tag]
         return ''.join(result)
 
     def build_rename_map(self, target_kind: int) -> dict[str, str]:
-        """Build old_name → new_name mapping for D/Z-sourced extensions."""
+        """Build old_name → new_name mapping for every precision-dependent symbol."""
         rename: dict[str, str] = {}
         for sym in self._symbol_to_family:
             new_name = self.target_name(sym, target_kind)
@@ -251,4 +255,4 @@ def build_rename_map(symbols: set[str], target_kind: int,
 def target_prefix(kind: int, is_complex: bool) -> str:
     """Return the target prefix character for a given KIND and type."""
     pmap = PREFIX_MAP[kind]
-    return pmap['Z'] if is_complex else pmap['D']
+    return pmap['C'] if is_complex else pmap['R']

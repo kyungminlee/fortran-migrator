@@ -10,7 +10,7 @@ from pathlib import Path
 from .config import RecipeConfig, load_recipe
 from .symbol_scanner import scan_symbols
 from .prefix_classifier import classify_symbols, build_rename_map
-from .fortran_migrator import migrate_file, target_filename
+from .fortran_migrator import migrate_file, migrate_file_to_string, target_filename
 from .c_migrator import migrate_c_directory
 
 from tqdm import tqdm
@@ -31,12 +31,28 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     migrated_count = 0
     copied_count = 0
     skipped: list[str] = []
+    divergences: list[str] = []
 
     # Collect eligible source files
     src_files = sorted(
         p for p in config.source_dir.iterdir()
         if p.suffix.lower() in config.extensions
     )
+
+    # Convergence buffer: first writer of each output name stores its
+    # text; subsequent writers must agree or we record a divergence.
+    # D/Z sources are preferred as the canonical text: when a pair
+    # (SGEMM, DGEMM) both target QGEMM, DGEMM's migrated body is kept
+    # and SGEMM's is only consulted for the equality check.
+    def _is_double_source(stem: str) -> bool:
+        return bool(stem) and stem[0].upper() in ('D', 'Z')
+
+    # Process D/Z-sourced files first so their migration is the canonical
+    # one on disk; S/C co-members are verified against them.
+    src_files.sort(key=lambda p: (not _is_double_source(p.stem), p.name))
+
+    canonical_text: dict[str, str] = {}
+    canonical_source: dict[str, str] = {}
 
     for src_path in tqdm(src_files, desc='  Migrating', unit='file',
                           mininterval=1.0, miniters=10):
@@ -57,24 +73,35 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
             copied_count += 1
             continue
 
-        # Family members that aren't rename targets are S/C-sourced —
-        # their D/Z sibling carries the extension, so skip them.
-        if (classification is not None
-                and classification.is_precision_dependent(stem_upper)
-                and stem_upper not in rename_map):
+        result = migrate_file_to_string(src_path, rename_map, kind)
+        if result is None:
             skipped.append(src_path.name)
             continue
+        out_name, migrated = result
 
-        out_name = migrate_file(src_path, output_dir, rename_map, kind)
-        if out_name:
+        prior = canonical_text.get(out_name)
+        if prior is None:
+            # First (canonical) writer for this target name
+            (output_dir / out_name).write_text(migrated)
+            canonical_text[out_name] = migrated
+            canonical_source[out_name] = src_path.name
             migrated_count += 1
+        elif prior == migrated:
+            # Convergence: co-family member produced identical output
+            pass
         else:
-            skipped.append(src_path.name)
+            # Divergence: co-family members disagree. Keep the canonical
+            # (D/Z) version on disk and record the mismatch.
+            divergences.append(
+                f'{src_path.name} vs {canonical_source[out_name]} '
+                f'→ {out_name}'
+            )
 
     return {
         'migrated': migrated_count,
         'copied': copied_count,
         'skipped': skipped,
+        'divergences': divergences,
     }
 
 
@@ -189,6 +216,13 @@ def run_migration(recipe_path: Path, output_dir: Path,
             print(f'  Copied:   {result["copied"]} files (precision-independent)')
             if result['skipped']:
                 print(f'  Skipped:  {len(result["skipped"])} files')
+            if result.get('divergences'):
+                print(f'  Divergences: {len(result["divergences"])} '
+                      f'(co-family members produced differing output)')
+                for d in result['divergences'][:10]:
+                    print(f'    {d}')
+                if len(result['divergences']) > 10:
+                    print(f'    ... ({len(result["divergences"]) - 10} more)')
     elif config.language == 'c':
         # ScaLAPACK-style C libraries (PBLAS) use rename-map-driven
         # cloning; BLACS-style (prefix 'direct') keeps the legacy path.
@@ -201,6 +235,13 @@ def run_migration(recipe_path: Path, output_dir: Path,
             result = run_c_migration(config, output_dir, target_kind, dry_run)
         if not dry_run:
             print(f'\n  Cloned: {len(result["cloned"])} files')
+            if result.get('divergences'):
+                print(f'  Divergences: {len(result["divergences"])} '
+                      f'(co-family members produced differing output)')
+                for d in result['divergences'][:10]:
+                    print(f'    {d}')
+                if len(result['divergences']) > 10:
+                    print(f'    ... ({len(result["divergences"]) - 10} more)')
     else:
         raise ValueError(f'Unsupported language: {config.language}')
 

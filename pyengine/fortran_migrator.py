@@ -548,21 +548,21 @@ def target_filename(name: str, rename_map: dict[str, str]) -> str:
     return name
 
 
-def migrate_file(src_path: Path, output_dir: Path,
-                 rename_map: dict[str, str], kind: int,
-                 flang_cmd: str | None = None) -> str | None:
-    """Migrate a single Fortran source file. Returns output filename.
+def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
+                           kind: int,
+                           flang_cmd: str | None = None,
+                           ) -> tuple[str, str] | None:
+    """Migrate a file in memory. Returns (target_filename, migrated_text).
 
-    If flang_cmd is provided (or Flang is found on PATH), uses Flang's
-    parse tree to guide transformations. Falls back to regex-only when
-    Flang is unavailable.
+    Separated from :func:`migrate_file` so the pipeline can perform a
+    convergence check across co-family members that map to the same
+    output name before committing to disk.
     """
     from .flang_parser import scan_file, find_flang
 
     ext = src_path.suffix.lower()
     source = src_path.read_text(errors='replace')
 
-    # Try Flang-guided migration
     if flang_cmd is None:
         flang_cmd = find_flang()
 
@@ -580,6 +580,22 @@ def migrate_file(src_path: Path, output_dir: Path,
         return None
 
     out_name = target_filename(src_path.name, rename_map)
+    return out_name, migrated
+
+
+def migrate_file(src_path: Path, output_dir: Path,
+                 rename_map: dict[str, str], kind: int,
+                 flang_cmd: str | None = None) -> str | None:
+    """Migrate a single Fortran source file. Returns output filename.
+
+    If flang_cmd is provided (or Flang is found on PATH), uses Flang's
+    parse tree to guide transformations. Falls back to regex-only when
+    Flang is unavailable.
+    """
+    result = migrate_file_to_string(src_path, rename_map, kind, flang_cmd)
+    if result is None:
+        return None
+    out_name, migrated = result
     (output_dir / out_name).write_text(migrated)
     return out_name
 
