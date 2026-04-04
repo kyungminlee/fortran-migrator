@@ -71,15 +71,24 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
 
 
 def run_c_migration(config: RecipeConfig, output_dir: Path,
-                    kind: int, dry_run: bool = False) -> dict:
-    """Run C migration pipeline (clone-and-substitute)."""
+                    kind: int, dry_run: bool = False,
+                    classification=None,
+                    rename_map: dict[str, str] | None = None) -> dict:
+    """Run C migration pipeline (clone-and-substitute).
+
+    When `classification` and `rename_map` are supplied, the generic
+    rename-map-driven migration is used (for ScaLAPACK-style libraries
+    like PBLAS). Otherwise the BLACS-specific path is used.
+    """
     if dry_run:
         print('  (dry-run for C migration not yet implemented)')
         return {'cloned': [], 'template_vars': {}}
 
     result = migrate_c_directory(
         config.source_dir, output_dir, kind,
-        copy_originals=config.copy_all_originals
+        copy_originals=config.copy_all_originals,
+        classification=classification,
+        rename_map=rename_map,
     )
     return result
 
@@ -173,7 +182,15 @@ def run_migration(recipe_path: Path, output_dir: Path,
             if result['skipped']:
                 print(f'  Skipped:  {len(result["skipped"])} files')
     elif config.language == 'c':
-        result = run_c_migration(config, output_dir, target_kind, dry_run)
+        # ScaLAPACK-style C libraries (PBLAS) use rename-map-driven
+        # cloning; BLACS-style (prefix 'direct') keeps the legacy path.
+        if config.prefix_style == 'scalapack':
+            result = run_c_migration(
+                config, output_dir, target_kind, dry_run,
+                classification=classification, rename_map=rename_map,
+            )
+        else:
+            result = run_c_migration(config, output_dir, target_kind, dry_run)
         if not dry_run:
             print(f'\n  Cloned: {len(result["cloned"])} files')
     else:
