@@ -33,9 +33,9 @@ REAL_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
     (r'MPI_DOUBLE', 'MPI_{REAL_TYPE}'),
-    # Function name prefixes
+    # Function name prefixes (allow uppercase after prefix for BI_dMPI_* etc.)
     (r'Cd([a-z])', r'C{RP}\1'),
-    (r'BI_d([a-z])', r'BI_{RP}\1'),
+    (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
 ]
 
 COMPLEX_CLONE_SUBS = [
@@ -51,10 +51,10 @@ COMPLEX_CLONE_SUBS = [
     (r'MPI_DOUBLE_COMPLEX', 'MPI_{COMPLEX_TYPE}'),
     (r'MPI_DOUBLE', 'MPI_{REAL_TYPE}'),
     (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'MPI_{COMPLEX_TYPE}\1'),
-    # Function name prefixes
+    # Function name prefixes (allow uppercase after prefix for BI_zMPI_* etc.)
     (r'Cz([a-z])', r'C{CP}\1'),
-    (r'BI_z([a-z])', r'BI_{CP}\1'),
-    (r'BI_d([a-z])', r'BI_{RP}\1'),
+    (r'BI_z([a-zA-Z])', r'BI_{CP}\1'),
+    (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
 ]
 
 
@@ -79,8 +79,14 @@ def _build_sub_vars(kind: int) -> dict[str, str]:
 
 def clone_c_file(src_path: Path, dst_path: Path,
                  subs: list[tuple[str, str]],
-                 template_vars: dict[str, str]) -> None:
-    """Clone a C file with mechanical text substitutions."""
+                 template_vars: dict[str, str],
+                 routine_renames: list[tuple[str, str]] | None = None,
+                 ) -> None:
+    """Clone a C file with mechanical text substitutions.
+
+    routine_renames is a list of (old_name, new_name) pairs for literal
+    routine name replacements (both lowercase and uppercase are applied).
+    """
     text = src_path.read_text(errors='replace')
 
     for pattern, replacement in subs:
@@ -90,7 +96,31 @@ def clone_c_file(src_path: Path, dst_path: Path,
             expanded = expanded.replace(f'{{{key}}}', val)
         text = re.sub(pattern, expanded, text, flags=re.MULTILINE)
 
+    # Apply routine name renames (lowercase and uppercase)
+    if routine_renames:
+        for old_name, new_name in routine_renames:
+            text = text.replace(old_name, new_name)
+            text = text.replace(old_name.upper(), new_name.upper())
+
     dst_path.write_text(text)
+
+
+def _routine_renames(old_stem: str, new_stem: str) -> list[tuple[str, str]]:
+    """Derive routine name renames from source/target file stems.
+
+    For user-facing files like 'dgesd2d_' → 'qgesd2d_', strips the
+    trailing underscore to get the routine base name and returns rename
+    pairs.  For BI_-prefixed files the function names are already handled
+    by the regex rules, so this returns an empty list.
+    """
+    if old_stem.startswith('BI_'):
+        return []
+    # Strip trailing underscore if present (Fortran naming convention)
+    old_routine = old_stem.rstrip('_')
+    new_routine = new_stem.rstrip('_')
+    if old_routine == new_routine:
+        return []
+    return [(old_routine, new_routine)]
 
 
 def rename_c_file(name: str, old_prefix: str, new_prefix: str) -> str:
@@ -145,8 +175,9 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             new_name = rename_c_file(f.name, 'd', rp)
             if new_name == f.name:
                 continue
+            renames = _routine_renames(stem, Path(new_name).stem)
             clone_c_file(f, output_dir / new_name,
-                         REAL_CLONE_SUBS, template_vars)
+                         REAL_CLONE_SUBS, template_vars, renames)
             cloned.append(f'{f.name} → {new_name}')
 
     # Clone z-variant → complex-extended
@@ -158,8 +189,9 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             new_name = rename_c_file(f.name, 'z', cp)
             if new_name == f.name:
                 continue
+            renames = _routine_renames(stem, Path(new_name).stem)
             clone_c_file(f, output_dir / new_name,
-                         COMPLEX_CLONE_SUBS, template_vars)
+                         COMPLEX_CLONE_SUBS, template_vars, renames)
             cloned.append(f'{f.name} → {new_name}')
 
     return {
