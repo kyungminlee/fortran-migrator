@@ -209,14 +209,56 @@ patched — add it if you need f2c support.
 358e41e Patch Bdef.h with extended-precision types, macros, and name mangling
 e69dd01 Add .agent/PROGRESS.md with project status and continuation notes
 3387f6d Fix ScaLAPACK migration: add IFIX/IDINT intrinsics, dedup INTRINSIC decls, fix DBLE(var) skip
+05d9ba4 Complete intrinsic map from GCC gfortran intrinsic registry
+6549c6f Add dependency-aware symbol scanning for cross-library renaming
 ```
+
+---
+
+## Whole-Archive Link Test Results
+
+Compiled all four migrated libraries and linked an empty Fortran program with
+`--whole-archive` to expose all undefined symbols:
+
+| KIND | Undefined Symbols | Notes |
+|------|------------------|-------|
+| 16   | 134              | All from unmigrated auxiliary libs |
+| 10   | 138              | Structurally identical to KIND=16 |
+
+**Zero renaming bugs detected.** All undefined symbols fall into these categories:
+
+1. **Correctly-renamed but unimplemented PBLAS** (~69): `pqgemm_`, `pxgemm_`,
+   `pegemm_`, `pygemm_` — these are PBLAS routines that need their own migration
+2. **Precision-independent TOOLS** (~22): `numroc_`, `iceil_`, `infog2l_`,
+   `descset_`, etc. — these should be compiled from original source unchanged
+3. **LAPACK INSTALL routines** (~6): `slamch_`, `dlamch_`, `slamc3_`, `dlamc3_`,
+   `slamov_`, `zlamov_` — from INSTALL/ dir, not migrated
+4. **BLACS C interface** (4): `Cblacs_get`, `Cblacs_gridinfo`, etc.
+5. **XBLAS extensions** (14): `blas_sgemv_x_`, `blas_zgbmv2_x_`, etc.
+6. **ScaLAPACK REDIST** (~6): `psgemr2d_`, `pzgemr2d_`, etc.
+
+### Dependency-Aware Symbol Scanning
+
+Recipes now support `depends` and `extra_symbol_dirs` fields:
+
+- **`depends`**: List of other recipe YAML files. Their symbols are scanned and
+  merged into the rename map, ensuring cross-library calls are renamed correctly.
+  Transitive dependencies are followed (ScaLAPACK → LAPACK → BLAS).
+
+- **`extra_symbol_dirs`**: Additional directories scanned for symbols (both
+  Fortran and C, including subdirectories). Used for auxiliary code like
+  PBLAS/SRC, TOOLS, REDIST/SRC that provide symbols used by the migrated code.
+
+Rename map sizes after adding dependencies:
+- LAPACK: 2067 → 2204 renames (added BLAS + INSTALL symbols)
+- ScaLAPACK: 684 → 3262 renames (added LAPACK + BLAS + PBLAS + TOOLS symbols)
 
 ---
 
 ## Likely Next Steps
 
-1. **Integrated build**: Build all four libraries together (BLAS → LAPACK →
-   BLACS → ScaLAPACK) and link them into a single test program.
+1. **Migrate PBLAS**: Add a recipe for PBLAS/SRC (Fortran + C mixed) to resolve
+   the ~69 correctly-renamed-but-missing PBLAS symbols.
 2. **C migrator `cmd_build` support**: Generate a proper CMakeLists.txt for
    C libraries (with MPI, compiler flags, etc.) from `pyengine build`.
 3. **C migrator `cmd_verify`**: Add verification for C files (check for
