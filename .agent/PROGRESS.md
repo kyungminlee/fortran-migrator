@@ -257,15 +257,34 @@ Rename map sizes after adding dependencies:
 
 ## Likely Next Steps
 
+### Resolve remaining undefined symbols (to reach a fully-linked build)
+
 1. **Migrate PBLAS**: Add a recipe for PBLAS/SRC (Fortran + C mixed) to resolve
    the ~69 correctly-renamed-but-missing PBLAS symbols (`pqgemm_`, `pxgemv_`,
    `peaxpy_`, etc.).
 2. **Migrate XBLAS**: Add a recipe (or exclusion policy) for the 14 XBLAS
    extended-precision BLAS symbols (`blas_sgemv_x_`, `blas_zgbmv2_x_`, etc.)
    referenced from LAPACK extra-precise iterative refinement routines.
-3. **C migrator `cmd_build` support**: Generate a proper CMakeLists.txt for
+3. **Compile TOOLS from original source**: The ~22 precision-independent
+   ScaLAPACK TOOLS symbols (`numroc_`, `iceil_`, `infog2l_`, `descset_`,
+   `descinit_`, `ilcm_`, `indxg2l_`, etc.) need no migration — just compile
+   `external/scalapack-2.2.3/TOOLS/*.f` into the link.
+4. **Compile LAPACK INSTALL from original source**: The ~6 precision-independent
+   LAPACK INSTALL symbols (`slamch_`, `dlamch_`, `slamc3_`, `dlamc3_`,
+   `slamov_`, `zlamov_`) need to be compiled from `external/lapack-3.12.1/INSTALL/`.
+5. **Compile ScaLAPACK REDIST from original source**: ~6 symbols
+   (`psgemr2d_`, `pzgemr2d_`, `pstrmr2d_`, `pztrmr2d_`, `psgemr2do_`,
+   `pzgemr2do_`) from `external/scalapack-2.2.3/REDIST/SRC/`.
+6. **Link BLACS C interface**: The 4 `Cblacs_*` symbols (`Cblacs_get`,
+   `Cblacs_gridinfo`, `Cblacs_gridexit`, `Cblacs_pinfo`) need the BLACS
+   C interface wrappers linked in (the blacs C library already provides
+   these — the link test's BLACS build may have excluded the C interface).
+
+### Migrator feature work
+
+7. **C migrator `cmd_build` support**: Generate a proper CMakeLists.txt for
    C libraries (with MPI, compiler flags, etc.) from `pyengine build`.
-4. **C migrator `cmd_verify`**: Add verification for C files (check for
+8. **C migrator `cmd_verify`**: Add verification for C files (check for
    residual `double`/`MPI_DOUBLE` in q/x files).
-5. **Test with Intel Fortran / NVIDIA HPC SDK**: Verify KIND=16 works with
+9. **Test with Intel Fortran / NVIDIA HPC SDK**: Verify KIND=16 works with
    non-GCC compilers (KIND=10 will be skipped via HAVE_REAL10 guard).
