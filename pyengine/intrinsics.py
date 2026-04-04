@@ -42,6 +42,8 @@ INTRINSIC_MAP: dict[str, tuple[str, bool]] = {
     'CSQRT':  ('SQRT',  False),
     'CEXP':   ('EXP',   False),
     'CLOG':   ('LOG',   False),
+    'IFIX':   ('INT',   False),
+    'IDINT':  ('INT',   False),
     # Type conversion — needs KIND arg to preserve target precision
     'DBLE':   ('REAL',  True),
     'DCMPLX': ('CMPLX', True),
@@ -60,4 +62,6 @@ INTRINSIC_DECL_MAP: dict[str, str] = {
     'DCMPLX': 'CMPLX',
     'SNGL':   'REAL',
     'CABS':   'ABS',
+    'IFIX':   'INT',
+    'IDINT':  'INT',
 }

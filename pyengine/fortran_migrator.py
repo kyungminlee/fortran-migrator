@@ -123,10 +123,19 @@ def replace_intrinsic_calls(line: str, kind: int) -> str:
                     inner = line[paren_start + 1:close_pos]
                     # Skip type declarations: REAL(KIND=16), REAL(4),
                     # REAL(wp), COMPLEX(dp), etc.
+                    # The single-identifier check only applies when the
+                    # old name can itself be a Fortran type specifier.
+                    # Intrinsics like DBLE, SNGL, DCMPLX are never type
+                    # specifiers, so DBLE(ALPHA) is always a function call.
                     inner_stripped = inner.strip().upper()
+                    old_upper = old_name.upper()
+                    is_type_spec_name = old_upper in ('REAL', 'CMPLX',
+                                                       'COMPLEX')
                     if (re.match(r'KIND\s*=', inner_stripped)
                             or inner_stripped.isdigit()
-                            or re.match(r'^[A-Z_]\w*$', inner_stripped)):
+                            or (is_type_spec_name
+                                and re.match(r'^[A-Z_]\w*$',
+                                             inner_stripped))):
                         search_start = pos
                         continue
                     # Skip if KIND= already present (from prior replacement)
@@ -223,11 +232,42 @@ def replace_generic_conversions(line: str, kind: int) -> str:
 
 
 def replace_intrinsic_decls(line: str) -> str:
-    """Replace intrinsic names in INTRINSIC declarations."""
+    """Replace intrinsic names in INTRINSIC declarations.
+
+    After substitution, removes duplicate names that can arise when a
+    type-specific intrinsic (e.g. DBLE) maps to a generic (REAL) that
+    already appears in the same declaration.
+    """
     if not re.match(r'\s+INTRINSIC\b', line, re.IGNORECASE):
         return line
     for old_name, new_name in INTRINSIC_DECL_MAP.items():
         line = re.sub(rf'\b{old_name}\b', new_name, line, flags=re.IGNORECASE)
+
+    # Deduplicate: parse out the name list, remove duplicates, reassemble.
+    m = re.match(r'(\s+INTRINSIC\s+)(.*)', line, re.IGNORECASE)
+    if m:
+        prefix, name_list = m.group(1), m.group(2)
+        newline = '\n' if line.endswith('\n') else ''
+        stripped = name_list.rstrip().rstrip('\n')
+        # Detect trailing continuation marker (& for free-form,
+        # trailing comma for fixed-form continuation)
+        trail = ''
+        if stripped.endswith('&'):
+            trail = ' &'
+            stripped = stripped[:-1]
+        elif stripped.endswith(','):
+            # Trailing comma indicates a continuation line follows
+            trail = ','
+            stripped = stripped[:-1]
+        names = [n.strip() for n in stripped.split(',') if n.strip()]
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for n in names:
+            key = n.upper()
+            if key not in seen:
+                seen.add(key)
+                deduped.append(n)
+        line = prefix + ', '.join(deduped) + trail + newline
     return line
 
 
