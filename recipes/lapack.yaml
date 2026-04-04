@@ -28,4 +28,5 @@ skip_files:
 # Multi-precision utility modules — copy unchanged
 copy_files:
   - LA_CONSTANTS
+  - LA_CONSTANTS_EP
   - LA_XISNAN
