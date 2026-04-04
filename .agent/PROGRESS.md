@@ -258,10 +258,14 @@ Rename map sizes after adding dependencies:
 ## Likely Next Steps
 
 1. **Migrate PBLAS**: Add a recipe for PBLAS/SRC (Fortran + C mixed) to resolve
-   the ~69 correctly-renamed-but-missing PBLAS symbols.
-2. **C migrator `cmd_build` support**: Generate a proper CMakeLists.txt for
+   the ~69 correctly-renamed-but-missing PBLAS symbols (`pqgemm_`, `pxgemv_`,
+   `peaxpy_`, etc.).
+2. **Migrate XBLAS**: Add a recipe (or exclusion policy) for the 14 XBLAS
+   extended-precision BLAS symbols (`blas_sgemv_x_`, `blas_zgbmv2_x_`, etc.)
+   referenced from LAPACK extra-precise iterative refinement routines.
+3. **C migrator `cmd_build` support**: Generate a proper CMakeLists.txt for
    C libraries (with MPI, compiler flags, etc.) from `pyengine build`.
-3. **C migrator `cmd_verify`**: Add verification for C files (check for
+4. **C migrator `cmd_verify`**: Add verification for C files (check for
    residual `double`/`MPI_DOUBLE` in q/x files).
-4. **Test with Intel Fortran / NVIDIA HPC SDK**: Verify KIND=16 works with
+5. **Test with Intel Fortran / NVIDIA HPC SDK**: Verify KIND=16 works with
    non-GCC compilers (KIND=10 will be skipped via HAVE_REAL10 guard).
