@@ -30,3 +30,4 @@ copy_files:
   - LA_CONSTANTS
   - LA_CONSTANTS_EP
   - LA_XISNAN
+  - LA_XISNAN_EP

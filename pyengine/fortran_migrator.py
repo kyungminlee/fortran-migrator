@@ -366,6 +366,87 @@ def _replace_kind_parameter(line: str, kind: int) -> str:
     return _KIND_PARAM_RE.sub(rf'\g<1>{kind}', line)
 
 
+# ---------------------------------------------------------------------------
+# USE LA_CONSTANTS → USE LA_CONSTANTS_EP rewriting
+# ---------------------------------------------------------------------------
+
+# All parameter names defined in la_constants.f90, grouped by prefix.
+_LA_CONST_SP = [
+    'SP', 'SZERO', 'SHALF', 'SONE', 'STWO', 'STHREE', 'SFOUR',
+    'SEIGHT', 'STEN', 'SPREFIX',
+    'SULP', 'SEPS', 'SSAFMIN', 'SSAFMAX', 'SSMLNUM', 'SBIGNUM',
+    'SRTMIN', 'SRTMAX', 'STSML', 'STBIG', 'SSSML', 'SSBIG',
+]
+_LA_CONST_CP = ['CZERO', 'CHALF', 'CONE', 'CPREFIX']
+_LA_CONST_DP = [
+    'DP', 'DZERO', 'DHALF', 'DONE', 'DTWO', 'DTHREE', 'DFOUR',
+    'DEIGHT', 'DTEN', 'DPREFIX',
+    'DULP', 'DEPS', 'DSAFMIN', 'DSAFMAX', 'DSMLNUM', 'DBIGNUM',
+    'DRTMIN', 'DRTMAX', 'DTSML', 'DTBIG', 'DSSML', 'DSBIG',
+]
+_LA_CONST_ZP = ['ZZERO', 'ZHALF', 'ZONE', 'ZPREFIX']
+
+
+def _la_constants_rename_map(kind: int) -> dict[str, str]:
+    """Build a rename map for LA_CONSTANTS symbols at a given KIND."""
+    from .prefix_classifier import PREFIX_MAP
+    pmap = PREFIX_MAP[kind]
+    renames: dict[str, str] = {}
+    for name in _LA_CONST_SP:
+        renames[name] = pmap['S'] + name[1:]
+    for name in _LA_CONST_CP:
+        renames[name] = pmap['C'] + name[1:]
+    for name in _LA_CONST_DP:
+        renames[name] = pmap['D'] + name[1:]
+    for name in _LA_CONST_ZP:
+        renames[name] = pmap['Z'] + name[1:]
+    return renames
+
+
+def rewrite_la_constants_use(source: str, kind: int) -> str:
+    """Rewrite USE LA_CONSTANTS → LA_CONSTANTS_EP and USE LA_XISNAN → LA_XISNAN_EP.
+
+    Handles multi-line USE statements (free-form & continuation).
+    For LA_CONSTANTS: also renames imported constant symbols to their
+    extended/quad-precision counterparts.
+    """
+    const_renames = _la_constants_rename_map(kind)
+    lines = source.split('\n')
+    result: list[str] = []
+    in_use_stmt = False  # tracks multi-line LA_CONSTANTS USE
+
+    for line in lines:
+        upper = line.upper().lstrip()
+
+        # --- USE LA_XISNAN → USE LA_XISNAN_EP (always single-line) ---
+        if re.search(r'\bUSE\s+LA_XISNAN\b', upper) and 'LA_XISNAN_EP' not in upper:
+            line = re.sub(
+                r'(?i)\bLA_XISNAN\b',
+                lambda m: ('la_xisnan_ep' if m.group().islower()
+                           else 'LA_XISNAN_EP'),
+                line,
+            )
+
+        # --- USE LA_CONSTANTS → USE LA_CONSTANTS_EP + rename symbols ---
+        if re.search(r'\bUSE\s+LA_CONSTANTS\b', upper) and 'LA_CONSTANTS_EP' not in upper:
+            in_use_stmt = True
+            line = re.sub(
+                r'(?i)\bLA_CONSTANTS\b',
+                lambda m: ('la_constants_ep' if m.group().islower()
+                           else 'LA_CONSTANTS_EP'),
+                line,
+            )
+
+        if in_use_stmt:
+            line = replace_routine_names(line, const_renames)
+            if not line.rstrip().endswith('&'):
+                in_use_stmt = False
+
+        result.append(line)
+
+    return '\n'.join(result)
+
+
 def migrate_free_form(source: str, rename_map: dict[str, str],
                       kind: int) -> str:
     """Migrate a free-form Fortran file (.f90).
@@ -375,6 +456,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str],
         integer, parameter :: wp = real64       (iso_fortran_env)
     We change the wp/sp/dp definition and rename routines.
     """
+    source = rewrite_la_constants_use(source, kind)
     lines = source.splitlines(keepends=True)
     result = []
     for line in lines:
@@ -538,6 +620,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str],
 def _migrate_free_form_flang(source: str, rename_map: dict[str, str],
                              kind: int, has_float_types: bool) -> str:
     """Free-form migration guided by Flang parse tree."""
+    source = rewrite_la_constants_use(source, kind)
     lines = source.splitlines(keepends=True)
     result = []
     for line in lines:
