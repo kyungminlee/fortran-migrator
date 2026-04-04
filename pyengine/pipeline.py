@@ -5,6 +5,7 @@ Usage:
     run_migration(recipe_path, output_dir, target_kind=16)
 """
 
+import re
 from pathlib import Path
 
 from .config import RecipeConfig, load_recipe
@@ -14,6 +15,60 @@ from .fortran_migrator import migrate_file, migrate_file_to_string, target_filen
 from .c_migrator import migrate_c_directory
 
 from tqdm import tqdm
+
+
+def _strip_fortran_comments(text: str, ext: str) -> str:
+    """Strip comments from Fortran source so convergence comparisons
+    ignore commentary that differs between S/D or C/Z source halves.
+
+    Fixed-form (.f/.for): a line is a full comment when column 1 is
+    C, c, *, !, d, or D. Inline ! comments are stripped unless inside
+    a string literal.
+
+    Free-form (.f90/.F90/.f95): a line is a full comment when the
+    first non-blank char is !. Inline ! comments are stripped the
+    same way.
+
+    Trailing whitespace and blank lines that result from stripping are
+    removed so normalization is stable.
+    """
+    is_fixed = ext.lower() in ('.f', '.for')
+    out_lines: list[str] = []
+    for line in text.split('\n'):
+        if is_fixed and line[:1] in ('C', 'c', '*', '!'):
+            # Column-1 comment marker in fixed-form.
+            continue
+        if not is_fixed and line.lstrip().startswith('!'):
+            continue
+        # Strip inline ! comments (respect simple single/double quotes)
+        stripped = _strip_inline_bang(line)
+        if stripped.strip():
+            out_lines.append(stripped.rstrip())
+    return '\n'.join(out_lines)
+
+
+def _strip_inline_bang(line: str) -> str:
+    in_s = in_d = False
+    for i, ch in enumerate(line):
+        if ch == "'" and not in_d:
+            in_s = not in_s
+        elif ch == '"' and not in_s:
+            in_d = not in_d
+        elif ch == '!' and not in_s and not in_d:
+            return line[:i]
+    return line
+
+
+def _strip_c_comments(text: str) -> str:
+    """Strip // and /* */ comments plus blank/whitespace-only lines."""
+    # Remove /* ... */ block comments (possibly multi-line)
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
+    # Remove // line comments
+    text = re.sub(r'//[^\n]*', '', text)
+    # Collapse blank/whitespace-only lines and trim trailing spaces
+    lines = [ln.rstrip() for ln in text.split('\n')]
+    lines = [ln for ln in lines if ln.strip()]
+    return '\n'.join(lines)
 
 
 def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
@@ -52,6 +107,7 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     src_files.sort(key=lambda p: (not _is_double_source(p.stem), p.name))
 
     canonical_text: dict[str, str] = {}
+    canonical_normalized: dict[str, str] = {}
     canonical_source: dict[str, str] = {}
 
     for src_path in tqdm(src_files, desc='  Migrating', unit='file',
@@ -79,15 +135,19 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
             continue
         out_name, migrated = result
 
-        prior = canonical_text.get(out_name)
+        normalized = _strip_fortran_comments(migrated, src_path.suffix)
+
+        prior = canonical_normalized.get(out_name)
         if prior is None:
             # First (canonical) writer for this target name
             (output_dir / out_name).write_text(migrated)
             canonical_text[out_name] = migrated
+            canonical_normalized[out_name] = normalized
             canonical_source[out_name] = src_path.name
             migrated_count += 1
-        elif prior == migrated:
-            # Convergence: co-family member produced identical output
+        elif prior == normalized:
+            # Convergence: co-family member produced identical code
+            # (comments may differ and are ignored).
             pass
         else:
             # Divergence: co-family members disagree. Keep the canonical

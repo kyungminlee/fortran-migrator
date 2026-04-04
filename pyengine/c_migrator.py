@@ -262,9 +262,15 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         ),
     )
 
+    def _strip_c_comments(s: str) -> str:
+        s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
+        s = re.sub(r'//[^\n]*', '', s)
+        lines = [ln.rstrip() for ln in s.split('\n')]
+        return '\n'.join(ln for ln in lines if ln.strip())
+
     cloned: list[str] = []
     divergences: list[str] = []
-    canonical_text: dict[str, str] = {}
+    canonical_normalized: dict[str, str] = {}
     canonical_source: dict[str, str] = {}
 
     for f in entries:
@@ -290,14 +296,15 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         text = _rename(text)
         text = _apply_c_type_subs(text, template_vars)
 
-        prior = canonical_text.get(new_name)
+        normalized = _strip_c_comments(text)
+        prior = canonical_normalized.get(new_name)
         if prior is None:
             new_path.write_text(text)
-            canonical_text[new_name] = text
+            canonical_normalized[new_name] = normalized
             canonical_source[new_name] = f.name
             cloned.append(f'{f.name} → {new_name}')
-        elif prior == text:
-            pass  # convergence
+        elif prior == normalized:
+            pass  # convergence (ignoring comment differences)
         else:
             divergences.append(
                 f'{f.name} vs {canonical_source[new_name]} → {new_name}'
