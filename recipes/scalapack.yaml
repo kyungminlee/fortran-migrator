@@ -6,6 +6,17 @@ extensions: [.f, .f90]
 symbols:
   method: scan_source
 
+depends:
+  - lapack.yaml   # transitively includes BLAS
+
+# Additional source dirs to scan for symbols (not migrated, just for renaming)
+# Scans both Fortran and C files, plus subdirectories.
+extra_symbol_dirs:
+  - external/scalapack-2.2.3/TOOLS
+  - external/scalapack-2.2.3/PBLAS/SRC
+  - external/scalapack-2.2.3/SRC        # re-scan for C symbols (slamov, etc.)
+  - external/scalapack-2.2.3/REDIST/SRC # pigemr2d, etc.
+
 prefix:
   style: scalapack  # P + S/D/C/Z
 

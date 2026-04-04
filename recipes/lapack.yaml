@@ -6,6 +6,13 @@ extensions: [.f, .f90, .F90]
 symbols:
   method: scan_source
 
+depends:
+  - blas.yaml
+
+# INSTALL directory contains slamch/dlamch, sroundup_lwork, etc.
+extra_symbol_dirs:
+  - external/lapack-3.12.1/INSTALL
+
 prefix:
   style: direct
 

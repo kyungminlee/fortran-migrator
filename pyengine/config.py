@@ -28,6 +28,8 @@ class RecipeConfig:
     copy_files: set[str] = field(default_factory=set)  # Copy unchanged (multi-precision utilities)
     copy_all_originals: bool = False  # For C: copy all files, then add clones
     patches: list[str] = field(default_factory=list)
+    depends: list[Path] = field(default_factory=list)  # Dependency recipe paths
+    extra_symbol_dirs: list[Path] = field(default_factory=list)  # Extra dirs to scan for symbols
 
 
 def load_recipe(recipe_path: Path,
@@ -62,6 +64,14 @@ def load_recipe(recipe_path: Path,
     skip = set(s.upper() for s in data.get('skip_files', []))
     copy = set(s.upper() for s in data.get('copy_files', []))
 
+    # Resolve dependency recipe paths relative to the recipe directory
+    depends_raw = data.get('depends', [])
+    depends = [recipe_path.parent / d for d in depends_raw]
+
+    # Resolve extra symbol directories relative to the project root
+    extra_dirs_raw = data.get('extra_symbol_dirs', [])
+    extra_symbol_dirs = [project_root / d for d in extra_dirs_raw]
+
     return RecipeConfig(
         library=data['library'],
         language=data['language'],
@@ -74,4 +84,6 @@ def load_recipe(recipe_path: Path,
         copy_files=copy,
         copy_all_originals=data.get('copy_all_originals', False),
         patches=data.get('patches', []),
+        depends=depends,
+        extra_symbol_dirs=extra_symbol_dirs,
     )
