@@ -4,9 +4,10 @@
 
 ### What This Branch Does
 
-Adds support for migrating BLACS (C library) alongside the existing Fortran
-migration (BLAS, LAPACK), including proper MPI datatype handling, Bdef.h
-patching, and LAPACK constant module support for extended/quad precision.
+Adds support for migrating BLACS (C library) and ScaLAPACK (Fortran) alongside
+the existing BLAS/LAPACK migration, including proper MPI datatype handling,
+Bdef.h patching, LAPACK constant module support, and intrinsic function fixes
+for extended/quad precision.
 
 ---
 
@@ -17,7 +18,7 @@ patching, and LAPACK constant module support for extended/quad precision.
 | BLAS    | migrate ✓ verify ✓ build ✓ | migrate ✓ verify ✓ build ✓ | Clean |
 | LAPACK  | migrate ✓ verify ⚠ build ✓ | migrate ✓ verify ⚠ build ✓ | 6 benign verify warnings (see below) |
 | BLACS   | migrate ✓ build ✓ | migrate ✓ build ✓ | No verify step for C yet |
-| ScaLAPACK | not tested | not tested | Recipe exists, Fortran, depends on all above |
+| ScaLAPACK | migrate ✓ verify ⚠ build ✓ | migrate ✓ verify ⚠ build ✓ | 1 benign verify warning (see below) |
 
 ### LAPACK Verify Warnings (benign — do not need fixing)
 
@@ -29,6 +30,12 @@ patching, and LAPACK constant module support for extended/quad precision.
    72 chars. These are on *comment lines* where the original `dlarf1f.f` was
    already close to the limit and the `d→q` prefix change pushed them over.
    The Fortran compiler ignores comment overflow.
+
+### ScaLAPACK Verify Warning (benign — do not need fixing)
+
+1. **`piparmq.f` D-exponent residual (1 warning)**: Line 263 has `335.0D+0`
+   and `-0.44D+0` — this is a precision-independent file copied unchanged
+   from the original source. The D-exponents are in the original code.
 
 ---
 
@@ -64,6 +71,27 @@ and a dedicated rewriting pass that:
 
 This runs as a **pre-processing step** before the line-by-line migration in
 both `migrate_free_form()` and `_migrate_free_form_flang()`.
+
+### ScaLAPACK Intrinsic Fixes (in `intrinsics.py` and `fortran_migrator.py`)
+
+Three issues surfaced during ScaLAPACK testing that required migrator fixes:
+
+1. **IFIX/IDINT intrinsics**: `IFIX` (REAL(4)→INTEGER) and `IDINT`
+   (REAL(8)→INTEGER) are precision-specific integer conversion intrinsics
+   used in `psgeqpf.f`, `pcgeqpf.f`, `pdgeqpf.f`, `pzgeqpf.f`. Both now
+   map to the generic `INT`.
+
+2. **Duplicate INTRINSIC declarations**: When `DBLE` → `REAL` replacement
+   creates a duplicate in an INTRINSIC declaration (e.g., the original has
+   both `DBLE` and `REAL`), gfortran rejects it. The `replace_intrinsic_decls()`
+   function now deduplicates names while preserving trailing commas needed
+   for fixed-form continuation lines.
+
+3. **DBLE(variable) wrongly skipped**: The `replace_intrinsic_calls()` function
+   had a heuristic to skip `REAL(wp)` type declarations (single identifier
+   argument). This incorrectly skipped `DBLE(ALPHA)` function calls. Fixed by
+   only applying the single-identifier skip for names that can be Fortran type
+   specifiers (`REAL`, `CMPLX`, `COMPLEX`), not for `DBLE`, `SNGL`, etc.
 
 ### HAVE_REAL10 Macro
 
@@ -140,11 +168,10 @@ that doesn't exist in the output directory.
   helpers (`BI_qvvamx.c`, `BI_qvvsum.c`, etc.), so it's not just opaque
   byte passing — the compiler must support `__float128` math.
 
-### 5. ScaLAPACK migration is untested
-The `scalapack.yaml` recipe exists and uses `prefix_style: scalapack`
-(P + S/D/C/Z pattern). It has NOT been tested through the pipeline.
-ScaLAPACK depends on BLAS, LAPACK, and BLACS, so a full build would
-require all four libraries migrated and linked together.
+### 5. ScaLAPACK `piparmq.f` D-exponent residual
+The copied (precision-independent) file `piparmq.f` contains `335.0D+0`
+and `-0.44D+0` literals. This is in the original source and triggers a
+benign verify warning. The file is not migrated, just copied.
 
 ### 6. Fixed-form Fortran column limits
 The migrator does not wrap or reformat lines that exceed 72 columns after
@@ -180,19 +207,19 @@ patched — add it if you need f2c support.
 1c52897 Rewrite USE LA_CONSTANTS/LA_XISNAN to EP modules in migrated code
 44c6c23 Use standard MPI types (MPI_REAL16/MPI_COMPLEX32) for quad-precision BLACS
 358e41e Patch Bdef.h with extended-precision types, macros, and name mangling
+e69dd01 Add .agent/PROGRESS.md with project status and continuation notes
+3387f6d Fix ScaLAPACK migration: add IFIX/IDINT intrinsics, dedup INTRINSIC decls, fix DBLE(var) skip
 ```
 
 ---
 
 ## Likely Next Steps
 
-1. **ScaLAPACK migration**: Run the pipeline and debug any issues. It will
-   likely need similar USE-statement rewriting for ScaLAPACK-specific modules.
-2. **Integrated build**: Build all four libraries together (BLAS → LAPACK →
+1. **Integrated build**: Build all four libraries together (BLAS → LAPACK →
    BLACS → ScaLAPACK) and link them into a single test program.
-3. **C migrator `cmd_build` support**: Generate a proper CMakeLists.txt for
+2. **C migrator `cmd_build` support**: Generate a proper CMakeLists.txt for
    C libraries (with MPI, compiler flags, etc.) from `pyengine build`.
-4. **C migrator `cmd_verify`**: Add verification for C files (check for
+3. **C migrator `cmd_verify`**: Add verification for C files (check for
    residual `double`/`MPI_DOUBLE` in q/x files).
-5. **Test with Intel Fortran / NVIDIA HPC SDK**: Verify KIND=16 works with
+4. **Test with Intel Fortran / NVIDIA HPC SDK**: Verify KIND=16 works with
    non-GCC compilers (KIND=10 will be skipped via HAVE_REAL10 guard).
