@@ -32,10 +32,10 @@ REAL_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
-    (r'MPI_DOUBLE', 'MPI_{REAL_TYPE}'),
-    # Function name prefixes
+    (r'MPI_DOUBLE', '{MPI_REAL}'),
+    # Function name prefixes (allow uppercase after prefix for BI_dMPI_* etc.)
     (r'Cd([a-z])', r'C{RP}\1'),
-    (r'BI_d([a-z])', r'BI_{RP}\1'),
+    (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
 ]
 
 COMPLEX_CLONE_SUBS = [
@@ -48,14 +48,28 @@ COMPLEX_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types (order matters: DOUBLE_COMPLEX before DOUBLE)
-    (r'MPI_DOUBLE_COMPLEX', 'MPI_{COMPLEX_TYPE}'),
-    (r'MPI_DOUBLE', 'MPI_{REAL_TYPE}'),
-    (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'MPI_{COMPLEX_TYPE}\1'),
-    # Function name prefixes
+    (r'MPI_DOUBLE_COMPLEX', '{MPI_COMPLEX}'),
+    (r'MPI_DOUBLE', '{MPI_REAL}'),
+    (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'{MPI_COMPLEX}\1'),
+    # Function name prefixes (allow uppercase after prefix for BI_zMPI_* etc.)
     (r'Cz([a-z])', r'C{CP}\1'),
-    (r'BI_z([a-z])', r'BI_{CP}\1'),
-    (r'BI_d([a-z])', r'BI_{RP}\1'),
+    (r'BI_z([a-zA-Z])', r'BI_{CP}\1'),
+    (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
 ]
+
+
+# Standard MPI datatype names for each target KIND.
+# KIND=16 (quad precision): MPI_REAL16 / MPI_COMPLEX32 — requires MPI
+#   implementation with quad-precision support.
+# KIND=10 (extended precision): maps to long double on x86.
+_MPI_REAL_TYPE = {
+    16: 'MPI_REAL16',
+    10: 'MPI_LONG_DOUBLE',
+}
+_MPI_COMPLEX_TYPE = {
+    16: 'MPI_COMPLEX32',
+    10: 'MPI_C_LONG_DOUBLE_COMPLEX',
+}
 
 
 def _build_sub_vars(kind: int) -> dict[str, str]:
@@ -68,8 +82,8 @@ def _build_sub_vars(kind: int) -> dict[str, str]:
     return {
         'REAL_TYPE': real_type,
         'COMPLEX_TYPE': complex_type,
-        'MPI_REAL': f'MPI_{real_type}',
-        'MPI_COMPLEX': f'MPI_{complex_type}',
+        'MPI_REAL': _MPI_REAL_TYPE[kind],
+        'MPI_COMPLEX': _MPI_COMPLEX_TYPE[kind],
         'RP': rp,
         'CP': cp,
         'RPU': rp.upper(),
@@ -79,8 +93,14 @@ def _build_sub_vars(kind: int) -> dict[str, str]:
 
 def clone_c_file(src_path: Path, dst_path: Path,
                  subs: list[tuple[str, str]],
-                 template_vars: dict[str, str]) -> None:
-    """Clone a C file with mechanical text substitutions."""
+                 template_vars: dict[str, str],
+                 routine_renames: list[tuple[str, str]] | None = None,
+                 ) -> None:
+    """Clone a C file with mechanical text substitutions.
+
+    routine_renames is a list of (old_name, new_name) pairs for literal
+    routine name replacements (both lowercase and uppercase are applied).
+    """
     text = src_path.read_text(errors='replace')
 
     for pattern, replacement in subs:
@@ -90,7 +110,31 @@ def clone_c_file(src_path: Path, dst_path: Path,
             expanded = expanded.replace(f'{{{key}}}', val)
         text = re.sub(pattern, expanded, text, flags=re.MULTILINE)
 
+    # Apply routine name renames (lowercase and uppercase)
+    if routine_renames:
+        for old_name, new_name in routine_renames:
+            text = text.replace(old_name, new_name)
+            text = text.replace(old_name.upper(), new_name.upper())
+
     dst_path.write_text(text)
+
+
+def _routine_renames(old_stem: str, new_stem: str) -> list[tuple[str, str]]:
+    """Derive routine name renames from source/target file stems.
+
+    For user-facing files like 'dgesd2d_' → 'qgesd2d_', strips the
+    trailing underscore to get the routine base name and returns rename
+    pairs.  For BI_-prefixed files the function names are already handled
+    by the regex rules, so this returns an empty list.
+    """
+    if old_stem.startswith('BI_'):
+        return []
+    # Strip trailing underscore if present (Fortran naming convention)
+    old_routine = old_stem.rstrip('_')
+    new_routine = new_stem.rstrip('_')
+    if old_routine == new_routine:
+        return []
+    return [(old_routine, new_routine)]
 
 
 def rename_c_file(name: str, old_prefix: str, new_prefix: str) -> str:
@@ -145,8 +189,9 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             new_name = rename_c_file(f.name, 'd', rp)
             if new_name == f.name:
                 continue
+            renames = _routine_renames(stem, Path(new_name).stem)
             clone_c_file(f, output_dir / new_name,
-                         REAL_CLONE_SUBS, template_vars)
+                         REAL_CLONE_SUBS, template_vars, renames)
             cloned.append(f'{f.name} → {new_name}')
 
     # Clone z-variant → complex-extended
@@ -158,11 +203,145 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             new_name = rename_c_file(f.name, 'z', cp)
             if new_name == f.name:
                 continue
+            renames = _routine_renames(stem, Path(new_name).stem)
             clone_c_file(f, output_dir / new_name,
-                         COMPLEX_CLONE_SUBS, template_vars)
+                         COMPLEX_CLONE_SUBS, template_vars, renames)
             cloned.append(f'{f.name} → {new_name}')
+
+    # Patch Bdef.h with extended-precision type definitions and macros
+    bdef_path = output_dir / 'Bdef.h'
+    if bdef_path.exists():
+        _patch_bdef_header(bdef_path, kind, template_vars)
+
+    # Generate MPI requirement check for KIND=16
+    if kind == 16:
+        _generate_mpi_real16_check(output_dir)
 
     return {
         'cloned': cloned,
         'template_vars': template_vars,
     }
+
+
+# C type underlying each target KIND.
+_C_REAL_TYPE = {
+    16: '__float128',
+    10: 'long double',
+}
+
+# The 11 BLACS user-facing routine suffixes (same for each type prefix).
+_BLACS_ROUTINE_SUFFIXES = [
+    'gesd2d', 'gerv2d', 'gebs2d', 'gebr2d',
+    'trsd2d', 'trrv2d', 'trbs2d', 'trbr2d',
+    'gsum2d', 'gamx2d', 'gamn2d',
+]
+
+
+def _patch_bdef_header(bdef_path: Path, kind: int,
+                       template_vars: dict[str, str]) -> None:
+    """Add extended-precision type definitions and macros to Bdef.h."""
+    rp = template_vars['RP']
+    cp = template_vars['CP']
+    real_type = template_vars['REAL_TYPE']      # e.g. QREAL
+    complex_type = template_vars['COMPLEX_TYPE']  # e.g. XCOMPLEX
+    c_type = _C_REAL_TYPE[kind]
+
+    # --- Type definitions and prototypes ---
+    type_block = f"""
+/*
+ *  Extended-precision types for migrated {{prefix}} routines.
+ */
+typedef {c_type} {real_type};
+typedef struct {{{real_type} r, i;}} {complex_type};
+
+void BI_{rp}mvcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
+void BI_{rp}vmcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
+""".replace('{prefix}', f'{rp}/{cp}')
+
+    # --- Complex copy macros ---
+    macro_block = f"""#define BI_{cp}mvcopy(m, n, A, lda, buff) \\
+        BI_{rp}mvcopy(2*(m), (n), ({real_type} *) (A), 2*(lda), ({real_type} *) (buff))
+#define BI_{cp}vmcopy(m, n, A, lda, buff) \\
+        BI_{rp}vmcopy(2*(m), (n), ({real_type} *) (A), 2*(lda), ({real_type} *) (buff))
+"""
+
+    # --- Fortran name mangling defines ---
+    def _mangling_block(prefix: str, transform) -> str:
+        lines = []
+        for suf in _BLACS_ROUTINE_SUFFIXES:
+            src = f'{prefix}{suf}_'
+            dst = transform(f'{prefix}{suf}')
+            lines.append(f'#define {src:19s}{dst}')
+        return '\n'.join(lines) + '\n'
+
+    nochange_block = (_mangling_block(rp, lambda s: s) +
+                      _mangling_block(cp, lambda s: s))
+    upcase_block = (_mangling_block(rp, str.upper) +
+                    _mangling_block(cp, str.upper))
+
+    text = bdef_path.read_text(errors='replace')
+
+    # Insert type definitions after the DCOMPLEX/SCOMPLEX typedefs
+    text = text.replace(
+        'typedef struct {float r, i;} SCOMPLEX;\n',
+        'typedef struct {float r, i;} SCOMPLEX;\n' + type_block
+    )
+
+    # Insert copy macros after the existing BI_zvmcopy macro
+    zvmcopy_line = '#define BI_zvmcopy(m, n, A, lda, buff) \\\n        BI_dvmcopy(2*(m), (n), (double *) (A), 2*(lda), (double *) (buff))'
+    text = text.replace(zvmcopy_line, zvmcopy_line + '\n' + macro_block)
+
+    # Insert name mangling defines in NOCHANGE section (after zgamn2d)
+    nochange_marker = f'#define zgamn2d_   zgamn2d\n'
+    text = text.replace(nochange_marker, nochange_marker + nochange_block)
+
+    # Insert name mangling defines in UPCASE section (after ZGAMN2D)
+    upcase_marker = f'#define zgamn2d_   ZGAMN2D\n'
+    text = text.replace(upcase_marker, upcase_marker + upcase_block)
+
+    bdef_path.write_text(text)
+
+
+def _generate_mpi_real16_check(output_dir: Path) -> None:
+    """Generate a CMake module that verifies MPI_REAL16 support."""
+    cmake = """\
+# CheckMpiReal16.cmake — Verify that the MPI implementation provides
+# MPI_REAL16 and MPI_COMPLEX32, which are required by the migrated
+# quad-precision BLACS routines.
+#
+# Usage:
+#   include(CheckMpiReal16)
+#   check_mpi_real16()          # FATAL_ERROR if unsupported
+#
+# After a successful check the cache variable HAVE_MPI_REAL16 is set.
+
+include(CheckCSourceCompiles)
+
+function(check_mpi_real16)
+    find_package(MPI REQUIRED COMPONENTS C)
+
+    set(CMAKE_REQUIRED_INCLUDES  ${MPI_C_INCLUDE_DIRS})
+    set(CMAKE_REQUIRED_LIBRARIES ${MPI_C_LIBRARIES})
+    set(CMAKE_REQUIRED_FLAGS     ${MPI_C_COMPILE_FLAGS})
+
+    check_c_source_compiles("
+        #include <mpi.h>
+        int main(void) {
+            MPI_Datatype dt_real = MPI_REAL16;
+            MPI_Datatype dt_cplx = MPI_COMPLEX32;
+            (void)dt_real; (void)dt_cplx;
+            return 0;
+        }
+    " HAVE_MPI_REAL16)
+
+    if(NOT HAVE_MPI_REAL16)
+        message(FATAL_ERROR
+            "The MPI implementation does not provide MPI_REAL16 / MPI_COMPLEX32. "
+            "Quad-precision BLACS requires an MPI library built with 128-bit real "
+            "support (e.g. OpenMPI or MPICH compiled with __float128 enabled).")
+    endif()
+
+    set(HAVE_MPI_REAL16 ${HAVE_MPI_REAL16} PARENT_SCOPE)
+endfunction()
+"""
+    (output_dir / 'CheckMpiReal16.cmake').write_text(cmake)

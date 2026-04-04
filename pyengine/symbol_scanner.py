@@ -58,7 +58,12 @@ def scan_c_source(src_dir: Path,
             continue
         text = f.read_text(errors='replace')
         for m in _C_FUNC_RE.finditer(text):
-            names.add(m.group(1).upper())
+            sym = m.group(1)
+            # Strip trailing underscore (Fortran name mangling in C wrappers)
+            if sym.endswith('_'):
+                sym = sym[:-1]
+            if sym:
+                names.add(sym.upper())
     return names
 
 

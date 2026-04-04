@@ -132,6 +132,21 @@ endif()
 # Enable Fortran preprocessing for .F90 files
 set(CMAKE_Fortran_PREPROCESS ON)
 
+# Detect 80-bit extended precision (KIND=10) support
+if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+    include(CheckFortranSourceCompiles)
+    check_fortran_source_compiles("
+        program test_real10
+        integer, parameter :: ep = selected_real_kind(18, 4931)
+        real(ep) :: x
+        x = 1.0_ep
+        end program
+    " HAVE_REAL10 SRC_EXT F90)
+    if(HAVE_REAL10)
+        add_compile_definitions(HAVE_REAL10)
+    endif()
+endif()
+
 # --- Common (type-independent) library ---
 set(COMMON_SOURCES
     {common_list}

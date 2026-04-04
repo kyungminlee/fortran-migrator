@@ -123,10 +123,19 @@ def replace_intrinsic_calls(line: str, kind: int) -> str:
                     inner = line[paren_start + 1:close_pos]
                     # Skip type declarations: REAL(KIND=16), REAL(4),
                     # REAL(wp), COMPLEX(dp), etc.
+                    # The single-identifier check only applies when the
+                    # old name can itself be a Fortran type specifier.
+                    # Intrinsics like DBLE, SNGL, DCMPLX are never type
+                    # specifiers, so DBLE(ALPHA) is always a function call.
                     inner_stripped = inner.strip().upper()
+                    old_upper = old_name.upper()
+                    is_type_spec_name = old_upper in ('REAL', 'CMPLX',
+                                                       'COMPLEX')
                     if (re.match(r'KIND\s*=', inner_stripped)
                             or inner_stripped.isdigit()
-                            or re.match(r'^[A-Z_]\w*$', inner_stripped)):
+                            or (is_type_spec_name
+                                and re.match(r'^[A-Z_]\w*$',
+                                             inner_stripped))):
                         search_start = pos
                         continue
                     # Skip if KIND= already present (from prior replacement)
@@ -223,11 +232,42 @@ def replace_generic_conversions(line: str, kind: int) -> str:
 
 
 def replace_intrinsic_decls(line: str) -> str:
-    """Replace intrinsic names in INTRINSIC declarations."""
+    """Replace intrinsic names in INTRINSIC declarations.
+
+    After substitution, removes duplicate names that can arise when a
+    type-specific intrinsic (e.g. DBLE) maps to a generic (REAL) that
+    already appears in the same declaration.
+    """
     if not re.match(r'\s+INTRINSIC\b', line, re.IGNORECASE):
         return line
     for old_name, new_name in INTRINSIC_DECL_MAP.items():
         line = re.sub(rf'\b{old_name}\b', new_name, line, flags=re.IGNORECASE)
+
+    # Deduplicate: parse out the name list, remove duplicates, reassemble.
+    m = re.match(r'(\s+INTRINSIC\s+)(.*)', line, re.IGNORECASE)
+    if m:
+        prefix, name_list = m.group(1), m.group(2)
+        newline = '\n' if line.endswith('\n') else ''
+        stripped = name_list.rstrip().rstrip('\n')
+        # Detect trailing continuation marker (& for free-form,
+        # trailing comma for fixed-form continuation)
+        trail = ''
+        if stripped.endswith('&'):
+            trail = ' &'
+            stripped = stripped[:-1]
+        elif stripped.endswith(','):
+            # Trailing comma indicates a continuation line follows
+            trail = ','
+            stripped = stripped[:-1]
+        names = [n.strip() for n in stripped.split(',') if n.strip()]
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for n in names:
+            key = n.upper()
+            if key not in seen:
+                seen.add(key)
+                deduped.append(n)
+        line = prefix + ', '.join(deduped) + trail + newline
     return line
 
 
@@ -366,6 +406,87 @@ def _replace_kind_parameter(line: str, kind: int) -> str:
     return _KIND_PARAM_RE.sub(rf'\g<1>{kind}', line)
 
 
+# ---------------------------------------------------------------------------
+# USE LA_CONSTANTS → USE LA_CONSTANTS_EP rewriting
+# ---------------------------------------------------------------------------
+
+# All parameter names defined in la_constants.f90, grouped by prefix.
+_LA_CONST_SP = [
+    'SP', 'SZERO', 'SHALF', 'SONE', 'STWO', 'STHREE', 'SFOUR',
+    'SEIGHT', 'STEN', 'SPREFIX',
+    'SULP', 'SEPS', 'SSAFMIN', 'SSAFMAX', 'SSMLNUM', 'SBIGNUM',
+    'SRTMIN', 'SRTMAX', 'STSML', 'STBIG', 'SSSML', 'SSBIG',
+]
+_LA_CONST_CP = ['CZERO', 'CHALF', 'CONE', 'CPREFIX']
+_LA_CONST_DP = [
+    'DP', 'DZERO', 'DHALF', 'DONE', 'DTWO', 'DTHREE', 'DFOUR',
+    'DEIGHT', 'DTEN', 'DPREFIX',
+    'DULP', 'DEPS', 'DSAFMIN', 'DSAFMAX', 'DSMLNUM', 'DBIGNUM',
+    'DRTMIN', 'DRTMAX', 'DTSML', 'DTBIG', 'DSSML', 'DSBIG',
+]
+_LA_CONST_ZP = ['ZZERO', 'ZHALF', 'ZONE', 'ZPREFIX']
+
+
+def _la_constants_rename_map(kind: int) -> dict[str, str]:
+    """Build a rename map for LA_CONSTANTS symbols at a given KIND."""
+    from .prefix_classifier import PREFIX_MAP
+    pmap = PREFIX_MAP[kind]
+    renames: dict[str, str] = {}
+    for name in _LA_CONST_SP:
+        renames[name] = pmap['S'] + name[1:]
+    for name in _LA_CONST_CP:
+        renames[name] = pmap['C'] + name[1:]
+    for name in _LA_CONST_DP:
+        renames[name] = pmap['D'] + name[1:]
+    for name in _LA_CONST_ZP:
+        renames[name] = pmap['Z'] + name[1:]
+    return renames
+
+
+def rewrite_la_constants_use(source: str, kind: int) -> str:
+    """Rewrite USE LA_CONSTANTS → LA_CONSTANTS_EP and USE LA_XISNAN → LA_XISNAN_EP.
+
+    Handles multi-line USE statements (free-form & continuation).
+    For LA_CONSTANTS: also renames imported constant symbols to their
+    extended/quad-precision counterparts.
+    """
+    const_renames = _la_constants_rename_map(kind)
+    lines = source.split('\n')
+    result: list[str] = []
+    in_use_stmt = False  # tracks multi-line LA_CONSTANTS USE
+
+    for line in lines:
+        upper = line.upper().lstrip()
+
+        # --- USE LA_XISNAN → USE LA_XISNAN_EP (always single-line) ---
+        if re.search(r'\bUSE\s+LA_XISNAN\b', upper) and 'LA_XISNAN_EP' not in upper:
+            line = re.sub(
+                r'(?i)\bLA_XISNAN\b',
+                lambda m: ('la_xisnan_ep' if m.group().islower()
+                           else 'LA_XISNAN_EP'),
+                line,
+            )
+
+        # --- USE LA_CONSTANTS → USE LA_CONSTANTS_EP + rename symbols ---
+        if re.search(r'\bUSE\s+LA_CONSTANTS\b', upper) and 'LA_CONSTANTS_EP' not in upper:
+            in_use_stmt = True
+            line = re.sub(
+                r'(?i)\bLA_CONSTANTS\b',
+                lambda m: ('la_constants_ep' if m.group().islower()
+                           else 'LA_CONSTANTS_EP'),
+                line,
+            )
+
+        if in_use_stmt:
+            line = replace_routine_names(line, const_renames)
+            if not line.rstrip().endswith('&'):
+                in_use_stmt = False
+
+        result.append(line)
+
+    return '\n'.join(result)
+
+
 def migrate_free_form(source: str, rename_map: dict[str, str],
                       kind: int) -> str:
     """Migrate a free-form Fortran file (.f90).
@@ -375,6 +496,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str],
         integer, parameter :: wp = real64       (iso_fortran_env)
     We change the wp/sp/dp definition and rename routines.
     """
+    source = rewrite_la_constants_use(source, kind)
     lines = source.splitlines(keepends=True)
     result = []
     for line in lines:
@@ -538,6 +660,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str],
 def _migrate_free_form_flang(source: str, rename_map: dict[str, str],
                              kind: int, has_float_types: bool) -> str:
     """Free-form migration guided by Flang parse tree."""
+    source = rewrite_la_constants_use(source, kind)
     lines = source.splitlines(keepends=True)
     result = []
     for line in lines:

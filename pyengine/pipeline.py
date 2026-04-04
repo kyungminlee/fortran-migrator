@@ -116,9 +116,45 @@ def run_migration(recipe_path: Path, output_dir: Path,
         config.source_dir, config.language,
         config.extensions, config.library_path
     )
+    own_count = len(symbols)
+
+    # Merge symbols from dependency libraries
+    for dep_path in config.depends:
+        dep_config = load_recipe(dep_path, project_root)
+        dep_symbols = scan_symbols(
+            dep_config.source_dir, dep_config.language,
+            dep_config.extensions, dep_config.library_path
+        )
+        symbols |= dep_symbols
+        # Recursively load transitive dependencies
+        for transitive in dep_config.depends:
+            trans_config = load_recipe(transitive, project_root)
+            trans_symbols = scan_symbols(
+                trans_config.source_dir, trans_config.language,
+                trans_config.extensions, trans_config.library_path
+            )
+            symbols |= trans_symbols
+
+    # Scan extra symbol directories (for external dependencies like PBLAS/TOOLS)
+    # These are scanned recursively to handle subdirectory structures.
+    # Both Fortran and C files are scanned for symbols.
+    for extra_dir in config.extra_symbol_dirs:
+        if extra_dir.is_dir():
+            for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
+                               ('c', ['.c'])]:
+                extra_syms = scan_symbols(extra_dir, lang, exts)
+                symbols |= extra_syms
+            # Also scan subdirectories
+            for sub in sorted(extra_dir.iterdir()):
+                if sub.is_dir():
+                    for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
+                                       ('c', ['.c'])]:
+                        sub_syms = scan_symbols(sub, lang, exts)
+                        symbols |= sub_syms
+
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_kind)
-    print(f'  {len(symbols)} symbols found')
+    print(f'  {own_count} own symbols + {len(symbols) - own_count} from dependencies')
     print(f'  {len(classification.families)} precision families')
     print(f'  {len(classification.independent)} independent symbols')
     print(f'  {len(rename_map)} renames computed')
