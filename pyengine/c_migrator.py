@@ -208,6 +208,11 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                          COMPLEX_CLONE_SUBS, template_vars, renames)
             cloned.append(f'{f.name} → {new_name}')
 
+    # Patch Bdef.h with extended-precision type definitions and macros
+    bdef_path = output_dir / 'Bdef.h'
+    if bdef_path.exists():
+        _patch_bdef_header(bdef_path, kind, template_vars)
+
     # Generate MPI requirement check for KIND=16
     if kind == 16:
         _generate_mpi_real16_check(output_dir)
@@ -216,6 +221,85 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
         'cloned': cloned,
         'template_vars': template_vars,
     }
+
+
+# C type underlying each target KIND.
+_C_REAL_TYPE = {
+    16: '__float128',
+    10: 'long double',
+}
+
+# The 11 BLACS user-facing routine suffixes (same for each type prefix).
+_BLACS_ROUTINE_SUFFIXES = [
+    'gesd2d', 'gerv2d', 'gebs2d', 'gebr2d',
+    'trsd2d', 'trrv2d', 'trbs2d', 'trbr2d',
+    'gsum2d', 'gamx2d', 'gamn2d',
+]
+
+
+def _patch_bdef_header(bdef_path: Path, kind: int,
+                       template_vars: dict[str, str]) -> None:
+    """Add extended-precision type definitions and macros to Bdef.h."""
+    rp = template_vars['RP']
+    cp = template_vars['CP']
+    real_type = template_vars['REAL_TYPE']      # e.g. QREAL
+    complex_type = template_vars['COMPLEX_TYPE']  # e.g. XCOMPLEX
+    c_type = _C_REAL_TYPE[kind]
+
+    # --- Type definitions and prototypes ---
+    type_block = f"""
+/*
+ *  Extended-precision types for migrated {{prefix}} routines.
+ */
+typedef {c_type} {real_type};
+typedef struct {{{real_type} r, i;}} {complex_type};
+
+void BI_{rp}mvcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
+void BI_{rp}vmcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
+""".replace('{prefix}', f'{rp}/{cp}')
+
+    # --- Complex copy macros ---
+    macro_block = f"""#define BI_{cp}mvcopy(m, n, A, lda, buff) \\
+        BI_{rp}mvcopy(2*(m), (n), ({real_type} *) (A), 2*(lda), ({real_type} *) (buff))
+#define BI_{cp}vmcopy(m, n, A, lda, buff) \\
+        BI_{rp}vmcopy(2*(m), (n), ({real_type} *) (A), 2*(lda), ({real_type} *) (buff))
+"""
+
+    # --- Fortran name mangling defines ---
+    def _mangling_block(prefix: str, transform) -> str:
+        lines = []
+        for suf in _BLACS_ROUTINE_SUFFIXES:
+            src = f'{prefix}{suf}_'
+            dst = transform(f'{prefix}{suf}')
+            lines.append(f'#define {src:19s}{dst}')
+        return '\n'.join(lines) + '\n'
+
+    nochange_block = (_mangling_block(rp, lambda s: s) +
+                      _mangling_block(cp, lambda s: s))
+    upcase_block = (_mangling_block(rp, str.upper) +
+                    _mangling_block(cp, str.upper))
+
+    text = bdef_path.read_text(errors='replace')
+
+    # Insert type definitions after the DCOMPLEX/SCOMPLEX typedefs
+    text = text.replace(
+        'typedef struct {float r, i;} SCOMPLEX;\n',
+        'typedef struct {float r, i;} SCOMPLEX;\n' + type_block
+    )
+
+    # Insert copy macros after the existing BI_zvmcopy macro
+    zvmcopy_line = '#define BI_zvmcopy(m, n, A, lda, buff) \\\n        BI_dvmcopy(2*(m), (n), (double *) (A), 2*(lda), (double *) (buff))'
+    text = text.replace(zvmcopy_line, zvmcopy_line + '\n' + macro_block)
+
+    # Insert name mangling defines in NOCHANGE section (after zgamn2d)
+    nochange_marker = f'#define zgamn2d_   zgamn2d\n'
+    text = text.replace(nochange_marker, nochange_marker + nochange_block)
+
+    # Insert name mangling defines in UPCASE section (after ZGAMN2D)
+    upcase_marker = f'#define zgamn2d_   ZGAMN2D\n'
+    text = text.replace(upcase_marker, upcase_marker + upcase_block)
+
+    bdef_path.write_text(text)
 
 
 def _generate_mpi_real16_check(output_dir: Path) -> None:
