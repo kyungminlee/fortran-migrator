@@ -230,6 +230,40 @@ def _split_top_level_comma(s: str) -> list[str]:
     return out
 
 
+def _light_normalize(text: str) -> str:
+    """Minimal normalization for post-migration convergence checking.
+
+    Applies ONLY cosmetic rules that are never the migrator's job:
+
+    * uppercase everything (Fortran is case-insensitive)
+    * collapse runs of horizontal whitespace to a single space
+    * strip whitespace adjacent to punctuation (commas, parens,
+      arithmetic/relational operators)
+    * merge ``END IF``/``END DO``/... → ``ENDIF``/``ENDDO``/...
+    * drop blank lines and trailing whitespace
+
+    No prefix collapse, no literal-form rewrites, no declaration
+    reordering, no type-cast stripping — convergence here means the
+    migrator got it right and the co-family halves already agree on
+    identifiers, literal kinds, and casts.
+    """
+    text = text.upper()
+    text = re.sub(
+        r'\bEND\s+('
+        r'IF|DO|SELECT|WHERE|FORALL|SUBROUTINE|FUNCTION|'
+        r'MODULE|INTERFACE|PROGRAM|TYPE|BLOCK|ASSOCIATE'
+        r')\b',
+        r'END\1', text,
+    )
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\s*([*+\-/=])\s*', r'\1', text)
+    text = re.sub(r'\s*\(\s*', '(', text)
+    text = re.sub(r'\s*\)', ')', text)
+    text = re.sub(r'\s*,\s*', ',', text)
+    lines = [ln.strip() for ln in text.split('\n')]
+    return '\n'.join(ln for ln in lines if ln)
+
+
 def _canonicalize_for_compare(text: str) -> str:
     """Normalize text to ignore cosmetic precision-specific differences
     that remain after migration.
@@ -327,10 +361,12 @@ def _canonicalize_for_compare(text: str) -> str:
     #     ``F(X)``, ``IF (X)`` vs ``IF(X)``).
     text = re.sub(r'\s*\(\s*', '(', text)
     text = re.sub(r'\s*\)', ')', text)
-    # 6d. Strip whitespace after commas. LAPACK formats complex
+    # 6d. Strip whitespace around commas. LAPACK formats complex
     #     literals and argument lists as ``(1.0, 0.0)`` vs
-    #     ``(1.0,0.0)`` inconsistently between S/C and D/Z halves.
-    text = re.sub(r',\s+', ',', text)
+    #     ``(1.0,0.0)`` inconsistently between S/C and D/Z halves,
+    #     and occasionally leaves a stray space before the comma
+    #     (``1 ,WORK``).
+    text = re.sub(r'\s*,\s*', ',', text)
     # 6e. Collapse doubled parens ``((X))`` → ``(X)``. LAPACK
     #     occasionally wraps a boolean / logical expression in an
     #     extra redundant paren on one half.
@@ -376,7 +412,8 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     # Identify precision-independent symbols
     if classification is None:
         symbols = scan_symbols(config.source_dir, config.language,
-                               config.extensions, config.library_path)
+                               config.extensions, config.library_path,
+                               extra_c_return_types=tuple(config.c_return_types))
         classification = classify_symbols(symbols)
     independent = classification.independent
 
@@ -488,6 +525,63 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     }
 
 
+def _scan_extra_dirs(extra_dirs: list[Path],
+                     extra_c_return_types: tuple[str, ...]) -> set[str]:
+    """Scan ``extra_symbol_dirs`` plus one level of subdirectories for
+    Fortran and C symbols."""
+    out: set[str] = set()
+    for extra_dir in extra_dirs:
+        if not extra_dir.is_dir():
+            continue
+        for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
+                           ('c', ['.c'])]:
+            out |= scan_symbols(
+                extra_dir, lang, exts,
+                extra_c_return_types=extra_c_return_types)
+        for sub in sorted(extra_dir.iterdir()):
+            if sub.is_dir():
+                for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
+                                   ('c', ['.c'])]:
+                    out |= scan_symbols(
+                        sub, lang, exts,
+                        extra_c_return_types=extra_c_return_types)
+    return out
+
+
+def _collect_all_symbols(config: RecipeConfig,
+                         project_root: Path | None) -> set[str]:
+    """Scan the recipe plus every transitive dependency — including
+    each dependency's ``extra_symbol_dirs`` — so the rename map
+    covers kernels a dependency exposes indirectly (e.g. LAPACK's
+    INSTALL/slamch.f reached via scalapack → lapack)."""
+    own_c_types = tuple(config.c_return_types)
+    symbols = scan_symbols(
+        config.source_dir, config.language,
+        config.extensions, config.library_path,
+        extra_c_return_types=own_c_types,
+    )
+    symbols |= _scan_extra_dirs(config.extra_symbol_dirs, own_c_types)
+
+    seen: set[Path] = set()
+    queue = list(config.depends)
+    while queue:
+        dep_path = queue.pop(0)
+        key = dep_path.resolve()
+        if key in seen:
+            continue
+        seen.add(key)
+        dep_cfg = load_recipe(dep_path, project_root)
+        dep_c_types = tuple(dep_cfg.c_return_types)
+        symbols |= scan_symbols(
+            dep_cfg.source_dir, dep_cfg.language,
+            dep_cfg.extensions, dep_cfg.library_path,
+            extra_c_return_types=dep_c_types,
+        )
+        symbols |= _scan_extra_dirs(dep_cfg.extra_symbol_dirs, dep_c_types)
+        queue.extend(dep_cfg.depends)
+    return symbols
+
+
 def run_divergence_report(recipe_path: Path, target_kind: int = 16,
                            project_root: Path | None = None) -> list[dict]:
     """Migrate every co-family source pair in-memory and return the
@@ -501,28 +595,7 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
     import difflib
     config = load_recipe(recipe_path, project_root)
 
-    # Scan this recipe and its dependencies.
-    symbols = scan_symbols(
-        config.source_dir, config.language,
-        config.extensions, config.library_path,
-    )
-    for dep_path in config.depends:
-        dep_cfg = load_recipe(dep_path, project_root)
-        symbols |= scan_symbols(
-            dep_cfg.source_dir, dep_cfg.language,
-            dep_cfg.extensions, dep_cfg.library_path,
-        )
-    for extra_dir in config.extra_symbol_dirs:
-        if extra_dir.is_dir():
-            for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
-                               ('c', ['.c'])]:
-                symbols |= scan_symbols(extra_dir, lang, exts)
-            for sub in sorted(extra_dir.iterdir()):
-                if sub.is_dir():
-                    for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
-                                       ('c', ['.c'])]:
-                        symbols |= scan_symbols(sub, lang, exts)
-
+    symbols = _collect_all_symbols(config, project_root)
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_kind)
 
@@ -596,6 +669,114 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
     return report
 
 
+def run_convergence_report(recipe_path: Path, output_dir: Path,
+                            target_kind: int = 16,
+                            project_root: Path | None = None) -> list[dict]:
+    """Verify that already-migrated files converge with a fresh
+    migration of their S/C co-family siblings.
+
+    Reads each pair's canonical (D/Z-derived) target from
+    ``output_dir``, re-migrates the S/C member in memory, then
+    compares the two with :func:`_light_normalize` — whitespace,
+    case, and ``END KEYWORD`` merging only. All semantic
+    transforms (identifier renames, literal kinds, casts, typedef
+    substitutions) are the migrator's responsibility; this report
+    flags anything that slipped through.
+
+    Returns ``[{'target', 'canonical', 'other', 'diff', 'status'}]``
+    where ``status`` is ``'diverged'`` for normalized mismatches and
+    ``'missing'`` for pairs whose on-disk canonical is absent.
+    """
+    import difflib
+    config = load_recipe(recipe_path, project_root)
+
+    symbols = _collect_all_symbols(config, project_root)
+    classification = classify_symbols(symbols)
+    rename_map = classification.build_rename_map(target_kind)
+
+    src_files = sorted(
+        p for p in config.source_dir.iterdir()
+        if p.suffix.lower() in config.extensions
+    )
+    by_target: dict[str, list[Path]] = {}
+    for p in src_files:
+        stem_u = p.stem.upper()
+        if stem_u in config.skip_files or stem_u in config.copy_files:
+            continue
+        if stem_u in classification.independent:
+            continue
+        by_target.setdefault(target_filename(p.name, rename_map), []).append(p)
+
+    pairs: list[tuple[Path, Path]] = []
+    for tn, members in by_target.items():
+        if len(members) < 2:
+            continue
+        members.sort(key=lambda p: (p.stem[0].upper() not in ('D', 'Z'), p.name))
+        canonical = members[0]
+        for other in members[1:]:
+            pairs.append((canonical, other))
+
+    # Only the S/C (other) halves need re-migration; the D/Z
+    # canonical is already on disk.
+    others_to_migrate = {other for _, other in pairs}
+    texts: dict[Path, str] = {}
+    workers = max(1, (os.cpu_count() or 4))
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        futures = {
+            ex.submit(migrate_file_to_string, p, rename_map, target_kind): p
+            for p in others_to_migrate
+        }
+        for fut in tqdm(as_completed(futures), total=len(futures),
+                        desc='  Re-migrating S/C', unit='file',
+                        mininterval=1.0, miniters=10):
+            p = futures[fut]
+            try:
+                _, migrated = fut.result()
+                texts[p] = migrated
+            except Exception:
+                pass
+
+    report: list[dict] = []
+    for canonical, other in pairs:
+        target_name = target_filename(canonical.name, rename_map)
+        on_disk = output_dir / target_name
+        if not on_disk.is_file():
+            report.append({
+                'target': target_name,
+                'canonical': canonical.name,
+                'other': other.name,
+                'diff': [],
+                'status': 'missing',
+            })
+            continue
+        if other not in texts:
+            continue
+        disk_text = on_disk.read_text(errors='replace')
+        n_can = _light_normalize(
+            _strip_fortran_comments(disk_text, canonical.suffix))
+        n_oth = _light_normalize(
+            _strip_fortran_comments(texts[other], other.suffix))
+        if n_can == n_oth:
+            continue
+        diff = [
+            line for line in difflib.unified_diff(
+                n_oth.splitlines(), n_can.splitlines(),
+                lineterm='', n=0,
+            )
+            if line.startswith(('-', '+'))
+            and not line.startswith(('---', '+++'))
+        ]
+        report.append({
+            'target': target_name,
+            'canonical': canonical.name,
+            'other': other.name,
+            'diff': diff,
+            'status': 'diverged',
+        })
+    report.sort(key=lambda r: (r['status'], r['other'], r['canonical']))
+    return report
+
+
 def run_c_migration(config: RecipeConfig, output_dir: Path,
                     kind: int, dry_run: bool = False,
                     classification=None,
@@ -615,6 +796,8 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         copy_originals=config.copy_all_originals,
         classification=classification,
         rename_map=rename_map,
+        c_type_aliases=config.c_type_aliases,
+        header_patches=config.header_patches,
     )
     return result
 
@@ -647,45 +830,13 @@ def run_migration(recipe_path: Path, output_dir: Path,
 
     # Scan symbols and classify precision families
     print('Scanning symbols...')
-    symbols = scan_symbols(
+    own_symbols = scan_symbols(
         config.source_dir, config.language,
-        config.extensions, config.library_path
+        config.extensions, config.library_path,
+        extra_c_return_types=tuple(config.c_return_types),
     )
-    own_count = len(symbols)
-
-    # Merge symbols from dependency libraries
-    for dep_path in config.depends:
-        dep_config = load_recipe(dep_path, project_root)
-        dep_symbols = scan_symbols(
-            dep_config.source_dir, dep_config.language,
-            dep_config.extensions, dep_config.library_path
-        )
-        symbols |= dep_symbols
-        # Recursively load transitive dependencies
-        for transitive in dep_config.depends:
-            trans_config = load_recipe(transitive, project_root)
-            trans_symbols = scan_symbols(
-                trans_config.source_dir, trans_config.language,
-                trans_config.extensions, trans_config.library_path
-            )
-            symbols |= trans_symbols
-
-    # Scan extra symbol directories (for external dependencies like PBLAS/TOOLS)
-    # These are scanned recursively to handle subdirectory structures.
-    # Both Fortran and C files are scanned for symbols.
-    for extra_dir in config.extra_symbol_dirs:
-        if extra_dir.is_dir():
-            for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
-                               ('c', ['.c'])]:
-                extra_syms = scan_symbols(extra_dir, lang, exts)
-                symbols |= extra_syms
-            # Also scan subdirectories
-            for sub in sorted(extra_dir.iterdir()):
-                if sub.is_dir():
-                    for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
-                                       ('c', ['.c'])]:
-                        sub_syms = scan_symbols(sub, lang, exts)
-                        symbols |= sub_syms
+    own_count = len(own_symbols)
+    symbols = _collect_all_symbols(config, project_root)
 
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_kind)
