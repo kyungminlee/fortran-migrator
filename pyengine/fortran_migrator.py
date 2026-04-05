@@ -277,21 +277,50 @@ def replace_intrinsic_decls(line: str) -> str:
 # Routine name replacement
 # ---------------------------------------------------------------------------
 
+_RENAME_PATTERN_CACHE: dict[int, tuple[re.Pattern, dict[str, str]]] = {}
+
+
+def _get_rename_pattern(
+    rename_map: dict[str, str],
+) -> tuple[re.Pattern, dict[str, str]]:
+    """Build (and cache) a single alternation regex over all rename keys.
+
+    A single pattern is 10–100× faster than iterating every key for
+    every line — dominant cost on LAPACK (2000+ renames × many
+    thousand lines)."""
+    key = id(rename_map)
+    cached = _RENAME_PATTERN_CACHE.get(key)
+    if cached is not None:
+        return cached
+    upper_map = {k.upper(): v for k, v in rename_map.items()}
+    # Longest first so a key that's a prefix of another never steals
+    # the match from its longer sibling.
+    names = sorted(upper_map.keys(), key=len, reverse=True)
+    if not names:
+        pattern = re.compile(r'(?!x)x')  # never matches
+    else:
+        pattern = re.compile(
+            r'\b(' + '|'.join(re.escape(n) for n in names) + r')\b',
+            re.IGNORECASE,
+        )
+    _RENAME_PATTERN_CACHE[key] = (pattern, upper_map)
+    return pattern, upper_map
+
+
 def replace_routine_names(line: str, rename_map: dict[str, str]) -> str:
     """Replace routine names using the rename map (case-preserving)."""
-    for old_name, new_name in rename_map.items():
-        pattern = re.compile(rf'\b{re.escape(old_name)}\b', re.IGNORECASE)
+    pattern, upper_map = _get_rename_pattern(rename_map)
 
-        def case_replace(m, _new=new_name):
-            matched = m.group(0)
-            if matched.isupper():
-                return _new.upper()
-            elif matched.islower():
-                return _new.lower()
-            return _new.upper()
+    def case_replace(m):
+        matched = m.group(0)
+        new = upper_map[matched.upper()]
+        if matched.isupper():
+            return new.upper()
+        elif matched.islower():
+            return new.lower()
+        return new.upper()
 
-        line = pattern.sub(case_replace, line)
-    return line
+    return pattern.sub(case_replace, line)
 
 
 def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:

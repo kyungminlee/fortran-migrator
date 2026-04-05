@@ -5,7 +5,9 @@ Usage:
     run_migration(recipe_path, output_dir, target_kind=16)
 """
 
+import os
 import re
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from .config import RecipeConfig, load_recipe
@@ -120,6 +122,16 @@ def _canonicalize_for_compare(text: str) -> str:
     text = re.sub(r'([0-9.])[eE][+-]?0+\b', r'\1', text)
     # 4. Canonicalize mantissa exponent marker to uppercase E
     text = re.sub(r'(\d)e([+-]?\d)', r'\1E\2', text)
+    # 4b. Strip REAL(x, KIND=N) / CMPLX(x, KIND=N) wrappers around a
+    #     bare identifier. Migrated S/C sources wrap every formerly
+    #     single-precision REAL() cast with an explicit KIND=, while
+    #     D/Z sources had no such cast in the original (they relied on
+    #     implicit integer→double conversion). The two are semantically
+    #     identical.
+    text = re.sub(
+        r'\b(?:REAL|CMPLX)\s*\(\s*(\w+)\s*,\s*KIND\s*=\s*\d+\s*\)',
+        r'\1', text,
+    )
     # 5. Canonicalize prefix-dependent identifiers: any run of leading
     #    S/D/C/Z characters on an identifier collapses to a single '@'.
     #    This handles both single-letter prefixes (SA vs DA) and
@@ -197,31 +209,55 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     canonical_normalized: dict[str, str] = {}
     canonical_source: dict[str, str] = {}
 
-    for src_path in tqdm(src_files, desc='  Migrating', unit='file',
-                          mininterval=1.0, miniters=10):
+    # Partition: copy/skip/dry-run decisions stay in the main process;
+    # only the Flang-bound migration is dispatched to workers.
+    to_migrate: list[Path] = []
+    for src_path in src_files:
         stem_upper = src_path.stem.upper()
-
         if stem_upper in config.skip_files:
             skipped.append(src_path.name)
             continue
-
         if dry_run:
             out_name = target_filename(src_path.name, rename_map)
             tqdm.write(f'  {src_path.name} → {out_name}')
             continue
-
         if stem_upper in config.copy_files or stem_upper in independent:
             (output_dir / src_path.name).write_text(
                 src_path.read_text(errors='replace'))
             copied_count += 1
             continue
+        to_migrate.append(src_path)
 
-        result = migrate_file_to_string(src_path, rename_map, kind)
+    if dry_run:
+        return {
+            'migrated': 0, 'copied': copied_count,
+            'skipped': skipped, 'divergences': divergences,
+        }
+
+    # Parallel migration. Each worker runs flang + regex substitution,
+    # which is the dominant cost for large libraries like LAPACK.
+    # We reduce results in canonical-first order so D/Z output is
+    # the one written to disk.
+    workers = max(1, (os.cpu_count() or 4))
+    results: dict[Path, tuple[str, str] | None] = {}
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        futures = {
+            ex.submit(migrate_file_to_string, p, rename_map, kind): p
+            for p in to_migrate
+        }
+        for fut in tqdm(as_completed(futures), total=len(futures),
+                        desc='  Migrating', unit='file',
+                        mininterval=1.0, miniters=10):
+            p = futures[fut]
+            results[p] = fut.result()
+
+    # Reduce in deterministic D/Z-first order.
+    for src_path in to_migrate:
+        result = results.get(src_path)
         if result is None:
             skipped.append(src_path.name)
             continue
         out_name, migrated = result
-
         normalized = _canonicalize_for_compare(
             _strip_fortran_comments(migrated, src_path.suffix)
         )
