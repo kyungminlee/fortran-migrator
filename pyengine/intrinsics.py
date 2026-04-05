@@ -240,6 +240,14 @@ INTRINSIC_MAP: dict[str, tuple[str, bool]] = {
     # CMPLX — conversion to complex  (needs KIND to select target prec.)
     # -----------------------------------------------------------------
     'DCMPLX': ('CMPLX', True),   # any → DOUBLE COMPLEX (GNU extension)
+    # Bare CMPLX needs an explicit KIND argument too. The original
+    # precision-specific source used default-kind complex because the
+    # file was single-precision; post-migration the result must carry
+    # the target precision. The ``needs_kind`` path skips any call
+    # that already has a top-level ``KIND=`` argument, so calls left
+    # over from the ``DCMPLX``→``CMPLX`` rewrite above are not
+    # double-annotated.
+    'CMPLX':  ('CMPLX', True),
 }
 
 

@@ -177,8 +177,30 @@ def replace_intrinsic_calls(line: str, kind: int) -> str:
                                              inner_stripped))):
                         search_start = pos
                         continue
-                    # Skip if KIND= already present (from prior replacement)
-                    if re.search(r'\bKIND\s*=', inner, re.IGNORECASE):
+                    # Skip if this call already carries a ``KIND=``
+                    # argument *at top level* (meaning we already added
+                    # it to this very call). Nested ``KIND=`` inside a
+                    # sub-call — e.g. ``DCMPLX(DA*REAL(X, KIND=16),…)``
+                    # after the inner ``DBLE``→``REAL`` rewrite — must
+                    # not block the outer intrinsic's own rename.
+                    depth_k = 0
+                    has_top_kind = False
+                    ii = 0
+                    while ii < len(inner):
+                        ch = inner[ii]
+                        if ch == '(':
+                            depth_k += 1
+                        elif ch == ')':
+                            depth_k -= 1
+                        elif (depth_k == 0
+                                and inner[ii:ii + 4].upper() == 'KIND'
+                                and re.match(r'KIND\s*=',
+                                             inner[ii:],
+                                             re.IGNORECASE)):
+                            has_top_kind = True
+                            break
+                        ii += 1
+                    if has_top_kind:
                         search_start = pos
                         continue
                     replacement = f'{new_name}({inner}, KIND={kind})'
