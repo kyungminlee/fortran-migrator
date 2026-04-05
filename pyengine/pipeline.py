@@ -492,7 +492,8 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
 
 
 def run_divergence_report(recipe_path: Path, target_kind: int = 16,
-                           project_root: Path | None = None) -> list[dict]:
+                           project_root: Path | None = None,
+                           output_dir: Path | None = None) -> list[dict]:
     """Migrate every co-family source pair in-memory and return the
     normalized diff for each pair whose members disagree.
 
@@ -500,6 +501,13 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
     dicts, sorted by target filename. ``diff`` is the list of +/-
     lines (without context) from the unified diff of the two
     canonicalized texts.
+
+    When ``output_dir`` is provided, the canonical half of each pair
+    is read from disk (``output_dir/<target>``) instead of being
+    re-migrated in memory. This performs a **post-migration**
+    verification — the actual on-disk artifact is the comparison
+    target, catching any bug that would desync in-memory and on-disk
+    forms.
     """
     import difflib
     config = load_recipe(recipe_path, project_root)
@@ -566,13 +574,19 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
         for other in members[1:]:
             pairs.append((canonical, other))
 
-    all_paths = {p for pair in pairs for p in pair}
+    # Decide which source paths actually need migration. When reading
+    # canonicals from disk, only the "other" (S/C) halves do.
+    if output_dir is not None:
+        paths_to_migrate = {other for _, other in pairs}
+    else:
+        paths_to_migrate = {p for pair in pairs for p in pair}
+
     texts: dict[Path, str] = {}
     workers = max(1, (os.cpu_count() or 4))
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
             ex.submit(migrate_file_to_string, p, rename_map, target_kind): p
-            for p in all_paths
+            for p in paths_to_migrate
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
                         desc='  Migrating', unit='file',
@@ -584,12 +598,27 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
             except Exception:
                 pass
 
+    def _load_canonical(canonical: Path) -> str | None:
+        if output_dir is None:
+            return texts.get(canonical)
+        tgt = output_dir / target_filename(canonical.name, rename_map)
+        if not tgt.is_file():
+            return None
+        return tgt.read_text(errors='replace')
+
     report: list[dict] = []
+    missing_on_disk: list[str] = []
     for canonical, other in pairs:
-        if canonical not in texts or other not in texts:
+        can_text = _load_canonical(canonical)
+        if can_text is None:
+            if output_dir is not None:
+                missing_on_disk.append(
+                    target_filename(canonical.name, rename_map))
+            continue
+        if other not in texts:
             continue
         n_can = _canonicalize_for_compare(
-            _strip_fortran_comments(texts[canonical], canonical.suffix))
+            _strip_fortran_comments(can_text, canonical.suffix))
         n_oth = _canonicalize_for_compare(
             _strip_fortran_comments(texts[other], other.suffix))
         if n_can == n_oth:

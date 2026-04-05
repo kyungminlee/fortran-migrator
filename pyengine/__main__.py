@@ -42,6 +42,7 @@ def cmd_diverge(args):
         recipe_path=args.recipe,
         target_kind=args.kind,
         project_root=args.project_root,
+        output_dir=args.from_disk,
     )
     total = len(report)
     # Optional filtering on diff content.
@@ -377,6 +378,10 @@ def main():
                    help='Print full diff per entry (ignores --context)')
     p.add_argument('--max-width', type=int, default=200,
                    help='Truncate each diff line to this many chars')
+    p.add_argument('--from-disk', type=Path, default=None, metavar='DIR',
+                   help='Compare re-migrated S/C halves against the '
+                        'canonical D/Z outputs already written to DIR '
+                        '(post-migration verification).')
     p.set_defaults(func=cmd_diverge)
 
     # --- verify ---
