@@ -34,6 +34,16 @@ def _build_c_func_re(extra_return_types: tuple[str, ...] = ()) -> re.Pattern:
     )
 
 
+# #define alias name_ — exposes ``name_`` as the Fortran-callable entry
+# (the preprocessor substitutes the alias used in the function
+# definition to ``name_``). Used by ScaLAPACK's REDIST/SRC to export
+# ``psgemr2d_`` et al. Also catches the reverse form ``#define name_
+# other_alias`` in case a recipe uses it.
+_C_DEFINE_FORTRAN_RE = re.compile(
+    r'^\s*#\s*define\s+(\w+)\s+(\w+)\s*$', re.MULTILINE,
+)
+
+
 # Default compiled pattern (no recipe-specific extensions).
 _C_FUNC_RE = _build_c_func_re()
 
@@ -88,6 +98,13 @@ def scan_c_source(src_dir: Path,
                 sym = sym[:-1]
             if sym:
                 names.add(sym.upper())
+        # #define alias name_  — ``name_`` is the resulting Fortran
+        # entry-point symbol. Either side may carry the trailing
+        # underscore depending on how the file is written.
+        for m in _C_DEFINE_FORTRAN_RE.finditer(text):
+            for tok in (m.group(1), m.group(2)):
+                if tok.endswith('_') and len(tok) > 1:
+                    names.add(tok[:-1].upper())
     return names
 
 

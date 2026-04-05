@@ -327,10 +327,12 @@ def _canonicalize_for_compare(text: str) -> str:
     #     ``F(X)``, ``IF (X)`` vs ``IF(X)``).
     text = re.sub(r'\s*\(\s*', '(', text)
     text = re.sub(r'\s*\)', ')', text)
-    # 6d. Strip whitespace after commas. LAPACK formats complex
+    # 6d. Strip whitespace around commas. LAPACK formats complex
     #     literals and argument lists as ``(1.0, 0.0)`` vs
-    #     ``(1.0,0.0)`` inconsistently between S/C and D/Z halves.
-    text = re.sub(r',\s+', ',', text)
+    #     ``(1.0,0.0)`` inconsistently between S/C and D/Z halves,
+    #     and occasionally leaves a stray space before the comma
+    #     (``1 ,WORK``).
+    text = re.sub(r'\s*,\s*', ',', text)
     # 6e. Collapse doubled parens ``((X))`` → ``(X)``. LAPACK
     #     occasionally wraps a boolean / logical expression in an
     #     extra redundant paren on one half.
@@ -509,13 +511,21 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
         config.extensions, config.library_path,
         extra_c_return_types=own_c_types,
     )
-    for dep_path in config.depends:
+    seen_deps: set[Path] = set()
+    dep_queue = list(config.depends)
+    while dep_queue:
+        dep_path = dep_queue.pop(0)
+        key = dep_path.resolve()
+        if key in seen_deps:
+            continue
+        seen_deps.add(key)
         dep_cfg = load_recipe(dep_path, project_root)
         symbols |= scan_symbols(
             dep_cfg.source_dir, dep_cfg.language,
             dep_cfg.extensions, dep_cfg.library_path,
             extra_c_return_types=tuple(dep_cfg.c_return_types),
         )
+        dep_queue.extend(dep_cfg.depends)
     for extra_dir in config.extra_symbol_dirs:
         if extra_dir.is_dir():
             for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
