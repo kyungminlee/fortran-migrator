@@ -507,6 +507,39 @@ def _replace_kind_parameter(line: str, kind: int) -> str:
     return _KIND_PARAM_RE.sub(rf'\g<1>{kind}', line)
 
 
+# ``USE, INTRINSIC :: iso_fortran_env, ONLY: real{32,64,128}`` survives
+# migration even though the matching ``INTEGER, PARAMETER :: WP = real64``
+# is rewritten to ``WP = {kind}`` — so the import becomes dead code and
+# the precision-suffix carries the original (non-converged) realN name.
+# Strip the realN entry from the ONLY list, and delete the whole
+# statement when realN was its sole import.
+_ISO_USE_ONLY_RE = re.compile(
+    r'^(?P<lead>\s*)USE\s*,\s*INTRINSIC\s*::\s*ISO_FORTRAN_ENV'
+    r'\s*,\s*ONLY\s*:\s*(?P<names>[^\n!]*?)\s*(?P<tail>!.*)?$',
+    re.IGNORECASE,
+)
+
+
+def _strip_iso_fortran_env_realN(line: str) -> str:
+    """Drop ``real{32,64,128}`` from an ``iso_fortran_env`` ONLY list.
+
+    After ``_replace_kind_parameter`` rewrites ``WP = real64`` to
+    ``WP = 16`` the import is unused. Trim it so co-family halves
+    whose originals referenced different realN names converge.
+    """
+    m = _ISO_USE_ONLY_RE.match(line)
+    if not m:
+        return line
+    names = [n.strip() for n in m.group('names').split(',') if n.strip()]
+    kept = [n for n in names
+            if not re.fullmatch(r'real(?:32|64|128)', n, re.IGNORECASE)]
+    if not kept:
+        return ''   # drop the whole USE statement
+    tail = m.group('tail') or ''
+    tail = (' ' + tail) if tail else ''
+    return f'{m.group("lead")}USE, INTRINSIC :: ISO_FORTRAN_ENV, ONLY: {", ".join(kept)}{tail}'
+
+
 # ---------------------------------------------------------------------------
 # USE LA_CONSTANTS → USE LA_CONSTANTS_EP rewriting
 # ---------------------------------------------------------------------------
@@ -617,6 +650,11 @@ def migrate_free_form(source: str, rename_map: dict[str, str],
         # Change working-precision parameter definition
         stripped = _replace_kind_parameter(stripped, kind)
         if not stripped.lstrip().startswith('!'):
+            stripped = _strip_iso_fortran_env_realN(stripped)
+            if not stripped:
+                # The USE line was entirely dropped (realN was its only
+                # import); skip it so we don't leave a blank gap.
+                continue
             stripped = replace_intrinsic_calls(stripped, kind)
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_generic_conversions(stripped, kind)
@@ -795,6 +833,9 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str],
         nl = '\n' if line.endswith('\n') else ''
         stripped = _replace_kind_parameter(stripped, kind)
         if not stripped.lstrip().startswith('!'):
+            stripped = _strip_iso_fortran_env_realN(stripped)
+            if not stripped:
+                continue
             stripped = replace_intrinsic_calls(stripped, kind)
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_generic_conversions(stripped, kind)

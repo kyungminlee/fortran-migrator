@@ -259,10 +259,13 @@ def _light_normalize(text: str) -> str:
         r'END\1', text,
     )
     text = re.sub(r'[ \t]+', ' ', text)
-    text = re.sub(r'\s*([*+\-/=])\s*', r'\1', text)
-    text = re.sub(r'\s*\(\s*', '(', text)
-    text = re.sub(r'\s*\)', ')', text)
-    text = re.sub(r'\s*,\s*', ',', text)
+    # Horizontal whitespace only ([ \t], not \s) so that a Fortran
+    # fixed-form DATA statement ``DATA Z,T/0.E0_16,2.E0_16/`` never
+    # gets glued onto the next line via its trailing ``/``.
+    text = re.sub(r'[ \t]*([*+\-/=])[ \t]*', r'\1', text)
+    text = re.sub(r'[ \t]*\([ \t]*', '(', text)
+    text = re.sub(r'[ \t]*\)', ')', text)
+    text = re.sub(r'[ \t]*,[ \t]*', ',', text)
 
     # Strip per-line whitespace *before* sorting declarations so the
     # ``^`` anchor sees the statement keyword at the line start.
