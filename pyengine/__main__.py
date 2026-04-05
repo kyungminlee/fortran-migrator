@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from .config import load_recipe
-from .pipeline import run_migration
+from .pipeline import run_divergence_report, run_migration
 from .prefix_classifier import classify_symbols, PREFIX_MAP
 from .symbol_scanner import scan_symbols
 
@@ -29,6 +29,45 @@ def cmd_migrate(args):
         dry_run=args.dry_run,
         project_root=args.project_root,
     )
+
+
+def cmd_diverge(args):
+    """Report every co-family pair whose migrated text differs.
+
+    Shows one entry per divergent pair with the +/- lines from the
+    canonicalized unified diff (canonical = D/Z half, kept on disk;
+    other = S/C half, checked against it).
+    """
+    report = run_divergence_report(
+        recipe_path=args.recipe,
+        target_kind=args.kind,
+        project_root=args.project_root,
+    )
+    total = len(report)
+    # Optional filtering on diff content.
+    if args.grep:
+        pat = re.compile(args.grep, re.IGNORECASE)
+        report = [r for r in report if any(pat.search(l) for l in r['diff'])]
+    if args.exclude:
+        pat = re.compile(args.exclude, re.IGNORECASE)
+        report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+
+    for entry in report:
+        header = (f'### {entry["other"]} vs {entry["canonical"]}'
+                  f' → {entry["target"]} (+{len(entry["diff"])})')
+        print(header)
+        diff = entry['diff'] if args.full else entry['diff'][:args.context]
+        for line in diff:
+            print(line[:args.max_width])
+        if not args.full and len(entry['diff']) > args.context:
+            print(f'  ...{len(entry["diff"]) - args.context} more')
+        print()
+
+    shown = len(report)
+    if args.grep or args.exclude:
+        print(f'{shown} shown / {total} divergent pairs')
+    else:
+        print(f'{total} divergent pairs')
 
 
 def cmd_verify(args):
@@ -112,7 +151,7 @@ def _generate_cmake(output_dir: Path, lib_name: str, kind: int,
                     common_files: list[str], precision_files: list[str]):
     """Generate a self-contained CMakeLists.txt in the output directory."""
     pmap = PREFIX_MAP[kind]
-    real_pfx = pmap['D'].lower()
+    real_pfx = pmap['R'].lower()
     precision_lib = f'{real_pfx}{lib_name}'
     common_lib = f'{lib_name}_common'
 
@@ -257,7 +296,7 @@ def cmd_build(args):
 
     # Report results
     pmap = PREFIX_MAP[kind]
-    real_pfx = pmap['D'].lower()
+    real_pfx = pmap['R'].lower()
     precision_lib_name = f'lib{real_pfx}{lib_name}.a'
     common_lib_name = f'lib{lib_name}_common.a'
 
@@ -320,6 +359,24 @@ def main():
     p.add_argument('--dry-run', action='store_true')
     p.add_argument('--project-root', type=Path, default=None)
     p.set_defaults(func=cmd_migrate)
+
+    # --- diverge ---
+    p = sub.add_parser('diverge',
+                       help='Report co-family pairs with differing output')
+    p.add_argument('recipe', type=Path, help='Recipe YAML file')
+    p.add_argument('--kind', type=int, default=16, choices=[10, 16])
+    p.add_argument('--project-root', type=Path, default=None)
+    p.add_argument('--grep', default=None,
+                   help='Regex: only show entries with diff matching')
+    p.add_argument('--exclude', default=None,
+                   help='Regex: drop entries whose diff matches')
+    p.add_argument('--context', type=int, default=8,
+                   help='Max diff lines per entry (default 8)')
+    p.add_argument('--full', action='store_true',
+                   help='Print full diff per entry (ignores --context)')
+    p.add_argument('--max-width', type=int, default=200,
+                   help='Truncate each diff line to this many chars')
+    p.set_defaults(func=cmd_diverge)
 
     # --- verify ---
     p = sub.add_parser('verify', help='Verify migrated output')

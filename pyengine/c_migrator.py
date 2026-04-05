@@ -12,7 +12,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .prefix_classifier import target_prefix
+from .prefix_classifier import target_prefix, SymbolClassification
 
 
 # Default C type substitution rules.
@@ -153,11 +153,178 @@ def rename_c_file(name: str, old_prefix: str, new_prefix: str) -> str:
 
 
 def migrate_c_directory(src_dir: Path, output_dir: Path,
-                        kind: int, copy_originals: bool = True) -> dict:
-    """Migrate a C source directory by cloning d→q/e and z→x/y variants.
+                        kind: int, copy_originals: bool = True,
+                        classification: SymbolClassification | None = None,
+                        rename_map: dict[str, str] | None = None) -> dict:
+    """Migrate a C source directory by cloning real/complex variants.
+
+    Two modes:
+
+    - **Generic** (when `classification` and `rename_map` are supplied):
+      clones each D/Z member of every precision family found in
+      `classification`, applying `rename_map` for all in-file routine
+      name substitutions plus C-type upgrades (``double`` →
+      ``{REAL_TYPE}``). Used for ScaLAPACK-style libraries like PBLAS
+      whose entry points are Fortran-callable names such as
+      ``pdgemm_``, ``pzhemm_``, ``pdznrm2_``.
+
+    - **BLACS** (when neither is supplied): hardcoded ``d → q`` / ``z →
+      x`` file renames with BLACS-specific ``Cd*``/``BI_d*`` routine
+      patterns, MPI type substitutions, ``Bdef.h`` patching, and an
+      MPI_REAL16 check module for KIND=16. Preserved for backward
+      compatibility.
 
     Returns a summary dict.
     """
+    if classification is not None and rename_map is not None:
+        return _migrate_generic_c_directory(
+            src_dir, output_dir, kind, copy_originals,
+            classification, rename_map,
+        )
+    return _migrate_blacs_c_directory(src_dir, output_dir, kind, copy_originals)
+
+
+def _build_rename_regex(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[str, str]]:
+    """Build a single-pass regex that renames routine names in C text.
+
+    For each (OLD, NEW) in rename_map we emit four lookup entries:
+    uppercase bare, lowercase bare, uppercase with trailing underscore,
+    lowercase with trailing underscore. Word boundaries prevent false
+    matches inside longer identifiers (e.g. ``DGER`` inside ``PDGER``).
+    """
+    combined: dict[str, str] = {}
+    for old, new in rename_map.items():
+        combined[old] = new
+        combined[old.lower()] = new.lower()
+        combined[old + '_'] = new + '_'
+        combined[old.lower() + '_'] = new.lower() + '_'
+    # Longest keys first so the alternation prefers the underscore forms
+    keys_sorted = sorted(combined.keys(), key=len, reverse=True)
+    pattern = re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in keys_sorted) + r')\b'
+    )
+    return pattern, combined
+
+
+def _apply_c_type_subs(text: str, template_vars: dict[str, str]) -> str:
+    """Upgrade C type names used by precision-specific source files."""
+    text = re.sub(r'\bdouble\b', template_vars['REAL_TYPE'], text)
+    text = re.sub(r'\bDCOMPLEX\b', template_vars['COMPLEX_TYPE'], text)
+    text = re.sub(r'\bSCOMPLEX\b', template_vars['COMPLEX_TYPE'], text)
+    return text
+
+
+def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
+                                 kind: int, copy_originals: bool,
+                                 classification: SymbolClassification,
+                                 rename_map: dict[str, str]) -> dict:
+    """Rename-map-driven C migration for ScaLAPACK-style libraries.
+
+    A file ``foo_.c`` is cloned iff its routine ``FOO`` is a D- or
+    Z-precision member of some family in ``classification``. The clone
+    is written to ``<target>.c`` where ``<target>`` is the lowercase of
+    ``rename_map[FOO]``, with all in-file routine names rewritten via
+    ``rename_map`` and C types upgraded to the target precision.
+    """
+    template_vars = _build_sub_vars(kind)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy all originals first (keeps S/D/C/Z entry points available)
+    if copy_originals:
+        for f in sorted(src_dir.iterdir()):
+            if f.suffix.lower() in ('.c', '.h'):
+                shutil.copy2(f, output_dir / f.name)
+
+    rename_pattern, combined_map = _build_rename_regex(rename_map)
+
+    def _rename(text: str) -> str:
+        return rename_pattern.sub(lambda m: combined_map[m.group(0)], text)
+
+    # Process D/Z-sourced files first so they become the canonical
+    # output; S/C co-family members are verified against them.
+    def _is_double_key(routine_upper: str) -> bool:
+        fam = classification.get_family(routine_upper)
+        if fam is None:
+            return False
+        key = next(
+            (k for k, v in fam.members.items() if v == routine_upper),
+            '',
+        )
+        return bool(key) and key[0] in ('D', 'Z')
+
+    entries = sorted(
+        (f for f in src_dir.iterdir() if f.suffix.lower() == '.c'),
+        key=lambda f: (
+            not _is_double_key(
+                (f.stem[:-1] if f.stem.endswith('_') else f.stem).upper()
+            ),
+            f.name,
+        ),
+    )
+
+    def _normalize_for_compare(s: str) -> str:
+        # Strip block + line comments
+        s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
+        s = re.sub(r'//[^\n]*', '', s)
+        # Canonicalize prefix-dependent identifiers: leading s/d/c/z
+        # becomes '@' so sibling C sources that differ only in the
+        # precision prefix of local names collapse together.
+        s = re.sub(r'\b[sdczSDCZ]+(?=[A-Za-z])', '@', s)
+        lines = [ln.rstrip() for ln in s.split('\n')]
+        return '\n'.join(ln for ln in lines if ln.strip())
+
+    cloned: list[str] = []
+    divergences: list[str] = []
+    canonical_normalized: dict[str, str] = {}
+    canonical_source: dict[str, str] = {}
+
+    for f in entries:
+        has_underscore = f.stem.endswith('_')
+        routine = f.stem[:-1] if has_underscore else f.stem
+        upper_routine = routine.upper()
+
+        if upper_routine not in rename_map:
+            continue
+        if classification.get_family(upper_routine) is None:
+            continue
+
+        target_upper = rename_map[upper_routine]
+        target_lower = target_upper.lower()
+        new_stem = target_lower + ('_' if has_underscore else '')
+        new_name = new_stem + f.suffix
+        new_path = output_dir / new_name
+
+        text = f.read_text(errors='replace')
+        # Apply renames first, then type upgrades — the two domains
+        # don't overlap but this order preserves identifier names that
+        # happen to coincide with generic type keywords.
+        text = _rename(text)
+        text = _apply_c_type_subs(text, template_vars)
+
+        normalized = _normalize_for_compare(text)
+        prior = canonical_normalized.get(new_name)
+        if prior is None:
+            new_path.write_text(text)
+            canonical_normalized[new_name] = normalized
+            canonical_source[new_name] = f.name
+            cloned.append(f'{f.name} → {new_name}')
+        elif prior == normalized:
+            pass  # convergence (ignoring comment differences)
+        else:
+            divergences.append(
+                f'{f.name} vs {canonical_source[new_name]} → {new_name}'
+            )
+
+    return {
+        'cloned': cloned,
+        'divergences': divergences,
+        'template_vars': template_vars,
+    }
+
+
+def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
+                               kind: int, copy_originals: bool) -> dict:
+    """BLACS-specific C migration (original behavior)."""
     template_vars = _build_sub_vars(kind)
     rp = template_vars['RP']
     cp = template_vars['CP']

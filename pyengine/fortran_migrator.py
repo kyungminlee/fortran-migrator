@@ -182,10 +182,12 @@ def replace_generic_conversions(line: str, kind: int) -> str:
     what precedes the call: operators/commas/parens indicate expression
     context, while line-start indicates a type declaration.
     """
-    # Pattern: REAL or CMPLX preceded by expression-context character
+    # Pattern: REAL or CMPLX preceded by expression-context character.
+    # The '.' handles Fortran relational operators (.EQ./.NE./.NOT./etc.)
+    # that precede REAL() as a type-conversion intrinsic call.
     for name in ('REAL', 'CMPLX'):
         pattern = re.compile(
-            rf'(?<=[=+\-*/,(])\s*\b({name})\s*\(', re.IGNORECASE
+            rf'(?<=[=+\-*/,(.])\s*\b({name})\s*\(', re.IGNORECASE
         )
         search_start = 0
         while True:
@@ -275,21 +277,50 @@ def replace_intrinsic_decls(line: str) -> str:
 # Routine name replacement
 # ---------------------------------------------------------------------------
 
+_RENAME_PATTERN_CACHE: dict[int, tuple[re.Pattern, dict[str, str]]] = {}
+
+
+def _get_rename_pattern(
+    rename_map: dict[str, str],
+) -> tuple[re.Pattern, dict[str, str]]:
+    """Build (and cache) a single alternation regex over all rename keys.
+
+    A single pattern is 10–100× faster than iterating every key for
+    every line — dominant cost on LAPACK (2000+ renames × many
+    thousand lines)."""
+    key = id(rename_map)
+    cached = _RENAME_PATTERN_CACHE.get(key)
+    if cached is not None:
+        return cached
+    upper_map = {k.upper(): v for k, v in rename_map.items()}
+    # Longest first so a key that's a prefix of another never steals
+    # the match from its longer sibling.
+    names = sorted(upper_map.keys(), key=len, reverse=True)
+    if not names:
+        pattern = re.compile(r'(?!x)x')  # never matches
+    else:
+        pattern = re.compile(
+            r'\b(' + '|'.join(re.escape(n) for n in names) + r')\b',
+            re.IGNORECASE,
+        )
+    _RENAME_PATTERN_CACHE[key] = (pattern, upper_map)
+    return pattern, upper_map
+
+
 def replace_routine_names(line: str, rename_map: dict[str, str]) -> str:
     """Replace routine names using the rename map (case-preserving)."""
-    for old_name, new_name in rename_map.items():
-        pattern = re.compile(rf'\b{re.escape(old_name)}\b', re.IGNORECASE)
+    pattern, upper_map = _get_rename_pattern(rename_map)
 
-        def case_replace(m, _new=new_name):
-            matched = m.group(0)
-            if matched.isupper():
-                return _new.upper()
-            elif matched.islower():
-                return _new.lower()
-            return _new.upper()
+    def case_replace(m):
+        matched = m.group(0)
+        new = upper_map[matched.upper()]
+        if matched.isupper():
+            return new.upper()
+        elif matched.islower():
+            return new.lower()
+        return new.upper()
 
-        line = pattern.sub(case_replace, line)
-    return line
+    return pattern.sub(case_replace, line)
 
 
 def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:
@@ -428,9 +459,19 @@ _LA_CONST_ZP = ['ZZERO', 'ZHALF', 'ZONE', 'ZPREFIX']
 
 
 def _la_constants_rename_map(kind: int) -> dict[str, str]:
-    """Build a rename map for LA_CONSTANTS symbols at a given KIND."""
-    from .prefix_classifier import PREFIX_MAP
-    pmap = PREFIX_MAP[kind]
+    """Build a rename map for LA_CONSTANTS symbols at a given KIND.
+
+    LA_CONSTANTS exposes precision-tagged constants (SZERO/DZERO/CZERO/
+    ZZERO and friends) that all migrate to the extended-precision name.
+    This is a special case — unlike routine renames, all four prefix
+    variants must be remapped, so we use a local S/C/D/Z → Q/X (or
+    E/Y) map independent of the generic PREFIX_MAP.
+    """
+    _LA_FULL_MAP = {
+        10: {'S': 'E', 'D': 'E', 'C': 'Y', 'Z': 'Y'},
+        16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'},
+    }
+    pmap = _LA_FULL_MAP[kind]
     renames: dict[str, str] = {}
     for name in _LA_CONST_SP:
         renames[name] = pmap['S'] + name[1:]
@@ -538,21 +579,21 @@ def target_filename(name: str, rename_map: dict[str, str]) -> str:
     return name
 
 
-def migrate_file(src_path: Path, output_dir: Path,
-                 rename_map: dict[str, str], kind: int,
-                 flang_cmd: str | None = None) -> str | None:
-    """Migrate a single Fortran source file. Returns output filename.
+def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
+                           kind: int,
+                           flang_cmd: str | None = None,
+                           ) -> tuple[str, str] | None:
+    """Migrate a file in memory. Returns (target_filename, migrated_text).
 
-    If flang_cmd is provided (or Flang is found on PATH), uses Flang's
-    parse tree to guide transformations. Falls back to regex-only when
-    Flang is unavailable.
+    Separated from :func:`migrate_file` so the pipeline can perform a
+    convergence check across co-family members that map to the same
+    output name before committing to disk.
     """
     from .flang_parser import scan_file, find_flang
 
     ext = src_path.suffix.lower()
     source = src_path.read_text(errors='replace')
 
-    # Try Flang-guided migration
     if flang_cmd is None:
         flang_cmd = find_flang()
 
@@ -570,6 +611,22 @@ def migrate_file(src_path: Path, output_dir: Path,
         return None
 
     out_name = target_filename(src_path.name, rename_map)
+    return out_name, migrated
+
+
+def migrate_file(src_path: Path, output_dir: Path,
+                 rename_map: dict[str, str], kind: int,
+                 flang_cmd: str | None = None) -> str | None:
+    """Migrate a single Fortran source file. Returns output filename.
+
+    If flang_cmd is provided (or Flang is found on PATH), uses Flang's
+    parse tree to guide transformations. Falls back to regex-only when
+    Flang is unavailable.
+    """
+    result = migrate_file_to_string(src_path, rename_map, kind, flang_cmd)
+    if result is None:
+        return None
+    out_name, migrated = result
     (output_dir / out_name).write_text(migrated)
     return out_name
 

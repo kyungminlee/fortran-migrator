@@ -1,0 +1,30 @@
+library: pblas
+language: c
+source_dir: external/scalapack-2.2.3/PBLAS/SRC
+extensions: [.c, .h]
+
+symbols:
+  method: scan_source
+
+depends:
+  - blas.yaml    # BLAS kernels called from PBLAS Fortran kernels
+  - blacs.yaml   # BLACS comm routines called from PBLAS
+
+# Fortran kernels and C helpers that live alongside PBLAS/SRC.
+# Scanned so every cross-directory call gets a consistent rename
+# (e.g. PBLAS entry pdgemm_ -> PTZBLAS kernel catrmv_ -> BLAS dgemm_).
+extra_symbol_dirs:
+  - external/scalapack-2.2.3/PBLAS/SRC/PBBLAS    # Fortran PB-BLAS kernels
+  - external/scalapack-2.2.3/PBLAS/SRC/PTZBLAS   # Fortran trapezoidal BLAS kernels
+  - external/scalapack-2.2.3/PBLAS/SRC/PTOOLS    # C PBLAS helpers (PB_C*)
+
+prefix:
+  style: scalapack   # P + S/D/C/Z entry points
+
+# PBLAS/SRC contains 123 precision-specific C entry points (pdgemm_.c,
+# pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent
+# Fortran file (pilaenv.f). All originals are retained so the resulting
+# library still exposes the standard S/D/C/Z names.
+copy_all_originals: true
+
+skip_files: []
