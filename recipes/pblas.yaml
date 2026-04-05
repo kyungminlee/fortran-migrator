@@ -28,6 +28,23 @@ prefix:
 c_return_types:
   - 'PBTYP_T\s*\*'
 
+# PBLAS represents complex scalars as a 2-element array of the underlying
+# real type (``typedef float cmplx[2]`` in single precision, ``typedef
+# double cmplx16[2]`` in double). Sources index these with
+# ``work[i][REAL_PART]`` / ``[IMAG_PART]``, so the migrated type must
+# keep the array layout — the generic ``QCOMPLEX`` struct cannot stand
+# in. Add a kind-specific array typedef (``cmplxQ`` for KIND=16,
+# ``cmplxE`` for KIND=10) via header_patches and point both originals
+# at it with c_type_aliases.
+c_type_aliases:
+  - from: [cmplx, cmplx16]
+    to: 'cmplx{RPU}'
+
+header_patches:
+  - file: pblas.h
+    after: 'typedef    double              cmplx16[2];'
+    insert: 'typedef    {C_REAL_TYPE}          cmplx{RPU}[2];'
+
 # PBLAS/SRC contains 123 precision-specific C entry points (pdgemm_.c,
 # pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent
 # Fortran file (pilaenv.f). All originals are retained so the resulting

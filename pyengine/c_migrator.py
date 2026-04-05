@@ -62,6 +62,12 @@ COMPLEX_CLONE_SUBS = [
 # KIND=16 (quad precision): MPI_REAL16 / MPI_COMPLEX32 — requires MPI
 #   implementation with quad-precision support.
 # KIND=10 (extended precision): maps to long double on x86.
+# C type underlying each target KIND.
+_C_REAL_TYPE = {
+    16: '__float128',
+    10: 'long double',
+}
+
 _MPI_REAL_TYPE = {
     16: 'MPI_REAL16',
     10: 'MPI_LONG_DOUBLE',
@@ -82,6 +88,7 @@ def _build_sub_vars(kind: int) -> dict[str, str]:
     return {
         'REAL_TYPE': real_type,
         'COMPLEX_TYPE': complex_type,
+        'C_REAL_TYPE': _C_REAL_TYPE[kind],
         'MPI_REAL': _MPI_REAL_TYPE[kind],
         'MPI_COMPLEX': _MPI_COMPLEX_TYPE[kind],
         'RP': rp,
@@ -155,7 +162,9 @@ def rename_c_file(name: str, old_prefix: str, new_prefix: str) -> str:
 def migrate_c_directory(src_dir: Path, output_dir: Path,
                         kind: int, copy_originals: bool = True,
                         classification: SymbolClassification | None = None,
-                        rename_map: dict[str, str] | None = None) -> dict:
+                        rename_map: dict[str, str] | None = None,
+                        c_type_aliases: list[dict] | None = None,
+                        header_patches: list[dict] | None = None) -> dict:
     """Migrate a C source directory by cloning real/complex variants.
 
     Two modes:
@@ -180,6 +189,8 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
         return _migrate_generic_c_directory(
             src_dir, output_dir, kind, copy_originals,
             classification, rename_map,
+            c_type_aliases=c_type_aliases,
+            header_patches=header_patches,
         )
     return _migrate_blacs_c_directory(src_dir, output_dir, kind, copy_originals)
 
@@ -235,19 +246,67 @@ def _make_rename_substituter(pattern: re.Pattern, combined: dict[str, str]):
     return _sub
 
 
-def _apply_c_type_subs(text: str, template_vars: dict[str, str]) -> str:
-    """Upgrade C type names used by precision-specific source files."""
+def _expand_template(s: str, template_vars: dict[str, str]) -> str:
+    """Expand ``{KEY}`` placeholders in ``s`` using template_vars."""
+    for key, val in template_vars.items():
+        s = s.replace('{' + key + '}', val)
+    return s
+
+
+def _apply_c_type_subs(text: str, template_vars: dict[str, str],
+                      aliases: list[dict] | None = None) -> str:
+    """Upgrade C type names used by precision-specific source files.
+
+    ``aliases`` is a list of recipe-level rename rules of the form
+    ``{'from': [names...], 'to': '<target>'}``. The target may contain
+    ``{KEY}`` placeholders that expand from ``template_vars``. Applied
+    after the built-in double/float/SCOMPLEX/DCOMPLEX substitutions.
+    """
     text = re.sub(r'\bdouble\b', template_vars['REAL_TYPE'], text)
     text = re.sub(r'\bfloat\b', template_vars['REAL_TYPE'], text)
     text = re.sub(r'\bDCOMPLEX\b', template_vars['COMPLEX_TYPE'], text)
     text = re.sub(r'\bSCOMPLEX\b', template_vars['COMPLEX_TYPE'], text)
+    for rule in aliases or []:
+        target = _expand_template(rule['to'], template_vars)
+        for src in rule['from']:
+            text = re.sub(r'\b' + re.escape(src) + r'\b', target, text)
     return text
+
+
+def _apply_header_patches(output_dir: Path,
+                          patches: list[dict],
+                          template_vars: dict[str, str]) -> None:
+    """Insert recipe-declared lines into migrated headers.
+
+    Each patch has ``file`` (relative name under output_dir), ``after``
+    (literal anchor line that must be present exactly once) and
+    ``insert`` (text to insert on the line after the anchor). The
+    ``insert`` text is template-expanded.
+    """
+    for patch in patches:
+        target = output_dir / patch['file']
+        if not target.exists():
+            continue
+        anchor = patch['after']
+        insert = _expand_template(patch['insert'], template_vars)
+        if not insert.endswith('\n'):
+            insert = insert + '\n'
+        text = target.read_text(errors='replace')
+        if anchor not in text:
+            continue
+        if insert in text:
+            continue  # already patched (idempotent)
+        # Insert on the line after the anchor.
+        text = text.replace(anchor, anchor + '\n' + insert.rstrip('\n'), 1)
+        target.write_text(text)
 
 
 def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                                  kind: int, copy_originals: bool,
                                  classification: SymbolClassification,
-                                 rename_map: dict[str, str]) -> dict:
+                                 rename_map: dict[str, str],
+                                 c_type_aliases: list[dict] | None = None,
+                                 header_patches: list[dict] | None = None) -> dict:
     """Rename-map-driven C migration for ScaLAPACK-style libraries.
 
     A file ``foo_.c`` is cloned iff its routine ``FOO`` is a D- or
@@ -264,6 +323,11 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         for f in sorted(src_dir.iterdir()):
             if f.suffix.lower() in ('.c', '.h'):
                 shutil.copy2(f, output_dir / f.name)
+
+    # Apply recipe-declared header patches to the copied originals so
+    # later clones can reference the newly introduced typedefs.
+    if header_patches:
+        _apply_header_patches(output_dir, header_patches, template_vars)
 
     rename_pattern, combined_map = _build_rename_regex(rename_map)
     _rename_sub = _make_rename_substituter(rename_pattern, combined_map)
@@ -333,7 +397,7 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         # don't overlap but this order preserves identifier names that
         # happen to coincide with generic type keywords.
         text = _rename(text)
-        text = _apply_c_type_subs(text, template_vars)
+        text = _apply_c_type_subs(text, template_vars, c_type_aliases)
 
         normalized = _normalize_for_compare(text)
         prior = canonical_normalized.get(new_name)
@@ -423,12 +487,6 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
         'template_vars': template_vars,
     }
 
-
-# C type underlying each target KIND.
-_C_REAL_TYPE = {
-    16: '__float128',
-    10: 'long double',
-}
 
 # The 11 BLACS user-facing routine suffixes (same for each type prefix).
 _BLACS_ROUTINE_SUFFIXES = [

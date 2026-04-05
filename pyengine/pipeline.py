@@ -621,6 +621,8 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         copy_originals=config.copy_all_originals,
         classification=classification,
         rename_map=rename_map,
+        c_type_aliases=config.c_type_aliases,
+        header_patches=config.header_patches,
     )
     return result
 
