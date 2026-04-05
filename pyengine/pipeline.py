@@ -14,7 +14,7 @@ from .config import RecipeConfig, load_recipe
 from .symbol_scanner import scan_symbols
 from .prefix_classifier import classify_symbols, build_rename_map
 from .fortran_migrator import migrate_file, migrate_file_to_string, target_filename
-from .c_migrator import migrate_c_directory
+from .c_migrator import migrate_c_directory, migrate_c_file_to_string
 
 from tqdm import tqdm
 
@@ -301,6 +301,36 @@ def _light_normalize(text: str) -> str:
     )
 
     lines = [ln.strip() for ln in text.split('\n')]
+    return '\n'.join(ln for ln in lines if ln)
+
+
+def _strip_c_comments(text: str) -> str:
+    """Strip ``/* ... */`` block comments and ``// ...`` line comments.
+
+    Used before :func:`_light_normalize_c` so convergence comparisons
+    ignore commentary that differs between S/D and C/Z C source halves
+    (e.g. ``real`` vs ``double precision`` in BLACS docblocks).
+    """
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
+    text = re.sub(r'//[^\n]*', '', text)
+    return text
+
+
+def _light_normalize_c(text: str) -> str:
+    """Minimal C normalization for post-migration convergence checking.
+
+    Mirrors :func:`_light_normalize` for Fortran. Assumes the migrator
+    has already rewritten identifiers, types, and MPI constants — the
+    only drift tolerated here is whitespace around tokens and blank
+    lines. Preserves case (C is case-sensitive) but collapses runs of
+    horizontal whitespace and strips whitespace adjacent to common
+    punctuation, so column-aligned declarations like ``float
+    *A,`` vs ``QREAL          *A,`` converge.
+    """
+    # Tokenize each line into words and single non-whitespace chars,
+    # then rejoin with a single space. This collapses column padding
+    # and incidental space drift around punctuation uniformly.
+    lines = [' '.join(re.findall(r'\w+|\S', ln)) for ln in text.split('\n')]
     return '\n'.join(ln for ln in lines if ln)
 
 
@@ -730,8 +760,12 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
     import difflib
     config = load_recipe(recipe_path, project_root)
 
+    if config.language == 'c':
+        return run_c_convergence_report(
+            recipe_path, output_dir, target_kind, project_root
+        )
     if config.language != 'fortran':
-        print(f'  (converge currently only supports Fortran recipes; '
+        print(f'  (converge currently only supports Fortran/C recipes; '
               f'{config.library} is {config.language} — skipping)')
         return []
 
@@ -818,6 +852,111 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
             'diff': diff,
             'status': 'diverged',
         })
+    report.sort(key=lambda r: (r['status'], r['other'], r['canonical']))
+    return report
+
+
+def run_c_convergence_report(recipe_path: Path, output_dir: Path,
+                              target_kind: int = 16,
+                              project_root: Path | None = None) -> list[dict]:
+    """Verify that migrated C files on disk converge with a fresh
+    migration of their S/C co-family siblings.
+
+    C counterpart of :func:`run_convergence_report`. Each eligible
+    source ``.c`` file in ``config.source_dir`` is migrated in memory
+    via :func:`migrate_c_file_to_string` to discover its target name;
+    files that collide on a target form co-family groups. The D/Z
+    member is the canonical (read from disk at ``output_dir``); each
+    S/C sibling's in-memory migration result is compared with
+    :func:`_light_normalize_c` after stripping C comments.
+
+    Supports both scalapack-style recipes (rename-map driven, e.g.
+    PBLAS) and direct-style recipes (prefix driven, e.g. BLACS).
+    """
+    import difflib
+    config = load_recipe(recipe_path, project_root)
+
+    if config.language != 'c':
+        print(f'  (run_c_convergence_report called on non-C recipe '
+              f'{config.library} — skipping)')
+        return []
+
+    rename_map: dict[str, str] | None = None
+    classification = None
+    if config.prefix_style == 'scalapack':
+        symbols = _collect_all_symbols(config, project_root)
+        classification = classify_symbols(symbols)
+        rename_map = classification.build_rename_map(target_kind)
+
+    src_files = sorted(
+        p for p in config.source_dir.iterdir()
+        if p.suffix.lower() == '.c'
+    )
+
+    # Migrate every source in memory and group by target filename. For
+    # BLACS the target-computing cost is trivial; for PBLAS we'd save
+    # work by skipping D/Z here, but the rename_map regex build is the
+    # hot part and unavoidable either way.
+    by_target: dict[str, list[tuple[Path, str]]] = {}
+    for p in tqdm(src_files, desc='  Re-migrating C sources', unit='file',
+                  mininterval=1.0, miniters=10):
+        try:
+            res = migrate_c_file_to_string(
+                p, target_kind,
+                rename_map=rename_map,
+                classification=classification,
+                c_type_aliases=config.c_type_aliases,
+            )
+        except Exception:
+            continue
+        if res is None:
+            continue
+        target_name, text = res
+        by_target.setdefault(target_name, []).append((p, text))
+
+    def _is_dz(src_path: Path) -> bool:
+        stem = src_path.stem
+        base = stem[3:] if stem.startswith('BI_') else stem
+        return bool(base) and base[0].lower() in ('d', 'z')
+
+    report: list[dict] = []
+    for target_name, members in by_target.items():
+        if len(members) < 2:
+            continue
+        members.sort(key=lambda m: (not _is_dz(m[0]), m[0].name))
+        canonical_path, _ = members[0]
+        on_disk = output_dir / target_name
+        if not on_disk.is_file():
+            for other_path, _ in members[1:]:
+                report.append({
+                    'target': target_name,
+                    'canonical': canonical_path.name,
+                    'other': other_path.name,
+                    'diff': [],
+                    'status': 'missing',
+                })
+            continue
+        disk_text = on_disk.read_text(errors='replace')
+        n_can = _light_normalize_c(_strip_c_comments(disk_text))
+        for other_path, other_text in members[1:]:
+            n_oth = _light_normalize_c(_strip_c_comments(other_text))
+            if n_can == n_oth:
+                continue
+            diff = [
+                line for line in difflib.unified_diff(
+                    n_oth.splitlines(), n_can.splitlines(),
+                    lineterm='', n=0,
+                )
+                if line.startswith(('-', '+'))
+                and not line.startswith(('---', '+++'))
+            ]
+            report.append({
+                'target': target_name,
+                'canonical': canonical_path.name,
+                'other': other_path.name,
+                'diff': diff,
+                'status': 'diverged',
+            })
     report.sort(key=lambda r: (r['status'], r['other'], r['canonical']))
     return report
 
