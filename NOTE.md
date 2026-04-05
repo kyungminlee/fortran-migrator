@@ -82,16 +82,16 @@ the one produced from `drotmg.f`. The D-sourced version is retained.
 
 ## LAPACK convergence divergences
 
-LAPACK has **350 divergent pairs** out of 1018 migrated routines,
+LAPACK has **347 divergent pairs** out of 1018 migrated routines,
 breaking down as:
 
 | category                | count |
 |-------------------------|-------|
 | `SROUNDUP_LWORK`        | 237   |
 | `ILAPREC` character arg | 9     |
-| other upstream drift    | 104   |
+| other upstream drift    | 101   |
 
-All 350 are genuine upstream source-level differences between the
+All 347 are genuine upstream source-level differences between the
 S/C and D/Z halves of LAPACK 3.12.1 — not migrator bugs. The D/Z
 version is retained on disk as canonical for each pair.
 
@@ -301,3 +301,88 @@ This is genuine upstream drift — the single-complex and
 double-complex halves of `LAHEF` diverged at some point and were
 never resynced. The migrator cannot (and should not) paper over it;
 the Z-sourced canonical is kept on disk.
+
+
+## Post-migration `converge` results
+
+The `converge` subcommand is the authoritative post-migration
+verifier: it reads each D/Z canonical off disk, re-migrates its
+S/C sibling in memory, and compares the two under a light
+normalizer (whitespace/case, `END KEYWORD` merging, sorted
+`INTRINSIC`/`EXTERNAL` and simple-type-spec bare-identifier
+lists). No prefix collapse, no literal rewrites. Every entry
+that survives is either migrator slop or genuine upstream drift.
+
+| library | converge entries | character                                    |
+|---------|------------------|----------------------------------------------|
+| BLAS    | 20               | local dummy-arg / local-var prefix drift     |
+| LAPACK  | 458              | SROUNDUP_LWORK, REAL(int,KIND=) casts, drift |
+
+### BLAS: local-variable prefix drift (all 20 entries)
+
+BLAS's S/D/C/Z precision families name their local variables and
+dummy arguments after the precision prefix (`SX`/`DX`, `SA`/`DA`,
+`STEMP`/`DTEMP`, `CX`/`ZX`, `CA`/`ZA`, `CTEMP`/`ZTEMP`). These
+are local to each routine and never enter the symbol table, so
+the rename map does not touch them. Closing this would require a
+local-identifier rename policy (risky: would collide with
+legitimate names that happen to start with `S`/`D`/`C`/`Z`), so
+the S/C-sourced re-migration textually differs from the on-disk
+D/Z canonical. All 20 BLAS entries fall here, plus the three
+already-documented BLAS upstream items above (`sdot`, `scasum`,
+`srotmg`).
+
+### LAPACK: remaining categories
+
+After the light normalizer sorts `INTRINSIC`/`EXTERNAL` argument
+lists and simple type-spec declaration lists, 458 LAPACK pairs
+still diverge. Dominant categories:
+
+- **`SROUNDUP_LWORK` asymmetry** (≈237 pairs, documented above).
+  The S/C side calls `QROUNDUP_LWORK` and declares it `EXTERNAL`;
+  the D/Z side uses `REAL(LWKOPT, KIND=16)` directly.
+- **Explicit `REAL(int_expr, KIND=16)` casts** (≈150 pairs).
+  S/C sources wrap INTEGER expressions in explicit `REAL(...)` to
+  promote them before combining with a REAL operand; D/Z sources
+  rely on implicit conversion. Post-migration to KIND=16 the two
+  are semantically identical but textually distinct. The migrator
+  does not strip these — doing so would require type inference to
+  prove the cast is a no-op, and the cast is not formally wrong.
+- **`ILAPREC 'D'` vs `'E'`** (9 pairs, documented above).
+- **`ISO_FORTRAN_ENV: REAL32` vs `REAL64`** (4 pairs in
+  `[sc]gedmd*.f90` / `[dz]gedmd*.f90`, also with algorithmic drift).
+- **Algorithmic drift** (`clahef`/`zlahef` off-by-one, etc.).
+
+### Migrator fixes driven by converge
+
+Running `converge` across BLAS and LAPACK surfaced three bugs in
+the migrator that had been masked by the heavy canonicalizer used
+for `migrate`/`diverge`:
+
+1. **Rename-pattern cache collision** — `_RENAME_PATTERN_CACHE`
+   was keyed by `id(rename_map)`. When `_migrate_with_flang`
+   built a fresh per-file filtered rename map, Python reused the
+   freed dict's address, so subsequent files hit stale cached
+   patterns that didn't include their routines' names. Symptom:
+   `qtrsv.f` on disk still carried `SUBROUTINE DTRSV` etc.
+   BLAS migrate divergences dropped from 33 to 3 after re-keying
+   on `frozenset(upper_map.items())`.
+
+2. **Bare complex literal canonicalization** — C-prefix sources
+   wrote `(0.0, 0.0)` (default-kind) while Z-prefix sources wrote
+   `(0.0d0, 0.0d0)`; only the latter picked up the `KIND` suffix
+   from the existing D/E-exponent rule. `replace_literals` was
+   extended to rewrite bare `N.M` to `N.ME0_{kind}`, excluding
+   string literals (FORMAT specs) and masking Fortran logical
+   operators (`.EQ.`/`.AND.`/…) so `.EQ.0.0` is never re-parsed
+   as `.EQ` + `.0` + `.0`. `E+0` exponents also normalize to `E0`.
+
+3. **`CMPLX`/`DCMPLX` intrinsic rewriting** — `DCMPLX(...)` was
+   left unrenamed when its inner arguments already contained a
+   `KIND=16` from an earlier `DBLE`→`REAL` rewrite (the guard
+   against double-annotating was checking for any `KIND=` in
+   inner, not just top-level). And bare `CMPLX(a, b)` without a
+   `KIND` was passing through unchanged, leaving default-kind
+   complex values where kind-16 was intended. Both are fixed:
+   `CMPLX` is now in the intrinsic map with `needs_kind=True`
+   and the nested-`KIND=` guard uses paren-depth tracking.
