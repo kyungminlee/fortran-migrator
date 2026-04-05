@@ -191,19 +191,48 @@ def _build_rename_regex(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[st
     uppercase bare, lowercase bare, uppercase with trailing underscore,
     lowercase with trailing underscore. Word boundaries prevent false
     matches inside longer identifiers (e.g. ``DGER`` inside ``PDGER``).
+
+    Matching is case-insensitive at substitution time (see
+    :func:`_make_rename_substituter`) so PascalCase identifiers like
+    ``PB_Cctypeset`` are also renamed correctly; this dict carries the
+    canonical lowercase form and the replacement is case-transferred
+    from the matched text at callback time.
     """
     combined: dict[str, str] = {}
     for old, new in rename_map.items():
-        combined[old] = new
+        # Canonical form is lowercase with optional trailing underscore.
+        # The actual replacement case is computed per-match.
         combined[old.lower()] = new.lower()
-        combined[old + '_'] = new + '_'
         combined[old.lower() + '_'] = new.lower() + '_'
     # Longest keys first so the alternation prefers the underscore forms
     keys_sorted = sorted(combined.keys(), key=len, reverse=True)
     pattern = re.compile(
-        r'\b(' + '|'.join(re.escape(k) for k in keys_sorted) + r')\b'
+        r'\b(' + '|'.join(re.escape(k) for k in keys_sorted) + r')\b',
+        re.IGNORECASE,
     )
     return pattern, combined
+
+
+def _make_rename_substituter(pattern: re.Pattern, combined: dict[str, str]):
+    """Return a callback for ``pattern.sub`` that renames case-preservingly.
+
+    Renames performed by the migrator only change the precision letter
+    (e.g. ``D``→``Q``); all other characters of the identifier are
+    identical modulo case. So we look up the new name by the matched
+    text's lowercase form and then transfer each source character's case
+    onto the replacement, letting ``dgemm_`` → ``qgemm_``,
+    ``DGEMM_`` → ``QGEMM_``, and ``PB_Cctypeset`` → ``PB_Cxtypeset`` all
+    fall out of a single rule.
+    """
+    def _sub(m: re.Match) -> str:
+        src = m.group(0)
+        new_lower = combined[src.lower()]
+        # Length is preserved: only the precision letter changes.
+        return ''.join(
+            c.upper() if s.isupper() else c
+            for s, c in zip(src, new_lower)
+        )
+    return _sub
 
 
 def _apply_c_type_subs(text: str, template_vars: dict[str, str]) -> str:
@@ -237,9 +266,10 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                 shutil.copy2(f, output_dir / f.name)
 
     rename_pattern, combined_map = _build_rename_regex(rename_map)
+    _rename_sub = _make_rename_substituter(rename_pattern, combined_map)
 
     def _rename(text: str) -> str:
-        return rename_pattern.sub(lambda m: combined_map[m.group(0)], text)
+        return rename_pattern.sub(_rename_sub, text)
 
     # Process D/Z-sourced files first so they become the canonical
     # output; S/C co-family members are verified against them.

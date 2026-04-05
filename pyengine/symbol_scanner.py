@@ -16,7 +16,8 @@ _FORTRAN_DEF_RE = re.compile(
 # C patterns — function definitions (simplified, handles BLACS style)
 _C_FUNC_RE = re.compile(
     r'^\s*(?:void|int|float|double|Int|BVOID|F_VOID_FUNC|F_INT_FUNC|F_DOUBLE_FUNC'
-    r'|SCOMPLEX|DCOMPLEX|QCOMPLEX|MPI_Datatype|BLACBUFF\s*\*)'
+    r'|SCOMPLEX|DCOMPLEX|QCOMPLEX|MPI_Datatype|BLACBUFF\s*\*'
+    r'|PBTYP_T\s*\*)'
     r'\s+(\w+)\s*\(',
     re.MULTILINE
 )
