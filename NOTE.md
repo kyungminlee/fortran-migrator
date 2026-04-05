@@ -82,8 +82,18 @@ the one produced from `drotmg.f`. The D-sourced version is retained.
 
 ## LAPACK convergence divergences
 
-LAPACK has **370 divergent pairs** out of 1018 migrated routines. The
-bulk is explained by a handful of deliberate upstream asymmetries.
+LAPACK has **350 divergent pairs** out of 1018 migrated routines,
+breaking down as:
+
+| category                | count |
+|-------------------------|-------|
+| `SROUNDUP_LWORK`        | 237   |
+| `ILAPREC` character arg | 9     |
+| other upstream drift    | 104   |
+
+All 350 are genuine upstream source-level differences between the
+S/C and D/Z halves of LAPACK 3.12.1 — not migrator bugs. The D/Z
+version is retained on disk as canonical for each pair.
 
 ### 1. `SROUNDUP_LWORK` (237 files)
 
@@ -170,13 +180,103 @@ precision; the character literal divergence is genuine upstream
 source drift that the migrator cannot (and should not) paper over.
 The D/Z version is retained on disk.
 
-### 3. `REAL32` / `REAL64` `iso_fortran_env` kinds (4 files)
+### 3. Other source-level drift (104 files)
 
-(investigation pending)
+These are miscellaneous places where the S/C and D/Z halves of a
+routine were maintained independently and drifted apart in
+token-level but semantically-benign ways. They group into roughly
+six patterns:
 
-### 4. Other source-level drift (~106 files)
+#### 3a. DO-loop / GO TO label renumbering
 
-(investigation pending)
+The loop-label values were chosen differently between halves even
+though the control structure is identical:
+
+```fortran
+! strsyl.f                  ! dtrsyl.f
+DO 70 L = 1, N              DO 60 L = 1, N
+  IF( L.LT.LNEXT ) GO TO 70   IF( L.LT.LNEXT ) GO TO 60
+```
+
+Largest contributors by line-count:
+`strsyl/dtrsyl` (+172), `clatbs/zlatbs` (+58), `cptts2/zptts2`
+(+54), `clatrs/zlatrs` (+52), `clatps/zlatps` (+48), `slatrs/dlatrs`
+(+32), `slatbs/dlatbs` (+30), `slatps/dlatps` (+28),
+`clapmt/zlapmt` and `slapmt/dlapmt` (+22 each), `cpttrf/zpttrf`
+(+16), plus smaller label shuffles in `clahef`, `claqp2`, `clauu2`,
+`claqp2rk`, `clarfx`, `cupmtr`, `slaexc`.
+
+#### 3b. Unused `PARAMETER(ONE=…)` declaration on one side only
+
+One half declares a constant that the code path never references:
+
+```fortran
+! cgehd2.f declares ONE; zgehd2.f does not (or vice versa):
+COMPLEX ONE
+PARAMETER(ONE=(1,0))
+```
+
+Pattern: `cgehd2/cgelq2/cgeql2/cgeqr2/cgeqr2p/cgerq2`,
+`cunm2l/cunm2r/cunml2/cunmr2`, `sorm2l/sorm2r/sorml2/sormr2`,
+`sorg2l`, `cungr2`, etc. `clahef_rk/zlahef_rk` splits a combined
+`PARAMETER(ONE=…,ZERO=…)` into two single-parameter declarations.
+
+#### 3c. `INTRINSIC` list mismatch
+
+One half lists more intrinsics than the other, even though only the
+common subset is actually called:
+
+```fortran
+! cggbak.f      INTRINSIC MAX
+! zggbak.f      INTRINSIC INT, MAX
+
+! slansf.f      INTRINSIC SQRT, ABS
+! dlansf.f      INTRINSIC SQRT, ABS, MAX
+```
+
+#### 3d. Formatting / expression-level differences
+
+Semantically identical expressions written slightly differently:
+
+```fortran
+! cheequb:  C0 = (-(T*DI)*DI+2*WORK(I)*DI-N*AVG)   ! outer parens
+! zheequb:  C0 = -(T*DI)*DI+2*WORK(I)*DI-N*AVG
+
+! ctrsyl3:  DWORK(2,1) = (2*NBB+NBA)
+! ztrsyl3:  DWORK(2,1) = 2*NBB+NBA
+
+! clarf1f:  C(2,1)
+! zlarf1f:  C(1+1,1)                               ! unfolded constant
+
+! chgeqz:   WORK(1) = 1
+! zhgeqz:   WORK(1) = DCMPLX(1)                    ! explicit cast
+```
+
+#### 3e. Algorithmic drift — different code paths
+
+A handful of pairs use genuinely different implementations:
+
+```fortran
+! slasq2:  IEEE = .FALSE.                          ! hardcoded
+! dlasq2:  IEEE = (ILAENV(10,'DLASQ2','N',1,2,3,4).EQ.1)
+
+! clarf1f calls CGER   (single-complex GER, no conjugate)
+! zlarf1f calls ZGERC  (conjugate GER) — different BLAS kernel
+
+! clahef_rk uses CGEMM
+! zlahef_rk uses ZGEMMTR                           ! different routine
+```
+
+The migrator cannot (and should not) close these — they look
+symmetric under our character-based canonicalizer only by accident,
+but they do call different BLAS kernels.
+
+#### 3f. Workspace-query dummy-argument asymmetry
+
+`sorcsd/dorcsd` (+13): one half allocates a tiny
+`REAL DUMMY(1)` to pass to lazy workspace-query calls; the other
+passes the real output arrays (which the query-mode call never
+touches). Both are correct.
 
 #### Case study: `clahef.f` vs `zlahef.f` — loop-bound off-by-one
 
