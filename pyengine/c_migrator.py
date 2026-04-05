@@ -365,10 +365,13 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         # becomes '@' so sibling C sources that differ only in the
         # precision prefix of local names collapse together.
         s = re.sub(r'\b[sdczSDCZ]+(?=[A-Za-z])', '@', s)
-        # Collapse all whitespace so column-aligned declarations like
-        # ``float          * ALPHA;`` and ``double         * ALPHA;``
-        # compare equal after the type substitution.
-        lines = [re.sub(r'\s+', ' ', ln).strip() for ln in s.split('\n')]
+        # Tokenize each line into words and single non-whitespace
+        # characters, then rejoin with a single space. This collapses
+        # not just column-aligned padding like ``float          *``
+        # vs ``double         *`` but also incidental single-space
+        # drift around punctuation: ``(QREAL )(`` vs ``(QREAL)(``,
+        # ``if (`` vs ``if(``, ``Mptr(...)))`` vs ``Mptr(... ))``.
+        lines = [' '.join(re.findall(r'\w+|\S', ln)) for ln in s.split('\n')]
         return '\n'.join(ln for ln in lines if ln)
 
     cloned: list[str] = []
