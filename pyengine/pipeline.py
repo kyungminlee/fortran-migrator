@@ -92,6 +92,71 @@ def _strip_inline_bang(line: str) -> str:
     return line
 
 
+def _strip_real_cmplx_casts(text: str) -> str:
+    """Strip ``REAL(expr, KIND=N)`` and ``CMPLX(expr, KIND=N)`` wrappers,
+    replacing them with just ``expr``. Uses balanced-paren matching
+    because ``expr`` may contain nested calls, and recurses into the
+    inner expression so nested casts are stripped too."""
+    pattern = re.compile(r'\b(?:REAL|CMPLX)\s*\(', re.IGNORECASE)
+    out = []
+    i = 0
+    while i < len(text):
+        m = pattern.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        out.append(text[i:m.start()])
+        # Find matching ')'
+        depth = 1
+        j = m.end()
+        while j < len(text) and depth > 0:
+            c = text[j]
+            if c == '(':
+                depth += 1
+            elif c == ')':
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        if depth != 0:
+            # Unmatched — give up on this match
+            out.append(text[m.start():m.end()])
+            i = m.end()
+            continue
+        inner = text[m.end():j]
+        # Recurse into the inner expression so nested casts are
+        # stripped even when the outer call doesn't match the KIND
+        # shape we rewrite.
+        inner = _strip_real_cmplx_casts(inner)
+        parts = _split_top_level_comma(inner)
+        if (len(parts) == 2 and
+                re.fullmatch(r'\s*KIND\s*=\s*\d+\s*', parts[1])):
+            out.append(parts[0].strip())
+        else:
+            # Not the shape we want — keep original call, but with
+            # inner expression already stripped recursively.
+            out.append(text[m.start():m.end()] + inner + ')')
+        i = j + 1
+    return ''.join(out)
+
+
+def _split_top_level_comma(s: str) -> list[str]:
+    """Split on commas that are not inside nested parens or brackets."""
+    out: list[str] = []
+    depth = 0
+    start = 0
+    for i, c in enumerate(s):
+        if c in '([':
+            depth += 1
+        elif c in ')]':
+            depth -= 1
+        elif c == ',' and depth == 0:
+            out.append(s[start:i])
+            start = i + 1
+    out.append(s[start:])
+    return out
+
+
 def _canonicalize_for_compare(text: str) -> str:
     """Normalize text to ignore cosmetic precision-specific differences
     that remain after migration.
@@ -122,38 +187,57 @@ def _canonicalize_for_compare(text: str) -> str:
     text = re.sub(r'([0-9.])[eE][+-]?0+\b', r'\1', text)
     # 4. Canonicalize mantissa exponent marker to uppercase E
     text = re.sub(r'(\d)e([+-]?\d)', r'\1E\2', text)
-    # 4b. Strip REAL(x, KIND=N) / CMPLX(x, KIND=N) wrappers around a
-    #     bare identifier. Migrated S/C sources wrap every formerly
-    #     single-precision REAL() cast with an explicit KIND=, while
-    #     D/Z sources had no such cast in the original (they relied on
-    #     implicit integer→double conversion). The two are semantically
-    #     identical.
-    text = re.sub(
-        r'\b(?:REAL|CMPLX)\s*\(\s*(\w+)\s*,\s*KIND\s*=\s*\d+\s*\)',
-        r'\1', text,
-    )
+    # 4b. Strip REAL(expr, KIND=N) / CMPLX(expr, KIND=N) wrappers.
+    #     Migrated S/C sources wrap every formerly single-precision
+    #     REAL() cast with an explicit KIND=, while D/Z sources had no
+    #     such cast in the original (they relied on implicit
+    #     integer→real conversion). The two are semantically
+    #     identical. We match balanced parens because the inner
+    #     expression may contain nested calls like ``REAL(F(I)*G, KIND=16)``.
+    text = _strip_real_cmplx_casts(text)
     # 5. Canonicalize prefix-dependent identifiers: any run of leading
     #    S/D/C/Z characters on an identifier collapses to a single '@'.
     #    This handles both single-letter prefixes (SA vs DA) and
     #    double-prefix intrinsic names (CMPLX vs DCMPLX, CABS vs
     #    DCABS). Applied to both halves so the mapping is symmetric.
-    text = re.sub(r'\b[sdczSDCZ]+(?=[A-Za-z])', '@', text)
+    text = re.sub(
+        r'(?<![A-Za-z0-9])[sdczSDCZ]+(?=[A-Za-z])', '@', text,
+    )
     # 6. Collapse runs of whitespace to a single space — BLAS sources
     #    hand-align declaration lists with varying spacing between
     #    type keyword and argument list, and indent DO loop bodies
     #    differently across precision halves.
     text = re.sub(r'[ \t]+', ' ', text)
-    # 7. Sort items in INTRINSIC / EXTERNAL lists. BLAS sources list
-    #    intrinsics in arbitrary (often precision-specific) order —
-    #    e.g., S source writes "INTRINSIC REAL, CONJG, MAX" while Z
-    #    source writes "INTRINSIC CONJG, MAX, MIN, REAL". Sort both.
+    # 6b. Strip whitespace adjacent to arithmetic / relational
+    #     operators. LAPACK's S and D sources format the same
+    #     expression with different spacing (``NZ*EPS`` vs
+    #     ``NZ* EPS``, ``I + 1`` vs ``I+1``). We squeeze both sides
+    #     so they compare equal.
+    text = re.sub(r'\s*([*+\-/=])\s*', r'\1', text)
+    # 7. Sort items in declaration lists whose order isn't
+    #    semantically meaningful. BLAS/LAPACK sources list
+    #    intrinsics, externals, and type-declared variables in
+    #    arbitrary (often precision-specific) order — e.g., S source
+    #    writes "INTRINSIC REAL, CONJG, MAX" while Z source writes
+    #    "INTRINSIC CONJG, MAX, MIN, REAL".
     def _sort_decl(match: re.Match) -> str:
         kw = match.group(1)
         items = [s.strip() for s in match.group(2).split(',')]
         return f'{kw} ' + ', '.join(sorted(items))
     text = re.sub(
-        r'\b(INTRINSIC|EXTERNAL)\s+([A-Za-z_@][A-Za-z0-9_@,\s]*?)(?=$)',
+        r'\b(INTRINSIC|EXTERNAL|INTEGER|LOGICAL|COMPLEX)\s+'
+        r'([A-Za-z_@][A-Za-z0-9_@,\s]*?)(?=$)',
         _sort_decl, text, flags=re.MULTILINE,
+    )
+    # 7b. REAL(KIND=N) declarations: sort items similarly. After the
+    #     KIND=N wrapper stripping above, these reduce to a bare list.
+    def _sort_real_decl(match: re.Match) -> str:
+        items = [s.strip() for s in match.group(1).split(',')]
+        return 'REAL(KIND=16) ' + ', '.join(sorted(items))
+    text = re.sub(
+        r'\bREAL\s*\(\s*KIND\s*=\s*\d+\s*\)\s+'
+        r'([A-Za-z_@][A-Za-z0-9_@,\s]*?)(?=$)',
+        _sort_real_decl, text, flags=re.MULTILINE,
     )
     return text
 

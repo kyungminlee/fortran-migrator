@@ -34,7 +34,6 @@ This naturally handles any prefix convention without hardcoding:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from itertools import combinations
 
 # Target prefix mapping by KIND, keyed by slot type tag ('R' or 'C').
 # Every family member maps to the SAME target char (determined by the
@@ -160,13 +159,31 @@ def _find_families_single_pass(
         if not candidate_positions:
             continue
 
-        # Try all non-empty subsets (limit to 3 positions)
-        for r in range(1, min(len(candidate_positions) + 1, 4)):
-            for positions in combinations(candidate_positions, r):
-                pattern = _build_tagged_pattern(sym, positions)
-                tags = tuple(CHAR_TYPE[sym[p]] for p in positions)
-                key = (pattern, positions)
-                groups.setdefault(key, {})[sym] = tags
+        # Only enumerate subsets that contain at most one real and at
+        # most one complex slot — i.e. valid tag-combinations are
+        # (R), (C), (R,C). Multiple R-slots or multiple C-slots in the
+        # same pattern let unrelated routines masquerade as siblings
+        # (e.g. DSPTRS vs DSPTRD getting grouped on their second R
+        # slot alone), so we forbid them.
+        r_positions = [p for p in candidate_positions
+                       if CHAR_TYPE[sym[p]] == 'R']
+        c_positions = [p for p in candidate_positions
+                       if CHAR_TYPE[sym[p]] == 'C']
+
+        subsets: list[tuple[int, ...]] = []
+        for rp in [None] + r_positions:
+            for cp in [None] + c_positions:
+                combo = tuple(sorted(
+                    p for p in (rp, cp) if p is not None
+                ))
+                if combo:
+                    subsets.append(combo)
+
+        for positions in subsets:
+            pattern = _build_tagged_pattern(sym, positions)
+            tags = tuple(CHAR_TYPE[sym[p]] for p in positions)
+            key = (pattern, positions)
+            groups.setdefault(key, {})[sym] = tags
 
     return groups
 
