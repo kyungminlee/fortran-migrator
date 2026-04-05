@@ -128,6 +128,30 @@ The D/Z version is retained.
 
 (investigation pending)
 
-### 4. Other source-level drift (~120 files)
+### 4. Other source-level drift (~106 files)
 
 (investigation pending)
+
+#### Case study: `clahef.f` vs `zlahef.f` — loop-bound off-by-one
+
+In the Bunch-Kaufman pivot-unwinding loops (both in the upper-
+triangular and lower-triangular branches), the loop-continuation
+check differs between the two halves:
+
+| Source          | Upper branch (label 60) | Lower branch (label 120) |
+|-----------------|-------------------------|--------------------------|
+| `clahef.f` (C)  | `IF( J.LE.N ) GO TO 60` | `IF( J.GE.1 ) GO TO 120` |
+| `zlahef.f` (Z)  | `IF( J.LT.N ) GO TO 60` | `IF( J.GT.1 ) GO TO 120` |
+
+The inner `[CZ]SWAP` call is guarded by `J.LE.N` in **both** halves,
+and its body starts with an unconditional `J = J + 1`. When the
+C-side does its extra `J == N` iteration, the inner increment makes
+`J == N+1`, the swap guard becomes false, and the iteration is a
+no-op. The same holds symmetrically for the `J == 1` case in the
+lower branch. So the behavioural difference is a benign off-by-one:
+clahef executes one additional empty loop turn that zlahef skips.
+
+This is genuine upstream drift — the single-complex and
+double-complex halves of `LAHEF` diverged at some point and were
+never resynced. The migrator cannot (and should not) paper over it;
+the Z-sourced canonical is kept on disk.
