@@ -131,13 +131,44 @@ def _strip_real_cmplx_casts(text: str) -> str:
         parts = _split_top_level_comma(inner)
         if (len(parts) == 2 and
                 re.fullmatch(r'\s*KIND\s*=\s*\d+\s*', parts[1])):
-            out.append(parts[0].strip())
+            # Wrap the stripped expression in parens ONLY when the
+            # inner contains a top-level arithmetic operator — the
+            # surrounding context's precedence then matches the
+            # unwrapped side (``REAL(N-1, KIND=16)*T`` → ``(N-1)*T``
+            # rather than ``N-1*T``). Single atoms keep their natural
+            # form so ``REAL(X, KIND=16)`` → ``X``.
+            inner_expr = parts[0].strip()
+            if _has_top_level_operator(inner_expr):
+                out.append('(' + inner_expr + ')')
+            else:
+                out.append(inner_expr)
         else:
             # Not the shape we want — keep original call, but with
             # inner expression already stripped recursively.
             out.append(text[m.start():m.end()] + inner + ')')
         i = j + 1
     return ''.join(out)
+
+
+def _has_top_level_operator(s: str) -> bool:
+    """True if ``s`` contains a ``+``, ``-``, ``*``, or ``/`` outside
+    of any nested parens/brackets (ignoring the leading sign)."""
+    depth = 0
+    for i, c in enumerate(s):
+        if c in '([':
+            depth += 1
+        elif c in ')]':
+            depth -= 1
+        elif depth == 0 and c in '+-*/' and i > 0:
+            # Skip if preceded by 'E' / 'D' (exponent sign) or an
+            # operator (meaning it's a unary sign).
+            prev = s[i - 1]
+            if prev in 'eEdD' and i >= 2 and s[i - 2].isdigit():
+                continue
+            if prev in '+-*/=(,':
+                continue
+            return True
+    return False
 
 
 def _split_top_level_comma(s: str) -> list[str]:
@@ -203,6 +234,20 @@ def _canonicalize_for_compare(text: str) -> str:
     text = re.sub(
         r'(?<![A-Za-z0-9])[sdczSDCZ]+(?=[A-Za-z])', '@', text,
     )
+    # 5b. Uppercase everything. Fortran is case-insensitive, and S vs
+    #     D sources are not consistent about casing keywords
+    #     (``then`` vs ``THEN``, ``IF`` vs ``if``). Uppercasing both
+    #     halves makes them compare equal.
+    text = text.upper()
+    # 5c. Merge ``END IF`` → ``ENDIF`` etc. LAPACK writes these block
+    #     terminators with or without a space arbitrarily between
+    #     precision halves.
+    text = re.sub(r'\bEND\s+(IF|DO|SELECT|WHERE|FORALL|SUBROUTINE|FUNCTION|MODULE|INTERFACE|PROGRAM|TYPE|BLOCK|ASSOCIATE)\b',
+                  r'END\1', text)
+    # 5d. Strip bare ``IMPLICIT NONE`` (or any other IMPLICIT spec).
+    #     Some S/D halves have it and others don't; it has no bearing
+    #     on the migrated numerics.
+    text = re.sub(r'^\s*IMPLICIT\s+\S.*$', '', text, flags=re.MULTILINE)
     # 6. Collapse runs of whitespace to a single space — BLAS sources
     #    hand-align declaration lists with varying spacing between
     #    type keyword and argument list, and indent DO loop bodies
@@ -214,6 +259,11 @@ def _canonicalize_for_compare(text: str) -> str:
     #     ``NZ* EPS``, ``I + 1`` vs ``I+1``). We squeeze both sides
     #     so they compare equal.
     text = re.sub(r'\s*([*+\-/=])\s*', r'\1', text)
+    # 6c. Strip whitespace adjacent to parens. LAPACK formats
+    #     argument lists with varying spacing (``F( X )`` vs
+    #     ``F(X)``, ``IF (X)`` vs ``IF(X)``).
+    text = re.sub(r'\s*\(\s*', '(', text)
+    text = re.sub(r'\s*\)', ')', text)
     # 7. Sort items in declaration lists whose order isn't
     #    semantically meaningful. BLAS/LAPACK sources list
     #    intrinsics, externals, and type-declared variables in

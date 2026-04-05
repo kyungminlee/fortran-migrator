@@ -210,12 +210,23 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
         if double_members:
             candidates[key] = (single_members, double_members)
 
-    # Sort: most combined members first, then fewest positions. This
-    # gives tighter, higher-coverage families priority under greedy
-    # assignment.
+    # Sort: most combined members first, then fewest positions, then
+    # prefer slots at low indices (LAPACK/BLAS convention: precision
+    # char is a prefix). The min-position tiebreaker is what keeps
+    # DSYTRS/DSYTRD from being grouped as a sibling pair via their
+    # trailing S/D — the competing families (#RSYTRS@0, #RSYTRD@0)
+    # win because their slot sits at position 0. The final
+    # (positions, pattern) tiebreaker ensures deterministic output.
     def _size(item):
+        (pattern, positions) = item[0]
         (single, double) = item[1]
-        return -(len(single) + len(double)), len(item[0][1])
+        return (
+            -(len(single) + len(double)),
+            len(positions),
+            min(positions) if positions else 0,
+            positions,
+            pattern,
+        )
 
     sorted_candidates = sorted(candidates.items(), key=_size)
 
