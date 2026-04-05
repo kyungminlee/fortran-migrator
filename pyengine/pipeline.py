@@ -268,14 +268,6 @@ def _canonicalize_for_compare(text: str) -> str:
     #     identical. We match balanced parens because the inner
     #     expression may contain nested calls like ``REAL(F(I)*G, KIND=16)``.
     text = _strip_real_cmplx_casts(text)
-    # 5. Canonicalize prefix-dependent identifiers: any run of leading
-    #    S/D/C/Z characters on an identifier collapses to a single '@'.
-    #    This handles both single-letter prefixes (SA vs DA) and
-    #    double-prefix intrinsic names (CMPLX vs DCMPLX, CABS vs
-    #    DCABS). Applied to both halves so the mapping is symmetric.
-    text = re.sub(
-        r'(?<![A-Za-z0-9])[sdczSDCZ]+(?=[A-Za-z])', '@', text,
-    )
     # 4c. Canonicalize numeric literal forms. ``1.0`` / ``1.`` / ``1``
     #     all denote the same value; LAPACK writes them inconsistently
     #     between S/C and D/Z halves (``1.0,0.0`` complex zero vs
@@ -285,10 +277,21 @@ def _canonicalize_for_compare(text: str) -> str:
     # 4d. Strip ``(KIND=N)`` suffix on REAL/COMPLEX type-spec in
     #     F90 declarations. Some LAPACK F90 files use the bare
     #     ``COMPLEX, INTENT(...)`` form while the migrator adds
-    #     ``(KIND=16)`` to others — normalize to bare form.
+    #     ``(KIND=16)`` to others — normalize to bare form. Must run
+    #     BEFORE the @-collapse below, which would otherwise turn
+    #     ``COMPLEX`` into ``@OMPLEX`` and prevent this regex from
+    #     matching.
     text = re.sub(
         r'\b(REAL|COMPLEX)\s*\(\s*KIND\s*=\s*\d+\s*\)',
         r'\1', text, flags=re.IGNORECASE)
+    # 5. Canonicalize prefix-dependent identifiers: any run of leading
+    #    S/D/C/Z characters on an identifier collapses to a single '@'.
+    #    This handles both single-letter prefixes (SA vs DA) and
+    #    double-prefix intrinsic names (CMPLX vs DCMPLX, CABS vs
+    #    DCABS). Applied to both halves so the mapping is symmetric.
+    text = re.sub(
+        r'(?<![A-Za-z0-9])[sdczSDCZ]+(?=[A-Za-z])', '@', text,
+    )
     # 5a. iso_fortran_env kind imports: ``only: real32`` vs
     #     ``only: real64`` survive as an unused import (after the
     #     migrator rewrites ``WP = real32`` → ``WP = 16``). Normalize
