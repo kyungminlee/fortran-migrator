@@ -502,13 +502,23 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     # text; subsequent writers must agree or we record a divergence.
     # D/Z sources are preferred as the canonical text: when a pair
     # (SGEMM, DGEMM) both target QGEMM, DGEMM's migrated body is kept
-    # and SGEMM's is only consulted for the equality check.
-    def _is_double_source(stem: str) -> bool:
-        return bool(stem) and stem[0].upper() in ('D', 'Z')
+    # and SGEMM's is only consulted for the equality check. The
+    # ``prefer_source`` recipe field flips this for individual stems
+    # (e.g. to route around a bug that only exists in the D/Z half).
+    prefer = config.prefer_source
 
-    # Process D/Z-sourced files first so their migration is the canonical
-    # one on disk; S/C co-members are verified against them.
-    src_files.sort(key=lambda p: (not _is_double_source(p.stem), p.name))
+    def _canonical_rank(stem: str) -> int:
+        # 0 = highest priority (recipe-pinned), 1 = D/Z default,
+        # 2 = S/C fallback. Sorting ascending makes the preferred
+        # source the first writer for each target.
+        u = stem.upper()
+        if u in prefer:
+            return 0
+        if u and u[0] in ('D', 'Z'):
+            return 1
+        return 2
+
+    src_files.sort(key=lambda p: (_canonical_rank(p.stem), p.name))
 
     canonical_text: dict[str, str] = {}
     canonical_normalized: dict[str, str] = {}
@@ -688,7 +698,11 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
     for tn, members in by_target.items():
         if len(members) < 2:
             continue
-        members.sort(key=lambda p: (p.stem[0].upper() not in ('D', 'Z'), p.name))
+        members.sort(key=lambda p: (
+            0 if p.stem.upper() in config.prefer_source
+            else (1 if p.stem[0].upper() in ('D', 'Z') else 2),
+            p.name,
+        ))
         canonical = members[0]
         for other in members[1:]:
             pairs.append((canonical, other))
@@ -790,7 +804,11 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
     for tn, members in by_target.items():
         if len(members) < 2:
             continue
-        members.sort(key=lambda p: (p.stem[0].upper() not in ('D', 'Z'), p.name))
+        members.sort(key=lambda p: (
+            0 if p.stem.upper() in config.prefer_source
+            else (1 if p.stem[0].upper() in ('D', 'Z') else 2),
+            p.name,
+        ))
         canonical = members[0]
         for other in members[1:]:
             pairs.append((canonical, other))

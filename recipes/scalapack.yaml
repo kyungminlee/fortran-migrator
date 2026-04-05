@@ -23,3 +23,13 @@ prefix:
   style: scalapack  # P + S/D/C/Z
 
 skip_files: []
+
+# Override D/Z-first canonical selection for pairs where the Z half
+# carries an upstream bug that the C half does not. PZUNGQL / PZUNML2
+# call PB_TOPGET in their restore step where they should call
+# PB_TOPSET (copy-paste bug in ScaLAPACK 2.2.3 — the C counterparts
+# have the correct PB_TOPSET). Pinning PCUNGQL / PCUNML2 as canonical
+# makes the migrated output inherit the correct restore logic.
+prefer_source:
+  - PCUNGQL   # fixes restore bug in pzungql.f:292-293
+  - PCUNML2   # fixes restore bug in pzunml2.f:394-395
