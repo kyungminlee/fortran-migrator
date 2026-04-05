@@ -240,12 +240,15 @@ def _light_normalize(text: str) -> str:
     * strip whitespace adjacent to punctuation (commas, parens,
       arithmetic/relational operators)
     * merge ``END IF``/``END DO``/... → ``ENDIF``/``ENDDO``/...
+    * sort ``INTRINSIC``/``EXTERNAL`` argument lists (cross-precision
+      co-family halves routinely list the same names in different
+      orders — purely cosmetic upstream drift)
     * drop blank lines and trailing whitespace
 
-    No prefix collapse, no literal-form rewrites, no declaration
-    reordering, no type-cast stripping — convergence here means the
-    migrator got it right and the co-family halves already agree on
-    identifiers, literal kinds, and casts.
+    No prefix collapse, no literal-form rewrites, no type-cast
+    stripping — convergence here means the migrator got it right and
+    the co-family halves already agree on identifiers, literal kinds,
+    and casts.
     """
     text = text.upper()
     text = re.sub(
@@ -260,6 +263,40 @@ def _light_normalize(text: str) -> str:
     text = re.sub(r'\s*\(\s*', '(', text)
     text = re.sub(r'\s*\)', ')', text)
     text = re.sub(r'\s*,\s*', ',', text)
+
+    # Strip per-line whitespace *before* sorting declarations so the
+    # ``^`` anchor sees the statement keyword at the line start.
+    text = '\n'.join(ln.strip() for ln in text.split('\n'))
+
+    # Sort INTRINSIC / EXTERNAL argument lists. The ordering of these
+    # declarations varies between co-family halves (e.g. C sources
+    # list ``INTRINSIC CONJG,MAX,MIN,REAL`` while Z sources write
+    # ``INTRINSIC REAL,CONJG,MAX,MIN``) but is semantically irrelevant.
+    def _sort_decl(m):
+        return f'{m.group(1)} ' + ','.join(sorted(m.group(2).split(',')))
+
+    text = re.sub(
+        r'\b(INTRINSIC|EXTERNAL)\s+([A-Z_][A-Z0-9_]*(?:,[A-Z_][A-Z0-9_]*)*)',
+        _sort_decl, text,
+    )
+
+    # Sort bare-identifier lists after a simple type-spec. Co-family
+    # halves reorder symbols between their ``INTEGER``/``REAL(KIND=N)``
+    # declarations of named external functions (``REAL(KIND=16)
+    # XLANGB,XLANTB,QLAMCH`` vs ``QLAMCH,XLANGB,XLANTB``). Match only
+    # pure name lists — lines with ``=``, ``(``, ``*`` (e.g. array
+    # specs ``A(LDA,*)``) are left alone.
+    def _sort_typed_decl(m):
+        type_spec, body = m.group(1), m.group(2)
+        names = body.split(',')
+        return f'{type_spec} ' + ','.join(sorted(names))
+
+    text = re.sub(
+        r'^(INTEGER|LOGICAL|REAL\(KIND=\d+\)|COMPLEX\(KIND=\d+\))\s+'
+        r'([A-Z_][A-Z0-9_]*(?:,[A-Z_][A-Z0-9_]*)+)$',
+        _sort_typed_decl, text, flags=re.MULTILINE,
+    )
+
     lines = [ln.strip() for ln in text.split('\n')]
     return '\n'.join(ln for ln in lines if ln)
 
@@ -689,6 +726,11 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
     """
     import difflib
     config = load_recipe(recipe_path, project_root)
+
+    if config.language != 'fortran':
+        print(f'  (converge currently only supports Fortran recipes; '
+              f'{config.library} is {config.language} — skipping)')
+        return []
 
     symbols = _collect_all_symbols(config, project_root)
     classification = classify_symbols(symbols)

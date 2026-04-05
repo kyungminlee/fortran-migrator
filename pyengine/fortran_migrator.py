@@ -75,18 +75,57 @@ def replace_standalone_real_complex(line: str, kind: int) -> str:
 def replace_literals(line: str, kind: int) -> str:
     """Replace floating-point literals with KIND suffix form.
 
-    1.0D+0 → 1.0E+0_k, 0.0E+0 → 0.0E+0_k
+    1.0D+0 → 1.0E+0_k, 0.0E+0 → 0.0E+0_k, 0.0 → 0.0E0_k.
+
+    Bare unsuffixed literals (no D/E exponent, no ``_kind``) are also
+    promoted so that complex constants like ``(0.0,0.0)`` in C sources
+    converge with ``(0.0d0,0.0d0)`` in Z sources after migration to
+    KIND=16.
     """
     def literal_sub(m):
         mantissa = m.group(1)
         exp_rest = m.group(3)
+        # Drop a leading ``+`` (canonical form: ``E0``, not ``E+0``)
+        # so C sources like ``0.0E+0`` converge with Z sources like
+        # ``0.0d0`` after migration.
+        if exp_rest.startswith('+'):
+            exp_rest = exp_rest[1:]
         return f'{mantissa}E{exp_rest}_{kind}'
 
-    line = re.sub(
-        r'(\d+\.\d*|\d*\.\d+)([DEde])([+-]?\d+)',
-        literal_sub, line
+    # Split off string literals so FORMAT specs like ``(E12.4)`` are
+    # never rewritten; rejoin after processing each code segment.
+    parts = re.split(r"('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\")", line)
+    # Fortran logical operators ``.EQ.``/``.AND.``/... end in ``.``;
+    # their trailing dot must not fool the bare-literal regex into
+    # matching ``.EQ.0.0`` as ``.EQ`` + ``.0`` + ``.0``. Neutralize
+    # the operator bodies with a placeholder that has no ``.``, then
+    # restore once the literal rewrite is done.
+    _FORTRAN_OP = re.compile(
+        r'\.(EQ|NE|LT|GT|LE|GE|AND|OR|NOT|TRUE|FALSE|EQV|NEQV)\.',
+        re.IGNORECASE,
     )
-    return line
+    for idx in range(0, len(parts), 2):
+        seg = parts[idx]
+        masked = _FORTRAN_OP.sub(
+            lambda m: '\x00' + m.group(1) + '\x00', seg,
+        )
+        masked = re.sub(
+            r'(\d+\.\d*|\d*\.\d+)([DEde])([+-]?\d+)',
+            literal_sub, masked,
+        )
+        # Bare float (no exponent, no kind suffix). Lookbehind avoids
+        # identifiers/digits; ``.`` cannot precede a literal here
+        # because logical operators are already masked. Lookahead
+        # stops us re-processing literals already rewritten above
+        # (``0.0E0_16``) or touching identifier / kind suffixes.
+        masked = re.sub(
+            r'(?<![.\w])(\d+\.\d*|\d*\.\d+)(?![DdEe\w]|_\d)',
+            rf'\1E0_{kind}', masked,
+        )
+        parts[idx] = re.sub(
+            r'\x00([A-Za-z]+)\x00', r'.\1.', masked,
+        )
+    return ''.join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +316,9 @@ def replace_intrinsic_decls(line: str) -> str:
 # Routine name replacement
 # ---------------------------------------------------------------------------
 
-_RENAME_PATTERN_CACHE: dict[int, tuple[re.Pattern, dict[str, str]]] = {}
+_RENAME_PATTERN_CACHE: dict[
+    frozenset, tuple[re.Pattern, dict[str, str]]
+] = {}
 
 
 def _get_rename_pattern(
@@ -287,12 +328,19 @@ def _get_rename_pattern(
 
     A single pattern is 10–100× faster than iterating every key for
     every line — dominant cost on LAPACK (2000+ renames × many
-    thousand lines)."""
-    key = id(rename_map)
+    thousand lines).
+
+    Cache keyed by the frozen set of ``(upper_key, value)`` pairs so
+    two filtered rename maps with the same contents share a compiled
+    pattern. Keying by ``id()`` is unsafe because Python reuses
+    addresses after a dict is freed, which caused stale-pattern
+    collisions when ``_migrate_with_flang`` built a fresh
+    ``file_rename_map`` per file."""
+    upper_map = {k.upper(): v for k, v in rename_map.items()}
+    key = frozenset(upper_map.items())
     cached = _RENAME_PATTERN_CACHE.get(key)
     if cached is not None:
         return cached
-    upper_map = {k.upper(): v for k, v in rename_map.items()}
     # Longest first so a key that's a prefix of another never steals
     # the match from its longer sibling.
     names = sorted(upper_map.keys(), key=len, reverse=True)
