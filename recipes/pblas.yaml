@@ -21,6 +21,13 @@ extra_symbol_dirs:
 prefix:
   style: scalapack   # P + S/D/C/Z entry points
 
+# Extra C return types used by PBLAS helper routines that the scanner's
+# built-in return-type set does not cover. Each entry is a regex fragment
+# matched before the function name. Needed so PB_C{s,d,c,z}typeset get
+# into the symbol table and participate in precision-family renaming.
+c_return_types:
+  - 'PBTYP_T\s*\*'
+
 # PBLAS/SRC contains 123 precision-specific C entry points (pdgemm_.c,
 # pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent
 # Fortran file (pilaenv.f). All originals are retained so the resulting

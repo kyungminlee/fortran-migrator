@@ -376,7 +376,8 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     # Identify precision-independent symbols
     if classification is None:
         symbols = scan_symbols(config.source_dir, config.language,
-                               config.extensions, config.library_path)
+                               config.extensions, config.library_path,
+                               extra_c_return_types=tuple(config.c_return_types))
         classification = classify_symbols(symbols)
     independent = classification.independent
 
@@ -502,26 +503,31 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
     config = load_recipe(recipe_path, project_root)
 
     # Scan this recipe and its dependencies.
+    own_c_types = tuple(config.c_return_types)
     symbols = scan_symbols(
         config.source_dir, config.language,
         config.extensions, config.library_path,
+        extra_c_return_types=own_c_types,
     )
     for dep_path in config.depends:
         dep_cfg = load_recipe(dep_path, project_root)
         symbols |= scan_symbols(
             dep_cfg.source_dir, dep_cfg.language,
             dep_cfg.extensions, dep_cfg.library_path,
+            extra_c_return_types=tuple(dep_cfg.c_return_types),
         )
     for extra_dir in config.extra_symbol_dirs:
         if extra_dir.is_dir():
             for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
                                ('c', ['.c'])]:
-                symbols |= scan_symbols(extra_dir, lang, exts)
+                symbols |= scan_symbols(
+                    extra_dir, lang, exts, extra_c_return_types=own_c_types)
             for sub in sorted(extra_dir.iterdir()):
                 if sub.is_dir():
                     for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
                                        ('c', ['.c'])]:
-                        symbols |= scan_symbols(sub, lang, exts)
+                        symbols |= scan_symbols(
+                            sub, lang, exts, extra_c_return_types=own_c_types)
 
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_kind)
@@ -647,9 +653,11 @@ def run_migration(recipe_path: Path, output_dir: Path,
 
     # Scan symbols and classify precision families
     print('Scanning symbols...')
+    own_c_types = tuple(config.c_return_types)
     symbols = scan_symbols(
         config.source_dir, config.language,
-        config.extensions, config.library_path
+        config.extensions, config.library_path,
+        extra_c_return_types=own_c_types,
     )
     own_count = len(symbols)
 
@@ -658,7 +666,8 @@ def run_migration(recipe_path: Path, output_dir: Path,
         dep_config = load_recipe(dep_path, project_root)
         dep_symbols = scan_symbols(
             dep_config.source_dir, dep_config.language,
-            dep_config.extensions, dep_config.library_path
+            dep_config.extensions, dep_config.library_path,
+            extra_c_return_types=tuple(dep_config.c_return_types),
         )
         symbols |= dep_symbols
         # Recursively load transitive dependencies
@@ -666,7 +675,8 @@ def run_migration(recipe_path: Path, output_dir: Path,
             trans_config = load_recipe(transitive, project_root)
             trans_symbols = scan_symbols(
                 trans_config.source_dir, trans_config.language,
-                trans_config.extensions, trans_config.library_path
+                trans_config.extensions, trans_config.library_path,
+                extra_c_return_types=tuple(trans_config.c_return_types),
             )
             symbols |= trans_symbols
 
@@ -677,14 +687,16 @@ def run_migration(recipe_path: Path, output_dir: Path,
         if extra_dir.is_dir():
             for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
                                ('c', ['.c'])]:
-                extra_syms = scan_symbols(extra_dir, lang, exts)
+                extra_syms = scan_symbols(
+                    extra_dir, lang, exts, extra_c_return_types=own_c_types)
                 symbols |= extra_syms
             # Also scan subdirectories
             for sub in sorted(extra_dir.iterdir()):
                 if sub.is_dir():
                     for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
                                        ('c', ['.c'])]:
-                        sub_syms = scan_symbols(sub, lang, exts)
+                        sub_syms = scan_symbols(
+                            sub, lang, exts, extra_c_return_types=own_c_types)
                         symbols |= sub_syms
 
     classification = classify_symbols(symbols)

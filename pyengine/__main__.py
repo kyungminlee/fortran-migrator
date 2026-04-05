@@ -235,7 +235,8 @@ def cmd_build(args):
 
     # Classify source files into common vs precision-specific
     symbols = scan_symbols(config.source_dir, config.language,
-                           config.extensions, config.library_path)
+                           config.extensions, config.library_path,
+                           extra_c_return_types=tuple(config.c_return_types))
     classification = classify_symbols(symbols)
     independent = classification.independent
 

@@ -30,6 +30,11 @@ class RecipeConfig:
     patches: list[str] = field(default_factory=list)
     depends: list[Path] = field(default_factory=list)  # Dependency recipe paths
     extra_symbol_dirs: list[Path] = field(default_factory=list)  # Extra dirs to scan for symbols
+    # Additional C return types to recognize when scanning for function
+    # definitions, as regex fragments (e.g. ``r'PBTYP_T\s*\*'``). Used
+    # only when ``language == 'c'``; the default set in
+    # ``symbol_scanner._C_DEFAULT_RETURN_TYPES`` is always included.
+    c_return_types: list[str] = field(default_factory=list)
 
 
 def load_recipe(recipe_path: Path,
@@ -86,4 +91,5 @@ def load_recipe(recipe_path: Path,
         patches=data.get('patches', []),
         depends=depends,
         extra_symbol_dirs=extra_symbol_dirs,
+        c_return_types=list(data.get('c_return_types', [])),
     )
