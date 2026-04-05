@@ -94,9 +94,11 @@ def _strip_inline_bang(line: str) -> str:
 
 def _strip_real_cmplx_casts(text: str) -> str:
     """Strip ``REAL(expr, KIND=N)`` and ``CMPLX(expr, KIND=N)`` wrappers,
-    replacing them with just ``expr``. Uses balanced-paren matching
-    because ``expr`` may contain nested calls, and recurses into the
-    inner expression so nested casts are stripped too."""
+    replacing them with just ``expr``. Single-argument ``REAL(expr)``
+    (integer/implicit-real promotion) is also stripped, but
+    ``CMPLX(expr)`` is NOT — it materially changes the result type
+    from real to complex and the two halves genuinely may differ in
+    how they construct complex literals."""
     pattern = re.compile(r'\b(?:REAL|CMPLX)\s*\(', re.IGNORECASE)
     out = []
     i = 0
@@ -129,14 +131,46 @@ def _strip_real_cmplx_casts(text: str) -> str:
         # shape we rewrite.
         inner = _strip_real_cmplx_casts(inner)
         parts = _split_top_level_comma(inner)
-        if (len(parts) == 2 and
-                re.fullmatch(r'\s*KIND\s*=\s*\d+\s*', parts[1])):
+        is_real_call = text[m.start():m.end()].upper().lstrip().startswith('REAL')
+        # Skip declaration-form ``REAL(KIND=N)`` — that's a type
+        # specifier, not a cast.
+        is_kind_decl = (len(parts) == 1 and
+                        re.fullmatch(r'\s*KIND\s*=\s*\d+\s*', parts[0]))
+        # Strip trailing ``KIND=N`` from any multi-arg call. This
+        # covers ``CMPLX(re, im, KIND=16)`` as well as
+        # ``REAL(x, KIND=16)``.
+        is_kinded_multi = (len(parts) >= 2 and
+                           re.fullmatch(r'\s*KIND\s*=\s*\d+\s*', parts[-1]))
+        if is_kinded_multi:
+            # Drop the KIND= tail argument but keep the call.
+            call_head = text[m.start():m.end()]
+            new_inner = ','.join(p.strip() for p in parts[:-1])
+            if len(parts) == 2:
+                # 1-data-arg form: reduce to bare identifier/expr.
+                inner_expr = parts[0].strip()
+                if _has_top_level_operator(inner_expr):
+                    out.append('(' + inner_expr + ')')
+                else:
+                    out.append(inner_expr)
+            else:
+                # Multi-arg CMPLX(a, b, KIND=N) → CMPLX(a, b)
+                out.append(call_head + new_inner + ')')
+            i = j + 1
+            continue
+        if not is_kind_decl and (
+                (len(parts) == 1 and is_real_call)):
             # Wrap the stripped expression in parens ONLY when the
-            # inner contains a top-level arithmetic operator — the
+            # inner contains a top-level additive operator — the
             # surrounding context's precedence then matches the
             # unwrapped side (``REAL(N-1, KIND=16)*T`` → ``(N-1)*T``
             # rather than ``N-1*T``). Single atoms keep their natural
             # form so ``REAL(X, KIND=16)`` → ``X``.
+            #
+            # Single-arg REAL(X)/CMPLX(X) is also stripped: it is an
+            # integer→real promotion that the Fortran compiler would
+            # insert implicitly when X is used in a real context, so
+            # ``REAL(MAXITR)*UNFL`` is semantically identical to
+            # ``MAXITR*UNFL`` after migration.
             inner_expr = parts[0].strip()
             if _has_top_level_operator(inner_expr):
                 out.append('(' + inner_expr + ')')
@@ -151,15 +185,23 @@ def _strip_real_cmplx_casts(text: str) -> str:
 
 
 def _has_top_level_operator(s: str) -> bool:
-    """True if ``s`` contains a ``+``, ``-``, ``*``, or ``/`` outside
-    of any nested parens/brackets (ignoring the leading sign)."""
+    """True if ``s`` contains a top-level ``+`` or ``-`` outside nested
+    parens/brackets (ignoring unary signs and exponent markers).
+
+    We only consider additive operators here, not ``*`` / ``/``:
+    when the stripped expression is used as a factor in an outer
+    multiplication (the usual case for REAL(int_expr, KIND=16)*x),
+    a pure product like ``MAXITR*Q*Q`` is associative with the
+    outer ``*`` so parens are unnecessary. Only ``a-b`` or ``a+b``
+    would change precedence under multiplication.
+    """
     depth = 0
     for i, c in enumerate(s):
         if c in '([':
             depth += 1
         elif c in ')]':
             depth -= 1
-        elif depth == 0 and c in '+-*/' and i > 0:
+        elif depth == 0 and c in '+-' and i > 0:
             # Skip if preceded by 'E' / 'D' (exponent sign) or an
             # operator (meaning it's a unary sign).
             prev = s[i - 1]
@@ -234,6 +276,24 @@ def _canonicalize_for_compare(text: str) -> str:
     text = re.sub(
         r'(?<![A-Za-z0-9])[sdczSDCZ]+(?=[A-Za-z])', '@', text,
     )
+    # 4c. Canonicalize numeric literal forms. ``1.0`` / ``1.`` / ``1``
+    #     all denote the same value; LAPACK writes them inconsistently
+    #     between S/C and D/Z halves (``1.0,0.0`` complex zero vs
+    #     ``1.,0.``). Drop fractional parts whose numeric value is
+    #     zero so all three forms collapse to ``1``.
+    text = re.sub(r'(\d)\.0*(?![\deEdD_])', r'\1', text)
+    # 4d. Strip ``(KIND=N)`` suffix on REAL/COMPLEX type-spec in
+    #     F90 declarations. Some LAPACK F90 files use the bare
+    #     ``COMPLEX, INTENT(...)`` form while the migrator adds
+    #     ``(KIND=16)`` to others — normalize to bare form.
+    text = re.sub(
+        r'\b(REAL|COMPLEX)\s*\(\s*KIND\s*=\s*\d+\s*\)',
+        r'\1', text, flags=re.IGNORECASE)
+    # 5a. iso_fortran_env kind imports: ``only: real32`` vs
+    #     ``only: real64`` survive as an unused import (after the
+    #     migrator rewrites ``WP = real32`` → ``WP = 16``). Normalize
+    #     the kind-suffix digits so both halves compare equal.
+    text = re.sub(r'\breal(32|64|128)\b', 'realK', text, flags=re.IGNORECASE)
     # 5b. Uppercase everything. Fortran is case-insensitive, and S vs
     #     D sources are not consistent about casing keywords
     #     (``then`` vs ``THEN``, ``IF`` vs ``if``). Uppercasing both
@@ -264,6 +324,17 @@ def _canonicalize_for_compare(text: str) -> str:
     #     ``F(X)``, ``IF (X)`` vs ``IF(X)``).
     text = re.sub(r'\s*\(\s*', '(', text)
     text = re.sub(r'\s*\)', ')', text)
+    # 6d. Strip whitespace after commas. LAPACK formats complex
+    #     literals and argument lists as ``(1.0, 0.0)`` vs
+    #     ``(1.0,0.0)`` inconsistently between S/C and D/Z halves.
+    text = re.sub(r',\s+', ',', text)
+    # 6e. Collapse doubled parens ``((X))`` → ``(X)``. LAPACK
+    #     occasionally wraps a boolean / logical expression in an
+    #     extra redundant paren on one half.
+    prev = None
+    while prev != text:
+        prev = text
+        text = re.sub(r'\(\(([^()]*)\)\)', r'(\1)', text)
     # 7. Sort items in declaration lists whose order isn't
     #    semantically meaningful. BLAS/LAPACK sources list
     #    intrinsics, externals, and type-declared variables in
@@ -275,19 +346,9 @@ def _canonicalize_for_compare(text: str) -> str:
         items = [s.strip() for s in match.group(2).split(',')]
         return f'{kw} ' + ', '.join(sorted(items))
     text = re.sub(
-        r'\b(INTRINSIC|EXTERNAL|INTEGER|LOGICAL|COMPLEX)\s+'
+        r'\b(INTRINSIC|EXTERNAL|INTEGER|LOGICAL|COMPLEX|REAL)\s+'
         r'([A-Za-z_@][A-Za-z0-9_@,\s]*?)(?=$)',
         _sort_decl, text, flags=re.MULTILINE,
-    )
-    # 7b. REAL(KIND=N) declarations: sort items similarly. After the
-    #     KIND=N wrapper stripping above, these reduce to a bare list.
-    def _sort_real_decl(match: re.Match) -> str:
-        items = [s.strip() for s in match.group(1).split(',')]
-        return 'REAL(KIND=16) ' + ', '.join(sorted(items))
-    text = re.sub(
-        r'\bREAL\s*\(\s*KIND\s*=\s*\d+\s*\)\s+'
-        r'([A-Za-z_@][A-Za-z0-9_@,\s]*?)(?=$)',
-        _sort_real_decl, text, flags=re.MULTILINE,
     )
     return text
 

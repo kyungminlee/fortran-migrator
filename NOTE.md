@@ -78,3 +78,56 @@ truncates earlier. After migration to `KIND=16`, the literals in the
 S source still carry only single-precision accuracy, so the migrated
 `QROTMG` produced from `srotmg.f` has slightly coarser constants than
 the one produced from `drotmg.f`. The D-sourced version is retained.
+
+
+## LAPACK convergence divergences
+
+LAPACK has **370 divergent pairs** out of 1018 migrated routines. The
+bulk is explained by a handful of deliberate upstream asymmetries.
+
+### 1. `SROUNDUP_LWORK` (237 files)
+
+`SROUNDUP_LWORK(N)` (in `INSTALL/sroundup_lwork.f`) converts an
+INTEGER workspace size to a REAL such that `INT(result) >= N`. It
+exists because LAPACK returns the optimal workspace size in
+`WORK(1)`, which has the same floating-point type as the matrix
+data. A 32-bit REAL cannot represent every INTEGER exactly:
+
+```
+REAL(16777217)           = 16777216.0    ! truncates down — unsafe
+REAL(16777217)*(1+eps)   = 16777218.0    ! rounds up — safe
+```
+
+If a caller casts `WORK(1)` back to INTEGER and allocates that many
+elements, a truncated-down value yields a buffer too small.
+`SROUNDUP_LWORK` multiplies by `1+eps` to force rounding up.
+
+**Asymmetry.** The S- and C-precision routines call
+`WORK(1) = SROUNDUP_LWORK(LWKOPT)`. The D- and Z-precision routines
+simply write `WORK(1) = LWKOPT`. Reason: 64-bit REAL has a 53-bit
+mantissa, so every INTEGER up to `2^53 ≈ 9×10^15` round-trips through
+REAL exactly. No workspace will ever approach that bound, so the
+double-precision side has no bug to fix and skips the helper call
+entirely. Only `dgesdd.f` and `zgesdd.f` use `DROUNDUP_LWORK`
+(defined alongside, and equivalent under D precision).
+
+This is a deliberate choice by upstream LAPACK 3.12: the release
+notes describe `SROUNDUP_LWORK` as fixing "a subtle bug with
+returning LWORK as a Float" that only manifests in single precision,
+and the D/Z halves were intentionally left bare. After migration to
+KIND=16 the migrated `QROUNDUP_LWORK` is harmless (128-bit REAL has
+a 113-bit mantissa, so the round-up branch never triggers), but the
+two halves remain textually distinct and are flagged as divergences.
+The D/Z version is retained.
+
+### 2. `ILAPREC` precision-character argument (9 files)
+
+(investigation pending)
+
+### 3. `REAL32` / `REAL64` `iso_fortran_env` kinds (4 files)
+
+(investigation pending)
+
+### 4. Other source-level drift (~120 files)
+
+(investigation pending)
