@@ -289,10 +289,16 @@ def _light_normalize(text: str) -> str:
     # XLANGB,XLANTB,QLAMCH`` vs ``QLAMCH,XLANGB,XLANTB``). Match only
     # pure name lists — lines with ``=``, ``(``, ``*`` (e.g. array
     # specs ``A(LDA,*)``) are left alone.
+    def _prec_neutral_key(name: str) -> str:
+        """Sort key that maps S↔D and C↔Z to the same character so
+        precision-equivalent locals (CI vs ZI) sort to the same position."""
+        return name.replace('S', 'D').replace('C', 'Z')
+
     def _sort_typed_decl(m):
         type_spec, body = m.group(1), m.group(2)
         names = body.split(',')
-        return f'{type_spec} ' + ','.join(sorted(names))
+        return f'{type_spec} ' + ','.join(
+            sorted(names, key=_prec_neutral_key))
 
     text = re.sub(
         r'^(INTEGER|LOGICAL|REAL\(KIND=\d+\)|COMPLEX\(KIND=\d+\))\s+'
@@ -300,7 +306,24 @@ def _light_normalize(text: str) -> str:
         _sort_typed_decl, text, flags=re.MULTILINE,
     )
 
-    lines = [ln.strip() for ln in text.split('\n')]
+    # Sort type-declaration statement lines to eliminate ordering drift
+    # between co-family halves. Only lines that start with a type
+    # keyword are reordered; everything else stays in place.
+    lines = text.split('\n')
+    _DECL_RE = re.compile(
+        r'^\s*(?:INTEGER|LOGICAL|REAL\(|COMPLEX\(|CHARACTER|'
+        r'DOUBLE\s+PRECISION)\b'
+    )
+    decl_indices = [k for k, ln in enumerate(lines) if _DECL_RE.match(ln)]
+    if decl_indices:
+        decl_contents = sorted(
+            (lines[k] for k in decl_indices),
+            key=_prec_neutral_key,
+        )
+        for idx, k in enumerate(decl_indices):
+            lines[k] = decl_contents[idx]
+
+    lines = [ln.strip() for ln in lines]
     return '\n'.join(ln for ln in lines if ln)
 
 
@@ -338,6 +361,86 @@ def _apply_local_renames(text: str, renames: dict[str, str]) -> str:
         return new
 
     return pattern.sub(_sub, text)
+
+
+_PRECISION_PAIRS = frozenset({
+    frozenset(('S', 'D')),
+    frozenset(('C', 'Z')),
+})
+
+
+def _is_precision_equivalent_token(a: str, b: str) -> bool:
+    """True if *a* and *b* differ only at S↔D or C↔Z positions.
+
+    Both tokens must have the same length, and every position where
+    they disagree must be an (S,D) or (C,Z) pair (case-insensitive).
+    Returns False for identical tokens (no drift to fold).
+    """
+    if len(a) != len(b) or a == b:
+        return False
+    for ca, cb in zip(a, b):
+        if ca == cb:
+            continue
+        if frozenset((ca.upper(), cb.upper())) not in _PRECISION_PAIRS:
+            return False
+    return True
+
+
+def _is_precision_equivalent_line(line_a: str, line_b: str) -> bool:
+    """True if two normalized source lines differ only at precision-prefix
+    positions within identifier tokens.
+
+    Tokenizes both lines into words (``\\w+``) and punctuation (``\\S``),
+    then checks each token pair.  If any non-precision token differs, or
+    if the token counts don't match, returns False.
+    """
+    toks_a = re.findall(r'\w+|\S', line_a)
+    toks_b = re.findall(r'\w+|\S', line_b)
+    if len(toks_a) != len(toks_b):
+        return False
+    has_drift = False
+    for ta, tb in zip(toks_a, toks_b):
+        if ta == tb:
+            continue
+        if not _is_precision_equivalent_token(ta, tb):
+            return False
+        has_drift = True
+    return has_drift
+
+
+def _filter_precision_drift(lines_a: list[str],
+                            lines_b: list[str]) -> list[str]:
+    """Compute diff between *lines_a* and *lines_b*, suppressing hunks
+    that are purely precision-prefix local-variable drift (S↔D, C↔Z).
+
+    Uses :func:`difflib.SequenceMatcher` to align the two sides, then
+    for each ``'replace'`` block where every replaced line pair is
+    precision-equivalent (per :func:`_is_precision_equivalent_line`),
+    the block is silently dropped.  Insert, delete, and mixed blocks
+    are kept as real divergences.
+
+    Returns a list of diff lines (prefixed with ``-`` / ``+``) for
+    genuine divergences only.
+    """
+    import difflib
+    sm = difflib.SequenceMatcher(None, lines_a, lines_b)
+    diff_lines: list[str] = []
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        if op == 'equal':
+            continue
+        if op == 'replace' and (i2 - i1) == (j2 - j1):
+            if all(
+                lines_a[i1 + k] == lines_b[j1 + k]  # identical
+                or _is_precision_equivalent_line(lines_a[i1 + k],
+                                                 lines_b[j1 + k])
+                for k in range(i2 - i1)
+            ):
+                continue  # pure precision drift — suppress
+        for line in lines_a[i1:i2]:
+            diff_lines.append(f'-{line}')
+        for line in lines_b[j1:j2]:
+            diff_lines.append(f'+{line}')
+    return diff_lines
 
 
 def _light_normalize_c(text: str) -> str:
@@ -872,24 +975,28 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
             continue
         if other not in texts:
             continue
-        disk_text = _apply_local_renames(
-            on_disk.read_text(errors='replace'), config.local_renames)
-        other_text = _apply_local_renames(
-            texts[other], config.local_renames)
+        disk_text = on_disk.read_text(errors='replace')
+        other_text = texts[other]
+        # Apply any remaining recipe-level local renames (for non-precision
+        # cases like CONJTOPH→TTOPH that aren't S↔D / C↔Z swaps).
+        if config.local_renames:
+            disk_text = _apply_local_renames(disk_text, config.local_renames)
+            other_text = _apply_local_renames(other_text,
+                                              config.local_renames)
         n_can = _light_normalize(
             _strip_fortran_comments(disk_text, canonical.suffix))
         n_oth = _light_normalize(
             _strip_fortran_comments(other_text, other.suffix))
         if n_can == n_oth:
             continue
-        diff = [
-            line for line in difflib.unified_diff(
-                n_oth.splitlines(), n_can.splitlines(),
-                lineterm='', n=0,
-            )
-            if line.startswith(('-', '+'))
-            and not line.startswith(('---', '+++'))
-        ]
+        # Filter out precision-prefix local-variable drift (S↔D, C↔Z).
+        # Any properly-classified symbol has the same migrated name in
+        # both halves, so precision-prefix differences in the diff can
+        # only come from locals not in the rename map.
+        diff = _filter_precision_drift(
+            n_oth.splitlines(), n_can.splitlines())
+        if not diff:
+            continue
         report.append({
             'target': target_name,
             'canonical': canonical.name,
