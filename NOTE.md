@@ -122,7 +122,53 @@ The D/Z version is retained.
 
 ### 2. `ILAPREC` precision-character argument (9 files)
 
-(investigation pending)
+`ILAPREC(c)` (`SRC/ilaprec.f`) is a character→integer dispatcher
+that maps a single-letter selector to one of the BLAST XBLAS
+intermediate-precision enum constants:
+
+```
+'S' → BLAS_PREC_SINGLE     = 211
+'D' → BLAS_PREC_DOUBLE     = 212
+'I' → BLAS_PREC_INDIGENOUS = 213
+'X'/'E' → BLAS_PREC_EXTRA  = 214
+```
+
+The value is passed to the XBLAS `BLAS_xGEMV_X` / `BLAS_xGEMV2_X`
+calls inside the extended iterative-refinement drivers
+(`[sdcz]la_*rfsx_extended.f`) to choose the residual precision.
+
+**Asymmetry.** The single/complex drivers select `'D'` (one rung
+above their base type):
+
+```fortran
+! sgerfsx.f  (and sgbrfsx / sporfsx / ssyrfsx,
+!             cgerfsx / cgbrfsx / cporfsx / csyrfsx / cherfsx)
+PREC_TYPE = ILAPREC( 'D' )         ! BLAS_PREC_DOUBLE = 212
+```
+
+The double/complex-double drivers select `'E'`:
+
+```fortran
+! dgerfsx.f  (and dgbrfsx / dporfsx / dsyrfsx,
+!             zgerfsx / zgbrfsx / zporfsx / zsyrfsx / zherfsx)
+PREC_TYPE = ILAPREC( 'E' )         ! BLAS_PREC_EXTRA = 214
+```
+
+Upstream picks whichever level is one rung above the base precision
+of the driver — single uses double, double uses extra. The two
+halves therefore request different XBLAS residual-precision modes
+and the character literals (`'D'` vs `'E'`) survive into the
+migrated output unchanged.
+
+Nine diverging pairs: `sgbrfsx/dgbrfsx`, `sgerfsx/dgerfsx`,
+`sporfsx/dporfsx`, `ssyrfsx/dsyrfsx`, `cgbrfsx/zgbrfsx`,
+`cgerfsx/zgerfsx`, `cporfsx/zporfsx`, `csyrfsx/zsyrfsx`,
+`cherfsx/zherfsx`.
+
+After migration to `KIND=16` both halves are physically quad
+precision; the character literal divergence is genuine upstream
+source drift that the migrator cannot (and should not) paper over.
+The D/Z version is retained on disk.
 
 ### 3. `REAL32` / `REAL64` `iso_fortran_env` kinds (4 files)
 
