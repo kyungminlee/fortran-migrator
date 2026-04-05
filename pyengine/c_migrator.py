@@ -209,6 +209,7 @@ def _build_rename_regex(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[st
 def _apply_c_type_subs(text: str, template_vars: dict[str, str]) -> str:
     """Upgrade C type names used by precision-specific source files."""
     text = re.sub(r'\bdouble\b', template_vars['REAL_TYPE'], text)
+    text = re.sub(r'\bfloat\b', template_vars['REAL_TYPE'], text)
     text = re.sub(r'\bDCOMPLEX\b', template_vars['COMPLEX_TYPE'], text)
     text = re.sub(r'\bSCOMPLEX\b', template_vars['COMPLEX_TYPE'], text)
     return text
