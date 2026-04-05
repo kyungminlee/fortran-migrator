@@ -488,6 +488,114 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     }
 
 
+def run_divergence_report(recipe_path: Path, target_kind: int = 16,
+                           project_root: Path | None = None) -> list[dict]:
+    """Migrate every co-family source pair in-memory and return the
+    normalized diff for each pair whose members disagree.
+
+    Returns a list of ``{'target', 'canonical', 'other', 'diff'}``
+    dicts, sorted by target filename. ``diff`` is the list of +/-
+    lines (without context) from the unified diff of the two
+    canonicalized texts.
+    """
+    import difflib
+    config = load_recipe(recipe_path, project_root)
+
+    # Scan this recipe and its dependencies.
+    symbols = scan_symbols(
+        config.source_dir, config.language,
+        config.extensions, config.library_path,
+    )
+    for dep_path in config.depends:
+        dep_cfg = load_recipe(dep_path, project_root)
+        symbols |= scan_symbols(
+            dep_cfg.source_dir, dep_cfg.language,
+            dep_cfg.extensions, dep_cfg.library_path,
+        )
+    for extra_dir in config.extra_symbol_dirs:
+        if extra_dir.is_dir():
+            for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
+                               ('c', ['.c'])]:
+                symbols |= scan_symbols(extra_dir, lang, exts)
+            for sub in sorted(extra_dir.iterdir()):
+                if sub.is_dir():
+                    for lang, exts in [('fortran', ['.f', '.f90', '.F90']),
+                                       ('c', ['.c'])]:
+                        symbols |= scan_symbols(sub, lang, exts)
+
+    classification = classify_symbols(symbols)
+    rename_map = classification.build_rename_map(target_kind)
+
+    # Group eligible source files by their target output name.
+    src_files = sorted(
+        p for p in config.source_dir.iterdir()
+        if p.suffix.lower() in config.extensions
+    )
+    by_target: dict[str, list[Path]] = {}
+    for p in src_files:
+        stem_u = p.stem.upper()
+        if stem_u in config.skip_files or stem_u in config.copy_files:
+            continue
+        if stem_u in classification.independent:
+            continue
+        by_target.setdefault(target_filename(p.name, rename_map), []).append(p)
+
+    # Migrate every member of every multi-member group in parallel.
+    pairs: list[tuple[Path, Path]] = []
+    for tn, members in by_target.items():
+        if len(members) < 2:
+            continue
+        members.sort(key=lambda p: (p.stem[0].upper() not in ('D', 'Z'), p.name))
+        canonical = members[0]
+        for other in members[1:]:
+            pairs.append((canonical, other))
+
+    all_paths = {p for pair in pairs for p in pair}
+    texts: dict[Path, str] = {}
+    workers = max(1, (os.cpu_count() or 4))
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        futures = {
+            ex.submit(migrate_file_to_string, p, rename_map, target_kind): p
+            for p in all_paths
+        }
+        for fut in tqdm(as_completed(futures), total=len(futures),
+                        desc='  Migrating', unit='file',
+                        mininterval=1.0, miniters=10):
+            p = futures[fut]
+            try:
+                _, migrated = fut.result()
+                texts[p] = migrated
+            except Exception:
+                pass
+
+    report: list[dict] = []
+    for canonical, other in pairs:
+        if canonical not in texts or other not in texts:
+            continue
+        n_can = _canonicalize_for_compare(
+            _strip_fortran_comments(texts[canonical], canonical.suffix))
+        n_oth = _canonicalize_for_compare(
+            _strip_fortran_comments(texts[other], other.suffix))
+        if n_can == n_oth:
+            continue
+        diff = [
+            line for line in difflib.unified_diff(
+                n_oth.splitlines(), n_can.splitlines(),
+                lineterm='', n=0,
+            )
+            if line.startswith(('-', '+'))
+            and not line.startswith(('---', '+++'))
+        ]
+        report.append({
+            'target': target_filename(canonical.name, rename_map),
+            'canonical': canonical.name,
+            'other': other.name,
+            'diff': diff,
+        })
+    report.sort(key=lambda r: (r['other'], r['canonical']))
+    return report
+
+
 def run_c_migration(config: RecipeConfig, output_dir: Path,
                     kind: int, dry_run: bool = False,
                     classification=None,
