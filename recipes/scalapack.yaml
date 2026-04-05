@@ -33,3 +33,12 @@ skip_files: []
 prefer_source:
   - PCUNGQL   # fixes restore bug in pzungql.f:292-293
   - PCUNML2   # fixes restore bug in pzunml2.f:394-395
+
+# Local-variable naming drift between S/D and C/Z source halves.
+# These are temp variables not in the symbol table, so the migrator
+# can't rename them. The mapping folds the C/S-half name into its
+# D/Z-half counterpart for convergence-report purposes only — the
+# on-disk D/Z-derived canonical is never modified.
+local_renames:
+  CR: ZR        # QLADIV output temps in pclattrs vs pzlattrs
+  CI: ZI

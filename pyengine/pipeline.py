@@ -304,16 +304,40 @@ def _light_normalize(text: str) -> str:
     return '\n'.join(ln for ln in lines if ln)
 
 
-def _strip_c_comments(text: str) -> str:
-    """Strip ``/* ... */`` block comments and ``// ...`` line comments.
+def _apply_local_renames(text: str, renames: dict[str, str]) -> str:
+    """Apply recipe-declared local-variable equivalence folds.
 
-    Used before :func:`_light_normalize_c` so convergence comparisons
-    ignore commentary that differs between S/D and C/Z C source halves
-    (e.g. ``real`` vs ``double precision`` in BLACS docblocks).
+    ``renames`` declares equivalence classes: each key is a local
+    identifier that should be treated as identical to its value for
+    convergence-report purposes only. Applied **to both halves** of
+    every pair (D/Z canonical read from disk and S/C other migrated
+    in-memory) before light-normalized comparison, so ScaLAPACK's
+    S-half ``CR`` / ``CI`` folds onto Z-half ``ZR`` / ``ZI`` in
+    pzlattrs AND a D-half file that already uses ``CR`` still
+    converges with its S-half sibling. Neither the on-disk canonical
+    nor the recipe source is modified; this is comparison-only.
+    Matching is case-insensitive; replacement casing tracks the
+    source match.
     """
-    text = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
-    text = re.sub(r'//[^\n]*', '', text)
-    return text
+    if not renames:
+        return text
+    keys = sorted(renames.keys(), key=len, reverse=True)
+    pattern = re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in keys) + r')\b',
+        re.IGNORECASE,
+    )
+    upper_map = {k.upper(): v.upper() for k, v in renames.items()}
+
+    def _sub(m: re.Match) -> str:
+        src = m.group(0)
+        new = upper_map[src.upper()]
+        if src.isupper():
+            return new
+        if src.islower():
+            return new.lower()
+        return new
+
+    return pattern.sub(_sub, text)
 
 
 def _light_normalize_c(text: str) -> str:
@@ -848,11 +872,14 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
             continue
         if other not in texts:
             continue
-        disk_text = on_disk.read_text(errors='replace')
+        disk_text = _apply_local_renames(
+            on_disk.read_text(errors='replace'), config.local_renames)
+        other_text = _apply_local_renames(
+            texts[other], config.local_renames)
         n_can = _light_normalize(
             _strip_fortran_comments(disk_text, canonical.suffix))
         n_oth = _light_normalize(
-            _strip_fortran_comments(texts[other], other.suffix))
+            _strip_fortran_comments(other_text, other.suffix))
         if n_can == n_oth:
             continue
         diff = [
