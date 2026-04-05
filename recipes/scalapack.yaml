@@ -8,6 +8,8 @@ symbols:
 
 depends:
   - lapack.yaml   # transitively includes BLAS
+  - blacs.yaml    # BLACS comm routines (SGEBR2D/DGEBR2D, etc.)
+  - pblas.yaml    # ScaLAPACK routines call PBLAS entry points directly
 
 # Additional source dirs to scan for symbols (not migrated, just for renaming)
 # Scans both Fortran and C files, plus subdirectories.

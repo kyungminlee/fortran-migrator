@@ -15,7 +15,9 @@ import sys
 from pathlib import Path
 
 from .config import load_recipe
-from .pipeline import run_divergence_report, run_migration
+from .pipeline import (
+    run_convergence_report, run_divergence_report, run_migration,
+)
 from .prefix_classifier import classify_symbols, PREFIX_MAP
 from .symbol_scanner import scan_symbols
 
@@ -42,7 +44,6 @@ def cmd_diverge(args):
         recipe_path=args.recipe,
         target_kind=args.kind,
         project_root=args.project_root,
-        output_dir=args.from_disk,
     )
     total = len(report)
     # Optional filtering on diff content.
@@ -69,6 +70,60 @@ def cmd_diverge(args):
         print(f'{shown} shown / {total} divergent pairs')
     else:
         print(f'{total} divergent pairs')
+
+
+def cmd_converge(args):
+    """Verify that migrated files on disk converge with a fresh
+    migration of their S/C co-family siblings under a light
+    normalizer (whitespace/case only).
+
+    This is the authoritative post-migration check: the D/Z
+    canonical is read from disk, the S/C sibling is re-migrated
+    in memory, and the two are compared without the heavy prefix
+    collapse / literal rewrites that ``diverge`` uses to mask
+    pre-existing BLAS/LAPACK source drift. Any entry here means
+    either the migrator left precision-specific material behind or
+    a genuine algorithmic difference exists between the halves.
+    """
+    report = run_convergence_report(
+        recipe_path=args.recipe,
+        output_dir=args.output_dir,
+        target_kind=args.kind,
+        project_root=args.project_root,
+    )
+    total = len(report)
+    if args.grep:
+        pat = re.compile(args.grep, re.IGNORECASE)
+        report = [r for r in report if any(pat.search(l) for l in r['diff'])]
+    if args.exclude:
+        pat = re.compile(args.exclude, re.IGNORECASE)
+        report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+
+    for entry in report:
+        if entry['status'] == 'missing':
+            print(f'### MISSING {entry["target"]} '
+                  f'(expected from {entry["canonical"]})')
+            print()
+            continue
+        header = (f'### {entry["other"]} vs {entry["canonical"]}'
+                  f' → {entry["target"]} (+{len(entry["diff"])})')
+        print(header)
+        diff = entry['diff'] if args.full else entry['diff'][:args.context]
+        for line in diff:
+            print(line[:args.max_width])
+        if not args.full and len(entry['diff']) > args.context:
+            print(f'  ...{len(entry["diff"]) - args.context} more')
+        print()
+
+    diverged = sum(1 for r in report if r['status'] == 'diverged')
+    missing = sum(1 for r in report if r['status'] == 'missing')
+    shown = len(report)
+    summary_total = sum(1 for _ in range(total))  # == total
+    if args.grep or args.exclude:
+        print(f'{shown} shown / {summary_total} entries '
+              f'({diverged} diverged, {missing} missing on disk)')
+    else:
+        print(f'{diverged} diverged, {missing} missing on disk')
 
 
 def cmd_verify(args):
@@ -378,11 +433,28 @@ def main():
                    help='Print full diff per entry (ignores --context)')
     p.add_argument('--max-width', type=int, default=200,
                    help='Truncate each diff line to this many chars')
-    p.add_argument('--from-disk', type=Path, default=None, metavar='DIR',
-                   help='Compare re-migrated S/C halves against the '
-                        'canonical D/Z outputs already written to DIR '
-                        '(post-migration verification).')
     p.set_defaults(func=cmd_diverge)
+
+    # --- converge ---
+    p = sub.add_parser('converge',
+                       help='Post-migration verification against on-disk '
+                            'files with a light whitespace-only normalizer')
+    p.add_argument('recipe', type=Path, help='Recipe YAML file')
+    p.add_argument('output_dir', type=Path,
+                   help='Directory holding migrated output')
+    p.add_argument('--kind', type=int, default=16, choices=[10, 16])
+    p.add_argument('--project-root', type=Path, default=None)
+    p.add_argument('--grep', default=None,
+                   help='Regex: only show entries with diff matching')
+    p.add_argument('--exclude', default=None,
+                   help='Regex: drop entries whose diff matches')
+    p.add_argument('--context', type=int, default=8,
+                   help='Max diff lines per entry (default 8)')
+    p.add_argument('--full', action='store_true',
+                   help='Print full diff per entry (ignores --context)')
+    p.add_argument('--max-width', type=int, default=200,
+                   help='Truncate each diff line to this many chars')
+    p.set_defaults(func=cmd_converge)
 
     # --- verify ---
     p = sub.add_parser('verify', help='Verify migrated output')
