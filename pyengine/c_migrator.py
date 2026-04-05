@@ -271,8 +271,11 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         # becomes '@' so sibling C sources that differ only in the
         # precision prefix of local names collapse together.
         s = re.sub(r'\b[sdczSDCZ]+(?=[A-Za-z])', '@', s)
-        lines = [ln.rstrip() for ln in s.split('\n')]
-        return '\n'.join(ln for ln in lines if ln.strip())
+        # Collapse all whitespace so column-aligned declarations like
+        # ``float          * ALPHA;`` and ``double         * ALPHA;``
+        # compare equal after the type substitution.
+        lines = [re.sub(r'\s+', ' ', ln).strip() for ln in s.split('\n')]
+        return '\n'.join(ln for ln in lines if ln)
 
     cloned: list[str] = []
     divergences: list[str] = []
