@@ -82,18 +82,15 @@ the one produced from `drotmg.f`. The D-sourced version is retained.
 
 ## LAPACK convergence divergences
 
-LAPACK has **347 divergent pairs** out of 1018 migrated routines,
-breaking down as:
-
-| category                | count |
-|-------------------------|-------|
-| `SROUNDUP_LWORK`        | 237   |
-| `ILAPREC` character arg | 9     |
-| other upstream drift    | 101   |
-
-All 347 are genuine upstream source-level differences between the
+LAPACK has **431 divergent pairs** out of 1018 migrated routines.
+All are genuine upstream source-level differences between the
 S/C and D/Z halves of LAPACK 3.12.1 — not migrator bugs. The D/Z
 version is retained on disk as canonical for each pair.
+
+The convergence test auto-filters precision-prefix local-variable
+drift (S↔D, C↔Z swaps in unclassified local names) via
+`_filter_precision_drift`, so these 431 are structural differences
+only.
 
 ### 1. `SROUNDUP_LWORK` (237 files)
 
@@ -180,7 +177,7 @@ precision; the character literal divergence is genuine upstream
 source drift that the migrator cannot (and should not) paper over.
 The D/Z version is retained on disk.
 
-### 3. Other source-level drift (104 files)
+### 3. Other source-level drift (~185 files)
 
 These are miscellaneous places where the S/C and D/Z halves of a
 routine were maintained independently and drifted apart in
@@ -310,48 +307,78 @@ verifier: it reads each D/Z canonical off disk, re-migrates its
 S/C sibling in memory, and compares the two under a light
 normalizer (whitespace/case, `END KEYWORD` merging, sorted
 `INTRINSIC`/`EXTERNAL` and simple-type-spec bare-identifier
-lists). No prefix collapse, no literal rewrites. Every entry
-that survives is either migrator slop or genuine upstream drift.
+lists, precision-neutral declaration sorting). Precision-prefix
+local-variable drift (S↔D, C↔Z swaps in unclassified locals)
+is auto-filtered by `_filter_precision_drift`. Every entry that
+survives is either migrator slop or genuine upstream drift.
 
-| library | converge entries | character                                    |
-|---------|------------------|----------------------------------------------|
-| BLAS    | 20               | local dummy-arg / local-var prefix drift     |
-| LAPACK  | 458              | SROUNDUP_LWORK, REAL(int,KIND=) casts, drift |
+| library    | diverged | missing | character                                  |
+|------------|----------|---------|--------------------------------------------|
+| BLAS       | 3        | 0       | upstream S≠D asymmetry (see above)         |
+| LAPACK     | 431      | 0       | SROUNDUP_LWORK, ILAPREC, upstream drift    |
+| BLACS      | 0        | 0       | clean                                      |
+| PBLAS      | 1        | 0       | psamax_/pdamax_ Mptr macro vs direct index |
+| ScaLAPACK  | 26       | 0       | upstream S≠D / C≠Z drift                   |
 
-### BLAS: local-variable prefix drift (all 20 entries)
+### BLAS (3 diverged)
 
-BLAS's S/D/C/Z precision families name their local variables and
-dummy arguments after the precision prefix (`SX`/`DX`, `SA`/`DA`,
-`STEMP`/`DTEMP`, `CX`/`ZX`, `CA`/`ZA`, `CTEMP`/`ZTEMP`). These
-are local to each routine and never enter the symbol table, so
-the rename map does not touch them. Closing this would require a
-local-identifier rename policy (risky: would collide with
-legitimate names that happen to start with `S`/`D`/`C`/`Z`), so
-the S/C-sourced re-migration textually differs from the on-disk
-D/Z canonical. All 20 BLAS entries fall here, plus the three
-already-documented BLAS upstream items above (`sdot`, `scasum`,
-`srotmg`).
+After auto-filtering precision-prefix drift, only 3 genuine
+upstream asymmetries remain — the `sdot`/`ddot`, `scasum`/`dzasum`,
+and `srotmg`/`drotmg` cases documented in detail above.
 
-### LAPACK: remaining categories
+### LAPACK (431 diverged)
 
-After the light normalizer sorts `INTRINSIC`/`EXTERNAL` argument
-lists and simple type-spec declaration lists, 458 LAPACK pairs
-still diverge. Dominant categories:
+All 431 are upstream S/C vs D/Z asymmetries, documented in the
+sections above. Dominant categories:
 
 - **`SROUNDUP_LWORK` asymmetry** (≈237 pairs, documented above).
   The S/C side calls `QROUNDUP_LWORK` and declares it `EXTERNAL`;
-  the D/Z side uses `REAL(LWKOPT, KIND=16)` directly.
-- **Explicit `REAL(int_expr, KIND=16)` casts** (≈150 pairs).
-  S/C sources wrap INTEGER expressions in explicit `REAL(...)` to
-  promote them before combining with a REAL operand; D/Z sources
-  rely on implicit conversion. Post-migration to KIND=16 the two
-  are semantically identical but textually distinct. The migrator
-  does not strip these — doing so would require type inference to
-  prove the cast is a no-op, and the cast is not formally wrong.
+  the D/Z side assigns `WORK(1)=LWKOPT` directly.
 - **`ILAPREC 'D'` vs `'E'`** (9 pairs, documented above).
+- **Explicit `REAL(int_expr, KIND=16)` casts** — S/C sources wrap
+  INTEGER expressions in explicit `REAL(...)` to promote them
+  before combining with a REAL operand; D/Z sources rely on
+  implicit conversion. Post-migration to KIND=16 the two are
+  semantically identical but textually distinct.
 - **`ISO_FORTRAN_ENV: REAL32` vs `REAL64`** (4 pairs in
   `[sc]gedmd*.f90` / `[dz]gedmd*.f90`, also with algorithmic drift).
-- **Algorithmic drift** (`clahef`/`zlahef` off-by-one, etc.).
+- **Algorithmic drift** (DO-loop labels, unused PARAMETERs,
+  INTRINSIC lists, expression formatting, different code paths —
+  see subsections above).
+
+### BLACS (0 diverged)
+
+All C-language co-family pairs converge perfectly after migration.
+
+### PBLAS (1 diverged)
+
+`psamax_.c` vs `pdamax_.c` → `pqamax_.c`: the S half accesses
+matrix elements via direct array indexing (`X[Xii + Xjj * Xld]`)
+while the D half uses the `Mptr` macro (`*Mptr(X, Xii, Xjj, Xld, 1)`).
+Both compute the same address; this is upstream editorial drift
+in the ScaLAPACK C sources.
+
+### ScaLAPACK (26 diverged)
+
+26 Fortran pairs diverge due to upstream S≠D or C≠Z asymmetries:
+
+- **`PB_TOPGET` vs `PB_TOPSET`** (2 files: `pzungql`/`pzunml2`):
+  the C half calls `PB_TOPGET` (query) while the Z half calls
+  `PB_TOPSET` (modify). Handled via `prefer_source` recipe
+  directive that selects the C half as canonical.
+- **`SROUNDUP_LWORK`-like patterns** — `REAL(expr, KIND=16)` casts
+  present in one half but not the other (same pattern as LAPACK).
+- **`PERT` parameter value** — `slarre2`/`dlarre2` and related
+  use `PERT=4.0` vs `PERT=8.0`; `MINRGP=3.0E-3` vs `1.0E-3`.
+  These are deliberate precision-dependent algorithmic constants.
+- **`RTL` tolerance** — `HNDRD*EPS` vs `SQRT(EPS)`: different
+  convergence thresholds chosen for single vs double precision.
+- **`INTRINSIC` list duplicates** — e.g., `REAL,REAL` appearing
+  in one half's INTRINSIC declaration.
+- **Array-size declarations** — `WORK(2)` vs `WORK(*)`, `V3(1)`
+  vs explicit size, `TAULOC` vs `TAULOC(1)` in subroutine args.
+- **Workspace query / `PARAMETER` drift** — minor expression and
+  declaration ordering differences between halves.
 
 ### Migrator fixes driven by converge
 
