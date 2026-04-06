@@ -711,8 +711,8 @@ def target_filename(name: str, rename_map: dict[str, str]) -> str:
 
 def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
                            kind: int,
-                           flang_cmd: str | None = None,
-                           gfortran_cmd: str | None = None,
+                           parser: str | None = None,
+                           parser_cmd: str | None = None,
                            ) -> tuple[str, str] | None:
     """Migrate a file in memory. Returns (target_filename, migrated_text).
 
@@ -720,30 +720,26 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
     convergence check across co-family members that map to the same
     output name before committing to disk.
 
-    Tries Flang first for parse-tree-guided migration, then falls back
-    to gfortran, and finally to regex-only when neither compiler is
-    available.
+    Args:
+        parser: Which parse tree backend to use: ``'flang'``,
+            ``'gfortran'``, or ``None`` (regex-only, no compiler).
+        parser_cmd: Explicit path to the compiler binary.  When *None*
+            the compiler is located via PATH.
     """
-    from .flang_parser import scan_file as flang_scan, find_flang
-    from .gfortran_parser import scan_file as gfortran_scan, find_gfortran
-
     ext = src_path.suffix.lower()
     source = src_path.read_text(errors='replace')
 
-    # --- Try Flang first ---
-    if flang_cmd is None:
-        flang_cmd = find_flang()
-
     facts = None
-    if flang_cmd:
-        facts = flang_scan(src_path, flang_cmd)
-
-    # --- Fall back to gfortran ---
-    if facts is None:
-        if gfortran_cmd is None:
-            gfortran_cmd = find_gfortran()
-        if gfortran_cmd:
-            facts = gfortran_scan(src_path, gfortran_cmd)
+    if parser == 'flang':
+        from .flang_parser import scan_file as flang_scan, find_flang
+        cmd = parser_cmd or find_flang()
+        if cmd:
+            facts = flang_scan(src_path, cmd)
+    elif parser == 'gfortran':
+        from .gfortran_parser import scan_file as gfortran_scan, find_gfortran
+        cmd = parser_cmd or find_gfortran()
+        if cmd:
+            facts = gfortran_scan(src_path, cmd)
 
     if facts is not None:
         migrated = _migrate_with_flang(source, ext, rename_map, kind, facts)
@@ -760,16 +756,15 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
 
 def migrate_file(src_path: Path, output_dir: Path,
                  rename_map: dict[str, str], kind: int,
-                 flang_cmd: str | None = None,
-                 gfortran_cmd: str | None = None) -> str | None:
+                 parser: str | None = None,
+                 parser_cmd: str | None = None) -> str | None:
     """Migrate a single Fortran source file. Returns output filename.
 
-    If flang_cmd is provided (or Flang is found on PATH), uses Flang's
-    parse tree to guide transformations. Falls back to gfortran, then
-    to regex-only when neither compiler is available.
+    Uses the specified *parser* backend (``'flang'``, ``'gfortran'``,
+    or ``None`` for regex-only) to guide transformations.
     """
-    result = migrate_file_to_string(src_path, rename_map, kind, flang_cmd,
-                                    gfortran_cmd)
+    result = migrate_file_to_string(src_path, rename_map, kind, parser,
+                                    parser_cmd)
     if result is None:
         return None
     out_name, migrated = result

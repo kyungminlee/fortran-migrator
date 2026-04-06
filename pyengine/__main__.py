@@ -22,14 +22,24 @@ from .prefix_classifier import classify_symbols, PREFIX_MAP
 from .symbol_scanner import scan_symbols
 
 
+def _parser_args(args):
+    """Extract parser/parser_cmd from CLI args."""
+    parser = getattr(args, 'parser', None)
+    parser_cmd = getattr(args, 'parser_cmd', None)
+    return parser, parser_cmd
+
+
 def cmd_migrate(args):
     """Run the migration step."""
+    parser, parser_cmd = _parser_args(args)
     run_migration(
         recipe_path=args.recipe,
         output_dir=args.output_dir,
         target_kind=args.kind,
         dry_run=args.dry_run,
         project_root=args.project_root,
+        parser=parser,
+        parser_cmd=parser_cmd,
     )
 
 
@@ -40,10 +50,13 @@ def cmd_diverge(args):
     canonicalized unified diff (canonical = D/Z half, kept on disk;
     other = S/C half, checked against it).
     """
+    parser, parser_cmd = _parser_args(args)
     report = run_divergence_report(
         recipe_path=args.recipe,
         target_kind=args.kind,
         project_root=args.project_root,
+        parser=parser,
+        parser_cmd=parser_cmd,
     )
     total = len(report)
     # Optional filtering on diff content.
@@ -85,11 +98,14 @@ def cmd_converge(args):
     either the migrator left precision-specific material behind or
     a genuine algorithmic difference exists between the halves.
     """
+    parser, parser_cmd = _parser_args(args)
     report = run_convergence_report(
         recipe_path=args.recipe,
         output_dir=args.output_dir,
         target_kind=args.kind,
         project_root=args.project_root,
+        parser=parser,
+        parser_cmd=parser_cmd,
     )
     total = len(report)
     if args.grep:
@@ -401,6 +417,19 @@ def cmd_run(args):
     cmd_build(args)
 
 
+def _add_parser_args(p):
+    """Add --parser and --parser-cmd arguments to a subparser."""
+    p.add_argument(
+        '--parser', default=None,
+        choices=['flang', 'gfortran'],
+        help='Parse tree backend for Fortran migration '
+             '(default: regex-only, no compiler)')
+    p.add_argument(
+        '--parser-cmd', default=None,
+        help='Explicit path to the parser compiler binary '
+             '(overrides PATH lookup)')
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog='pyengine',
@@ -415,6 +444,7 @@ def main():
     p.add_argument('--kind', type=int, default=16, choices=[10, 16])
     p.add_argument('--dry-run', action='store_true')
     p.add_argument('--project-root', type=Path, default=None)
+    _add_parser_args(p)
     p.set_defaults(func=cmd_migrate)
 
     # --- diverge ---
@@ -433,6 +463,7 @@ def main():
                    help='Print full diff per entry (ignores --context)')
     p.add_argument('--max-width', type=int, default=200,
                    help='Truncate each diff line to this many chars')
+    _add_parser_args(p)
     p.set_defaults(func=cmd_diverge)
 
     # --- converge ---
@@ -454,6 +485,7 @@ def main():
                    help='Print full diff per entry (ignores --context)')
     p.add_argument('--max-width', type=int, default=200,
                    help='Truncate each diff line to this many chars')
+    _add_parser_args(p)
     p.set_defaults(func=cmd_converge)
 
     # --- verify ---
@@ -477,6 +509,7 @@ def main():
     p.add_argument('--kind', type=int, default=16, choices=[10, 16])
     p.add_argument('--fc', default='gfortran')
     p.add_argument('--project-root', type=Path, default=None)
+    _add_parser_args(p)
     p.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
