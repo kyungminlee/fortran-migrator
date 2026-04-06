@@ -356,6 +356,114 @@ def replace_intrinsic_decls(line: str) -> str:
     return line
 
 
+def _dedup_intrinsic_stmts(text: str) -> str:
+    """Remove duplicate names from multi-line INTRINSIC statements.
+
+    The per-line dedup in ``replace_intrinsic_decls`` cannot catch
+    duplicates that span continuation lines (e.g. DBLE on line 1 maps
+    to REAL, but REAL already appears on the continuation line 2).
+    This pass joins continuations, deduplicates, and re-splits.
+    """
+    lines = text.split('\n')
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Detect start of an INTRINSIC statement (fixed-form or free-form)
+        if not re.match(r'\s+INTRINSIC\b', line, re.IGNORECASE):
+            result.append(line)
+            i += 1
+            continue
+
+        # Collect the full statement including continuation lines
+        stmt_lines = [line]
+        j = i + 1
+        while j < len(lines):
+            next_line = lines[j]
+            # Fixed-form continuation: column 6 is non-blank, non-zero
+            if len(next_line) > 5 and next_line[0] == ' ' and next_line[5] not in (' ', '0', ''):
+                stmt_lines.append(next_line)
+                j += 1
+            # Free-form continuation: previous line ends with &
+            elif stmt_lines[-1].rstrip().endswith('&'):
+                stmt_lines.append(next_line)
+                j += 1
+            else:
+                break
+
+        # Parse the INTRINSIC keyword + all names across lines
+        m = re.match(r'(\s+INTRINSIC\s+)', stmt_lines[0], re.IGNORECASE)
+        if not m:
+            result.extend(stmt_lines)
+            i = j
+            continue
+
+        prefix = m.group(1)
+        # Extract name portion from the first line
+        name_part = stmt_lines[0][len(prefix):]
+        # Extract name portions from continuation lines
+        for sl in stmt_lines[1:]:
+            # Strip fixed-form continuation prefix (col 1-6) or free-form &
+            if len(sl) > 5 and sl[0] == ' ' and sl[5] not in (' ', '0', ''):
+                name_part += ' ' + sl[6:]
+            else:
+                # Free-form: strip leading & if present
+                stripped = sl.lstrip()
+                if stripped.startswith('&'):
+                    stripped = stripped[1:]
+                name_part += ' ' + stripped
+
+        # Remove trailing & from free-form
+        name_part = name_part.replace('&', ' ')
+        names = [n.strip() for n in name_part.split(',') if n.strip()]
+
+        # Deduplicate preserving order
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for n in names:
+            key = n.upper()
+            if key not in seen:
+                seen.add(key)
+                deduped.append(n)
+
+        # Reassemble as a single INTRINSIC statement, re-wrapping to 72 cols
+        body = ', '.join(deduped)
+        full = prefix + body
+        if len(full) <= 72:
+            result.append(full)
+        else:
+            # Split across continuation lines at 72-char boundary.
+            # The first line needs room for a trailing comma (1 char)
+            # when there are continuation lines.
+            cont_prefix = '     $                   '
+            first_cap = 72 - len(prefix) - 1  # -1 for trailing comma
+            cont_cap = 72 - len(cont_prefix) - 1  # -1 for trailing comma
+            chunks: list[str] = []
+            cur = ''
+            for name in deduped:
+                addition = (', ' + name) if cur else name
+                cap = first_cap if not chunks else cont_cap
+                if not cur:
+                    cur = name
+                elif len(cur) + len(addition) <= cap:
+                    cur += addition
+                else:
+                    chunks.append(cur)
+                    cur = name
+            if cur:
+                chunks.append(cur)
+            for ci, chunk in enumerate(chunks):
+                trail = ',' if ci < len(chunks) - 1 else ''
+                if ci == 0:
+                    result.append(prefix + chunk + trail)
+                else:
+                    result.append(cont_prefix + chunk + trail)
+
+        i = j
+
+    return '\n'.join(result)
+
+
 # ---------------------------------------------------------------------------
 # Routine name replacement
 # ---------------------------------------------------------------------------
@@ -505,7 +613,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str],
             # Handle column 72 overflow
             stripped = reformat_fixed_line(stripped)
         result.append(stripped + nl)
-    return ''.join(result)
+    return _dedup_intrinsic_stmts(''.join(result))
 
 
 # ---------------------------------------------------------------------------
@@ -687,7 +795,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str],
             stripped = replace_type_decls(stripped, kind)
 
         result.append(stripped + nl)
-    return ''.join(result)
+    return _dedup_intrinsic_stmts(''.join(result))
 
 
 # ---------------------------------------------------------------------------
@@ -852,7 +960,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str],
             stripped = replace_xerbla_strings(stripped, rename_map)
             stripped = reformat_fixed_line(stripped)
         result.append(stripped + nl)
-    return ''.join(result)
+    return _dedup_intrinsic_stmts(''.join(result))
 
 
 def _migrate_free_form_flang(source: str, rename_map: dict[str, str],
@@ -876,4 +984,4 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str],
         if stripped.lstrip().startswith('!') and has_float_types:
             stripped = replace_type_decls(stripped, kind)
         result.append(stripped + nl)
-    return ''.join(result)
+    return _dedup_intrinsic_stmts(''.join(result))
