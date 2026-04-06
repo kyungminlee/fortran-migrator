@@ -712,24 +712,38 @@ def target_filename(name: str, rename_map: dict[str, str]) -> str:
 def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
                            kind: int,
                            flang_cmd: str | None = None,
+                           gfortran_cmd: str | None = None,
                            ) -> tuple[str, str] | None:
     """Migrate a file in memory. Returns (target_filename, migrated_text).
 
     Separated from :func:`migrate_file` so the pipeline can perform a
     convergence check across co-family members that map to the same
     output name before committing to disk.
+
+    Tries Flang first for parse-tree-guided migration, then falls back
+    to gfortran, and finally to regex-only when neither compiler is
+    available.
     """
-    from .flang_parser import scan_file, find_flang
+    from .flang_parser import scan_file as flang_scan, find_flang
+    from .gfortran_parser import scan_file as gfortran_scan, find_gfortran
 
     ext = src_path.suffix.lower()
     source = src_path.read_text(errors='replace')
 
+    # --- Try Flang first ---
     if flang_cmd is None:
         flang_cmd = find_flang()
 
     facts = None
     if flang_cmd:
-        facts = scan_file(src_path, flang_cmd)
+        facts = flang_scan(src_path, flang_cmd)
+
+    # --- Fall back to gfortran ---
+    if facts is None:
+        if gfortran_cmd is None:
+            gfortran_cmd = find_gfortran()
+        if gfortran_cmd:
+            facts = gfortran_scan(src_path, gfortran_cmd)
 
     if facts is not None:
         migrated = _migrate_with_flang(source, ext, rename_map, kind, facts)
@@ -746,14 +760,16 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
 
 def migrate_file(src_path: Path, output_dir: Path,
                  rename_map: dict[str, str], kind: int,
-                 flang_cmd: str | None = None) -> str | None:
+                 flang_cmd: str | None = None,
+                 gfortran_cmd: str | None = None) -> str | None:
     """Migrate a single Fortran source file. Returns output filename.
 
     If flang_cmd is provided (or Flang is found on PATH), uses Flang's
-    parse tree to guide transformations. Falls back to regex-only when
-    Flang is unavailable.
+    parse tree to guide transformations. Falls back to gfortran, then
+    to regex-only when neither compiler is available.
     """
-    result = migrate_file_to_string(src_path, rename_map, kind, flang_cmd)
+    result = migrate_file_to_string(src_path, rename_map, kind, flang_cmd,
+                                    gfortran_cmd)
     if result is None:
         return None
     out_name, migrated = result
