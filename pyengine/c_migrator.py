@@ -57,6 +57,41 @@ COMPLEX_CLONE_SUBS = [
     (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
 ]
 
+# Convergence-only sub rule sets: mirror of REAL_CLONE_SUBS/COMPLEX_CLONE_SUBS
+# but sourced from S/C sibling files (``float``/``MPI_FLOAT``/``Cs*``/``BI_s*``
+# and ``SCOMPLEX``/``MPI_COMPLEX``/``Cc*``/``BI_c*``). Used by the per-file
+# in-memory migrator to re-derive the Q/X target from the S/C half for
+# convergence checking against the on-disk canonical produced from D/Z.
+SINGLE_CLONE_SUBS = [
+    # Type names (run twice to catch adjacent matches)
+    (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
+    # MPI types
+    (r'MPI_FLOAT', '{MPI_REAL}'),
+    # Function name prefixes
+    (r'Cs([a-z])', r'C{RP}\1'),
+    (r'BI_s([a-zA-Z])', r'BI_{RP}\1'),
+]
+
+CSINGLE_CLONE_SUBS = [
+    # Complex struct types
+    (r'(^|[^a-zA-Z_])SCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_])SCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_])DCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_])DCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
+    # Underlying real type
+    (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
+    # MPI types (order matters: FLOAT_COMPLEX before FLOAT, MPI_COMPLEX gated)
+    (r'MPI_FLOAT_COMPLEX', '{MPI_COMPLEX}'),
+    (r'MPI_FLOAT', '{MPI_REAL}'),
+    (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'{MPI_COMPLEX}\1'),
+    # Function name prefixes
+    (r'Cc([a-z])', r'C{CP}\1'),
+    (r'BI_c([a-zA-Z])', r'BI_{CP}\1'),
+    (r'BI_s([a-zA-Z])', r'BI_{RP}\1'),
+]
+
 
 # Standard MPI datatype names for each target KIND.
 # KIND=16 (quad precision): MPI_REAL16 / MPI_COMPLEX32 — requires MPI
@@ -271,6 +306,102 @@ def _apply_c_type_subs(text: str, template_vars: dict[str, str],
         for src in rule['from']:
             text = re.sub(r'\b' + re.escape(src) + r'\b', target, text)
     return text
+
+
+def migrate_c_file_to_string(
+    src_path: Path,
+    kind: int,
+    rename_map: dict[str, str] | None = None,
+    classification: SymbolClassification | None = None,
+    c_type_aliases: list[dict] | None = None,
+) -> tuple[str, str] | None:
+    """Migrate one C source file in memory — no disk I/O.
+
+    Mirrors :func:`migrate_file_to_string` for Fortran: returns
+    ``(target_filename, migrated_text)`` or ``None`` when the file is
+    precision-independent / not part of any family. Used by the
+    convergence report to re-derive the target from an S/C sibling and
+    compare with the D/Z-derived canonical already on disk.
+
+    Two modes, mirroring :func:`migrate_c_directory`:
+
+    - **Generic/scalapack** (both ``rename_map`` and ``classification``
+      supplied): file is cloned iff its routine is a family member;
+      in-text renames from ``rename_map`` plus C type upgrades applied.
+    - **BLACS/direct** (both omitted): file's leading precision prefix
+      (``d``/``z``/``s``/``c``, possibly preceded by ``BI_``) selects a
+      substitution rule set; routine name is rewritten in-place.
+    """
+    if src_path.suffix.lower() != '.c':
+        return None
+
+    template_vars = _build_sub_vars(kind)
+
+    if rename_map is not None and classification is not None:
+        # Scalapack mode (PBLAS).
+        stem = src_path.stem
+        has_underscore = stem.endswith('_')
+        routine = stem[:-1] if has_underscore else stem
+        upper_routine = routine.upper()
+        if upper_routine not in rename_map:
+            return None
+        if classification.get_family(upper_routine) is None:
+            return None
+
+        target_upper = rename_map[upper_routine]
+        target_lower = target_upper.lower()
+        new_stem = target_lower + ('_' if has_underscore else '')
+        new_name = new_stem + src_path.suffix
+
+        pattern, combined = _build_rename_regex(rename_map)
+        sub = _make_rename_substituter(pattern, combined)
+        text = src_path.read_text(errors='replace')
+        text = pattern.sub(sub, text)
+        text = _apply_c_type_subs(text, template_vars, c_type_aliases)
+        return new_name, text
+
+    # Direct/BLACS mode.
+    stem = src_path.stem
+    rp = template_vars['RP']
+    cp = template_vars['CP']
+
+    # Identify precision variant from stem prefix. Order matters:
+    # check BI_-prefixed names before bare single-letter prefixes.
+    if stem.startswith('BI_d'):
+        src_prefix, new_prefix, subs = 'd', rp, REAL_CLONE_SUBS
+    elif stem.startswith('BI_z'):
+        src_prefix, new_prefix, subs = 'z', cp, COMPLEX_CLONE_SUBS
+    elif stem.startswith('BI_s'):
+        src_prefix, new_prefix, subs = 's', rp, SINGLE_CLONE_SUBS
+    elif stem.startswith('BI_c'):
+        src_prefix, new_prefix, subs = 'c', cp, CSINGLE_CLONE_SUBS
+    elif stem.startswith('BI_'):
+        return None  # precision-independent BI_* helper
+    elif stem.startswith('d'):
+        src_prefix, new_prefix, subs = 'd', rp, REAL_CLONE_SUBS
+    elif stem.startswith('z'):
+        src_prefix, new_prefix, subs = 'z', cp, COMPLEX_CLONE_SUBS
+    elif stem.startswith('s'):
+        src_prefix, new_prefix, subs = 's', rp, SINGLE_CLONE_SUBS
+    elif stem.startswith('c'):
+        src_prefix, new_prefix, subs = 'c', cp, CSINGLE_CLONE_SUBS
+    else:
+        return None
+
+    new_name = rename_c_file(src_path.name, src_prefix, new_prefix)
+    if new_name == src_path.name:
+        return None
+
+    renames = _routine_renames(stem, Path(new_name).stem)
+    text = src_path.read_text(errors='replace')
+    for pat, repl in subs:
+        expanded = _expand_template(repl, template_vars)
+        text = re.sub(pat, expanded, text, flags=re.MULTILINE)
+    for old_name, new_routine in renames:
+        text = text.replace(old_name, new_routine)
+        text = text.replace(old_name.upper(), new_routine.upper())
+    return new_name, text
+
 
 
 def _apply_header_patches(output_dir: Path,

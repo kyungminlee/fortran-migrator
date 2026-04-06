@@ -26,6 +26,22 @@ class RecipeConfig:
     prefix_style: str = 'direct'      # "direct" or "scalapack"
     skip_files: set[str] = field(default_factory=set)
     copy_files: set[str] = field(default_factory=set)  # Copy unchanged (multi-precision utilities)
+    # Source stems (uppercase, no extension) whose migrated output
+    # should win as canonical, overriding the default D/Z-first
+    # preference. Used to route around upstream bugs that live only
+    # in the D or Z half of a precision pair (e.g. ScaLAPACK's
+    # PZUNGQL / PZUNML2 call PB_TOPGET where they should call
+    # PB_TOPSET; PCUNGQL / PCUNML2 have the correct restore).
+    prefer_source: set[str] = field(default_factory=set)
+    # Local-variable renames applied to the S/C half of each pair
+    # *before* light-normalized convergence comparison. Each entry
+    # maps an S/C-half identifier to its D/Z-half counterpart (e.g.
+    # ``CR: ZR``, ``SX: DX``, ``STEMP: DTEMP``). Local variables are
+    # not in the symbol table, so the migrator can't rename them —
+    # but they are upstream S/D/C/Z convention drift, not semantic
+    # differences. Applied with word boundaries to the in-memory
+    # migrated S/C text; the on-disk canonical is never modified.
+    local_renames: dict[str, str] = field(default_factory=dict)
     copy_all_originals: bool = False  # For C: copy all files, then add clones
     patches: list[str] = field(default_factory=list)
     depends: list[Path] = field(default_factory=list)  # Dependency recipe paths
@@ -82,6 +98,11 @@ def load_recipe(recipe_path: Path,
 
     skip = set(s.upper() for s in data.get('skip_files', []))
     copy = set(s.upper() for s in data.get('copy_files', []))
+    prefer = set(s.upper() for s in data.get('prefer_source', []))
+    local_renames = {
+        str(k).upper(): str(v).upper()
+        for k, v in (data.get('local_renames') or {}).items()
+    }
 
     # Resolve dependency recipe paths relative to the recipe directory
     depends_raw = data.get('depends', [])
@@ -101,6 +122,8 @@ def load_recipe(recipe_path: Path,
         prefix_style=data.get('prefix', {}).get('style', 'direct'),
         skip_files=skip,
         copy_files=copy,
+        prefer_source=prefer,
+        local_renames=local_renames,
         copy_all_originals=data.get('copy_all_originals', False),
         patches=data.get('patches', []),
         depends=depends,

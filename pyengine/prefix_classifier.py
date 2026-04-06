@@ -179,6 +179,20 @@ def _find_families_single_pass(
                 if combo:
                     subsets.append(combo)
 
+        # Also allow doubled same-type prefix at positions (0, 1).
+        # ScaLAPACK uses ZZDOTC/CCDOTC (wrappers around ZDOTC/CDOTC)
+        # where both leading characters carry the precision tag.
+        # The single-position patterns can't match across halves
+        # (e.g. #CZDOTC ≠ #CCDOTC), so the 2-position pattern
+        # #C#CDOTC is the only way to form the family.  This is
+        # safe because the overlap requirement (both pass-1 and
+        # pass-2 members must exist) prevents false groupings —
+        # e.g. BLACS's CC* routines have no ZZ* counterparts.
+        if len(c_positions) >= 2 and 0 in c_positions and 1 in c_positions:
+            subsets.append((0, 1))
+        if len(r_positions) >= 2 and 0 in r_positions and 1 in r_positions:
+            subsets.append((0, 1))
+
         for positions in subsets:
             pattern = _build_tagged_pattern(sym, positions)
             tags = tuple(CHAR_TYPE[sym[p]] for p in positions)

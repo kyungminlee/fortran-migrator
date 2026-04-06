@@ -246,9 +246,29 @@ def replace_generic_conversions(line: str, kind: int) -> str:
     # Pattern: REAL or CMPLX preceded by expression-context character.
     # The '.' handles Fortran relational operators (.EQ./.NE./.NOT./etc.)
     # that precede REAL() as a type-conversion intrinsic call.
+    #
+    # Fixed-form continuation lines begin with a non-blank marker in
+    # column 6 followed by whitespace and then the continuation of the
+    # previous statement's expression. For these the whitespace after
+    # column 6 is expression context, so ``REAL( TJJS )`` at the start
+    # of a continuation body is a type-conversion call, not a type
+    # declaration. The lookbehind below includes ``\0`` (NUL) as an
+    # expression-context marker; if the line is a fixed-form
+    # continuation we temporarily replace its column-6 marker with NUL
+    # so the lookbehind matches, then restore it before returning.
+    # Every edit we make is strictly past column 6, so this swap is
+    # invariant with respect to the substitutions below.
+    is_fixed_cont = (
+        len(line) >= 6 and line[:5] == '     '
+        and line[5] not in (' ', '0', '!', 'C', 'c', '*', '\t')
+    )
+    cont_marker = line[5] if is_fixed_cont else ''
+    if is_fixed_cont:
+        line = line[:5] + '\0' + line[6:]
+
     for name in ('REAL', 'CMPLX'):
         pattern = re.compile(
-            rf'(?<=[=+\-*/,(.])\s*\b({name})\s*\(', re.IGNORECASE
+            rf'(?<=[=+\-*/,(.\0])\s*\b({name})\s*\(', re.IGNORECASE
         )
         search_start = 0
         while True:
@@ -291,6 +311,8 @@ def replace_generic_conversions(line: str, kind: int) -> str:
             replacement = f'{name}({inner}, KIND={kind})'
             line = line[:name_start] + replacement + line[close_pos + 1:]
             search_start = name_start + len(replacement)
+    if is_fixed_cont:
+        line = line[:5] + cont_marker + line[6:]
     return line
 
 
