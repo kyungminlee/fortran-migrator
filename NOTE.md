@@ -92,7 +92,7 @@ drift (S↔D, C↔Z swaps in unclassified local names) via
 `_filter_precision_drift`, so these 431 are structural differences
 only.
 
-### 1. `SROUNDUP_LWORK` (237 files)
+### 1. `QROUNDUP_LWORK` asymmetry (235 files)
 
 `SROUNDUP_LWORK(N)` (in `INSTALL/sroundup_lwork.f`) converts an
 INTEGER workspace size to a REAL such that `INT(result) >= N`. It
@@ -127,7 +127,29 @@ a 113-bit mantissa, so the round-up branch never triggers), but the
 two halves remain textually distinct and are flagged as divergences.
 The D/Z version is retained.
 
-### 2. `ILAPREC` precision-character argument (9 files)
+### 2. Explicit `REAL(int_expr, KIND=16)` casts (83 files)
+
+The S/C halves wrap INTEGER expressions in explicit `REAL(...)`
+casts before combining with a REAL operand; the D/Z halves rely
+on implicit INTEGER→DOUBLE promotion.  Examples:
+
+```fortran
+! cgebal (S/C):  SCALE(L) = REAL(I, KIND=16)
+! zgebal (D/Z):  SCALE(L) = I
+
+! cgbrfs (S/C):  SAFE1 = REAL(NZ, KIND=16) * SAFMIN
+! zgbrfs (D/Z):  SAFE1 = NZ * SAFMIN
+
+! cbdsqr (S/C):  THRESH = MAX(TOL*SMINOA, REAL(MAXITR, KIND=16) * ...)
+! zbdsqr (D/Z):  THRESH = MAX(TOL*SMINOA, MAXITR * ...)
+```
+
+Post-migration to KIND=16 the two are semantically identical but
+textually distinct. The migrator does not strip these — doing so
+would require type inference to prove the cast is a no-op, and the
+cast is not formally wrong.
+
+### 3. `ILAPREC` precision-character argument (10 files)
 
 `ILAPREC(c)` (`SRC/ilaprec.f`) is a character→integer dispatcher
 that maps a single-letter selector to one of the BLAST XBLAS
@@ -167,24 +189,28 @@ halves therefore request different XBLAS residual-precision modes
 and the character literals (`'D'` vs `'E'`) survive into the
 migrated output unchanged.
 
-Nine diverging pairs: `sgbrfsx/dgbrfsx`, `sgerfsx/dgerfsx`,
-`sporfsx/dporfsx`, `ssyrfsx/dsyrfsx`, `cgbrfsx/zgbrfsx`,
-`cgerfsx/zgerfsx`, `cporfsx/zporfsx`, `csyrfsx/zsyrfsx`,
-`cherfsx/zherfsx`.
+Diverging pairs: `sgbrfsx/dgbrfsx`, `sgerfsx/dgerfsx`,
+`sporfsx/dporfsx`, `ssyrfsx/dsyrfsx`, `sgbsvxx/dgbsvxx`,
+`cgbrfsx/zgbrfsx`, `cgerfsx/zgerfsx`, `cporfsx/zporfsx`,
+`csyrfsx/zsyrfsx`, `cherfsx/zherfsx`.
+
+These files also exhibit declaration-ordering drift (LOGICAL LSAME,
+RCEQU positions differ between halves) and DZTHRESH/RTHRESH
+parameter grouping differences.
 
 After migration to `KIND=16` both halves are physically quad
 precision; the character literal divergence is genuine upstream
 source drift that the migrator cannot (and should not) paper over.
 The D/Z version is retained on disk.
 
-### 3. Other source-level drift (~185 files)
+### 4. Other source-level drift (~103 files)
 
 These are miscellaneous places where the S/C and D/Z halves of a
 routine were maintained independently and drifted apart in
 token-level but semantically-benign ways. They group into roughly
 six patterns:
 
-#### 3a. DO-loop / GO TO label renumbering
+#### 4a. DO-loop / GO TO label renumbering (10 files)
 
 The loop-label values were chosen differently between halves even
 though the control structure is identical:
@@ -195,15 +221,13 @@ DO 70 L = 1, N              DO 60 L = 1, N
   IF( L.LT.LNEXT ) GO TO 70   IF( L.LT.LNEXT ) GO TO 60
 ```
 
-Largest contributors by line-count:
-`strsyl/dtrsyl` (+172), `clatbs/zlatbs` (+58), `cptts2/zptts2`
-(+54), `clatrs/zlatrs` (+52), `clatps/zlatps` (+48), `slatrs/dlatrs`
+Files: `clatbs/zlatbs` (+58), `cptts2/zptts2` (+54),
+`clatrs/zlatrs` (+52), `clatps/zlatps` (+48), `slatrs/dlatrs`
 (+32), `slatbs/dlatbs` (+30), `slatps/dlatps` (+28),
-`clapmt/zlapmt` and `slapmt/dlapmt` (+22 each), `cpttrf/zpttrf`
-(+16), plus smaller label shuffles in `clahef`, `claqp2`, `clauu2`,
-`claqp2rk`, `clarfx`, `cupmtr`, `slaexc`.
+`clapmt/zlapmt` (+22), `slapmt/dlapmt` (+22), `cpttrf/zpttrf`
+(+16).
 
-#### 3b. Unused `PARAMETER(ONE=…)` declaration on one side only
+#### 4b. Unused `PARAMETER(ONE=…)` declaration on one side only (25 files)
 
 One half declares a constant that the code path never references:
 
@@ -213,12 +237,15 @@ COMPLEX ONE
 PARAMETER(ONE=(1,0))
 ```
 
-Pattern: `cgehd2/cgelq2/cgeql2/cgeqr2/cgeqr2p/cgerq2`,
-`cunm2l/cunm2r/cunml2/cunmr2`, `sorm2l/sorm2r/sorml2/sormr2`,
-`sorg2l`, `cungr2`, etc. `clahef_rk/zlahef_rk` splits a combined
+Files: `cgehd2`, `cgelq2`, `cgeql2`, `cgeqr2`, `cgeqr2p`,
+`cgeqrt2`, `cgeqrt3`, `cgerq2`, `cpftri`, `cunm2l`, `cunm2r`,
+`cunml2`, `cunmr2`, `cupmtr` (complex side);
+`sgehd2`, `sgelq2`, `sgeql2`, `sgeqr2`, `sgeqr2p`, `sgeqrt2`,
+`sgeqrt3`, `sgerq2`, `sorm2l`, `sorm2r`, `sorml2` (real side).
+`clahef_rk/zlahef_rk` splits a combined
 `PARAMETER(ONE=…,ZERO=…)` into two single-parameter declarations.
 
-#### 3c. `INTRINSIC` list mismatch
+#### 4c. `INTRINSIC` list mismatch (5 files)
 
 One half lists more intrinsics than the other, even though only the
 common subset is actually called:
@@ -231,7 +258,40 @@ common subset is actually called:
 ! dlansf.f      INTRINSIC SQRT, ABS, MAX
 ```
 
-#### 3d. Formatting / expression-level differences
+Files: `cggbak/zggbak`, `clanht/zlanht`, `cpoequb/zpoequb`,
+`sggbak/dggbak`, `slansf/dlansf`.
+
+#### 4d. `CMPLX(…, KIND=16)` cast on one side only (6 files)
+
+C/Z halves use `CMPLX(expr, KIND=16)` to construct complex values
+where the S/D halves assign directly:
+
+```fortran
+! chbevd_2stage:   WORK(1) = CMPLX(LWMIN, KIND=16)
+! zhbevd_2stage:   WORK(1) = LWMIN
+
+! clalsd:          B(J,I) = CMPLX(RWORK(RE), RWORK(IM), KIND=16)
+! zlalsd:          (different code path — no RWORK splitting)
+```
+
+Files: `cgedmdq/zgedmdq`, `chbevd_2stage/zhbevd_2stage`,
+`cheevd_2stage/zheevd_2stage`, `chgeqz/zhgeqz`,
+`clalsd/zlalsd`, `csytri2/zsytri2`.
+
+#### 4e. Type-declaration style differences (9 files)
+
+The `[sc]laqz*` routines use bare `REAL,INTENT(…)` and
+`COMPLEX,INTENT(…)` type-specs while the `[dz]laqz*` counterparts
+use `REAL(KIND=16),INTENT(…)`. Also, `cgsvj1` has `IMPLICIT NONE`
+while `zgsvj1` does not, and `sisnan`/`disnan` have different
+function-result variable names.
+
+Files: `claqz0/zlaqz0`, `claqz1/zlaqz1`, `claqz2/zlaqz2`,
+`claqz3/zlaqz3`, `slaqz1/dlaqz1`, `slaqz2/dlaqz2`,
+`slaqz3/dlaqz3`, `slaqz4/dlaqz4`, `cgsvj1/zgsvj1`,
+`sisnan/disnan`, `slaisnan/dlaisnan`.
+
+#### 4f. Formatting / expression-level differences
 
 Semantically identical expressions written slightly differently:
 
@@ -249,7 +309,7 @@ Semantically identical expressions written slightly differently:
 ! zhgeqz:   WORK(1) = DCMPLX(1)                    ! explicit cast
 ```
 
-#### 3e. Algorithmic drift — different code paths
+#### 4g. Algorithmic drift — different code paths
 
 A handful of pairs use genuinely different implementations:
 
@@ -268,7 +328,7 @@ The migrator cannot (and should not) close these — they look
 symmetric under our character-based canonicalizer only by accident,
 but they do call different BLAS kernels.
 
-#### 3f. Workspace-query dummy-argument asymmetry
+#### 4h. Workspace-query dummy-argument asymmetry
 
 `sorcsd/dorcsd` (+13): one half allocates a tiny
 `REAL DUMMY(1)` to pass to lazy workspace-query calls; the other
@@ -329,22 +389,26 @@ and `srotmg`/`drotmg` cases documented in detail above.
 ### LAPACK (431 diverged)
 
 All 431 are upstream S/C vs D/Z asymmetries, documented in the
-sections above. Dominant categories:
+sections above. Categories (a file may belong to multiple):
 
-- **`SROUNDUP_LWORK` asymmetry** (≈237 pairs, documented above).
-  The S/C side calls `QROUNDUP_LWORK` and declares it `EXTERNAL`;
-  the D/Z side assigns `WORK(1)=LWKOPT` directly.
-- **`ILAPREC 'D'` vs `'E'`** (9 pairs, documented above).
-- **Explicit `REAL(int_expr, KIND=16)` casts** — S/C sources wrap
-  INTEGER expressions in explicit `REAL(...)` to promote them
-  before combining with a REAL operand; D/Z sources rely on
-  implicit conversion. Post-migration to KIND=16 the two are
-  semantically identical but textually distinct.
-- **`ISO_FORTRAN_ENV: REAL32` vs `REAL64`** (4 pairs in
-  `[sc]gedmd*.f90` / `[dz]gedmd*.f90`, also with algorithmic drift).
-- **Algorithmic drift** (DO-loop labels, unused PARAMETERs,
-  INTRINSIC lists, expression formatting, different code paths —
-  see subsections above).
+| category                                   | files |
+|--------------------------------------------|-------|
+| `QROUNDUP_LWORK` asymmetry (§1)            | 235   |
+| Explicit `REAL(int, KIND=16)` casts (§2)   | 83    |
+| `ILAPREC` + rfsx declaration drift (§3)    | 10    |
+| `PARAMETER(ONE=…)` on one side only (§4b)  | 25    |
+| DO-loop / GO TO label renumbering (§4a)    | 10    |
+| `CMPLX(…, KIND=16)` cast (§4d)            | 6     |
+| `INTRINSIC` list mismatch (§4c)            | 5     |
+| Type-declaration style (§4e)               | 9     |
+| Formatting / expression drift (§4f)        | ~20   |
+| Algorithmic drift (§4g)                    | ~10   |
+| Workspace-query dummy-arg (§4h)            | 1     |
+| Other misc (see remaining files below)     | ~50   |
+
+Many files overlap categories (e.g., 33 files have both
+`QROUNDUP_LWORK` and `REAL(int, KIND=16)` casts). The 431 total
+counts each divergent pair once.
 
 ### BLACS (0 diverged)
 
@@ -352,33 +416,82 @@ All C-language co-family pairs converge perfectly after migration.
 
 ### PBLAS (1 diverged)
 
-`psamax_.c` vs `pdamax_.c` → `pqamax_.c`: the S half accesses
+`psamax_.c` vs `pdamax_.c` → `pqamax_.c` (+12): the S half accesses
 matrix elements via direct array indexing (`X[Xii + Xjj * Xld]`)
 while the D half uses the `Mptr` macro (`*Mptr(X, Xii, Xjj, Xld, 1)`).
-Both compute the same address; this is upstream editorial drift
-in the ScaLAPACK C sources.
+The S half also adds extra parentheses around `Mptr` in `iqamax_`
+calls: `(char*)(Mptr(...))` vs `(char*)Mptr(...)`. Both compute the
+same address; this is upstream editorial drift in the ScaLAPACK C
+sources.
 
 ### ScaLAPACK (26 diverged)
 
-26 Fortran pairs diverge due to upstream S≠D or C≠Z asymmetries:
+26 Fortran pairs diverge due to upstream S≠D or C≠Z asymmetries.
+Full file-by-file listing:
 
-- **`PB_TOPGET` vs `PB_TOPSET`** (2 files: `pzungql`/`pzunml2`):
-  the C half calls `PB_TOPGET` (query) while the Z half calls
-  `PB_TOPSET` (modify). Handled via `prefer_source` recipe
-  directive that selects the C half as canonical.
-- **`SROUNDUP_LWORK`-like patterns** — `REAL(expr, KIND=16)` casts
-  present in one half but not the other (same pattern as LAPACK).
-- **`PERT` parameter value** — `slarre2`/`dlarre2` and related
-  use `PERT=4.0` vs `PERT=8.0`; `MINRGP=3.0E-3` vs `1.0E-3`.
-  These are deliberate precision-dependent algorithmic constants.
-- **`RTL` tolerance** — `HNDRD*EPS` vs `SQRT(EPS)`: different
-  convergence thresholds chosen for single vs double precision.
-- **`INTRINSIC` list duplicates** — e.g., `REAL,REAL` appearing
-  in one half's INTRINSIC declaration.
-- **Array-size declarations** — `WORK(2)` vs `WORK(*)`, `V3(1)`
-  vs explicit size, `TAULOC` vs `TAULOC(1)` in subroutine args.
-- **Workspace query / `PARAMETER` drift** — minor expression and
-  declaration ordering differences between halves.
+#### Precision-dependent algorithmic constants (6 files)
+
+```fortran
+! slarre2/dlarre2 and slarre2a/dlarre2a:
+!   PERT=4.0 vs PERT=8.0; RTL=HNDRD*EPS vs RTL=SQRT(EPS)
+! slarrf2/dlarrf2:
+!   LSIGMA-=|LSIGMA|*TWO*EPS vs FOUR*EPS
+! sstegr2/dstegr2, sstegr2a/dstegr2a, sstegr2b/dstegr2b:
+!   MINRGP=3.0E-3 vs MINRGP=1.0E-3
+```
+
+These are deliberate precision-dependent tuning constants.
+
+#### `PB_TOPGET` vs `PB_TOPSET` (2 files)
+
+`pzungql/pcungql` and `pzunml2/pcunml2`: the C half calls
+`PB_TOPGET` (query) while the Z half calls `PB_TOPSET` (modify).
+Handled via `prefer_source` recipe directive.
+
+#### Variable naming: `TTOPH`/`TTOPV` vs `CONJTOPH`/`CONJTOPV` (2 files)
+
+`pssyttrd/pdsyttrd` (real): uses `TTOPH`/`TTOPV`.
+`pzhettrd/pchettrd` (complex): uses `CONJTOPH`/`CONJTOPV` with
+`CONJG()`. The names differ but the precision-drift filter doesn't
+catch this because it's a semantic rename, not a prefix swap.
+
+#### `PSLAIECT` vs `PDLAIECTB`/`PDLAIECTL` — different algorithm (1 file)
+
+`psstebz/pdstebz` (+46): the S half calls a single `PSLAIECT`
+helper for eigenvalue counting; the D half uses two separate
+helpers `PDLAIECTB`/`PDLAIECTL` with an additional `IEFLAG`
+dispatch. This is the largest single ScaLAPACK divergence and
+reflects genuinely different algorithmic implementations for
+single vs double precision.
+
+#### Declaration grouping and array-size differences (7 files)
+
+```fortran
+! pslacon/pdlacon:  separate ESTWORK(1), TEMP(1), WORK(2) vs combined
+! pslawil/pdlawil:  separate BUF(4), H11(1), H12(1)... vs combined
+! pslaqr3/pdlaqr3:  TZROWS/TZCOLS workspace calc present in S, absent in D
+! pzlawil/pclawil:  declaration order + TAULOC vs TAULOC(1) in args
+! pzpotf2/pcpotf2:  XXDOTC helper call vs inline XDOTC function
+! pzunmbr/pcunmbr:  PCHK1MAT vs PCHK2MAT external declaration
+! pzlarz/pclarz:    TAULOC vs TAULOC(1) in subroutine arguments
+```
+
+#### Miscellaneous (8 files)
+
+- `bslaexc/bdlaexc` (+2): `PARAMETER(TEN=10.0E0_16)` vs `TEN=1.0E1_16`
+  — literal representation of the same value.
+- `pslaed3/pdlaed3` (+4): `IINFO=0` vs `INFO=0`; extra `IF(I+J.LE.N)`
+  guard in D half.
+- `pslaqr3/pdlaqr3` (+10): D half has `MPI_WTIME` external, S half
+  computes `LWK8` via `TZROWS*TZCOLS`, literal `0.0E0_16` vs `0.0E00_16`.
+- `pssyevd/pdsyevd` (+2): workspace query `LWORK.EQ.-1 .OR. LIWORK.EQ.-1`
+  vs just `LWORK.EQ.-1`.
+- `pstrsen/pdtrsen` (+4): `IF/CALL/ENDIF` block vs single-line `IF…CALL`.
+- `pzheevd/pcheevd` (+2): `DESCZ,11` vs `DESCZ,12` — argument-position
+  constant in PCHK2MAT call.
+- `pzheevx/pcheevx` (+2) and `pzhegvx/pchegvx` (+2): duplicate `REAL`
+  in INTRINSIC list on Z side.
+- `pzlarzc/pclarzc` (+2): `TAULOC` vs `TAULOC(1)` in XGEBR2D call.
 
 ### Migrator fixes driven by converge
 
