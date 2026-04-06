@@ -220,7 +220,8 @@ def cmd_verify(args):
 
 
 def _generate_cmake(output_dir: Path, lib_name: str, kind: int,
-                    common_files: list[str], precision_files: list[str]):
+                    common_files: list[str], precision_files: list[str],
+                    language: str = 'fortran'):
     """Generate a self-contained CMakeLists.txt in the output directory."""
     pmap = PREFIX_MAP[kind]
     real_pfx = pmap['R'].lower()
@@ -230,7 +231,50 @@ def _generate_cmake(output_dir: Path, lib_name: str, kind: int,
     common_list = '\n    '.join(sorted(common_files))
     precision_list = '\n    '.join(sorted(precision_files))
 
-    cmake = f"""\
+    if language == 'c':
+        cmake = f"""\
+cmake_minimum_required(VERSION 3.20)
+project({precision_lib} C)
+
+# --- Compiler flags ---
+set(CMAKE_C_FLAGS "${{CMAKE_C_FLAGS}} -w")
+
+# --- MPI (optional, for libraries like BLACS) ---
+find_package(MPI COMPONENTS C QUIET)
+if(MPI_C_FOUND)
+    include_directories(${{MPI_C_INCLUDE_DIRS}})
+endif()
+
+# --- Common (type-independent) library ---
+set(COMMON_SOURCES
+    {common_list}
+)
+
+# --- Precision-specific library ---
+set(PRECISION_SOURCES
+    {precision_list}
+)
+
+# Header include path
+include_directories(${{CMAKE_CURRENT_SOURCE_DIR}}/src)
+
+if(COMMON_SOURCES)
+    add_library({common_lib} STATIC ${{COMMON_SOURCES}})
+endif()
+
+add_library({precision_lib} STATIC ${{PRECISION_SOURCES}})
+if(TARGET {common_lib})
+    target_link_libraries({precision_lib} PUBLIC {common_lib})
+endif()
+
+# --- Install rules ---
+install(TARGETS {precision_lib} ARCHIVE DESTINATION lib)
+if(TARGET {common_lib})
+    install(TARGETS {common_lib} ARCHIVE DESTINATION lib)
+endif()
+"""
+    else:
+        cmake = f"""\
 cmake_minimum_required(VERSION 3.20)
 project({precision_lib} Fortran)
 
@@ -312,10 +356,13 @@ def cmd_build(args):
     classification = classify_symbols(symbols)
     independent = classification.independent
 
-    files = sorted(
-        list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
-        + list(src_dir.glob('*.F90'))
-    )
+    if config.language == 'c':
+        files = sorted(list(src_dir.glob('*.c')))
+    else:
+        files = sorted(
+            list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
+            + list(src_dir.glob('*.F90'))
+        )
     common_files, precision_files = [], []
     for f in files:
         rel = f.relative_to(output_dir)
@@ -328,7 +375,8 @@ def cmd_build(args):
     print(f'  Common:    {len(common_files)} files')
     print(f'  Precision: {len(precision_files)} files')
 
-    _generate_cmake(output_dir, lib_name, kind, common_files, precision_files)
+    _generate_cmake(output_dir, lib_name, kind, common_files, precision_files,
+                    language=config.language)
 
     # Configure and build
     build_dir = output_dir / '_build'
@@ -339,7 +387,7 @@ def cmd_build(args):
         cmake_cmd, '-S', str(output_dir), '-B', str(build_dir),
         '-DCMAKE_BUILD_TYPE=Release',
     ]
-    if args.fc:
+    if config.language != 'c' and args.fc:
         configure_args.append(f'-DCMAKE_Fortran_COMPILER={args.fc}')
 
     print(f'\nConfiguring...')
