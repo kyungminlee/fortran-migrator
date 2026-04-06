@@ -400,7 +400,25 @@ def cmd_run(args):
 
     print()
     print('=' * 60)
-    print('  Step 2: Verify')
+    print('  Step 2: Convergence')
+    print('=' * 60)
+    args.output_dir = src_dir
+    # Set defaults for convergence report display options
+    if not hasattr(args, 'grep'):
+        args.grep = None
+    if not hasattr(args, 'exclude'):
+        args.exclude = None
+    if not hasattr(args, 'context'):
+        args.context = 8
+    if not hasattr(args, 'full'):
+        args.full = False
+    if not hasattr(args, 'max_width'):
+        args.max_width = 200
+    cmd_converge(args)
+
+    print()
+    print('=' * 60)
+    print('  Step 3: Verify')
     print('=' * 60)
     args.output_dir = output_dir
     try:
@@ -411,7 +429,7 @@ def cmd_run(args):
 
     print()
     print('=' * 60)
-    print('  Step 3: Build (CMake)')
+    print('  Step 4: Build (CMake)')
     print('=' * 60)
     args.output_dir = output_dir
     cmd_build(args)
