@@ -13,5 +13,6 @@ external/*.tar.gz
 
 # Work directories (migration output)
 work/
+output/
 _build/
 _lib/
