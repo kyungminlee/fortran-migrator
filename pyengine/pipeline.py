@@ -604,7 +604,9 @@ def _strip_c_comments(text: str) -> str:
 def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
                           output_dir: Path, kind: int,
                           dry_run: bool = False,
-                          classification=None) -> dict:
+                          classification=None,
+                          parser: str | None = None,
+                          parser_cmd: str | None = None) -> dict:
     """Run Fortran migration pipeline."""
     # Identify precision-independent symbols
     if classification is None:
@@ -676,7 +678,7 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
             'skipped': skipped, 'divergences': divergences,
         }
 
-    # Parallel migration. Each worker runs flang + regex substitution,
+    # Parallel migration. Each worker runs parser + regex substitution,
     # which is the dominant cost for large libraries like LAPACK.
     # We reduce results in canonical-first order so D/Z output is
     # the one written to disk.
@@ -684,7 +686,8 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     results: dict[Path, tuple[str, str] | None] = {}
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
-            ex.submit(migrate_file_to_string, p, rename_map, kind): p
+            ex.submit(migrate_file_to_string, p, rename_map, kind,
+                      parser, parser_cmd): p
             for p in to_migrate
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
@@ -790,7 +793,9 @@ def _collect_all_symbols(config: RecipeConfig,
 
 
 def run_divergence_report(recipe_path: Path, target_kind: int = 16,
-                           project_root: Path | None = None) -> list[dict]:
+                           project_root: Path | None = None,
+                           parser: str | None = None,
+                           parser_cmd: str | None = None) -> list[dict]:
     """Migrate every co-family source pair in-memory and return the
     normalized diff for each pair whose members disagree.
 
@@ -839,7 +844,8 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
     workers = max(1, (os.cpu_count() or 4))
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
-            ex.submit(migrate_file_to_string, p, rename_map, target_kind): p
+            ex.submit(migrate_file_to_string, p, rename_map, target_kind,
+                      parser, parser_cmd): p
             for p in all_paths
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
@@ -882,7 +888,9 @@ def run_divergence_report(recipe_path: Path, target_kind: int = 16,
 
 def run_convergence_report(recipe_path: Path, output_dir: Path,
                             target_kind: int = 16,
-                            project_root: Path | None = None) -> list[dict]:
+                            project_root: Path | None = None,
+                            parser: str | None = None,
+                            parser_cmd: str | None = None) -> list[dict]:
     """Verify that already-migrated files converge with a fresh
     migration of their S/C co-family siblings.
 
@@ -947,7 +955,8 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
     workers = max(1, (os.cpu_count() or 4))
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
-            ex.submit(migrate_file_to_string, p, rename_map, target_kind): p
+            ex.submit(migrate_file_to_string, p, rename_map, target_kind,
+                      parser, parser_cmd): p
             for p in others_to_migrate
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
@@ -1140,7 +1149,9 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
 
 def run_migration(recipe_path: Path, output_dir: Path,
                   target_kind: int = 16, dry_run: bool = False,
-                  project_root: Path | None = None) -> dict:
+                  project_root: Path | None = None,
+                  parser: str | None = None,
+                  parser_cmd: str | None = None) -> dict:
     """Run the full migration pipeline for a library.
 
     Args:
@@ -1149,6 +1160,9 @@ def run_migration(recipe_path: Path, output_dir: Path,
         target_kind: 10 or 16.
         dry_run: If True, show what would be done without writing.
         project_root: Project root for resolving relative paths.
+        parser: Parse tree backend: ``'flang'``, ``'gfortran'``, or
+            ``None`` (regex-only).
+        parser_cmd: Explicit path to the compiler binary.
 
     Returns:
         Summary dict with migration statistics.
@@ -1187,7 +1201,8 @@ def run_migration(recipe_path: Path, output_dir: Path,
     if config.language == 'fortran':
         result = run_fortran_migration(
             config, rename_map, output_dir, target_kind, dry_run,
-            classification=classification
+            classification=classification,
+            parser=parser, parser_cmd=parser_cmd,
         )
         if not dry_run:
             print(f'\n  Migrated: {result["migrated"]} files')

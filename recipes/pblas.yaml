@@ -43,7 +43,9 @@ c_type_aliases:
 header_patches:
   - file: pblas.h
     after: 'typedef    double              cmplx16[2];'
-    insert: 'typedef    {C_REAL_TYPE}          cmplx{RPU}[2];'
+    insert: |
+      typedef    {C_REAL_TYPE}          cmplx{RPU}[2];
+      typedef    {C_REAL_TYPE}          {REAL_TYPE};
 
 # PBLAS/SRC contains 123 precision-specific C entry points (pdgemm_.c,
 # pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent

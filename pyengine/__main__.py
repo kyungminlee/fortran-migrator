@@ -22,14 +22,24 @@ from .prefix_classifier import classify_symbols, PREFIX_MAP
 from .symbol_scanner import scan_symbols
 
 
+def _parser_args(args):
+    """Extract parser/parser_cmd from CLI args."""
+    parser = getattr(args, 'parser', None)
+    parser_cmd = getattr(args, 'parser_cmd', None)
+    return parser, parser_cmd
+
+
 def cmd_migrate(args):
     """Run the migration step."""
+    parser, parser_cmd = _parser_args(args)
     run_migration(
         recipe_path=args.recipe,
         output_dir=args.output_dir,
         target_kind=args.kind,
         dry_run=args.dry_run,
         project_root=args.project_root,
+        parser=parser,
+        parser_cmd=parser_cmd,
     )
 
 
@@ -40,10 +50,13 @@ def cmd_diverge(args):
     canonicalized unified diff (canonical = D/Z half, kept on disk;
     other = S/C half, checked against it).
     """
+    parser, parser_cmd = _parser_args(args)
     report = run_divergence_report(
         recipe_path=args.recipe,
         target_kind=args.kind,
         project_root=args.project_root,
+        parser=parser,
+        parser_cmd=parser_cmd,
     )
     total = len(report)
     # Optional filtering on diff content.
@@ -85,11 +98,14 @@ def cmd_converge(args):
     either the migrator left precision-specific material behind or
     a genuine algorithmic difference exists between the halves.
     """
+    parser, parser_cmd = _parser_args(args)
     report = run_convergence_report(
         recipe_path=args.recipe,
         output_dir=args.output_dir,
         target_kind=args.kind,
         project_root=args.project_root,
+        parser=parser,
+        parser_cmd=parser_cmd,
     )
     total = len(report)
     if args.grep:
@@ -204,7 +220,8 @@ def cmd_verify(args):
 
 
 def _generate_cmake(output_dir: Path, lib_name: str, kind: int,
-                    common_files: list[str], precision_files: list[str]):
+                    common_files: list[str], precision_files: list[str],
+                    language: str = 'fortran'):
     """Generate a self-contained CMakeLists.txt in the output directory."""
     pmap = PREFIX_MAP[kind]
     real_pfx = pmap['R'].lower()
@@ -214,7 +231,50 @@ def _generate_cmake(output_dir: Path, lib_name: str, kind: int,
     common_list = '\n    '.join(sorted(common_files))
     precision_list = '\n    '.join(sorted(precision_files))
 
-    cmake = f"""\
+    if language == 'c':
+        cmake = f"""\
+cmake_minimum_required(VERSION 3.20)
+project({precision_lib} C)
+
+# --- Compiler flags ---
+set(CMAKE_C_FLAGS "${{CMAKE_C_FLAGS}} -w")
+
+# --- MPI (optional, for libraries like BLACS) ---
+find_package(MPI COMPONENTS C QUIET)
+if(MPI_C_FOUND)
+    include_directories(${{MPI_C_INCLUDE_DIRS}})
+endif()
+
+# --- Common (type-independent) library ---
+set(COMMON_SOURCES
+    {common_list}
+)
+
+# --- Precision-specific library ---
+set(PRECISION_SOURCES
+    {precision_list}
+)
+
+# Header include path
+include_directories(${{CMAKE_CURRENT_SOURCE_DIR}}/src)
+
+if(COMMON_SOURCES)
+    add_library({common_lib} STATIC ${{COMMON_SOURCES}})
+endif()
+
+add_library({precision_lib} STATIC ${{PRECISION_SOURCES}})
+if(TARGET {common_lib})
+    target_link_libraries({precision_lib} PUBLIC {common_lib})
+endif()
+
+# --- Install rules ---
+install(TARGETS {precision_lib} ARCHIVE DESTINATION lib)
+if(TARGET {common_lib})
+    install(TARGETS {common_lib} ARCHIVE DESTINATION lib)
+endif()
+"""
+    else:
+        cmake = f"""\
 cmake_minimum_required(VERSION 3.20)
 project({precision_lib} Fortran)
 
@@ -296,10 +356,13 @@ def cmd_build(args):
     classification = classify_symbols(symbols)
     independent = classification.independent
 
-    files = sorted(
-        list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
-        + list(src_dir.glob('*.F90'))
-    )
+    if config.language == 'c':
+        files = sorted(list(src_dir.glob('*.c')))
+    else:
+        files = sorted(
+            list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
+            + list(src_dir.glob('*.F90'))
+        )
     common_files, precision_files = [], []
     for f in files:
         rel = f.relative_to(output_dir)
@@ -312,7 +375,8 @@ def cmd_build(args):
     print(f'  Common:    {len(common_files)} files')
     print(f'  Precision: {len(precision_files)} files')
 
-    _generate_cmake(output_dir, lib_name, kind, common_files, precision_files)
+    _generate_cmake(output_dir, lib_name, kind, common_files, precision_files,
+                    language=config.language)
 
     # Configure and build
     build_dir = output_dir / '_build'
@@ -323,7 +387,7 @@ def cmd_build(args):
         cmake_cmd, '-S', str(output_dir), '-B', str(build_dir),
         '-DCMAKE_BUILD_TYPE=Release',
     ]
-    if args.fc:
+    if config.language != 'c' and args.fc:
         configure_args.append(f'-DCMAKE_Fortran_COMPILER={args.fc}')
 
     print(f'\nConfiguring...')
@@ -384,7 +448,25 @@ def cmd_run(args):
 
     print()
     print('=' * 60)
-    print('  Step 2: Verify')
+    print('  Step 2: Convergence')
+    print('=' * 60)
+    args.output_dir = src_dir
+    # Set defaults for convergence report display options
+    if not hasattr(args, 'grep'):
+        args.grep = None
+    if not hasattr(args, 'exclude'):
+        args.exclude = None
+    if not hasattr(args, 'context'):
+        args.context = 8
+    if not hasattr(args, 'full'):
+        args.full = False
+    if not hasattr(args, 'max_width'):
+        args.max_width = 200
+    cmd_converge(args)
+
+    print()
+    print('=' * 60)
+    print('  Step 3: Verify')
     print('=' * 60)
     args.output_dir = output_dir
     try:
@@ -395,10 +477,23 @@ def cmd_run(args):
 
     print()
     print('=' * 60)
-    print('  Step 3: Build (CMake)')
+    print('  Step 4: Build (CMake)')
     print('=' * 60)
     args.output_dir = output_dir
     cmd_build(args)
+
+
+def _add_parser_args(p):
+    """Add --parser and --parser-cmd arguments to a subparser."""
+    p.add_argument(
+        '--parser', default=None,
+        choices=['flang', 'gfortran'],
+        help='Parse tree backend for Fortran migration '
+             '(default: regex-only, no compiler)')
+    p.add_argument(
+        '--parser-cmd', default=None,
+        help='Explicit path to the parser compiler binary '
+             '(overrides PATH lookup)')
 
 
 def main():
@@ -415,6 +510,7 @@ def main():
     p.add_argument('--kind', type=int, default=16, choices=[10, 16])
     p.add_argument('--dry-run', action='store_true')
     p.add_argument('--project-root', type=Path, default=None)
+    _add_parser_args(p)
     p.set_defaults(func=cmd_migrate)
 
     # --- diverge ---
@@ -433,6 +529,7 @@ def main():
                    help='Print full diff per entry (ignores --context)')
     p.add_argument('--max-width', type=int, default=200,
                    help='Truncate each diff line to this many chars')
+    _add_parser_args(p)
     p.set_defaults(func=cmd_diverge)
 
     # --- converge ---
@@ -454,6 +551,7 @@ def main():
                    help='Print full diff per entry (ignores --context)')
     p.add_argument('--max-width', type=int, default=200,
                    help='Truncate each diff line to this many chars')
+    _add_parser_args(p)
     p.set_defaults(func=cmd_converge)
 
     # --- verify ---
@@ -477,6 +575,7 @@ def main():
     p.add_argument('--kind', type=int, default=16, choices=[10, 16])
     p.add_argument('--fc', default='gfortran')
     p.add_argument('--project-root', type=Path, default=None)
+    _add_parser_args(p)
     p.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
