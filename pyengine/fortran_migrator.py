@@ -380,8 +380,15 @@ def _dedup_intrinsic_stmts(text: str) -> str:
         j = i + 1
         while j < len(lines):
             next_line = lines[j]
-            # Fixed-form continuation: column 6 is non-blank, non-zero
-            if len(next_line) > 5 and next_line[0] == ' ' and next_line[5] not in (' ', '0', ''):
+            # Fixed-form continuation: columns 1-5 are spaces, column 6
+            # is non-blank/non-zero, and line is not a comment.
+            is_fixed_cont = (
+                len(next_line) > 6
+                and next_line[:5] == '     '
+                and next_line[5] not in (' ', '0', '')
+                and next_line[0] not in ('C', 'c', '*', '!')
+            )
+            if is_fixed_cont:
                 stmt_lines.append(next_line)
                 j += 1
             # Free-form continuation: previous line ends with &
