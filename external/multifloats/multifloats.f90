@@ -126,16 +126,19 @@ module multifloats
 
     interface sin
         module procedure mf_sin
+        module procedure cx_sin
     end interface
     public :: sin
 
     interface cos
         module procedure mf_cos
+        module procedure cx_cos
     end interface
     public :: cos
 
     interface tan
         module procedure mf_tan
+        module procedure cx_tan
     end interface
     public :: tan
 
@@ -309,6 +312,24 @@ contains
     pure function mf_tan(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
+        res%val = tan(x%val)
+    end function
+
+    pure function cx_sin(x) result(res)
+        type(complex128x2), intent(in) :: x
+        type(complex128x2) :: res
+        res%val = sin(x%val)
+    end function
+
+    pure function cx_cos(x) result(res)
+        type(complex128x2), intent(in) :: x
+        type(complex128x2) :: res
+        res%val = cos(x%val)
+    end function
+
+    pure function cx_tan(x) result(res)
+        type(complex128x2), intent(in) :: x
+        type(complex128x2) :: res
         res%val = tan(x%val)
     end function
 
