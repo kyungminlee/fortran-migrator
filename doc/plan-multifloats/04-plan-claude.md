@@ -69,7 +69,7 @@ class TargetMode:
     intrinsic_mode: str                # 'add_kind' or 'wrap_constructor'
 
     # Prefix map for renaming (Pattern 4)
-    prefix_map: dict[str, str]         # {'R': 'Q', 'C': 'X'}
+    prefix_map: dict[str, str]         # {'R': 'W', 'C': 'U'}
 
     # Free-form kind parameter (Pattern 5)
     kind_param_value: str | None       # '16' for KIND, None for MF
@@ -106,7 +106,7 @@ def multifloats_target(
     real_type: str = 'float64x2',
     complex_type: str = 'complex128x2',
     known_constants: dict[str, str] | None = None,
-    prefix_style: str = 'quad',   # reuse Q/X prefixes
+    prefix_style: str = 'wide',   # W/U prefixes for float64x2
 ) -> TargetMode:
     """Construct TargetMode for multifloats."""
     ...
@@ -114,11 +114,20 @@ def multifloats_target(
 
 ### Prefix Convention
 
-**Multifloats should reuse Q/X prefixes** (same as KIND=16):
-- The prefix is a naming convention, not a type system property.
-- Users linking against qblas/xblas expect Q/X names regardless of backing
-  implementation.
-- The convergence pipeline already validates against Q/X targets.
+**Multifloats uses W/U prefixes** — W for real (`float64x2`), U for complex
+(`complex128x2`). "W" stands for "Wide" (double-double provides wider precision
+than double, via a different mechanism than hardware quad). These prefixes are
+distinct from all existing conventions:
+
+| Real | Complex | Precision |
+|------|---------|-----------|
+| S | C | Single (32-bit) |
+| D | Z | Double (64-bit) |
+| E | Y | Extended (80-bit, KIND=10) |
+| Q | X | Quad (128-bit, KIND=16) |
+| **W** | **U** | **Wide (float64x2, multifloats)** |
+
+Examples: `WGEMM`, `WAXPY`, `WNRM2` (real); `UGEMM`, `UAXPY` (complex).
 
 `PREFIX_MAP` remains keyed by int for backward compatibility. The `TargetMode`
 carries its own `prefix_map` field, set by the factory function. The four
@@ -507,6 +516,9 @@ Derived from analysis of actual BLAS/LAPACK code patterns:
 
 ### Conversion
 - `DBLE(float64x2)` → `DOUBLE PRECISION` (downcast)
+- `mf_to_double(float64x2)` → `DOUBLE PRECISION` (explicit I/O conversion;
+  named distinctly so call sites can be found and removed once defined I/O is
+  supported by the module)
 - Defined assignment from `DOUBLE PRECISION` (implicit upcast)
 
 ### Named Constants
@@ -776,12 +788,11 @@ Per transformation function, covering:
 
 ---
 
-## 13. Resolved and Remaining Open Questions
+## 13. Resolved Open Questions
 
-### Resolved
-
-1. **Routine naming convention:** Reuse Q/X prefixes (same as KIND=16). The
-   prefix is a naming convention orthogonal to the backing type system.
+1. **Routine naming convention:** Use W/U prefixes — W for real (`float64x2`),
+   U for complex (`complex128x2`). "W" = "Wide" precision. Distinct from Q/X
+   (KIND=16) to avoid ambiguity between quad and double-double.
 
 2. **EQUIVALENCE handling:** Mandatory manual intervention for `dlaln2.f`/
    `slaln2.f`. Concrete rewrite strategy: replace flat-index CRV(k) with 2D
@@ -791,21 +802,35 @@ Per transformation function, covering:
    read-only constants. Executable re-assignment is safe. Add diagnostic for
    variables written after initialization.
 
-### Remaining
+4. **`gfortran` parser support:** Yes — `gfortran_parser.py` should be able to
+   extract PARAMETER/DATA context and variable type information. Both parser
+   backends (flang and gfortran) should support multifloats mode.
 
-1. **`gfortran` parser support:** Can `gfortran_parser.py` extract PARAMETER/DATA
-   context and variable type information, or is multifloats flang-only?
+5. **`multifloats` module availability:** The module is already implemented
+   externally. Phase 0 validates the minimum API (Section 10) against the actual
+   module rather than defining a new specification.
 
-2. **`multifloats` module availability:** Is the module already implemented, or
-   does Phase 0 define its specification? The minimum API (Section 10) should be
-   validated.
+6. **Mixed-precision expressions:** Compare the single-precision and
+   double-precision versions of each routine. Differences between the two
+   indicate where type migration should occur. This is already the core strategy
+   of the S/D and C/Z convergence pipeline — the same approach identifies which
+   expressions involve precision-dependent types and thus need explicit conversion
+   in multifloats mode.
 
-3. **Mixed-precision expressions:** When `float64x2` and `DOUBLE PRECISION`
-   coexist (e.g., calling a DOUBLE PRECISION helper), what are the conversion
-   rules? Does the module handle implicit mixed-precision arithmetic?
+7. **I/O statements:** The migrator inserts explicit conversion calls at I/O
+   boundaries. These use a dedicated wrapper function `mf_to_double(x)` that
+   converts `float64x2` to `DOUBLE PRECISION` for output:
+   ```fortran
+   ! Before
+   WRITE(*,*) X
 
-4. **I/O statements:** Does the module provide defined I/O, or must the migrator
-   insert explicit conversions for WRITE/READ?
+   ! After (multifloats)
+   WRITE(*,*) mf_to_double(X)
+   ```
+   The `mf_to_double` name is chosen so that these call sites are easily
+   searchable and can be mechanically removed once the multifloats module adds
+   defined I/O support. The external library will provide `mf_to_double` as part
+   of the module API.
 
-5. **Scope of initial target:** Recommend fixed-form BLAS first (Phases 0-7),
-   then free-form LAPACK (Phase 8), then convergence/build (Phases 9-10).
+8. **Scope of initial target:** Fixed-form BLAS first (Phases 0-7), then
+   free-form LAPACK (Phase 8), then convergence/build (Phases 9-10).
