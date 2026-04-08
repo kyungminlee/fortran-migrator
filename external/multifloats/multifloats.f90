@@ -173,11 +173,13 @@ module multifloats
 
     interface min
         module procedure mf_min
+        module procedure mf_min3
     end interface
     public :: min
 
     interface max
         module procedure mf_max
+        module procedure mf_max3
     end interface
     public :: max
 
@@ -377,10 +379,22 @@ contains
         res%val = min(x%val, y%val)
     end function
 
+    pure function mf_min3(x, y, z) result(res)
+        type(float64x2), intent(in) :: x, y, z
+        type(float64x2) :: res
+        res%val = min(x%val, y%val, z%val)
+    end function
+
     pure function mf_max(x, y) result(res)
         type(float64x2), intent(in) :: x, y
         type(float64x2) :: res
         res%val = max(x%val, y%val)
+    end function
+
+    pure function mf_max3(x, y, z) result(res)
+        type(float64x2), intent(in) :: x, y, z
+        type(float64x2) :: res
+        res%val = max(x%val, y%val, z%val)
     end function
 
     pure function mf_sign(x, y) result(res)
