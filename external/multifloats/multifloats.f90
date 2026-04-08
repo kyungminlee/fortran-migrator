@@ -209,6 +209,19 @@ module multifloats
     end interface
     public :: assignment(=)
 
+    ! Defined I/O
+    interface write(formatted)
+        module procedure write_mf_formatted
+        module procedure write_cx_formatted
+    end interface
+    public :: write(formatted)
+
+    interface read(formatted)
+        module procedure read_mf_formatted
+        module procedure read_cx_formatted
+    end interface
+    public :: read(formatted)
+
     ! Named Constants
     type(float64x2), parameter, public :: MF_ZERO = float64x2(0.0_qp)
     type(float64x2), parameter, public :: MF_ONE = float64x2(1.0_qp)
@@ -671,5 +684,58 @@ contains
         logical :: res
         res = real(a, qp) >= b%val
     end function
+
+    ! Defined I/O Implementations
+    subroutine write_mf_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
+        class(float64x2), intent(in) :: dtv
+        integer, intent(in) :: unit
+        character(*), intent(in) :: iotype
+        integer, intent(in) :: v_list(:)
+        integer, intent(out) :: iostat
+        character(*), intent(inout) :: iomsg
+        if (iotype == 'LISTDIRECTED') then
+            write(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+        else if (iotype(1:2) == 'DT') then
+            write(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+        else
+            write(unit, fmt='(' // iotype // ')', iostat=iostat, iomsg=iomsg) dtv%val
+        end if
+    end subroutine
+
+    subroutine write_cx_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
+        class(complex128x2), intent(in) :: dtv
+        integer, intent(in) :: unit
+        character(*), intent(in) :: iotype
+        integer, intent(in) :: v_list(:)
+        integer, intent(out) :: iostat
+        character(*), intent(inout) :: iomsg
+        if (iotype == 'LISTDIRECTED') then
+            write(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+        else if (iotype(1:2) == 'DT') then
+            write(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+        else
+            write(unit, fmt='(' // iotype // ')', iostat=iostat, iomsg=iomsg) dtv%val
+        end if
+    end subroutine
+
+    subroutine read_mf_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
+        class(float64x2), intent(inout) :: dtv
+        integer, intent(in) :: unit
+        character(*), intent(in) :: iotype
+        integer, intent(in) :: v_list(:)
+        integer, intent(out) :: iostat
+        character(*), intent(inout) :: iomsg
+        read(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+    end subroutine
+
+    subroutine read_cx_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
+        class(complex128x2), intent(inout) :: dtv
+        integer, intent(in) :: unit
+        character(*), intent(in) :: iotype
+        integer, intent(in) :: v_list(:)
+        integer, intent(out) :: iostat
+        character(*), intent(inout) :: iomsg
+        read(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+    end subroutine
 
 end module multifloats
