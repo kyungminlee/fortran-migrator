@@ -6,11 +6,11 @@ module multifloats
     integer, parameter :: dp = 8   ! Double precision
 
     type, public :: float64x2
-        real(qp) :: val
+        real(dp) :: limbs(2)
     end type float64x2
 
     type, public :: complex128x2
-        complex(qp) :: val
+        type(float64x2) :: re, im
     end type complex128x2
 
     ! Constructors
@@ -223,466 +223,492 @@ module multifloats
     public :: read(formatted)
 
     ! Named Constants
-    type(float64x2), parameter, public :: MF_ZERO = float64x2(0.0_qp)
-    type(float64x2), parameter, public :: MF_ONE = float64x2(1.0_qp)
-    type(float64x2), parameter, public :: MF_TWO = float64x2(2.0_qp)
-    type(float64x2), parameter, public :: MF_HALF = float64x2(0.5_qp)
-    type(float64x2), parameter, public :: MF_EIGHT = float64x2(8.0_qp)
+    type(float64x2), parameter, public :: MF_ZERO = float64x2([0.0_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_ONE = float64x2([1.0_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_TWO = float64x2([2.0_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_HALF = float64x2([0.5_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_EIGHT = float64x2([8.0_dp, 0.0_dp])
     
-    ! Dummy scaling constants for mock (quad precision approximations)
-    type(float64x2), parameter, public :: MF_SAFMIN = float64x2(tiny(0.0_qp))
-    type(float64x2), parameter, public :: MF_SAFMAX = float64x2(huge(0.0_qp))
-    type(float64x2), parameter, public :: MF_TSML = float64x2(1.0e-100_qp)
-    type(float64x2), parameter, public :: MF_TBIG = float64x2(1.0e+100_qp)
-    type(float64x2), parameter, public :: MF_SSML = float64x2(1.0e-50_qp)
-    type(float64x2), parameter, public :: MF_SBIG = float64x2(1.0e+50_qp)
+    ! Scaling constants
+    type(float64x2), parameter, public :: MF_SAFMIN = float64x2([3.3621031431120935e-4932_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_SAFMAX = float64x2([1.1897314953572317e+4932_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_TSML = float64x2([1.0e-100_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_TBIG = float64x2([1.0e+100_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_SSML = float64x2([1.0e-50_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_SBIG = float64x2([1.0e+50_dp, 0.0_dp])
 
 contains
+
+    ! Internal conversion helpers
+    pure function to_qp(mf) result(res)
+        type(float64x2), intent(in) :: mf
+        real(qp) :: res
+        res = real(mf%limbs(1), qp) + real(mf%limbs(2), qp)
+    end function
+
+    pure function from_qp(v) result(res)
+        real(qp), intent(in) :: v
+        type(float64x2) :: res
+        res%limbs(1) = real(v, dp)
+        res%limbs(2) = real(v - real(res%limbs(1), qp), dp)
+    end function
+
+    pure function to_cqp(cx) result(res)
+        type(complex128x2), intent(in) :: cx
+        complex(qp) :: res
+        res = cmplx(to_qp(cx%re), to_qp(cx%im), kind=qp)
+    end function
+
+    pure function from_cqp(v) result(res)
+        complex(qp), intent(in) :: v
+        type(complex128x2) :: res
+        res%re = from_qp(real(v, qp))
+        res%im = from_qp(aimag(v))
+    end function
 
     ! Constructors
     pure function mf_from_dp(v) result(res)
         real(dp), intent(in) :: v
         type(float64x2) :: res
-        res%val = real(v, qp)
+        res = from_qp(real(v, qp))
     end function
     
     pure function mf_from_int(v) result(res)
         integer, intent(in) :: v
         type(float64x2) :: res
-        res%val = real(v, qp)
+        res = from_qp(real(v, qp))
     end function
 
     pure function mf_from_char(v) result(res)
         character(len=*), intent(in) :: v
         type(float64x2) :: res
-        read(v, *) res%val
+        real(qp) :: val_qp
+        read(v, *) val_qp
+        res = from_qp(val_qp)
     end function
 
     pure function cx_from_mf(r, i) result(res)
         type(float64x2), intent(in) :: r, i
         type(complex128x2) :: res
-        res%val = cmplx(r%val, i%val, kind=qp)
+        res%re = r
+        res%im = i
     end function
 
     pure function cx_from_dp(r, i) result(res)
         real(dp), intent(in) :: r, i
         type(complex128x2) :: res
-        res%val = cmplx(real(r, qp), real(i, qp), kind=qp)
+        res%re = from_qp(real(r, qp))
+        res%im = from_qp(real(i, qp))
     end function
 
     ! Assignment
     pure subroutine mf_assign_dp(lhs, rhs)
         type(float64x2), intent(out) :: lhs
         real(dp), intent(in) :: rhs
-        lhs%val = real(rhs, qp)
+        lhs = from_qp(real(rhs, qp))
     end subroutine
 
     ! Conversions
     pure function mf_dble(x) result(res)
         type(float64x2), intent(in) :: x
         real(dp) :: res
-        res = real(x%val, dp)
+        res = real(to_qp(x), dp)
     end function
 
     pure function mf_to_double(x) result(res)
         type(float64x2), intent(in) :: x
         real(dp) :: res
-        res = real(x%val, dp)
+        res = real(to_qp(x), dp)
     end function
 
     ! Unary
     pure function mf_neg(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = -x%val
+        res = from_qp(-to_qp(x))
     end function
 
     ! Math Generics (Real)
     pure function mf_abs(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = abs(x%val)
+        res = from_qp(abs(to_qp(x)))
     end function
 
     pure function mf_sqrt(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = sqrt(x%val)
+        res = from_qp(sqrt(to_qp(x)))
     end function
 
     pure function mf_sin(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = sin(x%val)
+        res = from_qp(sin(to_qp(x)))
     end function
 
     pure function mf_cos(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = cos(x%val)
+        res = from_qp(cos(to_qp(x)))
     end function
 
     pure function mf_tan(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = tan(x%val)
-    end function
-
-    pure function cx_sin(x) result(res)
-        type(complex128x2), intent(in) :: x
-        type(complex128x2) :: res
-        res%val = sin(x%val)
-    end function
-
-    pure function cx_cos(x) result(res)
-        type(complex128x2), intent(in) :: x
-        type(complex128x2) :: res
-        res%val = cos(x%val)
-    end function
-
-    pure function cx_tan(x) result(res)
-        type(complex128x2), intent(in) :: x
-        type(complex128x2) :: res
-        res%val = tan(x%val)
+        res = from_qp(tan(to_qp(x)))
     end function
 
     pure function mf_exp(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = exp(x%val)
+        res = from_qp(exp(to_qp(x)))
     end function
 
     pure function mf_log(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = log(x%val)
+        res = from_qp(log(to_qp(x)))
     end function
 
     pure function mf_log10(x) result(res)
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = log10(x%val)
+        res = from_qp(log10(to_qp(x)))
     end function
 
     ! Math Generics (Complex)
     pure function cx_abs(x) result(res)
         type(complex128x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = abs(x%val)
+        res = from_qp(abs(to_cqp(x)))
     end function
 
     pure function cx_sqrt(x) result(res)
         type(complex128x2), intent(in) :: x
         type(complex128x2) :: res
-        res%val = sqrt(x%val)
+        res = from_cqp(sqrt(to_cqp(x)))
     end function
 
     pure function cx_exp(x) result(res)
         type(complex128x2), intent(in) :: x
         type(complex128x2) :: res
-        res%val = exp(x%val)
+        res = from_cqp(exp(to_cqp(x)))
     end function
 
     pure function cx_log(x) result(res)
         type(complex128x2), intent(in) :: x
         type(complex128x2) :: res
-        res%val = log(x%val)
+        res = from_cqp(log(to_cqp(x)))
+    end function
+
+    pure function cx_sin(x) result(res)
+        type(complex128x2), intent(in) :: x
+        type(complex128x2) :: res
+        res = from_cqp(sin(to_cqp(x)))
+    end function
+
+    pure function cx_cos(x) result(res)
+        type(complex128x2), intent(in) :: x
+        type(complex128x2) :: res
+        res = from_cqp(cos(to_cqp(x)))
+    end function
+
+    pure function cx_tan(x) result(res)
+        type(complex128x2), intent(in) :: x
+        type(complex128x2) :: res
+        res = from_cqp(tan(to_cqp(x)))
     end function
 
     pure function cx_aimag(x) result(res)
         type(complex128x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = aimag(x%val)
+        res = from_qp(aimag(to_cqp(x)))
     end function
 
     pure function cx_conjg(x) result(res)
         type(complex128x2), intent(in) :: x
         type(complex128x2) :: res
-        res%val = conjg(x%val)
+        res = from_cqp(conjg(to_cqp(x)))
     end function
 
     pure function cx_real(x) result(res)
         type(complex128x2), intent(in) :: x
         type(float64x2) :: res
-        res%val = real(x%val, qp)
+        res = from_qp(real(to_cqp(x), qp))
     end function
 
     pure function mf_min(x, y) result(res)
         type(float64x2), intent(in) :: x, y
         type(float64x2) :: res
-        res%val = min(x%val, y%val)
+        res = from_qp(min(to_qp(x), to_qp(y)))
     end function
 
     pure function mf_min3(x, y, z) result(res)
         type(float64x2), intent(in) :: x, y, z
         type(float64x2) :: res
-        res%val = min(x%val, y%val, z%val)
+        res = from_qp(min(to_qp(x), to_qp(y), to_qp(z)))
     end function
 
     pure function mf_max(x, y) result(res)
         type(float64x2), intent(in) :: x, y
         type(float64x2) :: res
-        res%val = max(x%val, y%val)
+        res = from_qp(max(to_qp(x), to_qp(y)))
     end function
 
     pure function mf_max3(x, y, z) result(res)
         type(float64x2), intent(in) :: x, y, z
         type(float64x2) :: res
-        res%val = max(x%val, y%val, z%val)
+        res = from_qp(max(to_qp(x), to_qp(y), to_qp(z)))
     end function
 
     pure function mf_sign(x, y) result(res)
         type(float64x2), intent(in) :: x, y
         type(float64x2) :: res
-        res%val = sign(x%val, y%val)
+        res = from_qp(sign(to_qp(x), to_qp(y)))
     end function
 
     pure function mf_mod(x, y) result(res)
         type(float64x2), intent(in) :: x, y
         type(float64x2) :: res
-        res%val = mod(x%val, y%val)
+        res = from_qp(mod(to_qp(x), to_qp(y)))
     end function
 
-    ! Binary Arithmetic (Macro-style functions)
-    ! Add
+    ! Binary Arithmetic
     pure function mf_add_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         type(float64x2) :: res
-        res%val = a%val + b%val
+        res = from_qp(to_qp(a) + to_qp(b))
     end function
     pure function mf_add_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val + real(b, qp)
+        res = from_qp(to_qp(a) + real(b, qp))
     end function
     pure function dp_add_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
-        res%val = real(a, qp) + b%val
+        res = from_qp(real(a, qp) + to_qp(b))
     end function
     pure function mf_add_int(a, b) result(res)
         type(float64x2), intent(in) :: a
         integer, intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val + b
+        res = from_qp(to_qp(a) + b)
     end function
     pure function int_add_mf(a, b) result(res)
         integer, intent(in) :: a
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
-        res%val = a + b%val
+        res = from_qp(real(a, qp) + to_qp(b))
     end function
 
-    ! Sub
     pure function mf_sub_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         type(float64x2) :: res
-        res%val = a%val - b%val
+        res = from_qp(to_qp(a) - to_qp(b))
     end function
     pure function mf_sub_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val - real(b, qp)
+        res = from_qp(to_qp(a) - real(b, qp))
     end function
     pure function dp_sub_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
-        res%val = real(a, qp) - b%val
+        res = from_qp(real(a, qp) - to_qp(b))
     end function
     pure function mf_sub_int(a, b) result(res)
         type(float64x2), intent(in) :: a
         integer, intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val - b
+        res = from_qp(to_qp(a) - b)
     end function
     pure function int_sub_mf(a, b) result(res)
         integer, intent(in) :: a
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
-        res%val = a - b%val
+        res = from_qp(real(a, qp) - to_qp(b))
     end function
 
-    ! Mul
     pure function mf_mul_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         type(float64x2) :: res
-        res%val = a%val * b%val
+        res = from_qp(to_qp(a) * to_qp(b))
     end function
     pure function mf_mul_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val * real(b, qp)
+        res = from_qp(to_qp(a) * real(b, qp))
     end function
     pure function dp_mul_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
-        res%val = real(a, qp) * b%val
+        res = from_qp(real(a, qp) * to_qp(b))
     end function
     pure function mf_mul_int(a, b) result(res)
         type(float64x2), intent(in) :: a
         integer, intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val * b
+        res = from_qp(to_qp(a) * b)
     end function
     pure function int_mul_mf(a, b) result(res)
         integer, intent(in) :: a
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
-        res%val = a * b%val
+        res = from_qp(real(a, qp) * to_qp(b))
     end function
 
-    ! Div
     pure function mf_div_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         type(float64x2) :: res
-        res%val = a%val / b%val
+        res = from_qp(to_qp(a) / to_qp(b))
     end function
     pure function mf_div_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val / real(b, qp)
+        res = from_qp(to_qp(a) / real(b, qp))
     end function
     pure function dp_div_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
-        res%val = real(a, qp) / b%val
+        res = from_qp(real(a, qp) / to_qp(b))
     end function
     pure function mf_div_int(a, b) result(res)
         type(float64x2), intent(in) :: a
         integer, intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val / b
+        res = from_qp(to_qp(a) / b)
     end function
     pure function int_div_mf(a, b) result(res)
         integer, intent(in) :: a
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
-        res%val = a / b%val
+        res = from_qp(real(a, qp) / to_qp(b))
     end function
 
-    ! Pow
     pure function mf_pow_int(a, b) result(res)
         type(float64x2), intent(in) :: a
         integer, intent(in) :: b
         type(float64x2) :: res
-        res%val = a%val ** b
+        res = from_qp(to_qp(a) ** b)
     end function
 
     ! Comparison
     pure function mf_eq_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         logical :: res
-        res = a%val == b%val
+        res = to_qp(a) == to_qp(b)
     end function
     pure function mf_eq_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         logical :: res
-        res = a%val == real(b, qp)
+        res = to_qp(a) == real(b, qp)
     end function
     pure function dp_eq_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         logical :: res
-        res = real(a, qp) == b%val
+        res = real(a, qp) == to_qp(b)
     end function
 
     pure function mf_ne_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         logical :: res
-        res = a%val /= b%val
+        res = to_qp(a) /= to_qp(b)
     end function
     pure function mf_ne_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         logical :: res
-        res = a%val /= real(b, qp)
+        res = to_qp(a) /= real(b, qp)
     end function
     pure function dp_ne_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         logical :: res
-        res = real(a, qp) /= b%val
+        res = real(a, qp) /= to_qp(b)
     end function
 
     pure function mf_lt_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         logical :: res
-        res = a%val < b%val
+        res = to_qp(a) < to_qp(b)
     end function
     pure function mf_lt_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         logical :: res
-        res = a%val < real(b, qp)
+        res = to_qp(a) < real(b, qp)
     end function
     pure function dp_lt_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         logical :: res
-        res = real(a, qp) < b%val
+        res = real(a, qp) < to_qp(b)
     end function
 
     pure function mf_gt_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         logical :: res
-        res = a%val > b%val
+        res = to_qp(a) > to_qp(b)
     end function
     pure function mf_gt_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         logical :: res
-        res = a%val > real(b, qp)
+        res = to_qp(a) > real(b, qp)
     end function
     pure function dp_gt_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         logical :: res
-        res = real(a, qp) > b%val
+        res = real(a, qp) > to_qp(b)
     end function
 
     pure function mf_le_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         logical :: res
-        res = a%val <= b%val
+        res = to_qp(a) <= to_qp(b)
     end function
     pure function mf_le_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         logical :: res
-        res = a%val <= real(b, qp)
+        res = to_qp(a) <= real(b, qp)
     end function
     pure function dp_le_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         logical :: res
-        res = real(a, qp) <= b%val
+        res = real(a, qp) <= to_qp(b)
     end function
 
     pure function mf_ge_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         logical :: res
-        res = a%val >= b%val
+        res = to_qp(a) >= to_qp(b)
     end function
     pure function mf_ge_dp(a, b) result(res)
         type(float64x2), intent(in) :: a
         real(dp), intent(in) :: b
         logical :: res
-        res = a%val >= real(b, qp)
+        res = to_qp(a) >= real(b, qp)
     end function
     pure function dp_ge_mf(a, b) result(res)
         real(dp), intent(in) :: a
         type(float64x2), intent(in) :: b
         logical :: res
-        res = real(a, qp) >= b%val
+        res = real(a, qp) >= to_qp(b)
     end function
 
     ! Defined I/O Implementations
@@ -693,12 +719,14 @@ contains
         integer, intent(in) :: v_list(:)
         integer, intent(out) :: iostat
         character(*), intent(inout) :: iomsg
+        real(qp) :: val_qp
+        val_qp = to_qp(dtv)
         if (iotype == 'LISTDIRECTED') then
-            write(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+            write(unit, *, iostat=iostat, iomsg=iomsg) val_qp
         else if (iotype(1:2) == 'DT') then
-            write(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+            write(unit, *, iostat=iostat, iomsg=iomsg) val_qp
         else
-            write(unit, fmt='(' // iotype // ')', iostat=iostat, iomsg=iomsg) dtv%val
+            write(unit, fmt='(' // iotype // ')', iostat=iostat, iomsg=iomsg) val_qp
         end if
     end subroutine
 
@@ -709,12 +737,14 @@ contains
         integer, intent(in) :: v_list(:)
         integer, intent(out) :: iostat
         character(*), intent(inout) :: iomsg
+        complex(qp) :: val_cqp
+        val_cqp = to_cqp(dtv)
         if (iotype == 'LISTDIRECTED') then
-            write(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+            write(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
         else if (iotype(1:2) == 'DT') then
-            write(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+            write(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
         else
-            write(unit, fmt='(' // iotype // ')', iostat=iostat, iomsg=iomsg) dtv%val
+            write(unit, fmt='(' // iotype // ')', iostat=iostat, iomsg=iomsg) val_cqp
         end if
     end subroutine
 
@@ -725,7 +755,9 @@ contains
         integer, intent(in) :: v_list(:)
         integer, intent(out) :: iostat
         character(*), intent(inout) :: iomsg
-        read(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+        real(qp) :: val_qp
+        read(unit, *, iostat=iostat, iomsg=iomsg) val_qp
+        dtv = from_qp(val_qp)
     end subroutine
 
     subroutine read_cx_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
@@ -735,7 +767,9 @@ contains
         integer, intent(in) :: v_list(:)
         integer, intent(out) :: iostat
         character(*), intent(inout) :: iomsg
-        read(unit, *, iostat=iostat, iomsg=iomsg) dtv%val
+        complex(qp) :: val_cqp
+        read(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
+        dtv = from_cqp(val_cqp)
     end subroutine
 
 end module multifloats
