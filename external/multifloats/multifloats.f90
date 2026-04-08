@@ -32,6 +32,7 @@ module multifloats
         module procedure dp_add_mf
         module procedure mf_add_int
         module procedure int_add_mf
+        module procedure cx_add_cx
     end interface
     public :: operator(+)
 
@@ -42,6 +43,8 @@ module multifloats
         module procedure mf_sub_int
         module procedure int_sub_mf
         module procedure mf_neg
+        module procedure cx_sub_cx
+        module procedure cx_neg
     end interface
     public :: operator(-)
 
@@ -51,6 +54,7 @@ module multifloats
         module procedure dp_mul_mf
         module procedure mf_mul_int
         module procedure int_mul_mf
+        module procedure cx_mul_cx
     end interface
     public :: operator(*)
 
@@ -60,6 +64,7 @@ module multifloats
         module procedure dp_div_mf
         module procedure mf_div_int
         module procedure int_div_mf
+        module procedure cx_div_cx
     end interface
     public :: operator(/)
 
@@ -229,9 +234,9 @@ module multifloats
     type(float64x2), parameter, public :: MF_HALF = float64x2([0.5_dp, 0.0_dp])
     type(float64x2), parameter, public :: MF_EIGHT = float64x2([8.0_dp, 0.0_dp])
     
-    ! Scaling constants
-    type(float64x2), parameter, public :: MF_SAFMIN = float64x2([3.3621031431120935e-4932_dp, 0.0_dp])
-    type(float64x2), parameter, public :: MF_SAFMAX = float64x2([1.1897314953572317e+4932_dp, 0.0_dp])
+    ! Scaling constants - using largest/smallest representable DP values for mock safety
+    type(float64x2), parameter, public :: MF_SAFMIN = float64x2([tiny(0.0_dp), 0.0_dp])
+    type(float64x2), parameter, public :: MF_SAFMAX = float64x2([huge(0.0_dp), 0.0_dp])
     type(float64x2), parameter, public :: MF_TSML = float64x2([1.0e-100_dp, 0.0_dp])
     type(float64x2), parameter, public :: MF_TBIG = float64x2([1.0e+100_dp, 0.0_dp])
     type(float64x2), parameter, public :: MF_SSML = float64x2([1.0e-50_dp, 0.0_dp])
@@ -301,7 +306,7 @@ contains
         res%im = from_qp(real(i, qp))
     end function
 
-    ! Assignment
+    ! Assignment from DP
     pure subroutine mf_assign_dp(lhs, rhs)
         type(float64x2), intent(out) :: lhs
         real(dp), intent(in) :: rhs
@@ -326,6 +331,12 @@ contains
         type(float64x2), intent(in) :: x
         type(float64x2) :: res
         res = from_qp(-to_qp(x))
+    end function
+
+    pure function cx_neg(x) result(res)
+        type(complex128x2), intent(in) :: x
+        type(complex128x2) :: res
+        res = from_cqp(-to_cqp(x))
     end function
 
     ! Math Generics (Real)
@@ -505,6 +516,12 @@ contains
         res = from_qp(real(a, qp) + to_qp(b))
     end function
 
+    pure function cx_add_cx(a, b) result(res)
+        type(complex128x2), intent(in) :: a, b
+        type(complex128x2) :: res
+        res = from_cqp(to_cqp(a) + to_cqp(b))
+    end function
+
     pure function mf_sub_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         type(float64x2) :: res
@@ -533,6 +550,12 @@ contains
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
         res = from_qp(real(a, qp) - to_qp(b))
+    end function
+
+    pure function cx_sub_cx(a, b) result(res)
+        type(complex128x2), intent(in) :: a, b
+        type(complex128x2) :: res
+        res = from_cqp(to_cqp(a) - to_cqp(b))
     end function
 
     pure function mf_mul_mf(a, b) result(res)
@@ -565,6 +588,12 @@ contains
         res = from_qp(real(a, qp) * to_qp(b))
     end function
 
+    pure function cx_mul_cx(a, b) result(res)
+        type(complex128x2), intent(in) :: a, b
+        type(complex128x2) :: res
+        res = from_cqp(to_cqp(a) * to_cqp(b))
+    end function
+
     pure function mf_div_mf(a, b) result(res)
         type(float64x2), intent(in) :: a, b
         type(float64x2) :: res
@@ -593,6 +622,12 @@ contains
         type(float64x2), intent(in) :: b
         type(float64x2) :: res
         res = from_qp(real(a, qp) / to_qp(b))
+    end function
+
+    pure function cx_div_cx(a, b) result(res)
+        type(complex128x2), intent(in) :: a, b
+        type(complex128x2) :: res
+        res = from_cqp(to_cqp(a) / to_cqp(b))
     end function
 
     pure function mf_pow_int(a, b) result(res)
@@ -723,10 +758,12 @@ contains
         val_qp = to_qp(dtv)
         if (iotype == 'LISTDIRECTED') then
             write(unit, *, iostat=iostat, iomsg=iomsg) val_qp
-        else if (iotype(1:2) == 'DT') then
-            write(unit, *, iostat=iostat, iomsg=iomsg) val_qp
+        else if (iotype(1:2) == 'DT' .and. len(iotype) > 2) then
+            ! Use the part after DT as the format
+            write(unit, fmt='(' // iotype(3:) // ')', iostat=iostat, iomsg=iomsg) val_qp
         else
-            write(unit, fmt='(' // iotype // ')', iostat=iostat, iomsg=iomsg) val_qp
+            ! Default behavior for DT or other
+            write(unit, *, iostat=iostat, iomsg=iomsg) val_qp
         end if
     end subroutine
 
@@ -741,10 +778,10 @@ contains
         val_cqp = to_cqp(dtv)
         if (iotype == 'LISTDIRECTED') then
             write(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
-        else if (iotype(1:2) == 'DT') then
-            write(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
+        else if (iotype(1:2) == 'DT' .and. len(iotype) > 2) then
+            write(unit, fmt='(' // iotype(3:) // ')', iostat=iostat, iomsg=iomsg) val_cqp
         else
-            write(unit, fmt='(' // iotype // ')', iostat=iostat, iomsg=iomsg) val_cqp
+            write(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
         end if
     end subroutine
 
@@ -757,7 +794,8 @@ contains
         character(*), intent(inout) :: iomsg
         real(qp) :: val_qp
         read(unit, *, iostat=iostat, iomsg=iomsg) val_qp
-        dtv = from_qp(val_qp)
+        dtv%limbs(1) = real(val_qp, dp)
+        dtv%limbs(2) = real(val_qp - real(dtv%limbs(1), qp), dp)
     end subroutine
 
     subroutine read_cx_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
@@ -769,7 +807,10 @@ contains
         character(*), intent(inout) :: iomsg
         complex(qp) :: val_cqp
         read(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
-        dtv = from_cqp(val_cqp)
+        dtv%re%limbs(1) = real(real(val_cqp, qp), dp)
+        dtv%re%limbs(2) = real(real(val_cqp, qp) - real(dtv%re%limbs(1), qp), dp)
+        dtv%im%limbs(1) = real(aimag(val_cqp), dp)
+        dtv%im%limbs(2) = real(aimag(val_cqp) - real(dtv%im%limbs(1), qp), dp)
     end subroutine
 
 end module multifloats
