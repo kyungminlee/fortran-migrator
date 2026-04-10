@@ -485,39 +485,8 @@ def replace_intrinsic_calls(
                         if old_name.upper() in ('REAL', 'DREAL', 'DBLE'):
                             replacement = f'{target_mode.real_constructor}({inner})'
                         elif old_name.upper() in ('CMPLX', 'DCMPLX'):
-                            # Detect 1-arg vs 2-arg form (split top-level commas)
-                            commas = 0
-                            depth = 0
-                            for ch in inner:
-                                if ch == '(':
-                                    depth += 1
-                                elif ch == ')':
-                                    depth -= 1
-                                elif ch == ',' and depth == 0:
-                                    commas += 1
-                            if commas == 0:
-                                # 1-arg CMPLX. multifloats's
-                                # ``complex128x2`` interface only takes
-                                # float64x2 / real(dp), not integer.
-                                # Pre-wrap unless the inner is already a
-                                # float64x2 expression (known real var
-                                # name, MF_* constant, or already a
-                                # ``float64x2(...)`` call) — wrapping
-                                # those would fail because float64x2
-                                # has no identity constructor.
-                                stripped_inner = inner.strip()
-                                head = re.match(r'([A-Za-z_]\w*)', stripped_inner)
-                                already_mf = (
-                                    stripped_inner.lower().startswith('float64x2(')
-                                    or stripped_inner.upper().startswith('MF_')
-                                    or (head and real_names and head.group(1).upper() in real_names)
-                                )
-                                if already_mf:
-                                    replacement = f'{target_mode.complex_constructor}({inner})'
-                                else:
-                                    replacement = f'{target_mode.complex_constructor}({target_mode.real_constructor}({inner}))'
-                            else:
-                                replacement = f'{target_mode.complex_constructor}({inner})'
+                            wrapped = _wrap_complex_args(inner, target_mode, real_names)
+                            replacement = f'{target_mode.complex_constructor}({wrapped})'
                         else:
                             replacement = f'{new_name}({inner})'
 
@@ -591,19 +560,8 @@ def replace_generic_conversions(line: str, target_mode: TargetMode) -> str:
                 if name.upper() == 'REAL':
                     replacement = f'{target_mode.real_constructor}({inner})'
                 else:
-                    commas = 0
-                    d = 0
-                    for ch in inner:
-                        if ch == '(':
-                            d += 1
-                        elif ch == ')':
-                            d -= 1
-                        elif ch == ',' and d == 0:
-                            commas += 1
-                    if commas == 0:
-                        replacement = f'{target_mode.complex_constructor}({target_mode.real_constructor}({inner}))'
-                    else:
-                        replacement = f'{target_mode.complex_constructor}({inner})'
+                    wrapped = _wrap_complex_args(inner, target_mode, None)
+                    replacement = f'{target_mode.complex_constructor}({wrapped})'
 
             line = line[:name_start] + replacement + line[close_pos + 1:]
             search_start = name_start + len(replacement)
@@ -944,6 +902,64 @@ def _rewrite_int_of_complex(line: str, complex_names: set[str]) -> str:
     line = _process(re.compile(r'\bINT\s*\(', re.IGNORECASE), line)
     line = _process(re.compile(r'\bNINT\s*\(', re.IGNORECASE), line)
     return line
+
+
+def _wrap_complex_args(
+    inner: str, target_mode: TargetMode, real_names: set[str] | None,
+) -> str:
+    """Pre-wrap each top-level argument of a CMPLX-style call so the
+    multifloats complex128x2 interface can dispatch.
+
+    multifloats's ``complex128x2`` interface only has overloads for
+    (float64x2[, float64x2]) and (real(dp)[, real(dp)]). For LAPACK's
+    common patterns ``CMPLX(N)`` and ``CMPLX(N, 0)`` with integer
+    arguments, the call falls back to the structure constructor and
+    fails. Wrapping each arg with ``float64x2(...)`` redirects to
+    ``cx_from_mf_*``.
+
+    Skip the wrap when the arg is already a float64x2 expression
+    (bare ``MF_*`` constant, ``float64x2(...)`` call, or a known
+    float64x2 local) — wrapping again would fail because float64x2
+    has no identity constructor.
+    """
+    parts: list[str] = []
+    cur, depth = '', 0
+    for ch in inner:
+        if ch == '(':
+            depth += 1; cur += ch
+        elif ch == ')':
+            depth -= 1; cur += ch
+        elif ch == ',' and depth == 0:
+            parts.append(cur); cur = ''
+        else:
+            cur += ch
+    if cur:
+        parts.append(cur)
+
+    def _wrap_one(arg: str) -> str:
+        s = arg.strip()
+        if not s:
+            return arg
+        # Strip a leading unary +/- and surrounding whitespace.
+        body = s.lstrip('+-').lstrip()
+        head = re.match(r'([A-Za-z_]\w*)', body)
+        # Detect any float64x2 token in the expression — if any operand
+        # is a known float64x2 / MF_* / float64x2() call, the whole
+        # expression is float64x2 (multifloats provides operator
+        # overloads for *, /, +, -). Wrapping the whole expression
+        # again with float64x2(...) would fail.
+        if body.lower().startswith(target_mode.real_constructor.lower() + '('):
+            return arg
+        if real_names:
+            for tok in re.finditer(r'\b([A-Za-z_]\w*)\b', body):
+                u = tok.group(1).upper()
+                if u in real_names or u.startswith('MF_'):
+                    return arg
+        if head and head.group(1).upper().startswith('MF_'):
+            return arg
+        return f'{target_mode.real_constructor}({s})'
+
+    return ','.join(_wrap_one(p) for p in parts)
 
 
 def _unwrap_redundant_constructors(

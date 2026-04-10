@@ -277,8 +277,18 @@ def test_intrinsic_dble_integer_uses_constructor(mf):
 
 
 def test_intrinsic_dcmplx_to_complex128x2(mf):
+    """``DCMPLX(A, B)`` becomes ``complex128x2(float64x2(A), float64x2(B))``
+    so the call dispatches to multifloats's cx_from_mf_2 interface.
+    Args known to be float64x2 are not double-wrapped (see
+    test_intrinsic_dcmplx_skips_known_real)."""
     src = "      Z = DCMPLX(A, B)"
     out = replace_intrinsic_calls(src, mf)
+    assert 'complex128x2(float64x2(A),float64x2(B))' in out
+
+
+def test_intrinsic_dcmplx_skips_known_real(mf):
+    src = "      Z = DCMPLX(A, B)"
+    out = replace_intrinsic_calls(src, mf, real_names={'A', 'B'})
     assert 'complex128x2(A, B)' in out
 
 
