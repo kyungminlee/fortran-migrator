@@ -27,7 +27,9 @@ program multifloats_unittest
     call test_binary_real_mixed()
     call test_complex_funcs()
     call test_conversions()
-    call test_io()
+    ! test_io() — removed: DTIO is no longer provided by the mock
+    ! multifloats module. See multifloats.fypp for the rationale
+    ! (gfortran HAS-DTIO-PROCS / SEQUENCE / EQUIVALENCE conflict).
 
     print *, "--------------------------------------------------------"
     print *, "Tests Run:   ", num_tests
@@ -653,24 +655,5 @@ contains
     ! ================================================================
     ! I/O
     ! ================================================================
-
-    subroutine test_io()
-        type(float64x2) :: a, b
-        character(len=100) :: buffer
-
-        a = float64x2(1.23456789_8)
-
-        ! Test write with DT and specific sub-format
-        write(buffer, '(DT"F12.8")') a
-        call check(adjustl(trim(buffer)) == "1.23456789", "IO: WRITE (DT)")
-
-        ! Test read
-        read(buffer, '(DT)') b
-        call check(abs(mf_to_double(a) - mf_to_double(b)) < 1e-8, "IO: READ (DT)")
-
-        ! Test list-directed (smoke test)
-        write(buffer, *) a
-        call check(len_trim(buffer) > 0, "IO: list-directed WRITE")
-    end subroutine
 
 end program multifloats_unittest

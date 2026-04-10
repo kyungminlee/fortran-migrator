@@ -531,8 +531,12 @@ def test_end_to_end_fixed_form(mf):
     assert not _re.search(r'\bONE\b', body)
 
 
-def test_equivalence_diagnostic(mf, capsys):
-    """Migration of a routine with FP EQUIVALENCE emits a warning."""
+def test_equivalence_no_diagnostic_after_sequence(mf, capsys):
+    """The mock multifloats module now declares both float64x2 and
+    complex128x2 with the SEQUENCE attribute, so EQUIVALENCE on
+    migrated FP variables compiles cleanly. The migrator therefore
+    does not emit a warning anymore.
+    """
     src = (
         "      SUBROUTINE FOO()\n"
         "      DOUBLE PRECISION CR(2,2), CRV(4)\n"
@@ -541,8 +545,8 @@ def test_equivalence_diagnostic(mf, capsys):
     )
     migrate_fixed_form(src, {}, mf)
     captured = capsys.readouterr()
-    assert 'EQUIVALENCE' in captured.err
-    assert 'Manual rewrite required' in captured.err
+    assert 'EQUIVALENCE' not in captured.err
+    assert 'Manual rewrite required' not in captured.err
 
 
 def test_equivalence_no_warning_for_integer_only(mf, capsys):

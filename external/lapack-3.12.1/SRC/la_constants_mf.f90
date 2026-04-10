@@ -38,10 +38,15 @@ module LA_CONSTANTS_MF
    type(float64x2), parameter, public :: whalf  = MF_HALF
    type(float64x2), parameter, public :: wone   = MF_ONE
    type(float64x2), parameter, public :: wtwo   = MF_TWO
-   type(float64x2), parameter, public :: wthree = float64x2([3.0d0, 0.0d0])
-   type(float64x2), parameter, public :: wfour  = float64x2([4.0d0, 0.0d0])
+   ! Use named-component structure constructor (``limbs=...``) so that
+   ! the compiler binds these initializers to the structure constructor
+   ! of float64x2 rather than to the overloaded ``float64x2(...)``
+   ! generic interface — the latter is a function call and is therefore
+   ! illegal in a PARAMETER initializer.
+   type(float64x2), parameter, public :: wthree = float64x2(limbs=[3.0d0, 0.0d0])
+   type(float64x2), parameter, public :: wfour  = float64x2(limbs=[4.0d0, 0.0d0])
    type(float64x2), parameter, public :: weight = MF_EIGHT
-   type(float64x2), parameter, public :: wten   = float64x2([10.0d0, 0.0d0])
+   type(float64x2), parameter, public :: wten   = float64x2(limbs=[10.0d0, 0.0d0])
 
 !  Complex constants. Must use named-component structure constructor
 !  syntax (``re=`` / ``im=``) so the compiler picks the structure

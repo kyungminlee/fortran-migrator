@@ -69,11 +69,20 @@ module multifloats
     integer, parameter :: dp = 8   ! Double precision
     integer, parameter :: sp = 4   ! Single precision
 
+    ! SEQUENCE attribute is required so derived-type variables of these
+    ! types may appear in EQUIVALENCE statements (used by some LAPACK
+    ! routines such as DLALN2/wlaln2 to overlay 2x2 work arrays with
+    ! linearized vectors). The DTIO procedures below use ``type(...)``
+    ! (allowed by F2018 for non-extensible types) instead of the
+    ! customary ``class(...)``, since SEQUENCE types may not be
+    ! polymorphic.
     type, public :: float64x2
+        sequence
         real(dp) :: limbs(2)
     end type float64x2
 
     type, public :: complex128x2
+        sequence
         type(float64x2) :: re, im
     end type complex128x2
 
@@ -201,6 +210,7 @@ module multifloats
     public :: ${func}$
 
 #:endfor
+#:set MINMAX_NARG = [3, 4, 5, 6, 7, 8]
 #:for func in BINARY_MINMAX
     interface ${func}$
 #:for n1, _ in RTYPES
@@ -210,7 +220,9 @@ module multifloats
 #:endif
 #:endfor
 #:endfor
-        module procedure mf_${func}$3
+#:for n in MINMAX_NARG
+        module procedure mf_${func}$${n}$
+#:endfor
     end interface
     public :: ${func}$
 
@@ -436,20 +448,18 @@ module multifloats
     public :: assignment(=)
 
     ! ================================================================
-    ! Defined I/O
+    ! Defined I/O — intentionally OMITTED.
     ! ================================================================
-
-    interface write(formatted)
-        module procedure write_mf_formatted
-        module procedure write_cx_formatted
-    end interface
-    public :: write(formatted)
-
-    interface read(formatted)
-        module procedure read_mf_formatted
-        module procedure read_cx_formatted
-    end interface
-    public :: read(formatted)
+    !
+    ! float64x2 and complex128x2 must carry the SEQUENCE attribute so
+    ! that LAPACK routines such as DLALN2 (wlaln2) can EQUIVALENCE
+    ! their work arrays. gfortran (as of 15.2) treats any module that
+    ! defines DTIO procedures for a derived type as displacing the
+    ! SEQUENCE attribute on use-association — the use-associated type
+    ! shows up with HAS-DTIO-PROCS instead, and any EQUIVALENCE of
+    ! such a variable is then rejected. We therefore drop the DTIO
+    ! generics entirely. Tests that need to print a value should fall
+    ! back to component-wise I/O (e.g. ``write(*, *) x%limbs``).
 
     ! ================================================================
     ! Named constants
@@ -763,14 +773,19 @@ contains
 #:endfor
 #:endfor
 #:endfor
-    ! min/max with 3 arguments
+    ! min/max with N arguments (N = 3..8). LAPACK has call sites with
+    ! up to 5 arguments; the upper bound here is generous so future
+    ! call sites do not regress.
+#:set MINMAX_ARGS = lambda n: ', '.join(['a%d' % i for i in range(1, n+1)])
 #:for func in BINARY_MINMAX
-    elemental function mf_${func}$3(a, b, c) result(res)
-        type(float64x2), intent(in) :: a, b, c
+#:for n in MINMAX_NARG
+    elemental function mf_${func}$${n}$(${MINMAX_ARGS(n)}$) result(res)
+        type(float64x2), intent(in) :: ${MINMAX_ARGS(n)}$
         type(float64x2) :: res
-        res = from_qp(${func}$(to_qp(a), to_qp(b), to_qp(c)))
+        res = from_qp(${func}$(${', '.join(['to_qp(a%d)' % i for i in range(1, n+1)])}$))
     end function
 
+#:endfor
 #:endfor
     ! ================================================================
     ! Bessel functions with integer order (elemental + transformational)
@@ -1515,88 +1530,4 @@ $:conv_loops(rank, 'tmp', 'harvest', 'from_qp')
 #:endfor
 #:endfor
 #:endfor
-    ! ================================================================
-    ! Defined I/O
-    ! ================================================================
-
-    subroutine write_mf_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
-        class(float64x2), intent(in) :: dtv
-        integer, intent(in) :: unit
-        character(*), intent(in) :: iotype
-        integer, intent(in) :: v_list(:)
-        integer, intent(out) :: iostat
-        character(*), intent(inout) :: iomsg
-        real(qp) :: val_qp
-        val_qp = to_qp(dtv)
-        if (iotype == 'LISTDIRECTED') then
-            write(unit, *, iostat=iostat, iomsg=iomsg) val_qp
-        else if (iotype(1:2) == 'DT' .and. len(iotype) > 2) then
-            write(unit, fmt='(' // iotype(3:) // ')', iostat=iostat, iomsg=iomsg) val_qp
-        else
-            write(unit, *, iostat=iostat, iomsg=iomsg) val_qp
-        end if
-    end subroutine
-
-    subroutine write_cx_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
-        class(complex128x2), intent(in) :: dtv
-        integer, intent(in) :: unit
-        character(*), intent(in) :: iotype
-        integer, intent(in) :: v_list(:)
-        integer, intent(out) :: iostat
-        character(*), intent(inout) :: iomsg
-        complex(qp) :: val_cqp
-        val_cqp = to_cqp(dtv)
-        if (iotype == 'LISTDIRECTED') then
-            write(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
-        else if (iotype(1:2) == 'DT' .and. len(iotype) > 2) then
-            write(unit, fmt='(' // iotype(3:) // ')', iostat=iostat, iomsg=iomsg) val_cqp
-        else
-            write(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
-        end if
-    end subroutine
-
-    subroutine read_mf_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
-        class(float64x2), intent(inout) :: dtv
-        integer, intent(in) :: unit
-        character(*), intent(in) :: iotype
-        integer, intent(in) :: v_list(:)
-        integer, intent(out) :: iostat
-        character(*), intent(inout) :: iomsg
-        real(qp) :: val_qp
-        if (iotype == 'LISTDIRECTED') then
-            read(unit, *, iostat=iostat, iomsg=iomsg) val_qp
-        else if (iotype(1:2) == 'DT' .and. len(iotype) > 2) then
-            read(unit, fmt='(' // iotype(3:) // ')', iostat=iostat, iomsg=iomsg) val_qp
-        else
-            read(unit, *, iostat=iostat, iomsg=iomsg) val_qp
-        end if
-        if (iostat == 0) then
-            dtv%limbs(1) = real(val_qp, dp)
-            dtv%limbs(2) = real(val_qp - real(dtv%limbs(1), qp), dp)
-        end if
-    end subroutine
-
-    subroutine read_cx_formatted(dtv, unit, iotype, v_list, iostat, iomsg)
-        class(complex128x2), intent(inout) :: dtv
-        integer, intent(in) :: unit
-        character(*), intent(in) :: iotype
-        integer, intent(in) :: v_list(:)
-        integer, intent(out) :: iostat
-        character(*), intent(inout) :: iomsg
-        complex(qp) :: val_cqp
-        if (iotype == 'LISTDIRECTED') then
-            read(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
-        else if (iotype(1:2) == 'DT' .and. len(iotype) > 2) then
-            read(unit, fmt='(' // iotype(3:) // ')', iostat=iostat, iomsg=iomsg) val_cqp
-        else
-            read(unit, *, iostat=iostat, iomsg=iomsg) val_cqp
-        end if
-        if (iostat == 0) then
-            dtv%re%limbs(1) = real(real(val_cqp, qp), dp)
-            dtv%re%limbs(2) = real(real(val_cqp, qp) - real(dtv%re%limbs(1), qp), dp)
-            dtv%im%limbs(1) = real(aimag(val_cqp), dp)
-            dtv%im%limbs(2) = real(aimag(val_cqp) - real(dtv%im%limbs(1), qp), dp)
-        end if
-    end subroutine
-
 end module multifloats

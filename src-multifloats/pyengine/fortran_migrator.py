@@ -76,57 +76,19 @@ _DECL_START_RE = re.compile(
 )
 
 
-_EQUIV_RE = re.compile(r'^\s+EQUIVALENCE\b', re.IGNORECASE | re.MULTILINE)
-
-
 def _warn_on_fp_equivalence(source: str, target_mode: TargetMode) -> None:
-    """Print a diagnostic if the source has an EQUIVALENCE block whose
-    members would become ``TYPE(float64x2)`` after migration.
+    """No-op kept for call-site compatibility.
 
-    Fortran prohibits EQUIVALENCE on non-SEQUENCE derived types, so the
-    file requires manual rewriting (see Section 8 of doc/MULTIFLOATS.md).
-    The migrator does not block on this — it migrates everything else
-    and lets the compiler reject the EQUIVALENCE line, which gives the
-    user a precise pointer to the manual fixup site.
+    Earlier versions emitted a warning for EQUIVALENCE statements
+    involving floating-point variables, because Fortran prohibits
+    EQUIVALENCE on non-SEQUENCE derived types and ``TYPE(float64x2)``
+    used to be a non-SEQUENCE type. The mock multifloats module now
+    declares both float64x2 and complex128x2 with the SEQUENCE
+    attribute (see external/multifloats/multifloats.fypp), so LAPACK
+    sources such as DLALN2 that EQUIVALENCE 2x2 work arrays compile
+    without manual fixups. The diagnostic is no longer needed.
     """
-    if not _EQUIV_RE.search(source):
-        return
-    fp_var_pattern = re.compile(
-        r'^\s+(?:DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX|'
-        r'COMPLEX\s*\*\s*16|COMPLEX\s*\*\s*8|REAL\s*\*\s*[48]|'
-        r'REAL(?!\s*[*(])|COMPLEX(?!\s*[*(]))\b',
-        re.IGNORECASE,
-    )
-    fp_var_names: set[str] = set()
-    for ln in source.splitlines():
-        if fp_var_pattern.match(ln):
-            # Extract identifiers from the variable list (rough)
-            tail = re.sub(
-                r'^\s+(?:DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX|'
-                r'COMPLEX\s*\*\s*\d+|REAL\s*\*\s*\d+|REAL|COMPLEX)',
-                '', ln, count=1, flags=re.IGNORECASE,
-            )
-            for m in re.finditer(r'\b([A-Za-z_]\w*)\b', tail):
-                fp_var_names.add(m.group(1).upper())
-
-    if not fp_var_names:
-        return
-
-    for ln in source.splitlines():
-        m = re.match(r'^\s+EQUIVALENCE\s*(.*)$', ln, re.IGNORECASE)
-        if not m:
-            continue
-        body = m.group(1)
-        for nm in re.finditer(r'\b([A-Za-z_]\w*)\b', body):
-            if nm.group(1).upper() in fp_var_names:
-                import sys as _sys
-                _sys.stderr.write(
-                    'WARNING: EQUIVALENCE statement contains floating-point '
-                    'variables that cannot be migrated to TYPE(float64x2). '
-                    'Manual rewrite required (see doc/MULTIFLOATS.md §8).\n'
-                    f'  -> {ln.rstrip()}\n'
-                )
-                return  # one warning per file is enough
+    return
 
 
 def strip_known_constants_from_decls(
@@ -570,8 +532,14 @@ def replace_generic_conversions(line: str, target_mode: TargetMode) -> str:
     return line
 
 
-def replace_intrinsic_decls(line: str) -> str:
-    """Replace intrinsic names in INTRINSIC declarations."""
+def replace_intrinsic_decls(line: str, target_mode: TargetMode | None = None) -> str:
+    """Replace intrinsic names in INTRINSIC declarations.
+
+    In multifloats mode, additionally drop names that are overloaded by
+    the multifloats module — gfortran refuses to accept a USE-associated
+    generic name when an INTRINSIC declaration in the same scope binds
+    the name to the standard intrinsic of incompatible signature.
+    """
     if not re.match(r'\s+INTRINSIC\b', line, re.IGNORECASE):
         return line
     for old_name, new_name in INTRINSIC_DECL_MAP.items():
@@ -589,6 +557,12 @@ def replace_intrinsic_decls(line: str) -> str:
         elif stripped.endswith(','):
             trail = ','
             stripped = stripped[:-1]
+        # Strip an optional ``::`` separator after the keyword.
+        sep_m = re.match(r'\s*::\s*', stripped)
+        sep = ''
+        if sep_m:
+            sep = stripped[:sep_m.end()]
+            stripped = stripped[sep_m.end():]
         names = [n.strip() for n in stripped.split(',') if n.strip()]
         seen: set[str] = set()
         deduped: list[str] = []
@@ -597,12 +571,63 @@ def replace_intrinsic_decls(line: str) -> str:
             if key not in seen:
                 seen.add(key)
                 deduped.append(n)
-        line = prefix + ', '.join(deduped) + trail + newline
+        if target_mode is not None and target_mode.intrinsic_mode == 'wrap_constructor':
+            overloaded = _multifloats_overloaded_intrinsics()
+            deduped = [n for n in deduped if n.upper() not in overloaded]
+        if not deduped:
+            # Whole declaration empty — drop the line so we don't emit a
+            # bare ``INTRINSIC`` keyword. The trailing comment, if any,
+            # is preserved as a regular comment line.
+            return ''
+        line = prefix + sep + ', '.join(deduped) + trail + newline
     return line
 
 
-def _dedup_intrinsic_stmts(text: str) -> str:
-    """Remove duplicate names from multi-line INTRINSIC statements."""
+# Names that the mock multifloats module exposes via USE-associated
+# generic interfaces. When the migrator emits ``USE multifloats``, any
+# residual ``INTRINSIC :: name`` clause for one of these names causes
+# gfortran to reject the generic with "is not consistent with a specific
+# intrinsic interface". Keep this list in sync with multifloats.fypp.
+_MULTIFLOATS_OVERLOADED_INTRINSICS: frozenset[str] | None = None
+
+
+def _multifloats_overloaded_intrinsics() -> frozenset[str]:
+    global _MULTIFLOATS_OVERLOADED_INTRINSICS
+    if _MULTIFLOATS_OVERLOADED_INTRINSICS is not None:
+        return _MULTIFLOATS_OVERLOADED_INTRINSICS
+    names = {
+        # Unary real/complex math
+        'ABS', 'SQRT', 'SIN', 'COS', 'TAN', 'EXP', 'LOG', 'LOG10',
+        'ATAN', 'ASIN', 'ACOS', 'AINT', 'ANINT', 'SINH', 'COSH', 'TANH',
+        'ASINH', 'ACOSH', 'ATANH', 'ERF', 'ERFC', 'ERFC_SCALED',
+        'GAMMA', 'LOG_GAMMA',
+        'BESSEL_J0', 'BESSEL_J1', 'BESSEL_Y0', 'BESSEL_Y1',
+        'BESSEL_JN', 'BESSEL_YN',
+        'FRACTION', 'RRSPACING', 'SPACING', 'EPSILON', 'HUGE', 'TINY',
+        'AIMAG', 'CONJG',
+        # Binary real
+        'SIGN', 'MOD', 'ATAN2', 'DIM', 'MODULO', 'HYPOT', 'NEAREST',
+        'MIN', 'MAX',
+        # Array reductions
+        'MAXVAL', 'MINVAL', 'MAXLOC', 'MINLOC', 'SUM', 'PRODUCT',
+        # Inquiry
+        'DIGITS', 'MAXEXPONENT', 'MINEXPONENT', 'RADIX',
+        'PRECISION', 'RANGE', 'EXPONENT',
+        # Conversions
+        'DBLE', 'INT', 'NINT', 'REAL', 'CMPLX', 'CEILING', 'FLOOR',
+        # (mf, integer) -> mf
+        'SCALE', 'SET_EXPONENT',
+    }
+    _MULTIFLOATS_OVERLOADED_INTRINSICS = frozenset(names)
+    return _MULTIFLOATS_OVERLOADED_INTRINSICS
+
+
+def _dedup_intrinsic_stmts(text: str, target_mode: TargetMode | None = None) -> str:
+    """Remove duplicate names from multi-line INTRINSIC statements.
+
+    In multifloats mode, also drop names that are overloaded by the
+    multifloats module — they conflict with the use-associated generics.
+    """
     lines = text.split('\n')
     result: list[str] = []
     i = 0
@@ -644,6 +669,10 @@ def _dedup_intrinsic_stmts(text: str) -> str:
                 name_part += ' ' + stripped
 
         name_part = name_part.replace('&', ' ')
+        # Drop an optional ``::`` separator following the keyword.
+        sep_m = re.match(r'\s*::\s*', name_part)
+        if sep_m:
+            name_part = name_part[sep_m.end():]
         names = [n.strip() for n in name_part.split(',') if n.strip()]
         seen: set[str] = set()
         deduped: list[str] = []
@@ -652,6 +681,15 @@ def _dedup_intrinsic_stmts(text: str) -> str:
             if key not in seen:
                 seen.add(key)
                 deduped.append(n)
+        if target_mode is not None and target_mode.intrinsic_mode == 'wrap_constructor':
+            overloaded = _multifloats_overloaded_intrinsics()
+            deduped = [n for n in deduped if n.upper() not in overloaded]
+
+        if not deduped:
+            # Whole INTRINSIC statement empty: drop the entire (possibly
+            # multi-line) declaration.
+            i = j
+            continue
 
         body = ', '.join(deduped)
         full = prefix + body
@@ -1262,8 +1300,307 @@ def _looks_like_statement_function(stripped: str, lines: list[str], k: int) -> b
     return False
 
 
+# Multifloats public names that the migrator may legitimately need to
+# import. Operators and the assignment generic are always added on top
+# of any name-based selections, so they are not listed here.
+_MULTIFLOATS_TYPE_NAMES = frozenset(['float64x2', 'complex128x2'])
+
+_MULTIFLOATS_CONSTANT_NAMES = frozenset([
+    'mf_zero', 'mf_one', 'mf_two', 'mf_half', 'mf_eight',
+    'mf_safmin', 'mf_safmax', 'mf_tsml', 'mf_tbig', 'mf_ssml', 'mf_sbig',
+    'mf_rtmin', 'mf_rtmax',
+    'mf_to_double', 'mf_real',
+])
+
+# Generic interface names exposed by multifloats. Keep in sync with
+# multifloats.fypp. Names that gfortran already provides as intrinsics
+# (abs, sqrt, sin, …, dble, int, nint, cmplx, real, etc.) need to be
+# in this list because the migrated source typically calls them on
+# float64x2 / complex128x2 arguments, which only the use-associated
+# generic can resolve.
+_MULTIFLOATS_GENERIC_NAMES = frozenset([
+    # Unary math
+    'abs', 'sqrt', 'sin', 'cos', 'tan', 'exp', 'log', 'log10',
+    'atan', 'asin', 'acos', 'aint', 'anint', 'sinh', 'cosh', 'tanh',
+    'asinh', 'acosh', 'atanh', 'erf', 'erfc', 'erfc_scaled',
+    'gamma', 'log_gamma',
+    'bessel_j0', 'bessel_j1', 'bessel_y0', 'bessel_y1',
+    'bessel_jn', 'bessel_yn',
+    'fraction', 'rrspacing', 'spacing', 'epsilon', 'huge', 'tiny',
+    'aimag', 'conjg',
+    # Binary real
+    'sign', 'mod', 'atan2', 'dim', 'modulo', 'hypot', 'nearest',
+    'min', 'max',
+    # Array reductions
+    'maxval', 'minval', 'maxloc', 'minloc', 'sum', 'product',
+    'dot_product', 'norm2', 'findloc', 'matmul',
+    # Inquiry
+    'digits', 'maxexponent', 'minexponent', 'radix',
+    'precision', 'range', 'exponent',
+    # Conversions
+    'dble', 'int', 'nint', 'real', 'cmplx', 'ceiling', 'floor',
+    # (mf, integer) -> mf
+    'scale', 'set_exponent',
+    # Misc
+    'storage_size', 'random_number',
+])
+
+_MULTIFLOATS_PUBLIC_NAMES = (
+    _MULTIFLOATS_TYPE_NAMES
+    | _MULTIFLOATS_CONSTANT_NAMES
+    | _MULTIFLOATS_GENERIC_NAMES
+)
+
+# Operator generics. These never collide with local variable names, so
+# they are always included in the ONLY clause.
+_MULTIFLOATS_ALWAYS_INCLUDE = (
+    'operator(+)', 'operator(-)', 'operator(*)', 'operator(/)',
+    'operator(**)',
+    'operator(==)', 'operator(/=)',
+    'operator(<)', 'operator(>)', 'operator(<=)', 'operator(>=)',
+    'assignment(=)',
+)
+
+_DECL_LINE_RE = re.compile(
+    r'^\s+(?:TYPE\s*\([^)]*\)|INTEGER\b|REAL\b|COMPLEX\b|LOGICAL\b|'
+    r'CHARACTER\b|DOUBLE\s+PRECISION\b|DOUBLE\s+COMPLEX\b)',
+    re.IGNORECASE,
+)
+_IDENT_RE = re.compile(r"\b([A-Za-z_]\w*)\b")
+_STRING_RE = re.compile(r"'[^']*'|\"[^\"]*\"")
+
+
+def _strip_strings_and_comments(line: str) -> str:
+    """Drop string literals and trailing inline comments."""
+    out = _STRING_RE.sub('', line)
+    bang = out.find('!')
+    if bang >= 0:
+        out = out[:bang]
+    return out
+
+
+def _scan_local_declared_names(proc_lines: list[str]) -> set[str]:
+    """Collect local variable names from type-declaration statements
+    inside a procedure. Used to suppress matching multifloats public
+    names so that the local variable can shadow the use-associated
+    generic interface (gfortran refuses if the name is in scope).
+    """
+    names: set[str] = set()
+    joined: list[str] = []
+    cur = ''
+    for raw in proc_lines:
+        # Skip pure comment lines (fixed and free form).
+        if raw[:1] in ('C', 'c', '*', '!'):
+            continue
+        if cur and is_continuation_line(raw):
+            # Fixed-form continuation.
+            cur += ' ' + raw[6:].rstrip('\n')
+            continue
+        if cur and cur.rstrip().endswith('&'):
+            cur = cur.rstrip().rstrip('&') + ' ' + raw.lstrip().lstrip('&').rstrip('\n')
+            continue
+        if cur:
+            joined.append(cur)
+        cur = raw.rstrip('\n')
+    if cur:
+        joined.append(cur)
+
+    for stmt in joined:
+        if not _DECL_LINE_RE.match(stmt):
+            continue
+        # Strip the type prefix (everything up to and including the
+        # first ``::`` if present, otherwise up to the type keyword).
+        if '::' in stmt:
+            tail = stmt.split('::', 1)[1]
+        else:
+            m = _DECL_LINE_RE.match(stmt)
+            tail = stmt[m.end():]
+        tail = _strip_strings_and_comments(tail)
+        # Drop array specs and KIND parameters in parentheses so we
+        # don't pick up bound expressions (``WNRM(MAX(M,N))``) as
+        # local-variable names. Iterate until no more nested parens
+        # remain.
+        while True:
+            new_tail = re.sub(r'\([^()]*\)', '', tail)
+            if new_tail == tail:
+                break
+            tail = new_tail
+        for m in _IDENT_RE.finditer(tail):
+            names.add(m.group(1).lower())
+    return names
+
+
+def _scan_referenced_identifiers(proc_lines: list[str]) -> set[str]:
+    """Lower-cased identifiers referenced anywhere in the procedure
+    body, excluding comments and string literals."""
+    names: set[str] = set()
+    for raw in proc_lines:
+        if raw[:1] in ('C', 'c', '*', '!'):
+            continue
+        cleaned = _strip_strings_and_comments(raw)
+        for m in _IDENT_RE.finditer(cleaned):
+            names.add(m.group(1).lower())
+    return names
+
+
+_PROC_HEADER_RE = re.compile(
+    r'^(\s{6,}|^\s*)(?:RECURSIVE\s+|PURE\s+|ELEMENTAL\s+)*'
+    r'(?:(?:INTEGER|REAL|COMPLEX|LOGICAL|CHARACTER|TYPE\s*\([^)]+\)|DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX)'
+    r'(?:\s*\*\s*\d+)?\s+)?'
+    r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s+DATA)\b',
+    re.IGNORECASE,
+)
+_END_PROC_RE = re.compile(
+    r'^\s*END\s*(?:(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s*DATA)\b\s*\w*)?\s*(?:!.*)?$',
+    re.IGNORECASE,
+)
+_USE_MF_RE = re.compile(r'^(\s*)USE\s+multifloats\s*(?:!.*)?$', re.IGNORECASE)
+
+
+def specialize_use_multifloats(source: str, target_mode: TargetMode, fixed_form: bool) -> str:
+    """Replace bare ``USE multifloats`` clauses with explicit ``only:``
+    lists tailored to each procedure.
+
+    Operates on the fully-migrated source so that scanned identifiers
+    reflect the post-transform names (``float64x2``, ``MF_ZERO``, ...).
+    Each procedure body between its header and matching END statement
+    is scanned for referenced multifloats names; the only-list excludes
+    any name that the procedure declares as a local variable, so that
+    LAPACK locals like ``SUM``/``SCALE``/``GAMMA``/``TINY``/``NINT`` do
+    not collide with use-associated generic interfaces.
+    """
+    if not target_mode.module_name or target_mode.intrinsic_mode != 'wrap_constructor':
+        return source
+
+    lines = source.splitlines(keepends=True)
+    # Find all procedure boundaries.
+    headers: list[int] = []
+    ends: list[int] = []
+    for idx, ln in enumerate(lines):
+        if _PROC_HEADER_RE.match(ln):
+            headers.append(idx)
+        if _END_PROC_RE.match(ln):
+            ends.append(idx)
+
+    # Pair headers with their matching END (the next END at or after
+    # the header). This is approximate but works for BLAS/LAPACK where
+    # CONTAINS is rare.
+    out = list(lines)
+    for h_idx, h in enumerate(headers):
+        # Determine the end of this procedure.
+        next_end = next((e for e in ends if e >= h), len(lines) - 1)
+        proc_lines = lines[h:next_end + 1]
+        only_clause = _build_use_only_clause(proc_lines, target_mode)
+        if not only_clause:
+            continue
+        # Replace the bare ``USE multifloats`` line(s) inside this
+        # procedure with the only-form. There should be exactly one.
+        for k in range(h, next_end + 1):
+            m = _USE_MF_RE.match(out[k])
+            if not m:
+                continue
+            indent = m.group(1) or ('      ' if fixed_form else '    ')
+            body = f"{target_mode.module_name}{only_clause}"
+            wrapped = _wrap_use_clause(indent, body, fixed_form)
+            out[k] = wrapped
+    return ''.join(out)
+
+
+def _wrap_use_clause(indent: str, body: str, fixed_form: bool) -> str:
+    """Wrap a long ``USE multifloats, only: a, b, c, ...`` statement so
+    each emitted line fits within Fortran source line limits.
+
+    ``body`` is the post-USE text (``multifloats, only: a, b, ...``).
+    Items are kept comma-separated; when adding the next item would
+    overflow the line, the current line is flushed and a new
+    continuation line is started.
+    """
+    cap = 72 if fixed_form else 132
+    cont_prefix = '     +' if fixed_form else (indent + '   ')
+
+    full = indent + 'USE ' + body
+    if len(full) <= cap:
+        return full + '\n'
+
+    # Split body into ``head`` (``multifloats``) and the only-list.
+    head, sep, rest = body.partition(', only:')
+    if not sep:
+        return full + '\n'
+
+    parts: list[str] = []
+    cur = ''
+    depth = 0
+    for ch in rest.strip():
+        if ch == ',' and depth == 0:
+            if cur.strip():
+                parts.append(cur.strip())
+            cur = ''
+            continue
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+        cur += ch
+    if cur.strip():
+        parts.append(cur.strip())
+
+    out_lines: list[str] = []
+    cur_line = indent + 'USE ' + head + ', only:'
+    # Reserve room on each line for the continuation overhead: a
+    # trailing ``,`` (fixed form) or ``, &`` (free form).
+    cont_overhead = 1 if fixed_form else 3
+    for part in parts:
+        addition = (' ' if cur_line.rstrip().endswith(':') else ', ') + part
+        if len(cur_line) + len(addition) + cont_overhead <= cap:
+            cur_line += addition
+            continue
+        # Flush — both forms need a trailing comma so that the next
+        # only-list item is correctly comma-separated. Free form also
+        # appends an explicit ``&`` continuation marker.
+        if not cur_line.rstrip().endswith(','):
+            cur_line = cur_line.rstrip() + ','
+        if fixed_form:
+            out_lines.append(cur_line + '\n')
+        else:
+            out_lines.append(cur_line + ' &\n')
+        cur_line = cont_prefix + part
+    out_lines.append(cur_line + '\n')
+    return ''.join(out_lines)
+
+
+def _build_use_only_clause(proc_lines: list[str], target_mode: TargetMode) -> str:
+    """Compute the ``, only:`` clause for ``USE multifloats``.
+
+    Returns the empty string if the target is not multifloats. Otherwise
+    returns ``", only: name1, name2, ..., operator(+), ..."`` listing
+    the multifloats public names referenced by ``proc_lines`` (minus
+    any name that the procedure declares as a local variable, so that
+    the local declaration is not shadowed by the use-associated
+    generic interface).
+    """
+    if target_mode.intrinsic_mode != 'wrap_constructor':
+        return ''
+    referenced = _scan_referenced_identifiers(proc_lines)
+    declared = _scan_local_declared_names(proc_lines)
+    selected = sorted(
+        (referenced & _MULTIFLOATS_PUBLIC_NAMES) - declared,
+        key=lambda s: (s.startswith('mf_'), s),
+    )
+    parts = list(selected) + list(_MULTIFLOATS_ALWAYS_INCLUDE)
+    return ', only: ' + ', '.join(parts) if parts else ''
+
+
 def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: list[str] = None) -> str:
-    """Insert USE multifloats statement and extra assignments after procedure headers."""
+    """Insert USE multifloats statement and extra assignments after procedure headers.
+
+    The USE statement is emitted with an explicit ``only:`` clause that
+    lists exactly the multifloats public names referenced by the
+    enclosing procedure (plus the operator/assignment generics, which
+    are always included). This avoids importing names like ``sum``,
+    ``scale``, ``gamma``, ``tiny``, ``nint``, etc. that LAPACK uses as
+    local variable names — gfortran rejects local declarations that
+    collide with use-associated generic interfaces.
+    """
     if not target_mode.module_name and not extra_lines:
         return source
 
@@ -1274,10 +1611,14 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
         r'^(\s{6,}|^\s*)(?:RECURSIVE\s+|PURE\s+|ELEMENTAL\s+)*'
         r'(?:(?:INTEGER|REAL|COMPLEX|LOGICAL|CHARACTER|TYPE\s*\([^)]+\)|DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX)'
         r'(?:\s*\*\s*\d+)?\s+)?'
-        r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s+DATA)\b', 
+        r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s+DATA)\b',
         re.IGNORECASE
     )
-    
+    end_proc_re = re.compile(
+        r'^\s*END\s*(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s*DATA)?\s*\w*\s*$',
+        re.IGNORECASE,
+    )
+
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -1291,10 +1632,13 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
                      result.append(next_line)
                      j += 1
                 else: break
-            
+
             if target_mode.module_name:
                 indent = m.group(1)
-                use_line = f"{indent if indent.strip() else '      '}USE {target_mode.module_name}\n"
+                use_line = (
+                    f"{indent if indent.strip() else '      '}"
+                    f"USE {target_mode.module_name}\n"
+                )
                 already_has = any(f"USE {target_mode.module_name}".upper() in lines[kk].upper() for kk in range(j, min(j+20, len(lines))))
                 if not already_has: result.append(use_line)
 
@@ -1433,7 +1777,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
             stripped = replace_standalone_real_complex(stripped, target_mode)
             stripped = replace_literals(stripped, target_mode)
             stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
-            stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
@@ -1449,7 +1793,9 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
         source = re.sub(r'! !    integer, parameter :: wp = kind\(1\.d0\)',
                         '!    integer, parameter :: wp = kind(1.d0)', source)
 
-    return _dedup_intrinsic_stmts(source)
+    source = _dedup_intrinsic_stmts(source, target_mode)
+    source = specialize_use_multifloats(source, target_mode, fixed_form=True)
+    return source
 
 
 _KIND_PARAM_NAMES = r'(?:wp|sp|dp)'
@@ -1639,7 +1985,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
             stripped = _strip_iso_fortran_env_realN(stripped)
             if not stripped: continue
             stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
-            stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
@@ -1659,7 +2005,9 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
         source = re.sub(r'(?i)!\s*!\s*integer\s*,\s*parameter\s*::\s*wp\s*=',
                         '!    integer, parameter :: wp =', source)
 
-    return _dedup_intrinsic_stmts(source)
+    source = _dedup_intrinsic_stmts(source, target_mode)
+    source = specialize_use_multifloats(source, target_mode, fixed_form=False)
+    return source
 
 
 def target_filename(name: str, rename_map: dict[str, str]) -> str:
@@ -1771,7 +2119,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
                 stripped = replace_standalone_real_complex(stripped, target_mode)
             if has_real_literals: stripped = replace_literals(stripped, target_mode)
             stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
-            stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
@@ -1787,7 +2135,9 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
         source = re.sub(r'! !    integer, parameter :: wp = kind\(1\.d0\)',
                         '!    integer, parameter :: wp = kind(1.d0)', source)
 
-    return _dedup_intrinsic_stmts(source)
+    source = _dedup_intrinsic_stmts(source, target_mode)
+    source = specialize_use_multifloats(source, target_mode, fixed_form=True)
+    return source
 
 
 def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mode: TargetMode, has_float_types: bool) -> str:
@@ -1810,7 +2160,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
             stripped = _strip_iso_fortran_env_realN(stripped)
             if not stripped: continue
             stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
-            stripped = replace_intrinsic_decls(stripped)
+            stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
@@ -1830,4 +2180,6 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
         source = re.sub(r'(?i)!\s*!\s*integer\s*,\s*parameter\s*::\s*wp\s*=',
                         '!    integer, parameter :: wp =', source)
 
-    return _dedup_intrinsic_stmts(source)
+    source = _dedup_intrinsic_stmts(source, target_mode)
+    source = specialize_use_multifloats(source, target_mode, fixed_form=False)
+    return source
