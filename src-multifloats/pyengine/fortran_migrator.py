@@ -797,6 +797,10 @@ _REAL_DECL_RE = re.compile(
     r'^\s+(?:DOUBLE\s+PRECISION|REAL\s*\*\s*(?:4|8)|REAL(?!\s*[*(])|TYPE\s*\(\s*float64x2\s*\))',
     re.IGNORECASE,
 )
+_INTEGER_DECL_RE = re.compile(
+    r'^\s+INTEGER(?!\s*\()',
+    re.IGNORECASE,
+)
 
 
 def _scan_typed_var_names(source: str, decl_re: re.Pattern) -> set[str]:
@@ -851,6 +855,21 @@ def _scan_complex_var_names(source: str) -> set[str]:
 
 def _scan_real_var_names(source: str) -> set[str]:
     return _scan_typed_var_names(source, _REAL_DECL_RE)
+
+
+def _scan_integer_var_names(source: str) -> set[str]:
+    return _scan_typed_var_names(source, _INTEGER_DECL_RE)
+
+
+# Note: an experimental ``_force_int_assignment`` pass was prototyped
+# here that wraps the RHS of ``INT_VAR = ...`` with ``INT(...)`` when
+# the RHS mentions a known float64x2 variable. It was removed because
+# the heuristic ("any token in real_names") misclassifies the case
+# where a float64x2 variable is *passed* to an integer-returning
+# function (e.g. ``JP = J - 1 + IUAMAX(M-J+1, A(J,J), 1)`` where A is
+# float64x2 but IUAMAX returns INTEGER). Reliable handling needs
+# semantic facts (the migrated function's return type), which is
+# Phase 1.5 work.
 
 
 def _rewrite_int_of_complex(line: str, complex_names: set[str]) -> str:
