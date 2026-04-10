@@ -94,6 +94,7 @@ module multifloats
     ! ================================================================
 
     interface float64x2
+        module procedure mf_from_mf
         module procedure mf_from_dp
         module procedure mf_from_sp
         module procedure mf_from_int
@@ -104,6 +105,7 @@ module multifloats
     end interface float64x2
 
     interface complex128x2
+        module procedure cx_from_cx
         module procedure cx_from_mf_2
         module procedure cx_from_dp_2
         module procedure cx_from_mf_1
@@ -213,6 +215,7 @@ module multifloats
     public :: ${func}$
 
 #:endfor
+#:set MINMAX_NARG = [3, 4, 5, 6, 7, 8]
 #:for func in BINARY_MINMAX
     interface ${func}$
 #:for n1, _ in RTYPES
@@ -222,7 +225,9 @@ module multifloats
 #:endif
 #:endfor
 #:endfor
-        module procedure mf_${func}$3
+#:for n in MINMAX_NARG
+        module procedure mf_${func}$${n}$
+#:endfor
     end interface
     public :: ${func}$
 
@@ -493,20 +498,26 @@ module multifloats
     ! Named constants
     ! ================================================================
 
-    type(float64x2), parameter, public :: MF_ZERO  = float64x2([0.0_dp, 0.0_dp])
-    type(float64x2), parameter, public :: MF_ONE   = float64x2([1.0_dp, 0.0_dp])
-    type(float64x2), parameter, public :: MF_TWO   = float64x2([2.0_dp, 0.0_dp])
-    type(float64x2), parameter, public :: MF_HALF  = float64x2([0.5_dp, 0.0_dp])
-    type(float64x2), parameter, public :: MF_EIGHT = float64x2([8.0_dp, 0.0_dp])
+    ! Use the named-component (``limbs=...``) form so the initializer
+    ! binds to the float64x2 structure constructor and not to the
+    ! overloaded ``float64x2(...)`` generic interface (which is a
+    ! function call and is therefore illegal in PARAMETER context).
+    ! gfortran tolerates the positional form here, but flang
+    ! (LLVM 18+) does not — both compilers accept the named form.
+    type(float64x2), parameter, public :: MF_ZERO  = float64x2(limbs=[0.0_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_ONE   = float64x2(limbs=[1.0_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_TWO   = float64x2(limbs=[2.0_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_HALF  = float64x2(limbs=[0.5_dp, 0.0_dp])
+    type(float64x2), parameter, public :: MF_EIGHT = float64x2(limbs=[8.0_dp, 0.0_dp])
 
-    type(float64x2), parameter, public :: MF_SAFMIN = float64x2([tiny(0.0_dp),  0.0_dp])
-    type(float64x2), parameter, public :: MF_SAFMAX = float64x2([huge(0.0_dp),  0.0_dp])
-    type(float64x2), parameter, public :: MF_TSML   = float64x2([1.0e-100_dp,   0.0_dp])
-    type(float64x2), parameter, public :: MF_TBIG   = float64x2([1.0e+100_dp,   0.0_dp])
-    type(float64x2), parameter, public :: MF_SSML   = float64x2([1.0e-50_dp,    0.0_dp])
-    type(float64x2), parameter, public :: MF_SBIG   = float64x2([1.0e+50_dp,    0.0_dp])
-    type(float64x2), parameter, public :: MF_RTMIN  = float64x2([1.0e-150_dp,   0.0_dp])
-    type(float64x2), parameter, public :: MF_RTMAX  = float64x2([1.0e+150_dp,   0.0_dp])
+    type(float64x2), parameter, public :: MF_SAFMIN = float64x2(limbs=[tiny(0.0_dp),  0.0_dp])
+    type(float64x2), parameter, public :: MF_SAFMAX = float64x2(limbs=[huge(0.0_dp),  0.0_dp])
+    type(float64x2), parameter, public :: MF_TSML   = float64x2(limbs=[1.0e-100_dp,   0.0_dp])
+    type(float64x2), parameter, public :: MF_TBIG   = float64x2(limbs=[1.0e+100_dp,   0.0_dp])
+    type(float64x2), parameter, public :: MF_SSML   = float64x2(limbs=[1.0e-50_dp,    0.0_dp])
+    type(float64x2), parameter, public :: MF_SBIG   = float64x2(limbs=[1.0e+50_dp,    0.0_dp])
+    type(float64x2), parameter, public :: MF_RTMIN  = float64x2(limbs=[1.0e-150_dp,   0.0_dp])
+    type(float64x2), parameter, public :: MF_RTMAX  = float64x2(limbs=[1.0e+150_dp,   0.0_dp])
 
 contains
 
@@ -556,6 +567,12 @@ contains
     ! Constructors
     ! ================================================================
 
+    elemental function mf_from_mf(v) result(res)
+        type(float64x2), intent(in) :: v
+        type(float64x2) :: res
+        res = v
+    end function
+
     elemental function mf_from_dp(v) result(res)
         real(dp), intent(in) :: v
         type(float64x2) :: res
@@ -599,6 +616,12 @@ contains
         complex(sp), intent(in) :: x
         type(float64x2) :: res
         res%limbs = [real(real(x, sp), dp), 0.0_dp]
+    end function
+
+    elemental function cx_from_cx(v) result(res)
+        type(complex128x2), intent(in) :: v
+        type(complex128x2) :: res
+        res = v
     end function
 
     elemental function cx_from_mf_2(r, i) result(res)
@@ -1436,28 +1459,25 @@ contains
 #:endfor
 #:endfor
 #:endfor
-    ! min/max with 3 arguments
-#:for func in BINARY_MINMAX
-    elemental function mf_${func}$3(a, b, c) result(res)
-        type(float64x2), intent(in) :: a, b, c
+    ! min/max with N arguments (N = 3..8). LAPACK has call sites with
+    ! up to 5 arguments; the upper bound is generous so future call
+    ! sites do not regress.
+#:def mf_minmax_body(func, n)
+    elemental function mf_${func}$${n}$(${', '.join(['a%d' % i for i in range(1, n+1)])}$) result(res)
+        type(float64x2), intent(in) :: ${', '.join(['a%d' % i for i in range(1, n+1)])}$
         type(float64x2) :: res
-#:if func == 'min'
-        if (a < b) then
-            res = a
-        else
-            res = b
-        end if
-        if (c < res) res = c
-#:else
-        if (a > b) then
-            res = a
-        else
-            res = b
-        end if
-        if (c > res) res = c
-#:endif
+#:set cmp = '<' if func == 'min' else '>'
+        res = a1
+#:for i in range(2, n+1)
+        if (a${i}$ ${cmp}$ res) res = a${i}$
+#:endfor
     end function
+#:enddef
+#:for func in BINARY_MINMAX
+#:for n in MINMAX_NARG
+$:mf_minmax_body(func, n)
 
+#:endfor
 #:endfor
     ! ================================================================
     ! Bessel functions with integer order (elemental + transformational)

@@ -36,5 +36,7 @@ skip_files:
 copy_files:
   - LA_CONSTANTS
   - LA_CONSTANTS_EP
+  - LA_CONSTANTS_MF
   - LA_XISNAN
   - LA_XISNAN_EP
+  - LA_XISNAN_MF

@@ -1626,12 +1626,20 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
         m = proc_header_re.match(line)
         if m:
             j = i + 1
+            # Walk past continuation lines so the USE clause is
+            # inserted AFTER the entire procedure header, not in the
+            # middle of a continued SUBROUTINE/FUNCTION declaration.
+            # Both fixed-form (column-6 marker) and free-form
+            # (trailing ``&``) continuations are recognized.
+            prev_has_amp = result[-1].rstrip().rstrip('\n').endswith('&')
             while j < len(lines):
                 next_line = lines[j]
-                if is_continuation_line(next_line):
-                     result.append(next_line)
-                     j += 1
-                else: break
+                if is_continuation_line(next_line) or prev_has_amp:
+                    result.append(next_line)
+                    prev_has_amp = next_line.rstrip().rstrip('\n').endswith('&')
+                    j += 1
+                else:
+                    break
 
             if target_mode.module_name:
                 indent = m.group(1)
