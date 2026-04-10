@@ -88,16 +88,27 @@ def multifloats_target(
     else:
         raise ValueError(f"Unknown prefix_style: {prefix_style}")
 
+    # Local FP variables in BLAS/LAPACK that are conventionally named
+    # after these constants and DATA-initialized to literal values are
+    # supplied as named constants by the multifloats module. The
+    # migrator filters them from declarations and substitutes references.
+    # Names like RTMIN/RTMAX are intentionally NOT included here: in
+    # several LAPACK files (e.g. dlartg.f90, dnrm2.f90) they are LOCAL
+    # variables that store ``sqrt(safmin)`` / ``sqrt(safmax/2)`` and
+    # must remain locally declared and assigned.
     known_constants = {
         'ZERO': 'MF_ZERO',
         'ONE': 'MF_ONE',
         'TWO': 'MF_TWO',
         'HALF': 'MF_HALF',
         'EIGHT': 'MF_EIGHT',
-        'RTMIN': 'MF_RTMIN',
-        'RTMAX': 'MF_RTMAX',
     }
 
+    # Names that LAPACK files import via ``USE LA_CONSTANTS, ONLY: ...``
+    # and that have a multifloats equivalent. ``rtmin``/``rtmax`` are
+    # NOT renamed here because some LAPACK routines (dlartg, dnrm2)
+    # also declare local variables with the same names; mass-renaming
+    # them would create assignments to module PARAMETERs.
     la_constants_map = {
         'zero': 'MF_ZERO',
         'half': 'MF_HALF',

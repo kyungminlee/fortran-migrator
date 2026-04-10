@@ -35,7 +35,14 @@ from .target_mode import TargetMode
 # ---------------------------------------------------------------------------
 
 def replace_type_decls(line: str, target_mode: TargetMode) -> str:
-    """Replace precision type keywords with target form."""
+    """Replace precision type keywords with target form.
+
+    In multifloats mode, also filters out variable names that are
+    supplied as named constants by the multifloats module (e.g. ZERO,
+    ONE, TWO). Those names become module imports and must not appear
+    as locally-declared variables — otherwise gfortran complains:
+    "Symbol 'mf_one' conflicts with symbol from module 'multifloats'".
+    """
     real_target = target_mode.real_type
     complex_target = target_mode.complex_type
 
@@ -48,22 +55,195 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
     line = re.sub(r'REAL\*4', real_target, line, flags=re.IGNORECASE)
 
     if not target_mode.is_kind_based:
-        # Check if this is a simple declaration of a known constant
-        # e.g. TYPE(float64x2) ONE, ZERO
-        # If so, return an empty string or comment it out
-        # Matches: TYPE(name) :: VAR1, VAR2
-        m = re.match(rf'^\s*{re.escape(real_target)}\s*(?:::)?\s*([A-Z0-9_,\s]+)$', line, re.IGNORECASE)
-        if not m:
-            m = re.match(rf'^\s*{re.escape(complex_target)}\s*(?:::)?\s*([A-Z0-9_,\s]+)$', line, re.IGNORECASE)
-        
-        if m:
-            vars_part = m.group(1)
-            vars_list = [v.strip().upper() for v in vars_part.split(',')]
-            # If all variables in this line are known constants, drop the line
-            if all(v in target_mode.known_constants for v in vars_list):
-                return "! " + line.strip()
+        line = _filter_known_constants_from_decl(line, target_mode)
 
     return line
+
+
+_DECL_START_RE = re.compile(
+    r'^(\s+)('
+    r'DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX|'
+    r'COMPLEX\s*\*\s*16|COMPLEX\s*\*\s*8|'
+    r'REAL\s*\*\s*8|REAL\s*\*\s*4|'
+    r'TYPE\s*\([^)]+\)|'
+    # Bare REAL / COMPLEX without ``*N`` / ``(KIND=...)`` decoration.
+    # The negative lookahead rules out ``REAL*N`` / ``REAL(KIND=...)``.
+    # ``REAL FUNCTION FOO(...)`` is rejected later by a FUNCTION-bail
+    # check on the variable list.
+    r'REAL(?!\s*[*(])|COMPLEX(?!\s*[*(])'
+    r')(\s*(?:,\s*[A-Za-z][\w]*\s*(?:\([^)]*\))?\s*)*::\s*|\s+)(.+)$',
+    re.IGNORECASE,
+)
+
+
+def strip_known_constants_from_decls(
+    source: str, target_mode: TargetMode,
+) -> tuple[str, dict[str, str]]:
+    """Whole-source pre-pass: drop known-constant names from multi-line type decls.
+
+    A continuation line like ``$  DU,GAM,GAMSQ,ONE,RGAMSQ,TWO,ZERO`` is
+    invisible to per-line filtering. This pass joins continuation lines
+    of a type declaration into one logical statement, removes any plain
+    identifier whose uppercase form is in ``target_mode.known_constants``,
+    and re-emits the declaration. Items containing parens (array specs)
+    or ``=`` (initializers) are preserved verbatim. If every item is
+    removed, the entire declaration is dropped.
+
+    Returns ``(new_source, removed_renames)`` where ``removed_renames``
+    maps each filtered name (uppercase) to its multifloats replacement
+    (e.g. ``'ZERO' -> 'MF_ZERO'``). Callers feed this map to
+    :func:`replace_known_constants` so that **only** the names that
+    were actually filtered get rewritten in the body — names imported
+    via ``USE LA_CONSTANTS_MF, ONLY: zero=>dzero`` are left intact
+    because they were never in a local declaration.
+    """
+    if target_mode.is_kind_based:
+        return source, {}
+    known = {k.upper(): v for k, v in target_mode.known_constants.items()}
+    if not known:
+        return source, {}
+
+    removed: dict[str, str] = {}
+    lines = source.splitlines(keepends=True)
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
+        # Don't touch comment lines
+        if raw and raw[0] in ('C', 'c', '*', '!'):
+            out.append(raw); i += 1; continue
+        rstripped = raw.rstrip('\n')
+        m = _DECL_START_RE.match(rstripped)
+        if not m:
+            out.append(raw); i += 1; continue
+
+        indent, type_text, sep, vars_part = m.groups()
+
+        # Bail on function-return decls: 'REAL FUNCTION FOO(...)'.
+        if re.match(r'^\s*FUNCTION\b', vars_part, re.IGNORECASE):
+            out.append(raw); i += 1; continue
+
+        # Collect continuation lines (fixed-form col-6 marker, OR
+        # previous logical line ends with '&').
+        stmt_lines = [raw]
+        j = i + 1
+        prev_amp = vars_part.rstrip().endswith('&')
+        while j < len(lines):
+            nxt = lines[j]
+            if is_continuation_line(nxt):
+                stmt_lines.append(nxt); j += 1; continue
+            if prev_amp:
+                stmt_lines.append(nxt)
+                prev_amp = nxt.rstrip('\n').rstrip().endswith('&')
+                j += 1; continue
+            break
+
+        # Build the joined var-list text. Strip continuation markers
+        # ('&' free-form, col-6 char fixed-form) and inline comments.
+        def _strip_amp(s: str) -> str:
+            s = s.rstrip()
+            return s[:-1].rstrip() if s.endswith('&') else s
+
+        full = _strip_amp(vars_part)
+        for cl in stmt_lines[1:]:
+            body = cl.rstrip('\n')
+            if is_continuation_line(body):
+                body = body[6:]
+            body = body.lstrip()
+            if body.startswith('&'):
+                body = body[1:]
+            full = full + ' ' + _strip_amp(body)
+
+        comment = ''
+        bang = full.find('!')
+        if bang >= 0:
+            comment = full[bang:]
+            full = full[:bang]
+
+        # Top-level comma split, respecting parentheses.
+        items: list[str] = []
+        cur, depth = '', 0
+        for ch in full:
+            if ch == '(':
+                depth += 1; cur += ch
+            elif ch == ')':
+                depth -= 1; cur += ch
+            elif ch == ',' and depth == 0:
+                if cur.strip(): items.append(cur.strip())
+                cur = ''
+            else:
+                cur += ch
+        if cur.strip():
+            items.append(cur.strip())
+
+        # If any item has an '=' initializer, bail out — preserving
+        # original is safer than rewriting initializer expressions.
+        if any('=' in it for it in items):
+            for sl in stmt_lines: out.append(sl)
+            i = j; continue
+
+        kept: list[str] = []
+        for it in items:
+            nm = re.match(r'^([A-Za-z_]\w*)', it)
+            if nm and nm.group(1).upper() in known and it == nm.group(1):
+                removed[nm.group(1).upper()] = known[nm.group(1).upper()]
+                continue  # drop bare known-constant name
+            kept.append(it)
+
+        if len(kept) == len(items):
+            for sl in stmt_lines: out.append(sl)
+            i = j; continue
+
+        if not kept:
+            # Whole declaration removed
+            i = j; continue
+
+        body = ', '.join(kept)
+        rebuilt = f'{indent}{type_text}{sep}{body}'
+        if comment:
+            rebuilt = rebuilt + ' ' + comment
+        nl = '\n' if stmt_lines[0].endswith('\n') else ''
+        out.append(rebuilt + nl)
+        i = j
+    return ''.join(out), removed
+
+
+def _filter_known_constants_from_decl(line: str, target_mode: TargetMode) -> str:
+    """Drop known-constant names from a TYPE() declaration's variable list.
+
+    Matches `TYPE(...)` (followed by optional ``::``) followed by a
+    comma-separated list of *plain* variable names — not array specs
+    like ``A(LDA,*)`` or initializers, which would require a deeper
+    parse. Names matching ``target_mode.known_constants`` are removed;
+    if every name is removed, the entire declaration is dropped.
+    """
+    real_target = target_mode.real_type
+    complex_target = target_mode.complex_type
+    known = {k.upper() for k in target_mode.known_constants}
+
+    type_alt = f'(?:{re.escape(real_target)}|{re.escape(complex_target)})'
+    m = re.match(
+        rf'^(\s*)({type_alt})(\s*(?:::)?\s*)(.+?)(\s*(?:!.*)?)$',
+        line, re.IGNORECASE,
+    )
+    if not m:
+        return line
+    indent, type_text, sep, vars_part, trailer = m.groups()
+    # Only handle simple comma-separated identifier lists. If any
+    # entry contains parens (array spec) or '=' (initializer), bail
+    # out — those need a smarter parser and the wholesale rewrite
+    # would be unsafe.
+    items = [v.strip() for v in vars_part.split(',')]
+    if not items or any(('(' in it or '=' in it) for it in items):
+        return line
+    if not all(re.fullmatch(r'[A-Za-z_]\w*', it) for it in items):
+        return line
+    kept = [it for it in items if it.upper() not in known]
+    if not kept:
+        return ''  # entire declaration removed
+    if len(kept) == len(items):
+        return line
+    return f'{indent}{type_text}{sep}{",".join(kept)}{trailer}'
 
 
 def replace_standalone_real_complex(line: str, target_mode: TargetMode) -> str:
@@ -430,6 +610,93 @@ def _get_rename_pattern(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[st
     return pattern, upper_map
 
 
+def _all_known_constant_renames(target_mode: TargetMode) -> dict[str, str]:
+    """Combined uppercase rename map for known + la_constants names."""
+    out: dict[str, str] = {}
+    for k, v in target_mode.known_constants.items():
+        out[k.upper()] = v
+    for k, v in target_mode.la_constants_map.items():
+        out[k.upper()] = v
+    return out
+
+
+_DECL_KEYWORD_RE = re.compile(
+    r'^\s*(?:TYPE\s*\(|INTEGER|REAL|COMPLEX|LOGICAL|CHARACTER|'
+    r'DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX|PARAMETER\b|DATA\b|'
+    r'IMPLICIT\b|DIMENSION\b|EXTERNAL\b|INTRINSIC\b|SAVE\b|'
+    r'COMMON\b|EQUIVALENCE\b|USE\b)',
+    re.IGNORECASE,
+)
+
+
+def replace_known_constants(
+    line: str,
+    target_mode: TargetMode,
+    renames: dict[str, str] | None = None,
+) -> str:
+    """Substitute names in ``renames`` in the code portion of ``line`` only.
+
+    ``renames`` is the per-file set of names that were removed from a
+    local declaration by :func:`strip_known_constants_from_decls`. They
+    are exactly the names that need module-import substitution. Names
+    bound via a ``USE LA_CONSTANTS_MF, ONLY: zero=>dzero`` alias are
+    NOT in this set and therefore are not touched here.
+
+    When ``renames`` is ``None`` the function falls back to the union
+    of ``target_mode.known_constants`` and ``target_mode.la_constants_map``;
+    that legacy mode is preserved for callers that haven't yet been
+    threaded through the new per-file API.
+
+    Skips: comment lines (fixed-form column-1 ``C/c/*/!`` and bare
+    ``!``-prefixed free-form), inline comment text after ``!``, and
+    declaration / PARAMETER / DATA / USE statement lines (those need
+    structural handling, not regex). String literals are also masked
+    out so an English ``ZERO`` inside an XERBLA-style message stays
+    untouched.
+    """
+    if target_mode.is_kind_based:
+        return line
+    if not line or is_comment_line(line):
+        return line
+    if _DECL_KEYWORD_RE.match(line):
+        return line
+
+    if renames is None:
+        renames = _all_known_constant_renames(target_mode)
+    if not renames:
+        return line
+    renames = {k.upper(): v for k, v in renames.items()}
+
+    # Split off any inline comment so we don't substitute inside it.
+    # We must respect string literals when locating the '!'.
+    code_end = len(line)
+    in_str, qch = False, ''
+    for i, ch in enumerate(line):
+        if in_str:
+            if ch == qch:
+                if i + 1 < len(line) and line[i + 1] == qch:
+                    continue  # doubled escape
+                in_str = False
+        elif ch in ("'", '"'):
+            in_str, qch = True, ch
+        elif ch == '!':
+            code_end = i
+            break
+    code, tail = line[:code_end], line[code_end:]
+
+    # Mask out string literal interiors in code segment.
+    parts = re.split(r"('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\")", code)
+    names_alt = '|'.join(re.escape(n) for n in sorted(renames.keys(), key=len, reverse=True))
+    pattern = re.compile(rf'(?<![A-Za-z0-9_])({names_alt})(?![A-Za-z0-9_])', re.IGNORECASE)
+
+    def _sub(m):
+        return renames[m.group(1).upper()]
+
+    for idx in range(0, len(parts), 2):
+        parts[idx] = pattern.sub(_sub, parts[idx])
+    return ''.join(parts) + tail
+
+
 def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:
     """Replace routine names inside XERBLA string arguments."""
     for old_name, new_name in rename_map.items():
@@ -439,15 +706,24 @@ def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:
     return line
 
 
-def convert_parameter_stmts(source: str, target_mode: TargetMode) -> tuple[str, list[str]]:
-    """Convert floating-point PARAMETER statements to executable assignments."""
+def convert_parameter_stmts(
+    source: str, target_mode: TargetMode,
+) -> tuple[str, list[str], dict[str, str]]:
+    """Convert floating-point PARAMETER statements to executable assignments.
+
+    Returns ``(new_source, fp_assignments, dropped_known)`` where
+    ``dropped_known`` maps each known-constant name skipped from the
+    PARAMETER list to its multifloats replacement (so the caller can
+    add it to the per-file rename set).
+    """
     if target_mode.is_kind_based:
-        return source, []
+        return source, [], {}
 
     lines = source.splitlines(keepends=True)
     result, fp_assignments = [], []
+    dropped_known: dict[str, str] = {}
     param_re = re.compile(r'^(\s{6,}|^\s*)PARAMETER\s*\((.*)\)\s*(!.*)?$', re.IGNORECASE)
-    
+
     for line in lines:
         m = param_re.match(line)
         if m:
@@ -461,7 +737,7 @@ def convert_parameter_stmts(source: str, target_mode: TargetMode) -> tuple[str, 
                     current = []
                 else: current.append(char)
             if current: parts.append(''.join(current))
-            
+
             kept_parts = []
             for part in parts:
                 if '=' in part:
@@ -469,26 +745,36 @@ def convert_parameter_stmts(source: str, target_mode: TargetMode) -> tuple[str, 
                     name, val = name.strip(), val.strip()
                     is_fp = ('.' in val or 'D' in val.upper() or 'E' in val.upper() or val.upper() in target_mode.known_constants)
                     if is_fp:
-                        if name.upper() in target_mode.known_constants: continue
+                        if name.upper() in target_mode.known_constants:
+                            dropped_known[name.upper()] = target_mode.known_constants[name.upper()]
+                            continue
                         fp_assignments.append(f"{indent}{name} = {val}{comment}\n")
                     else: kept_parts.append(part)
                 else: kept_parts.append(part)
-            
+
             if kept_parts: result.append(f"{indent}PARAMETER ({', '.join(kept_parts)}){comment}\n")
             else: result.append(f"{indent}! Converted to assignments: {line.strip()}\n")
         else: result.append(line)
-    return "".join(result), fp_assignments
+    return "".join(result), fp_assignments, dropped_known
 
 
-def convert_data_stmts(source: str, target_mode: TargetMode) -> tuple[str, list[str]]:
-    """Convert floating-point DATA statements to executable assignments."""
+def convert_data_stmts(
+    source: str, target_mode: TargetMode,
+) -> tuple[str, list[str], dict[str, str]]:
+    """Convert floating-point DATA statements to executable assignments.
+
+    Returns ``(new_source, fp_assignments, dropped_known)`` — see
+    :func:`convert_parameter_stmts` for the meaning of the third tuple
+    element.
+    """
     if target_mode.is_kind_based:
-        return source, []
+        return source, [], {}
 
     lines = source.splitlines(keepends=True)
     result, fp_assignments = [], []
+    dropped_known: dict[str, str] = {}
     data_re = re.compile(r'^(\s{6,}|^\s*)DATA\s+([^/]+)/\s*([^/]+)\s*/\s*(!.*)?$', re.IGNORECASE)
-    
+
     for line in lines:
         m = data_re.match(line)
         if m:
@@ -504,16 +790,18 @@ def convert_data_stmts(source: str, target_mode: TargetMode) -> tuple[str, list[
                         current = []
                     else: current.append(char)
                 if current: vals_list.append(''.join(current).strip())
-                
+
                 if len(vars_list) == len(vals_list):
                     for v, val in zip(vars_list, vals_list):
-                        if v.upper() in target_mode.known_constants: continue
+                        if v.upper() in target_mode.known_constants:
+                            dropped_known[v.upper()] = target_mode.known_constants[v.upper()]
+                            continue
                         fp_assignments.append(f"{indent}{v} = {val}{comment}\n")
                     result.append(f"{indent}! Converted to assignments: {line.strip()}\n")
                 else: result.append(line)
             else: result.append(line)
         else: result.append(line)
-    return "".join(result), fp_assignments
+    return "".join(result), fp_assignments, dropped_known
 
 
 def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: list[str] = None) -> str:
@@ -549,19 +837,45 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
             if target_mode.module_name:
                 indent = m.group(1)
                 use_line = f"{indent if indent.strip() else '      '}USE {target_mode.module_name}\n"
-                already_has = any(f"USE {target_mode.module_name}".upper() in lines[k].upper() for k in range(j, min(j+20, len(lines))))
+                already_has = any(f"USE {target_mode.module_name}".upper() in lines[kk].upper() for kk in range(j, min(j+20, len(lines))))
                 if not already_has: result.append(use_line)
 
             if extra_lines:
+                # Walk past the declaration block (blank lines, comments,
+                # and any line whose first token is a declaration keyword
+                # or a fixed-form continuation of one). Insert the
+                # extra assignments at the END of the declaration block,
+                # i.e. just before the first executable statement —
+                # otherwise the assignments would be parsed as
+                # implicit-typed executables before declarations.
                 k = j
                 while k < len(lines):
-                    l = lines[k].strip().upper()
-                    if not l or l.startswith('!') or l.startswith('C') or l.startswith('*'): k += 1
-                    elif any(l.startswith(p) for p in ('REAL', 'DOUBLE', 'COMPLEX', 'INTEGER', 'LOGICAL', 'CHARACTER', 'TYPE', 'USE', 'IMPLICIT', 'PARAMETER', 'DATA', 'INTRINSIC', 'EXTERNAL', 'DIMENSION', 'SAVE', 'EQUIVALENCE', 'COMMON')): k += 1
-                    else: break
-                for al in extra_lines: result.append(al)
+                    raw = lines[k]
+                    stripped = raw.lstrip()
+                    if not stripped.strip():
+                        k += 1; continue
+                    if raw and raw[0] in ('C', 'c', '*', '!'):
+                        k += 1; continue
+                    if is_continuation_line(raw):
+                        k += 1; continue
+                    l = stripped.upper()
+                    if any(l.startswith(p) for p in (
+                        'REAL', 'DOUBLE', 'COMPLEX', 'INTEGER', 'LOGICAL',
+                        'CHARACTER', 'TYPE', 'USE', 'IMPLICIT', 'PARAMETER',
+                        'DATA', 'INTRINSIC', 'EXTERNAL', 'DIMENSION', 'SAVE',
+                        'EQUIVALENCE', 'COMMON',
+                    )):
+                        k += 1; continue
+                    break
+                # Copy declaration block as-is, then emit assignments.
+                for kk in range(j, k):
+                    result.append(lines[kk])
+                for al in extra_lines:
+                    result.append(al)
                 result.append("\n")
-            i = j
+                i = k
+            else:
+                i = j
             continue
         i += 1
     return "".join(result)
@@ -617,8 +931,11 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
 
 
 def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
-    source, param_assignments = convert_parameter_stmts(source, target_mode)
-    source, data_assignments = convert_data_stmts(source, target_mode)
+    source, removed_known = strip_known_constants_from_decls(source, target_mode)
+    source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
+    source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
+    removed_known.update(dropped_p)
+    removed_known.update(dropped_d)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
     lines = source.splitlines(keepends=True)
     result = []
@@ -631,6 +948,10 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
             stripped = replace_type_decls(stripped, target_mode)
         else:
             stripped = replace_type_decls(stripped, target_mode)
+            if not stripped:
+                # Declaration was entirely consumed by known-constant
+                # filtering — drop the line, including any newline.
+                continue
             stripped = replace_standalone_real_complex(stripped, target_mode)
             stripped = replace_literals(stripped, target_mode)
             stripped = replace_intrinsic_calls(stripped, target_mode)
@@ -638,25 +959,14 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
+            stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = reformat_fixed_line(stripped)
         result.append(stripped + nl)
-    
+
     source = ''.join(result)
     if not target_mode.is_kind_based:
-        # Case-insensitive constant replacement, avoiding assignments
-        for base in sorted(target_mode.known_constants.keys(), key=len, reverse=True):
-            mf = target_mode.known_constants[base]
-            # Replace only if not followed by = or ::
-            source = re.sub(rf'(?i)\b{base}\b(?!\s*(?:=|\:\:))', mf, source)
-            source = re.sub(rf'(?i)\b{mf}\b(?!\s*(?:=|\:\:))', mf, source)
-            
-        source = re.sub(r'(?i)\bczero\b(?!\s*(?:=|\:\:))', 'MF_ZERO', source)
-        source = re.sub(r'(?i)\bsafmin\b(?!\s*(?:=|\:\:))', 'MF_SAFMIN', source)
-        source = re.sub(r'(?i)\bsafmax\b(?!\s*(?:=|\:\:))', 'MF_SAFMAX', source)
-        source = re.sub(r'(?i)\brtmin\b(?!\s*(?:=|\:\:))', 'MF_RTMIN', source)
-        source = re.sub(r'(?i)\brtmax\b(?!\s*(?:=|\:\:))', 'MF_RTMAX', source)
-        
-        source = re.sub(r'! !    integer, parameter :: wp = kind\(1\.d0\)', '!    integer, parameter :: wp = kind(1.d0)', source)
+        source = re.sub(r'! !    integer, parameter :: wp = kind\(1\.d0\)',
+                        '!    integer, parameter :: wp = kind(1.d0)', source)
 
     return _dedup_intrinsic_stmts(source)
 
@@ -681,16 +991,43 @@ def _strip_iso_fortran_env_realN(line: str) -> str:
 
 
 def rewrite_la_constants_use(source: str, target_mode: TargetMode) -> str:
+    """Rewrite ``USE LA_CONSTANTS`` clauses for the chosen target.
+
+    KIND mode (extended precision): the LAPACK la_constants module is
+    cloned to ``LA_CONSTANTS_EP`` by the migrator, so we just rename
+    the module reference and rename each constant to its EP-prefixed
+    equivalent (E*/Y*/Q*/X*).
+
+    Multifloats mode: there is no ``la_constants_mf`` module — instead,
+    we rewrite the import to point at the real ``multifloats`` module
+    and rename each LAPACK constant (``dzero``, ``dsafmin``, ...) to its
+    multifloats equivalent (``MF_ZERO``, ``MF_SAFMIN``, ...). The
+    ``wp=>dp`` rename entry is dropped because ``wp`` is no longer
+    meaningful once the type becomes ``TYPE(float64x2)``.
+    """
     const_renames = _la_constants_rename_map(target_mode)
     lines, result, in_use_stmt = source.split('\n'), [], False
     suffix = '_MF' if not target_mode.is_kind_based else '_EP'
+    target_module_upper = f'LA_CONSTANTS{suffix}'
+    target_module_lower = f'la_constants{suffix.lower()}'
+    target_xisnan_upper = f'LA_XISNAN{suffix}'
+    target_xisnan_lower = f'la_xisnan{suffix.lower()}'
+
     for line in lines:
         upper = line.upper().lstrip()
-        if re.search(r'\bUSE\s+LA_XISNAN\b', upper) and f'LA_XISNAN{suffix}' not in upper:
-            line = re.sub(r'(?i)\bLA_XISNAN\b', lambda m: (f'la_xisnan{suffix.lower()}' if m.group().islower() else f'LA_XISNAN{suffix}'), line)
-        if re.search(r'\bUSE\s+LA_CONSTANTS\b', upper) and f'LA_CONSTANTS{suffix}' not in upper:
+        if re.search(r'\bUSE\s+LA_XISNAN\b', upper) and target_xisnan_upper not in upper:
+            line = re.sub(
+                r'(?i)\bLA_XISNAN\b',
+                lambda m: target_xisnan_lower if m.group().islower() else target_xisnan_upper,
+                line,
+            )
+        if re.search(r'\bUSE\s+LA_CONSTANTS\b', upper) and target_module_upper not in upper:
             in_use_stmt = True
-            line = re.sub(r'(?i)\bLA_CONSTANTS\b', lambda m: (f'la_constants{suffix.lower()}' if m.group().islower() else f'LA_CONSTANTS{suffix}'), line)
+            line = re.sub(
+                r'(?i)\bLA_CONSTANTS\b',
+                lambda m: target_module_lower if m.group().islower() else target_module_upper,
+                line,
+            )
         if in_use_stmt:
             line = replace_routine_names(line, const_renames)
             if not target_mode.is_kind_based:
@@ -698,57 +1035,110 @@ def rewrite_la_constants_use(source: str, target_mode: TargetMode) -> str:
                 line = re.sub(r',\s*wp\s*=>\s*dp\s*(?=[!&]|$)', '', line, flags=re.IGNORECASE)
                 line = re.sub(r'(ONLY\s*:\s*)wp\s*=>\s*dp\s*,', r'\1', line, flags=re.IGNORECASE)
                 line = re.sub(r'(ONLY\s*:\s*)wp\s*=>\s*dp\s*(?=[!&]|$)', r'\1', line, flags=re.IGNORECASE)
-            if not line.rstrip().endswith('&'): in_use_stmt = False
+            if not line.rstrip().endswith('&'):
+                in_use_stmt = False
         result.append(line)
     return '\n'.join(result)
 
+_LA_CONSTANTS_REAL_NAMES = (
+    'ZERO', 'HALF', 'ONE', 'TWO', 'THREE', 'FOUR', 'EIGHT', 'TEN',
+    'PREFIX', 'ULP', 'EPS',
+    'SAFMIN', 'SAFMAX', 'SMLNUM', 'BIGNUM',
+    'RTMIN', 'RTMAX',
+    'TSML', 'TBIG', 'SSML', 'SBIG',
+)
+_LA_CONSTANTS_COMPLEX_NAMES = ('ZERO', 'HALF', 'ONE', 'PREFIX')
+
+
 def _la_constants_rename_map(target_mode: TargetMode) -> dict[str, str]:
-    if not target_mode.is_kind_based:
-        renames: dict[str, str] = {}
-        for base, mf_name in target_mode.la_constants_map.items():
-            u_base = base.upper()
-            for p in ('S', 'D', 'C', 'Z'): renames[p + u_base] = mf_name
-            renames[u_base] = mf_name
-        return renames
-    pmap = {10: {'S': 'E', 'D': 'E', 'C': 'Y', 'Z': 'Y'}, 16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'}}[target_mode.kind_suffix]
+    """Build a rename map for the RHS of LA_CONSTANTS USE-clause aliases.
+
+    Maps the LAPACK la_constants names ``DZERO``, ``DSAFMIN``, ``ZZERO``,
+    etc. to the equivalent names exported by the target la_constants
+    auxiliary module:
+
+      KIND=10  → ``ezero``, ``ysafmin`` (la_constants_ep)
+      KIND=16  → ``qzero``, ``xsafmin`` (la_constants_ep)
+      multifloats → ``wzero``, ``usafmin`` (la_constants_mf)
+
+    Only the prefixed names are mapped — the LHS aliases ``zero``,
+    ``half`` etc. are intentionally left untouched so the body of the
+    routine continues to reference them through the local alias.
+    """
+    if target_mode.is_kind_based:
+        pmap = {
+            10: {'S': 'E', 'D': 'E', 'C': 'Y', 'Z': 'Y'},
+            16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'},
+        }[target_mode.kind_suffix]
+    else:
+        pmap = {'S': 'W', 'D': 'W', 'C': 'U', 'Z': 'U'}
+
     renames: dict[str, str] = {}
-    for p, names in zip(('S', 'C', 'D', 'Z'), ([ 'SP', 'SZERO', 'SHALF', 'SONE', 'STWO', 'STHREE', 'SFOUR', 'SEIGHT', 'STEN', 'SPREFIX', 'SULP', 'SEPS', 'SSAFMIN', 'SSAFMAX', 'SSMLNUM', 'SBIGNUM', 'SRTMIN', 'SRTMAX', 'STSML', 'STBIG', 'SSSML', 'SSBIG' ], ['CZERO', 'CHALF', 'CONE', 'CPREFIX'], [ 'DP', 'DZERO', 'DHALF', 'DONE', 'DTWO', 'DTHREE', 'DFOUR', 'DEIGHT', 'DTEN', 'DPREFIX', 'DULP', 'DEPS', 'DSAFMIN', 'DSAFMAX', 'DSMLNUM', 'DBIGNUM', 'DRTMIN', 'DRTMAX', 'DTSML', 'DTBIG', 'DSSML', 'DSBIG' ], ['ZZERO', 'ZHALF', 'ZONE', 'ZPREFIX'])):
-        for n in names: renames[n] = pmap[p] + n[1:]
+    for p in ('S', 'D'):
+        for base in _LA_CONSTANTS_REAL_NAMES:
+            renames[p + base] = pmap[p] + base
+    for p in ('C', 'Z'):
+        for base in _LA_CONSTANTS_COMPLEX_NAMES:
+            renames[p + base] = pmap[p] + base
     return renames
 
 
 def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
     source = rewrite_la_constants_use(source, target_mode)
+    source, removed_known = strip_known_constants_from_decls(source, target_mode)
     if not target_mode.is_kind_based:
         lines_tmp = source.splitlines()
         res_tmp = []
         in_comment_block = False
-        nuke_names = {'zero', 'one', 'czero', 'safmin', 'safmax', 'rtmin', 'rtmax', 'tsml', 'tbig', 'ssml', 'sbig'}
-        
+        # Names of free-form file-scope PARAMETER declarations that are
+        # supplied as MF_* constants by the multifloats module. RTMIN and
+        # RTMAX are intentionally excluded: in several LAPACK routines
+        # they are local variables computed at runtime, not PARAMETERs.
+        # The mapping mirrors la_constants_map but with explicit
+        # multifloats target names for free-form Pattern A files (those
+        # use ``USE multifloats`` directly, not ``USE LA_CONSTANTS_MF``).
+        nuke_renames = {
+            'zero': 'MF_ZERO', 'one': 'MF_ONE', 'czero': 'MF_ZERO',
+            'safmin': 'MF_SAFMIN', 'safmax': 'MF_SAFMAX',
+            'tsml': 'MF_TSML', 'tbig': 'MF_TBIG',
+            'ssml': 'MF_SSML', 'sbig': 'MF_SBIG',
+            # dnrm2.f90's local ``maxN = huge(0.0_wp)`` is equivalent to
+            # MF_SAFMAX (which is itself defined as huge(0.0_dp) packed
+            # into float64x2's high limb).
+            'maxn': 'MF_SAFMAX',
+        }
+        nuke_names = set(nuke_renames.keys())
+
         for line in lines_tmp:
             stripped = line.strip().lower()
             is_decl_start = re.match(r'^\s*(?:real|complex|integer|type|parameter).*?::', line, re.IGNORECASE) or \
                             re.match(r'^\s*parameter\s*\(', line, re.IGNORECASE)
-            
+
             contains_nuke = False
+            matched_names: list[str] = []
             for n in nuke_names:
                 if re.search(rf'\b{n}\b', stripped):
-                    if n == 'rtmax' and 'parameter' not in stripped: continue
                     contains_nuke = True
-                    break
+                    matched_names.append(n)
 
             if not in_comment_block and is_decl_start and contains_nuke:
                 res_tmp.append('! ' + line)
                 if line.rstrip().endswith('&'): in_comment_block = True
+                for n in matched_names:
+                    removed_known[n.upper()] = nuke_renames[n]
             elif in_comment_block:
                 res_tmp.append('! ' + line)
                 if not line.rstrip().endswith('&'): in_comment_block = False
+                for n in matched_names:
+                    removed_known[n.upper()] = nuke_renames[n]
             else: res_tmp.append(line)
         source = '\n'.join(res_tmp)
 
-    source, param_assignments = convert_parameter_stmts(source, target_mode)
-    source, data_assignments = convert_data_stmts(source, target_mode)
-    
+    source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
+    source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
+    removed_known.update(dropped_p)
+    removed_known.update(dropped_d)
+
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
     lines = source.splitlines(keepends=True)
     result = []
@@ -763,28 +1153,20 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
-        if stripped.lstrip().startswith('!'): 
+        if stripped.lstrip().startswith('!'):
             stripped = replace_type_decls(stripped, target_mode)
         else:
             if not target_mode.is_kind_based:
                 stripped = re.sub(r'REAL\(' + _KIND_PARAM_NAMES + r'\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
                 stripped = re.sub(r'COMPLEX\(' + _KIND_PARAM_NAMES + r'\)', target_mode.complex_type, stripped, flags=re.IGNORECASE)
+            stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
         result.append(stripped + nl)
-    
+
     source = ''.join(result)
     if not target_mode.is_kind_based:
-        for base in sorted(target_mode.known_constants.keys(), key=len, reverse=True):
-            mf = target_mode.known_constants[base]
-            source = re.sub(rf'(?i)\b{base}\b(?!\s*(?:=|\:\:))', mf, source)
-            source = re.sub(rf'(?i)\b{mf}\b(?!\s*(?:=|\:\:))', mf, source)
-            
-        source = re.sub(r'(?i)\bczero\b(?!\s*(?:=|\:\:))', 'MF_ZERO', source)
-        source = re.sub(r'(?i)\bsafmin\b(?!\s*(?:=|\:\:))', 'MF_SAFMIN', source)
-        source = re.sub(r'(?i)\bsafmax\b(?!\s*(?:=|\:\:))', 'MF_SAFMAX', source)
-        source = re.sub(r'(?i)\brtmin\b(?!\s*(?:=|\:\:))', 'MF_RTMIN', source)
-        source = re.sub(r'(?i)\brtmax\b(?!\s*(?:=|\:\:))', 'MF_RTMAX', source)
-        source = re.sub(r'(?i)!\s*!\s*integer\s*,\s*parameter\s*::\s*wp\s*=', '!    integer, parameter :: wp =', source)
-    
+        source = re.sub(r'(?i)!\s*!\s*integer\s*,\s*parameter\s*::\s*wp\s*=',
+                        '!    integer, parameter :: wp =', source)
+
     return _dedup_intrinsic_stmts(source)
 
 
@@ -816,12 +1198,25 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
     out_name = target_filename(src_path.name, rename_map)
     if not target_mode.is_kind_based:
         import re
-        generics = {'ABS', 'REAL', 'AIMAG', 'CONJG', 'MAX', 'MIN', 'SQRT', 'EXP', 'LOG', 'LOG10', 'SIN', 'COS', 'TAN', 'SIGN', 'MOD', 'MF_REAL'}
+        # Names that the multifloats module overloads as generic
+        # interfaces. INTRINSIC declarations of these names become
+        # illegal once ``USE multifloats`` is in scope (gfortran:
+        # "Cannot change attributes of USE-associated symbol").
+        generics = {
+            'ABS', 'REAL', 'AIMAG', 'CONJG', 'MAX', 'MIN', 'SQRT',
+            'EXP', 'LOG', 'LOG10', 'SIN', 'COS', 'TAN', 'SIGN', 'MOD',
+            'MF_REAL', 'HUGE', 'TINY', 'EPSILON', 'CEILING', 'FLOOR',
+            'NINT', 'INT', 'DBLE',
+            'CMPLX', 'DCMPLX', 'DCONJG', 'DIMAG',
+        }
         def clean_intrinsic(m):
-            indent, funcs_str, newline = m.group(1), m.group(2), m.group(3)
+            indent, sep, funcs_str, newline = m.group(1), m.group(2), m.group(3), m.group(4)
             kept = [f.strip() for f in funcs_str.split(',') if f.strip() and f.strip().upper() not in generics]
-            return f"{indent}INTRINSIC {', '.join(kept)}{newline}" if kept else ""
-        migrated = re.sub(r'(?i)^([ \t]*)INTRINSIC\s+([A-Za-z0-9_,\s]+?)(\r?\n|$)', clean_intrinsic, migrated, flags=re.MULTILINE)
+            return f"{indent}INTRINSIC{sep}{', '.join(kept)}{newline}" if kept else ""
+        migrated = re.sub(
+            r'(?im)^([ \t]*)INTRINSIC(\s*::\s*|\s+)([A-Za-z0-9_,\s]+?)(\r?\n|$)',
+            clean_intrinsic, migrated,
+        )
     return out_name, migrated
 
 
@@ -843,8 +1238,11 @@ def _migrate_with_flang(source: str, ext: str, rename_map: dict[str, str], targe
 
 
 def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mode: TargetMode, has_float_types: bool, has_real_literals: bool) -> str:
-    source, param_assignments = convert_parameter_stmts(source, target_mode)
-    source, data_assignments = convert_data_stmts(source, target_mode)
+    source, removed_known = strip_known_constants_from_decls(source, target_mode)
+    source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
+    source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
+    removed_known.update(dropped_p)
+    removed_known.update(dropped_d)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
     lines = source.splitlines(keepends=True)
     result = []
@@ -858,6 +1256,8 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
         else:
             if has_float_types:
                 stripped = replace_type_decls(stripped, target_mode)
+                if not stripped:
+                    continue
                 stripped = replace_standalone_real_complex(stripped, target_mode)
             if has_real_literals: stripped = replace_literals(stripped, target_mode)
             stripped = replace_intrinsic_calls(stripped, target_mode)
@@ -865,31 +1265,25 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
+            stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = reformat_fixed_line(stripped)
         result.append(stripped + nl)
-    
+
     source = ''.join(result)
     if not target_mode.is_kind_based:
-        for base in sorted(target_mode.known_constants.keys(), key=len, reverse=True):
-            mf = target_mode.known_constants[base]
-            source = re.sub(rf'(?i)\b{base}\b(?!\s*(?:=|\:\:))', mf, source)
-            source = re.sub(rf'(?i)\b{mf}\b(?!\s*(?:=|\:\:))', mf, source)
-            
-        source = re.sub(r'(?i)\bczero\b(?!\s*(?:=|\:\:))', 'MF_ZERO', source)
-        source = re.sub(r'(?i)\bsafmin\b(?!\s*(?:=|\:\:))', 'MF_SAFMIN', source)
-        source = re.sub(r'(?i)\bsafmax\b(?!\s*(?:=|\:\:))', 'MF_SAFMAX', source)
-        source = re.sub(r'(?i)\brtmin\b(?!\s*(?:=|\:\:))', 'MF_RTMIN', source)
-        source = re.sub(r'(?i)\brtmax\b(?!\s*(?:=|\:\:))', 'MF_RTMAX', source)
-        
-        source = re.sub(r'! !    integer, parameter :: wp = kind\(1\.d0\)', '!    integer, parameter :: wp = kind(1.d0)', source)
+        source = re.sub(r'! !    integer, parameter :: wp = kind\(1\.d0\)',
+                        '!    integer, parameter :: wp = kind(1.d0)', source)
 
     return _dedup_intrinsic_stmts(source)
 
 
 def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mode: TargetMode, has_float_types: bool) -> str:
     source = rewrite_la_constants_use(source, target_mode)
-    source, param_assignments = convert_parameter_stmts(source, target_mode)
-    source, data_assignments = convert_data_stmts(source, target_mode)
+    source, removed_known = strip_known_constants_from_decls(source, target_mode)
+    source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
+    source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
+    removed_known.update(dropped_p)
+    removed_known.update(dropped_d)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
     lines = source.splitlines(keepends=True)
     result = []
@@ -904,27 +1298,18 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
-        if stripped.lstrip().startswith('!'): 
+        if stripped.lstrip().startswith('!'):
             stripped = replace_type_decls(stripped, target_mode)
         else:
             if not target_mode.is_kind_based:
                 stripped = re.sub(r'REAL\(' + _KIND_PARAM_NAMES + r'\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
                 stripped = re.sub(r'COMPLEX\(' + _KIND_PARAM_NAMES + r'\)', target_mode.complex_type, stripped, flags=re.IGNORECASE)
+            stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
         result.append(stripped + nl)
-    
+
     source = ''.join(result)
     if not target_mode.is_kind_based:
-        for base in sorted(target_mode.known_constants.keys(), key=len, reverse=True):
-            mf = target_mode.known_constants[base]
-            source = re.sub(rf'(?i)\b{base}\b(?!\s*(?:=|\:\:))', mf, source)
-            source = re.sub(rf'(?i)\b{mf}\b(?!\s*(?:=|\:\:))', mf, source)
-            
-        source = re.sub(r'(?i)\bczero\b(?!\s*(?:=|\:\:))', 'MF_ZERO', source)
-        source = re.sub(r'(?i)\bsafmin\b(?!\s*(?:=|\:\:))', 'MF_SAFMIN', source)
-        source = re.sub(r'(?i)\bsafmax\b(?!\s*(?:=|\:\:))', 'MF_SAFMAX', source)
-        source = re.sub(r'(?i)\brtmin\b(?!\s*(?:=|\:\:))', 'MF_RTMIN', source)
-        source = re.sub(r'(?i)\brtmax\b(?!\s*(?:=|\:\:))', 'MF_RTMAX', source)
-        
-        source = re.sub(r'! !    integer, parameter :: wp = kind\(1\.d0\)', '!    integer, parameter :: wp = kind(1.d0)', source)
-    
+        source = re.sub(r'(?i)!\s*!\s*integer\s*,\s*parameter\s*::\s*wp\s*=',
+                        '!    integer, parameter :: wp =', source)
+
     return _dedup_intrinsic_stmts(source)

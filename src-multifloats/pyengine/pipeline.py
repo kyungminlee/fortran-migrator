@@ -15,6 +15,7 @@ from .symbol_scanner import scan_symbols
 from .prefix_classifier import classify_symbols, build_rename_map
 from .fortran_migrator import migrate_file, migrate_file_to_string, target_filename
 from .c_migrator import migrate_c_directory, migrate_c_file_to_string
+from .target_mode import TargetMode
 
 from tqdm import tqdm
 
@@ -580,7 +581,7 @@ def _strip_c_comments(text: str) -> str:
 
 
 def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
-                          output_dir: Path, kind: int,
+                          output_dir: Path, target_mode: TargetMode,
                           dry_run: bool = False,
                           classification=None,
                           parser: str | None = None,
@@ -664,7 +665,7 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     results: dict[Path, tuple[str, str] | None] = {}
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
-            ex.submit(migrate_file_to_string, p, rename_map, kind,
+            ex.submit(migrate_file_to_string, p, rename_map, target_mode,
                       parser, parser_cmd): p
             for p in to_migrate
         }
@@ -1101,7 +1102,7 @@ def run_c_convergence_report(recipe_path: Path, output_dir: Path,
 
 
 def run_c_migration(config: RecipeConfig, output_dir: Path,
-                    kind: int, dry_run: bool = False,
+                    target_mode: TargetMode, dry_run: bool = False,
                     classification=None,
                     rename_map: dict[str, str] | None = None) -> dict:
     """Run C migration pipeline (clone-and-substitute).
@@ -1115,7 +1116,7 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         return {'cloned': [], 'template_vars': {}}
 
     result = migrate_c_directory(
-        config.source_dir, output_dir, kind,
+        config.source_dir, output_dir, target_mode,
         copy_originals=config.copy_all_originals,
         classification=classification,
         rename_map=rename_map,
@@ -1152,7 +1153,7 @@ def run_migration(recipe_path: Path, output_dir: Path,
     print(f'Library:     {config.library}')
     print(f'Language:    {config.language}')
     print(f'Source:      {config.source_dir}')
-    print(f'Target KIND: {target_mode}')
+    print(f'Target:      {target_mode.name}')
     print(f'Prefix:      {config.prefix_style}')
     print()
 
@@ -1181,7 +1182,7 @@ def run_migration(recipe_path: Path, output_dir: Path,
     print(f'  {len(rename_map)} renames computed')
 
     # Dispatch to language-specific migrator
-    print(f'\nMigrating to KIND={target_mode}...')
+    print(f'\nMigrating to {target_mode.name}...')
 
     if config.language == 'fortran':
         result = run_fortran_migration(
