@@ -1493,10 +1493,14 @@ def rewrite_la_constants_use(source: str, target_mode: TargetMode) -> str:
         if in_use_stmt:
             line = replace_routine_names(line, const_renames)
             if not target_mode.is_kind_based:
-                line = re.sub(r',\s*wp\s*=>\s*dp\s*,', ',', line, flags=re.IGNORECASE)
-                line = re.sub(r',\s*wp\s*=>\s*dp\s*(?=[!&]|$)', '', line, flags=re.IGNORECASE)
-                line = re.sub(r'(ONLY\s*:\s*)wp\s*=>\s*dp\s*,', r'\1', line, flags=re.IGNORECASE)
-                line = re.sub(r'(ONLY\s*:\s*)wp\s*=>\s*dp\s*(?=[!&]|$)', r'\1', line, flags=re.IGNORECASE)
+                # Strip ``wp=>dp`` (D-source) and ``wp=>sp`` (S-source)
+                # entries — both become meaningless after the migrator
+                # collapses both halves to float64x2.
+                for kindname in ('dp', 'sp'):
+                    line = re.sub(rf',\s*wp\s*=>\s*{kindname}\s*,', ',', line, flags=re.IGNORECASE)
+                    line = re.sub(rf',\s*wp\s*=>\s*{kindname}\s*(?=[!&]|$)', '', line, flags=re.IGNORECASE)
+                    line = re.sub(rf'(ONLY\s*:\s*)wp\s*=>\s*{kindname}\s*,', r'\1', line, flags=re.IGNORECASE)
+                    line = re.sub(rf'(ONLY\s*:\s*)wp\s*=>\s*{kindname}\s*(?=[!&]|$)', r'\1', line, flags=re.IGNORECASE)
             if not line.rstrip().endswith('&'):
                 in_use_stmt = False
         result.append(line)

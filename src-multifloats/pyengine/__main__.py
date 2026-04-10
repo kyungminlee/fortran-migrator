@@ -346,21 +346,65 @@ endif()
 """
     else:
         # If multifloats, we need to link against the multifloats library
+        # AND build the la_constants_mf / la_xisnan_mf helper modules
+        # that the migrated source depends on for la_constants USE clauses.
         mf_link = ""
         mf_deps = ""
         if target_mode.module_name == 'multifloats':
             mf_link = f"""
-# Find or link multifloats
-set(MULTIFLOATS_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/../../external/multifloats")
+# Find or link multifloats. The location can be overridden via the
+# MULTIFLOATS_DIR cache variable; otherwise we try the in-tree path
+# next to the migrated output.
+if(NOT DEFINED MULTIFLOATS_DIR)
+    set(MULTIFLOATS_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/../../external/multifloats"
+        CACHE PATH "Path to the external multifloats source tree")
+endif()
 if(EXISTS "${{MULTIFLOATS_DIR}}/CMakeLists.txt")
     add_subdirectory(${{MULTIFLOATS_DIR}} multifloats_build)
 else()
-    message(WARNING "multifloats library not found at ${{MULTIFLOATS_DIR}}")
+    message(FATAL_ERROR
+        "multifloats library not found at ${{MULTIFLOATS_DIR}}. Set "
+        "-DMULTIFLOATS_DIR=/path/to/multifloats to override.")
+endif()
+
+# Build the la_constants_mf and la_xisnan_mf helper modules. These
+# re-export multifloats's MF_* constants under the W/U-prefixed names
+# that the migrated LAPACK source uses via its rewritten
+# ``USE LA_CONSTANTS_MF`` clause.
+set(MF_HELPERS_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/../../external/lapack-3.12.1/SRC"
+    CACHE PATH "Directory containing la_constants_mf.f90 / la_xisnan_mf.f90")
+if(EXISTS "${{MF_HELPERS_DIR}}/la_constants_mf.f90")
+    add_library(la_constants_mf STATIC
+        "${{MF_HELPERS_DIR}}/la_constants_mf.f90")
+    set_target_properties(la_constants_mf PROPERTIES
+        Fortran_MODULE_DIRECTORY ${{CMAKE_CURRENT_BINARY_DIR}}/mod)
+    target_include_directories(la_constants_mf PUBLIC
+        $<BUILD_INTERFACE:${{CMAKE_CURRENT_BINARY_DIR}}/mod>)
+    if(TARGET multifloats)
+        target_link_libraries(la_constants_mf PUBLIC multifloats)
+    endif()
+endif()
+if(EXISTS "${{MF_HELPERS_DIR}}/la_xisnan_mf.f90")
+    add_library(la_xisnan_mf STATIC
+        "${{MF_HELPERS_DIR}}/la_xisnan_mf.f90")
+    set_target_properties(la_xisnan_mf PROPERTIES
+        Fortran_MODULE_DIRECTORY ${{CMAKE_CURRENT_BINARY_DIR}}/mod)
+    target_include_directories(la_xisnan_mf PUBLIC
+        $<BUILD_INTERFACE:${{CMAKE_CURRENT_BINARY_DIR}}/mod>)
+    if(TARGET multifloats)
+        target_link_libraries(la_xisnan_mf PUBLIC multifloats)
+    endif()
 endif()
 """
             mf_deps = f"""
 if(TARGET multifloats)
     target_link_libraries({precision_lib} PUBLIC multifloats)
+endif()
+if(TARGET la_constants_mf)
+    target_link_libraries({precision_lib} PUBLIC la_constants_mf)
+endif()
+if(TARGET la_xisnan_mf)
+    target_link_libraries({precision_lib} PUBLIC la_xisnan_mf)
 endif()
 """
 

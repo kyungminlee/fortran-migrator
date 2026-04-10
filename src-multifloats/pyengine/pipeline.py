@@ -1169,13 +1169,16 @@ def run_migration(recipe_path: Path, output_dir: Path,
 
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_mode)
-    
-    if not target_mode.is_kind_based:
-        # Add common BLAS/LAPACK constants to the rename map
-        # so they are replaced globally in all files.
-        for base, mf_name in target_mode.known_constants.items():
-            rename_map[base] = mf_name
-            
+
+    # NOTE: target_mode.known_constants (ZERO/ONE/...) are handled
+    # per-file by strip_known_constants_from_decls +
+    # replace_known_constants. We intentionally do NOT add them to the
+    # global rename_map: doing so would also rewrite the LHS aliases
+    # of LAPACK ``USE LA_CONSTANTS, ONLY: zero=>dzero`` clauses (and
+    # rename the lowercase ``zero`` reference everywhere) which breaks
+    # the alias binding.
+
+
     print(f'  {own_count} own symbols + {len(symbols) - own_count} from dependencies')
     print(f'  {len(classification.families)} precision families')
     print(f'  {len(classification.independent)} independent symbols')

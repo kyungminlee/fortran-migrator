@@ -53,8 +53,11 @@ def main() -> int:
                                       tuple(config.extensions), None))
     classification = classify_symbols(all_syms)
     rename_map = classification.build_rename_map(target_mode)
-    for base, mfn in target_mode.known_constants.items():
-        rename_map[base] = mfn
+    # NOTE: target_mode.known_constants are handled per-file by
+    # strip_known_constants_from_decls + replace_known_constants. We
+    # intentionally do NOT add them to the global rename_map because
+    # that would also rename the LHS aliases of LAPACK ``USE
+    # LA_CONSTANTS, ONLY: zero=>dzero`` clauses, breaking the alias.
     print(f'  {len(all_syms)} symbols, {len(classification.families)} families,'
           f' {len(rename_map)} renames', flush=True)
 
