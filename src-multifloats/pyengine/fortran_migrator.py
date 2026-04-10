@@ -759,6 +759,56 @@ def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:
     return line
 
 
+_FP_VALUE_RE = re.compile(
+    r'^[+-]?\s*(?:'
+    r'\d+\.\d*|\d*\.\d+|\d+'
+    r')(?:[DdEe][+-]?\d+)?\s*$'
+)
+
+
+def _is_fp_value(text: str, known_constants: dict) -> bool:
+    """Heuristic: does the trimmed PARAMETER/DATA value look like an
+    FP literal, a known-constant reference, or an expression that
+    contains one?
+
+    Tighter than a substring scan: rejects identifiers like ``ELEMENT``
+    that happen to contain ``E``. The composite-expression case splits
+    on Fortran operators and checks each operand: if ANY operand is a
+    known FP constant or an FP literal, the whole expression counts.
+    """
+    s = text.strip()
+    if not s:
+        return False
+    if _FP_VALUE_RE.match(s):
+        # Pure numeric token: FP iff it has a decimal point or exponent.
+        return ('.' in s) or ('D' in s.upper()) or ('E' in s.upper())
+    # Tokenize on identifiers + numeric literals; ignore operators.
+    tokens = re.findall(r'[A-Za-z_]\w*|\d+\.\d*[DdEe][+-]?\d+|\d*\.\d+[DdEe]?[+-]?\d*|\d+\.\d*|\d*\.\d+', s)
+    for tok in tokens:
+        if tok.upper() in known_constants:
+            return True
+        if _FP_VALUE_RE.match(tok) and (('.' in tok) or ('D' in tok.upper()) or ('E' in tok.upper())):
+            return True
+    return False
+
+
+def _join_continued_lines(lines: list[str], start: int) -> tuple[str, int]:
+    """Join a fixed-form statement starting at ``lines[start]`` with any
+    continuation lines (column-6 marker). Returns ``(joined_text, end)``
+    where ``end`` is the index of the first line NOT consumed.
+    """
+    out = lines[start].rstrip('\n')
+    j = start + 1
+    while j < len(lines):
+        nxt = lines[j]
+        if is_continuation_line(nxt):
+            out += ' ' + nxt[6:].rstrip('\n')
+            j += 1
+            continue
+        break
+    return out, j
+
+
 def convert_parameter_stmts(
     source: str, target_mode: TargetMode,
 ) -> tuple[str, list[str], dict[str, str]]:
@@ -768,6 +818,11 @@ def convert_parameter_stmts(
     ``dropped_known`` maps each known-constant name skipped from the
     PARAMETER list to its multifloats replacement (so the caller can
     add it to the per-file rename set).
+
+    Multi-line PARAMETER statements (fixed-form column-6 continuation)
+    are joined into a single logical statement before parsing. The
+    original line(s) are replaced as a unit so the line count of the
+    output may differ from the input.
     """
     if target_mode.is_kind_based:
         return source, [], {}
@@ -777,8 +832,16 @@ def convert_parameter_stmts(
     dropped_known: dict[str, str] = {}
     param_re = re.compile(r'^(\s{6,}|^\s*)PARAMETER\s*\((.*)\)\s*(!.*)?$', re.IGNORECASE)
 
-    for line in lines:
-        m = param_re.match(line)
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Try matching a single-line PARAMETER first; if not, try
+        # joining continuation lines and matching the joined form.
+        joined, next_i = line.rstrip('\n'), i + 1
+        if param_re.match(joined) is None and re.match(r'^\s{6,}PARAMETER\b', joined, re.IGNORECASE):
+            joined, next_i = _join_continued_lines(lines, i)
+
+        m = param_re.match(joined)
         if m:
             indent, params_content, comment = m.group(1), m.group(2), m.group(3) or ''
             parts, current, depth = [], [], 0
@@ -798,8 +861,7 @@ def convert_parameter_stmts(
                 if '=' in part:
                     name, val = part.split('=', 1)
                     name, val = name.strip(), val.strip()
-                    is_fp = ('.' in val or 'D' in val.upper() or 'E' in val.upper() or val.upper() in target_mode.known_constants)
-                    if is_fp:
+                    if _is_fp_value(val, target_mode.known_constants):
                         if name.upper() in target_mode.known_constants:
                             line_dropped_known[name.upper()] = target_mode.known_constants[name.upper()]
                             continue
@@ -814,10 +876,13 @@ def convert_parameter_stmts(
             elif line_assignments:
                 # Some FP entries became runtime assignments — leave a
                 # short marker comment so reviewers can find the source.
-                result.append(f"{indent}! Converted to assignments below: {line.strip()}\n")
+                result.append(f"{indent}! Converted to assignments below: {joined.strip()}\n")
             # else: every entry was a known constant supplied by the
             # multifloats module — drop the line entirely (no comment).
-        else: result.append(line)
+            i = next_i
+            continue
+        result.append(line)
+        i += 1
     return "".join(result), fp_assignments, dropped_known
 
 
@@ -838,36 +903,52 @@ def convert_data_stmts(
     dropped_known: dict[str, str] = {}
     data_re = re.compile(r'^(\s{6,}|^\s*)DATA\s+([^/]+)/\s*([^/]+)\s*/\s*(!.*)?$', re.IGNORECASE)
 
-    for line in lines:
-        m = data_re.match(line)
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        joined, next_i = line.rstrip('\n'), i + 1
+        if data_re.match(joined) is None and re.match(r'^\s{6,}DATA\b', joined, re.IGNORECASE):
+            joined, next_i = _join_continued_lines(lines, i)
+
+        m = data_re.match(joined)
         if m:
             indent, vars_part, vals_part, comment = m.group(1), m.group(2).strip(), m.group(3).strip(), m.group(4) or ''
-            if ('.' in vals_part or 'D' in vals_part.upper() or 'E' in vals_part.upper()):
-                vars_list = [v.strip() for v in vars_part.split(',')]
-                vals_list, current, depth = [], [], 0
-                for char in vals_part:
-                    if char == '(': depth += 1
-                    elif char == ')': depth -= 1
-                    if char == ',' and depth == 0:
-                        vals_list.append(''.join(current).strip())
-                        current = []
-                    else: current.append(char)
-                if current: vals_list.append(''.join(current).strip())
+            # Each value is FP iff it independently matches the FP
+            # heuristic; this is more discriminating than scanning the
+            # whole vals_part for ``D``/``E`` substrings (which would
+            # falsely match identifiers).
+            tmp_vals: list[str] = []
+            cur, depth = '', 0
+            for ch in vals_part:
+                if ch == '(': depth += 1
+                elif ch == ')': depth -= 1
+                if ch == ',' and depth == 0:
+                    tmp_vals.append(cur.strip()); cur = ''
+                else:
+                    cur += ch
+            if cur.strip(): tmp_vals.append(cur.strip())
+            any_fp = any(_is_fp_value(v, target_mode.known_constants) for v in tmp_vals)
 
-                if len(vars_list) == len(vals_list):
+            if any_fp:
+                vars_list = [v.strip() for v in vars_part.split(',')]
+                if len(vars_list) == len(tmp_vals):
                     line_assignments: list[str] = []
-                    for v, val in zip(vars_list, vals_list):
+                    for v, val in zip(vars_list, tmp_vals):
                         if v.upper() in target_mode.known_constants:
                             dropped_known[v.upper()] = target_mode.known_constants[v.upper()]
                             continue
                         line_assignments.append(f"{indent}{v} = {val}{comment}\n")
                     fp_assignments.extend(line_assignments)
                     if line_assignments:
-                        result.append(f"{indent}! Converted to assignments below: {line.strip()}\n")
+                        result.append(f"{indent}! Converted to assignments below: {joined.strip()}\n")
                     # else: every name was a known constant — drop the line
-                else: result.append(line)
-            else: result.append(line)
-        else: result.append(line)
+                    i = next_i
+                    continue
+            result.append(line)
+            i += 1
+            continue
+        result.append(line)
+        i += 1
     return "".join(result), fp_assignments, dropped_known
 
 

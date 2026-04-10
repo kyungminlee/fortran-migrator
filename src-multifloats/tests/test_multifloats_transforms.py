@@ -343,6 +343,36 @@ def test_convert_data_keeps_unknown_names(mf):
     assert dropped == {}
 
 
+def test_convert_parameter_multiline_continuation(mf):
+    """Multi-line PARAMETER (column-6 continuation) is joined and parsed."""
+    src = (
+        '      PARAMETER (X = 1.0D+0,\n'
+        '     $           Y = 2.0D+0)\n'
+    )
+    new, assigns, dropped = convert_parameter_stmts(src, mf)
+    assert any('X = 1.0D+0' in a for a in assigns)
+    assert any('Y = 2.0D+0' in a for a in assigns)
+
+
+def test_convert_parameter_rejects_identifier_with_e(mf):
+    """``E`` inside an identifier name must NOT make the value count as FP."""
+    src = '      PARAMETER (LEN = ELEMENT)\n'
+    new, assigns, dropped = convert_parameter_stmts(src, mf)
+    # ELEMENT is not a numeric literal, not a known constant — leave alone.
+    assert assigns == []
+    assert 'PARAMETER (LEN = ELEMENT)' in new
+
+
+def test_convert_data_multiline_continuation(mf):
+    src = (
+        '      DATA A,B/1.0D0,\n'
+        '     $          2.0D0/\n'
+    )
+    new, assigns, dropped = convert_data_stmts(src, mf)
+    assert any('A = 1.0D0' in a for a in assigns)
+    assert any('B = 2.0D0' in a for a in assigns)
+
+
 # ---------------------------------------------------------------------------
 # insert_use_multifloats
 # ---------------------------------------------------------------------------
