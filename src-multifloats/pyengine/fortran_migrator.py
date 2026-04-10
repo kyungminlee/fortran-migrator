@@ -76,6 +76,59 @@ _DECL_START_RE = re.compile(
 )
 
 
+_EQUIV_RE = re.compile(r'^\s+EQUIVALENCE\b', re.IGNORECASE | re.MULTILINE)
+
+
+def _warn_on_fp_equivalence(source: str, target_mode: TargetMode) -> None:
+    """Print a diagnostic if the source has an EQUIVALENCE block whose
+    members would become ``TYPE(float64x2)`` after migration.
+
+    Fortran prohibits EQUIVALENCE on non-SEQUENCE derived types, so the
+    file requires manual rewriting (see Section 8 of doc/MULTIFLOATS.md).
+    The migrator does not block on this — it migrates everything else
+    and lets the compiler reject the EQUIVALENCE line, which gives the
+    user a precise pointer to the manual fixup site.
+    """
+    if not _EQUIV_RE.search(source):
+        return
+    fp_var_pattern = re.compile(
+        r'^\s+(?:DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX|'
+        r'COMPLEX\s*\*\s*16|COMPLEX\s*\*\s*8|REAL\s*\*\s*[48]|'
+        r'REAL(?!\s*[*(])|COMPLEX(?!\s*[*(]))\b',
+        re.IGNORECASE,
+    )
+    fp_var_names: set[str] = set()
+    for ln in source.splitlines():
+        if fp_var_pattern.match(ln):
+            # Extract identifiers from the variable list (rough)
+            tail = re.sub(
+                r'^\s+(?:DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX|'
+                r'COMPLEX\s*\*\s*\d+|REAL\s*\*\s*\d+|REAL|COMPLEX)',
+                '', ln, count=1, flags=re.IGNORECASE,
+            )
+            for m in re.finditer(r'\b([A-Za-z_]\w*)\b', tail):
+                fp_var_names.add(m.group(1).upper())
+
+    if not fp_var_names:
+        return
+
+    for ln in source.splitlines():
+        m = re.match(r'^\s+EQUIVALENCE\s*(.*)$', ln, re.IGNORECASE)
+        if not m:
+            continue
+        body = m.group(1)
+        for nm in re.finditer(r'\b([A-Za-z_]\w*)\b', body):
+            if nm.group(1).upper() in fp_var_names:
+                import sys as _sys
+                _sys.stderr.write(
+                    'WARNING: EQUIVALENCE statement contains floating-point '
+                    'variables that cannot be migrated to TYPE(float64x2). '
+                    'Manual rewrite required (see doc/MULTIFLOATS.md §8).\n'
+                    f'  -> {ln.rstrip()}\n'
+                )
+                return  # one warning per file is enough
+
+
 def strip_known_constants_from_decls(
     source: str, target_mode: TargetMode,
 ) -> tuple[str, dict[str, str]]:
@@ -945,6 +998,8 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
 
 
 def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
+    if not target_mode.is_kind_based:
+        _warn_on_fp_equivalence(source, target_mode)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
@@ -1098,6 +1153,8 @@ def _la_constants_rename_map(target_mode: TargetMode) -> dict[str, str]:
 
 
 def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
+    if not target_mode.is_kind_based:
+        _warn_on_fp_equivalence(source, target_mode)
     source = rewrite_la_constants_use(source, target_mode)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     if not target_mode.is_kind_based:

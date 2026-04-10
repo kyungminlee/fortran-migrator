@@ -482,6 +482,33 @@ def test_end_to_end_fixed_form(mf):
     assert not _re.search(r'\bONE\b', body)
 
 
+def test_equivalence_diagnostic(mf, capsys):
+    """Migration of a routine with FP EQUIVALENCE emits a warning."""
+    src = (
+        "      SUBROUTINE FOO()\n"
+        "      DOUBLE PRECISION CR(2,2), CRV(4)\n"
+        "      EQUIVALENCE (CR(1,1), CRV(1))\n"
+        "      END\n"
+    )
+    migrate_fixed_form(src, {}, mf)
+    captured = capsys.readouterr()
+    assert 'EQUIVALENCE' in captured.err
+    assert 'Manual rewrite required' in captured.err
+
+
+def test_equivalence_no_warning_for_integer_only(mf, capsys):
+    """Integer EQUIVALENCE is fine and must not warn."""
+    src = (
+        "      SUBROUTINE FOO()\n"
+        "      INTEGER A(4), B(2,2)\n"
+        "      EQUIVALENCE (A(1), B(1,1))\n"
+        "      END\n"
+    )
+    migrate_fixed_form(src, {}, mf)
+    captured = capsys.readouterr()
+    assert 'EQUIVALENCE' not in captured.err
+
+
 SYNTHETIC_LAPACK_FREE_FORM = """\
 subroutine FOO( x, y )
    use LA_CONSTANTS, &
