@@ -387,9 +387,11 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
             )
             
         if target_mode.literal_mode == 'constructor':
-            # Wrap complex constants (float64x2(...), float64x2(...)) in complex128x2(...)
+            # Wrap complex constants (float64x2(...), float64x2(...)) in complex128x2(...).
+            # An optional unary +/- is allowed before each component to
+            # cover cases like ``(-1.0D0, 0.0D0)`` from LAPACK.
             masked = re.sub(
-                r'\(\s*(' + target_mode.real_constructor + r'\([^)]+\))\s*,\s*(' + target_mode.real_constructor + r'\([^)]+\))\s*\)',
+                r'\(\s*([-+]?\s*' + target_mode.real_constructor + r'\([^)]+\))\s*,\s*([-+]?\s*' + target_mode.real_constructor + r'\([^)]+\))\s*\)',
                 rf"{target_mode.complex_constructor}(\1,\2)",
                 masked,
                 flags=re.IGNORECASE
@@ -452,13 +454,24 @@ def replace_intrinsic_calls(line: str, target_mode: TargetMode) -> str:
                             continue
                         replacement = f'{new_name}({inner}, KIND={target_mode.kind_suffix})'
                     else:
-                        # wrap_constructor mode (multifloats)
-                        if new_name.upper() in ('REAL', 'AIMAG', 'CONJG'):
-                            mf_name = 'MF_REAL' if new_name.upper() == 'REAL' else new_name
-                            replacement = f'{mf_name}({inner})'
+                        # wrap_constructor mode (multifloats).
+                        # ``DBLE`` / ``DREAL`` / ``REAL`` map to the
+                        # ``float64x2(...)`` generic constructor, which
+                        # handles every input type uniformly: integer,
+                        # real(sp/dp), float64x2 (identity), and complex
+                        # (extract real part). Older code routed these
+                        # through ``MF_REAL`` but that interface only
+                        # accepts float64x2 / complex128x2, breaking
+                        # ``DBLE(integer)`` from LAPACK.
+                        # ``CMPLX`` / ``DCMPLX`` map to ``complex128x2``.
+                        # ``AIMAG`` / ``CONJG`` are module generics —
+                        # leave the name alone.
+                        if old_name.upper() in ('REAL', 'DREAL', 'DBLE'):
+                            replacement = f'{target_mode.real_constructor}({inner})'
+                        elif old_name.upper() in ('CMPLX', 'DCMPLX'):
+                            replacement = f'{target_mode.complex_constructor}({inner})'
                         else:
-                            constructor = target_mode.real_constructor if new_name.upper() == 'REAL' else target_mode.complex_constructor
-                            replacement = f'{constructor}({inner})'
+                            replacement = f'{new_name}({inner})'
 
                     line = line[:start] + replacement + line[close_pos + 1:]
                     search_start = start + len(replacement)
@@ -518,11 +531,15 @@ def replace_generic_conversions(line: str, target_mode: TargetMode) -> str:
                     continue
                 replacement = f'{name}({inner}, KIND={target_mode.kind_suffix})'
             else:
+                # multifloats: REAL(x) and CMPLX(...) become the
+                # universal generic constructors. float64x2 / complex128x2
+                # have overloads for every input type (int, real(sp/dp),
+                # float64x2, complex128x2 — extracts real part for the
+                # first), which DBLE/REAL/CMPLX in LAPACK rely on.
                 if name.upper() == 'REAL':
-                    replacement = f'MF_REAL({inner})'
+                    replacement = f'{target_mode.real_constructor}({inner})'
                 else:
-                    constructor = target_mode.real_constructor if name.upper() == 'REAL' else target_mode.complex_constructor
-                    replacement = f'{constructor}({inner})'
+                    replacement = f'{target_mode.complex_constructor}({inner})'
 
             line = line[:name_start] + replacement + line[close_pos + 1:]
             search_start = name_start + len(replacement)
@@ -1004,6 +1021,11 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
                         k += 1; continue
                     if raw and raw[0] in ('C', 'c', '*', '!'):
                         k += 1; continue
+                    # An all-comment line in fixed-form may also start
+                    # with whitespace then ``!`` (the inline-comment
+                    # marker is legal at any column).
+                    if stripped.startswith('!'):
+                        k += 1; continue
                     if is_continuation_line(raw):
                         k += 1; continue
                     l = stripped.upper()
@@ -1354,12 +1376,28 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
         # interfaces. INTRINSIC declarations of these names become
         # illegal once ``USE multifloats`` is in scope (gfortran:
         # "Cannot change attributes of USE-associated symbol").
+        # Names that the multifloats module overloads as generic
+        # interfaces — see external/multifloats/multifloats.fypp
+        # (UNARY_MF_MF, BINARY_REAL, etc.). INTRINSIC declarations of
+        # these names become illegal once ``USE multifloats`` is in
+        # scope (gfortran: "Cannot change attributes of USE-associated
+        # symbol").
         generics = {
-            'ABS', 'REAL', 'AIMAG', 'CONJG', 'MAX', 'MIN', 'SQRT',
-            'EXP', 'LOG', 'LOG10', 'SIN', 'COS', 'TAN', 'SIGN', 'MOD',
-            'MF_REAL', 'HUGE', 'TINY', 'EPSILON', 'CEILING', 'FLOOR',
-            'NINT', 'INT', 'DBLE',
-            'CMPLX', 'DCMPLX', 'DCONJG', 'DIMAG',
+            # Unary real -> real
+            'ABS', 'SQRT', 'SIN', 'COS', 'TAN', 'EXP', 'LOG', 'LOG10',
+            'ATAN', 'ASIN', 'ACOS', 'AINT', 'ANINT', 'SINH', 'COSH',
+            'TANH', 'ASINH', 'ACOSH', 'ATANH', 'ERF', 'ERFC',
+            'ERFC_SCALED', 'GAMMA', 'LOG_GAMMA', 'BESSEL_J0',
+            'BESSEL_J1', 'BESSEL_Y0', 'BESSEL_Y1', 'FRACTION',
+            'RRSPACING', 'SPACING', 'EPSILON', 'HUGE', 'TINY',
+            # Binary real
+            'SIGN', 'MOD', 'ATAN2', 'DIM', 'MODULO', 'HYPOT', 'NEAREST',
+            # Variadic
+            'MAX', 'MIN',
+            # Type/conversion / complex
+            'REAL', 'AIMAG', 'CONJG', 'CMPLX', 'DCMPLX', 'DCONJG',
+            'DIMAG', 'DBLE', 'INT', 'NINT', 'CEILING', 'FLOOR',
+            'MF_REAL',
         }
         def clean_intrinsic(m):
             indent, sep, funcs_str, newline = m.group(1), m.group(2), m.group(3), m.group(4)

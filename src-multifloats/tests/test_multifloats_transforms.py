@@ -259,12 +259,21 @@ def test_replace_known_constants_kind_mode_is_noop():
 # ---------------------------------------------------------------------------
 
 
-def test_intrinsic_dble_complex_real_part(mf):
-    """``DBLE(complex)`` extracts the real part. multifloats provides
-    a generic ``MF_REAL`` that handles both float64x2 and complex128x2."""
+def test_intrinsic_dble_uses_universal_constructor(mf):
+    """``DBLE(x)`` becomes ``float64x2(x)`` — the universal generic
+    constructor in multifloats handles every input type (integer,
+    real(sp/dp), float64x2, complex128x2 → real part)."""
     src = "      Y = DBLE(ZX(I))"
     out = replace_intrinsic_calls(src, mf)
-    assert 'MF_REAL(ZX(I))' in out
+    assert 'float64x2(ZX(I))' in out
+
+
+def test_intrinsic_dble_integer_uses_constructor(mf):
+    """``DBLE(N)`` for integer N must become ``float64x2(N)``, not
+    ``MF_REAL(N)`` (which only takes float64x2/complex128x2)."""
+    src = "      Y = DBLE(N)"
+    out = replace_intrinsic_calls(src, mf)
+    assert 'float64x2(N)' in out
 
 
 def test_intrinsic_dcmplx_to_complex128x2(mf):
