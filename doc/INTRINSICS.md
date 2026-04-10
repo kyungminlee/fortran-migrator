@@ -1,6 +1,6 @@
 # Fortran Generic Intrinsics Involving REAL(KIND=16) or COMPLEX(KIND=16)
 
-All standard Fortran intrinsic procedures (F77 through F2018) that accept or
+All standard Fortran intrinsic procedures (F77 through F2023) that accept or
 return `REAL(16)` or `COMPLEX(16)` values, listed by their **generic
 (type-agnostic) names only**.  Type-specific names such as `QABS`, `CQABS`,
 `DABS`, `CDABS`, etc. are excluded.
@@ -11,7 +11,7 @@ Notation:
 - `C16` = `COMPLEX(KIND=16)`
 - `INT` = default `INTEGER`
 - `LOG` = default `LOGICAL`
-- Standard column: 77 / 90 / 95 / 03 / 08 / 18 = first Fortran standard
+- Standard column: 77 / 90 / 95 / 03 / 08 / 18 / 23 = first Fortran standard
   where the intrinsic (or the specific overload) appeared.
 
 ---
@@ -57,6 +57,30 @@ Notation:
 | | `ATAN(Y: R16, X: R16) -> R16` | Arc tangent of Y/X (two-argument form) | 08 |
 | | `ATAN(X: C16) -> C16` | Complex arc tangent | 08 |
 | `ATAN2` | `ATAN2(Y: R16, X: R16) -> R16` | Arc tangent of Y/X | 77 |
+
+### 2b. Degree-Based Trigonometric Functions (Fortran 2023)
+
+| Name | Signature (KIND=16 overloads) | Description | Std |
+|------|-------------------------------|-------------|-----|
+| `SIND` | `SIND(X: R16) -> R16` | Sine (degrees) | 23 |
+| `COSD` | `COSD(X: R16) -> R16` | Cosine (degrees) | 23 |
+| `TAND` | `TAND(X: R16) -> R16` | Tangent (degrees) | 23 |
+| `ASIND` | `ASIND(X: R16) -> R16` | Arc sine, result in degrees | 23 |
+| `ACOSD` | `ACOSD(X: R16) -> R16` | Arc cosine, result in degrees | 23 |
+| `ATAND` | `ATAND(X: R16) -> R16` | Arc tangent, result in degrees | 23 |
+| `ATAN2D` | `ATAN2D(Y: R16, X: R16) -> R16` | Arc tangent of Y/X, result in degrees | 23 |
+
+### 2c. Half-Revolution (Pi-Based) Trigonometric Functions (Fortran 2023)
+
+| Name | Signature (KIND=16 overloads) | Description | Std |
+|------|-------------------------------|-------------|-----|
+| `SINPI` | `SINPI(X: R16) -> R16` | sin(X * pi) | 23 |
+| `COSPI` | `COSPI(X: R16) -> R16` | cos(X * pi) | 23 |
+| `TANPI` | `TANPI(X: R16) -> R16` | tan(X * pi) | 23 |
+| `ASINPI` | `ASINPI(X: R16) -> R16` | asin(X) / pi | 23 |
+| `ACOSPI` | `ACOSPI(X: R16) -> R16` | acos(X) / pi | 23 |
+| `ATANPI` | `ATANPI(X: R16) -> R16` | atan(X) / pi | 23 |
+| `ATAN2PI` | `ATAN2PI(Y: R16, X: R16) -> R16` | atan2(Y, X) / pi | 23 |
 
 ## 3. Hyperbolic Functions
 
@@ -141,7 +165,6 @@ The argument value is not used; only its type and kind matter.
 | `TINY` | `TINY(X: R16) -> R16` | Smallest positive model number | 90 |
 | `KIND` | `KIND(X: R16) -> INT` | Returns kind type parameter (16) | 90 |
 | | `KIND(X: C16) -> INT` | Returns kind type parameter (16) | 90 |
-| `BIT_SIZE` | — | INTEGER only, not applicable | — |
 | `STORAGE_SIZE` | `STORAGE_SIZE(A: R16 [,KIND]) -> INT` | Storage size in bits | 08 |
 | | `STORAGE_SIZE(A: C16 [,KIND]) -> INT` | Storage size in bits | 08 |
 
@@ -217,6 +240,66 @@ These are type-polymorphic but operate on REAL(16) / COMPLEX(16) arrays.
 | `CO_BROADCAST` | `CO_BROADCAST(A: R16/C16, SOURCE_IMAGE [,STAT] [,ERRMSG])` | Broadcast from one image | 18 |
 | `CO_REDUCE` | `CO_REDUCE(A: R16/C16, OP [,RESULT_IMAGE] [,STAT] [,ERRMSG])` | General reduction across images | 18 |
 
+## 13. Intrinsic Subroutines
+
+| Name | Signature (KIND=16 overloads) | Description | Std |
+|------|-------------------------------|-------------|-----|
+| `RANDOM_NUMBER` | `CALL RANDOM_NUMBER(HARVEST: R16)` | Pseudo-random number(s) in [0, 1) | 90 |
+| `CPU_TIME` | `CALL CPU_TIME(TIME: R16)` | Processor time in seconds | 95 |
+
+## Appendix A. IEEE_ARITHMETIC Module Procedures (Fortran 2003+)
+
+These are **module procedures** from `USE IEEE_ARITHMETIC`, not intrinsic
+procedures.  They are included here for completeness because they are part of
+the Fortran standard library and operate on `REAL(16)` when
+`IEEE_SUPPORT_DATATYPE(X)` is `.TRUE.` for KIND=16.
+
+### A1. IEEE Elemental Functions
+
+| Name | Signature (KIND=16 overloads) | Description | Std |
+|------|-------------------------------|-------------|-----|
+| `IEEE_COPY_SIGN` | `IEEE_COPY_SIGN(X: R16, Y: R16) -> R16` | X with sign of Y | 03 |
+| `IEEE_FMA` | `IEEE_FMA(A: R16, B: R16, C: R16) -> R16` | Fused multiply-add (A*B)+C | 18 |
+| `IEEE_INT` | `IEEE_INT(A: R16, ROUND [,KIND]) -> INT` | IEEE-conformant conversion to integer | 18 |
+| `IEEE_LOGB` | `IEEE_LOGB(X: R16) -> R16` | Unbiased exponent as real | 03 |
+| `IEEE_MAX_NUM` | `IEEE_MAX_NUM(X: R16, Y: R16) -> R16` | Maximum, NaN-aware | 18 |
+| `IEEE_MAX_NUM_MAG` | `IEEE_MAX_NUM_MAG(X: R16, Y: R16) -> R16` | Max by magnitude, NaN-aware | 18 |
+| `IEEE_MIN_NUM` | `IEEE_MIN_NUM(X: R16, Y: R16) -> R16` | Minimum, NaN-aware | 18 |
+| `IEEE_MIN_NUM_MAG` | `IEEE_MIN_NUM_MAG(X: R16, Y: R16) -> R16` | Min by magnitude, NaN-aware | 18 |
+| `IEEE_NEXT_AFTER` | `IEEE_NEXT_AFTER(X: R16, Y: R16) -> R16` | Next representable number from X toward Y | 03 |
+| `IEEE_NEXT_DOWN` | `IEEE_NEXT_DOWN(X: R16) -> R16` | Next representable number less than X | 18 |
+| `IEEE_NEXT_UP` | `IEEE_NEXT_UP(X: R16) -> R16` | Next representable number greater than X | 18 |
+| `IEEE_REAL` | `IEEE_REAL(A: R16 [,KIND]) -> REAL(KIND)` | IEEE-conformant real conversion | 18 |
+| `IEEE_REM` | `IEEE_REM(X: R16, Y: R16) -> R16` | IEEE remainder: X - Y*NINT(X/Y) | 03 |
+| `IEEE_RINT` | `IEEE_RINT(X: R16) -> R16` | Round to integer per current rounding mode | 03 |
+| `IEEE_SCALB` | `IEEE_SCALB(X: R16, I: INT) -> R16` | X * 2^I | 03 |
+| `IEEE_VALUE` | `IEEE_VALUE(X: R16, CLASS) -> R16` | Generate IEEE special value (NaN, Inf, etc.) | 03 |
+
+### A2. IEEE Classification / Query Functions
+
+| Name | Signature (KIND=16 overloads) | Description | Std |
+|------|-------------------------------|-------------|-----|
+| `IEEE_CLASS` | `IEEE_CLASS(X: R16) -> IEEE_CLASS_TYPE` | Classify value (NaN, Inf, normal, etc.) | 03 |
+| `IEEE_IS_FINITE` | `IEEE_IS_FINITE(X: R16) -> LOG` | Is value finite? | 03 |
+| `IEEE_IS_NAN` | `IEEE_IS_NAN(X: R16) -> LOG` | Is value NaN? | 03 |
+| `IEEE_IS_NEGATIVE` | `IEEE_IS_NEGATIVE(X: R16) -> LOG` | Is value negative? | 03 |
+| `IEEE_IS_NORMAL` | `IEEE_IS_NORMAL(X: R16) -> LOG` | Is value normal (not subnormal/NaN/Inf)? | 03 |
+| `IEEE_SIGNBIT` | `IEEE_SIGNBIT(X: R16) -> LOG` | Is sign bit set? | 18 |
+| `IEEE_UNORDERED` | `IEEE_UNORDERED(X: R16, Y: R16) -> LOG` | Is either value NaN? | 03 |
+
+### A3. IEEE Inquiry Functions
+
+| Name | Signature (KIND=16 overloads) | Description | Std |
+|------|-------------------------------|-------------|-----|
+| `IEEE_SUPPORT_DATATYPE` | `IEEE_SUPPORT_DATATYPE(X: R16) -> LOG` | Is IEEE arithmetic supported for R16? | 03 |
+| `IEEE_SUPPORT_DENORMAL` | `IEEE_SUPPORT_DENORMAL(X: R16) -> LOG` | Are denormals supported? | 03 |
+| `IEEE_SUPPORT_DIVIDE` | `IEEE_SUPPORT_DIVIDE(X: R16) -> LOG` | Is IEEE divide supported? | 03 |
+| `IEEE_SUPPORT_INF` | `IEEE_SUPPORT_INF(X: R16) -> LOG` | Are infinities supported? | 03 |
+| `IEEE_SUPPORT_NAN` | `IEEE_SUPPORT_NAN(X: R16) -> LOG` | Are NaNs supported? | 03 |
+| `IEEE_SUPPORT_SQRT` | `IEEE_SUPPORT_SQRT(X: R16) -> LOG` | Is IEEE sqrt supported? | 03 |
+| `IEEE_SUPPORT_STANDARD` | `IEEE_SUPPORT_STANDARD(X: R16) -> LOG` | Full IEEE standard supported? | 03 |
+| `IEEE_SUPPORT_SUBNORMAL` | `IEEE_SUPPORT_SUBNORMAL(X: R16) -> LOG` | Are subnormals supported? (alias) | 18 |
+
 ---
 
 ## Summary Count
@@ -224,18 +307,26 @@ These are type-polymorphic but operate on REAL(16) / COMPLEX(16) arrays.
 | Category | Count |
 |----------|-------|
 | Elemental mathematical | 17 generic names |
-| Trigonometric | 7 generic names |
+| Trigonometric (radians) | 7 generic names |
+| Trigonometric (degrees, F2023) | 7 generic names |
+| Trigonometric (pi-based, F2023) | 7 generic names |
 | Hyperbolic | 6 generic names |
 | Special mathematical | 10 generic names |
 | Type conversion | 8 generic names |
 | Complex number | 2 generic names |
-| Numeric inquiry | 13 generic names |
+| Numeric inquiry | 12 generic names |
 | Numeric model manipulation | 7 generic names |
 | Array reduction | 6 generic names |
 | Array location | 3 generic names |
 | Array transformation | 8 generic names |
 | Coarray collective | 5 generic names |
-| **Total** | **92 generic names** |
+| Intrinsic subroutines | 2 generic names |
+| **Total (intrinsic procedures)** | **107 generic names** |
+| | |
+| IEEE elemental functions (module) | 16 generic names |
+| IEEE classification/query (module) | 7 generic names |
+| IEEE inquiry (module) | 8 generic names |
+| **Total (incl. IEEE module)** | **138 generic names** |
 
 ---
 
@@ -255,13 +346,20 @@ These are type-polymorphic but operate on REAL(16) / COMPLEX(16) arrays.
    `ATAN`, `SINH`, `COSH`, `TANH`, `ASINH`, `ACOSH`, `ATANH` to accept
    `COMPLEX` arguments.  Prior standards only supported `REAL`.
 
-4. **Degree-based trigonometric** functions (`ACOSD`, `ASIND`, `ATAND`,
-   `ATAN2D`, `COSD`, `SIND`, `TAND`) were added in Fortran 2023.  They accept
-   `REAL(16)` but are not yet widely implemented.
+4. **Fortran 2023 trigonometric additions**: Degree-based functions (`SIND`,
+   `COSD`, `TAND`, `ASIND`, `ACOSD`, `ATAND`, `ATAN2D`) and pi-based
+   functions (`SINPI`, `COSPI`, `TANPI`, `ASINPI`, `ACOSPI`, `ATANPI`,
+   `ATAN2PI`) were added in Fortran 2023.  They accept `REAL(16)` but are
+   not yet widely implemented.  Some compilers already support degree-based
+   functions as extensions.
 
 5. **`SELECTED_REAL_KIND`** is not listed because its arguments and return
    value are `INTEGER`, not `REAL(16)` or `COMPLEX(16)`.
 
 6. **IEEE_ARITHMETIC module procedures** (e.g., `IEEE_VALUE`,
-   `IEEE_IS_FINITE`, `IEEE_CLASS`) are module procedures, not intrinsic
-   procedures, and are therefore outside the scope of this list.
+   `IEEE_IS_FINITE`, `IEEE_CLASS`) are module procedures from
+   `USE IEEE_ARITHMETIC`, not intrinsic procedures.  They are listed in
+   Appendix A for completeness.
+
+7. **`RANDOM_NUMBER`** and **`CPU_TIME`** are intrinsic subroutines (not
+   functions) whose `INTENT(OUT)` argument can be `REAL(16)`.
