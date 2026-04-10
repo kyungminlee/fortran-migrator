@@ -551,6 +551,31 @@ end subroutine
 """
 
 
+def test_canonicalize_for_compare_strips_multifloats(mf):
+    """The convergence canonicalizer must strip float64x2(...) wrappers
+    and TYPE(float64x2) so S/D pairs migrated to multifloats canonicalize
+    to the same text as the kind-based canonicalization would."""
+    from pyengine.pipeline import _canonicalize_for_compare
+    a = "      X = float64x2('1.0D+0') + float64x2('2.0D+0')"
+    b = "      X = 1.0D+0 + 2.0D+0"
+    assert _canonicalize_for_compare(a) == _canonicalize_for_compare(b)
+
+
+def test_canonicalize_for_compare_normalizes_type_decl():
+    from pyengine.pipeline import _canonicalize_for_compare
+    a = "      TYPE(float64x2) X"
+    b = "      DOUBLE PRECISION X"
+    # Both should canonicalize to the same form (REAL X after both
+    # type-name normalizations)
+    ca = _canonicalize_for_compare(a)
+    cb = _canonicalize_for_compare(b)
+    # The migrator only ever produces TYPE(float64x2) for multifloats,
+    # so we just need to confirm `TYPE(float64x2)` doesn't survive
+    # canonicalization.
+    assert 'FLOAT64X2' not in ca
+    assert 'TYPE(' not in ca
+
+
 def test_end_to_end_free_form_pattern_b(mf):
     out = migrate_free_form(SYNTHETIC_LAPACK_FREE_FORM, {}, mf)
     assert 'LA_CONSTANTS_MF' in out

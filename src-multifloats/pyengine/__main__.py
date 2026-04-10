@@ -142,6 +142,22 @@ def cmd_converge(args):
         print(f'{diverged} diverged, {missing} missing on disk')
 
 
+def _is_fixed_form_comment(line: str) -> bool:
+    """A fixed-form line is a comment if its first character is C/c/*/!
+    OR if its first non-whitespace character is ``!`` (the inline-comment
+    marker can also start a whole-line comment when it stands alone)."""
+    if not line:
+        return True
+    if line[0] in ('C', 'c', '*', '!'):
+        return True
+    stripped = line.lstrip()
+    return stripped.startswith('!')
+
+
+def _is_free_form_comment(line: str) -> bool:
+    return not line or line.lstrip().startswith('!')
+
+
 def cmd_verify(args):
     """Verify migrated output: residual types, literals, column width."""
     out_dir = args.output_dir
@@ -158,20 +174,32 @@ def cmd_verify(args):
     print(f'Verifying {len(all_files)} files in {src_dir}')
     print()
 
+    # Auto-detect target mode by sniffing for TYPE(float64x2) anywhere.
+    is_multifloats = any(
+        'TYPE(float64x2)' in f.read_text(errors='replace')
+        or 'type(float64x2)' in f.read_text(errors='replace')
+        for f in all_files
+    )
+
     # Check residual precision types in code lines
     print('Residual precision types (code lines):')
     residuals = 0
     for f in f_files:
         for i, line in enumerate(f.read_text(errors='replace').splitlines(), 1):
-            if not line or line[0] in ('C', 'c', '*', '!'):
+            if _is_fixed_form_comment(line):
                 continue
-            if re.search(r'DOUBLE\s+PRECISION|COMPLEX\*16|COMPLEX\*8|DOUBLE\s+COMPLEX',
+            if re.search(r'DOUBLE\s+PRECISION|COMPLEX\*16|COMPLEX\*8|DOUBLE\s+COMPLEX|REAL\*[48]',
                          line, re.IGNORECASE):
                 print(f'  {f.name}:{i}: {line.strip()}')
                 residuals += 1
     for f in f90_files:
         for i, line in enumerate(f.read_text(errors='replace').splitlines(), 1):
+            if _is_free_form_comment(line):
+                continue
             if re.search(r'kind\s*\(\s*1\.[de]0\s*\)', line, re.IGNORECASE):
+                print(f'  {f.name}:{i}: {line.strip()}')
+                residuals += 1
+            if re.search(r'\bdouble\s+precision\b', line, re.IGNORECASE):
                 print(f'  {f.name}:{i}: {line.strip()}')
                 residuals += 1
     if residuals == 0:
@@ -185,11 +213,22 @@ def cmd_verify(args):
     d_lits = 0
     for f in f_files:
         for i, line in enumerate(f.read_text(errors='replace').splitlines(), 1):
-            if not line or line[0] in ('C', 'c', '*', '!'):
+            if _is_fixed_form_comment(line):
                 continue
             # Remove valid constructor wrapped literals before checking
-            cleaned_line = re.sub(r'float64x2\(\'[^\']+\'\)', '', line, flags=re.IGNORECASE)
+            cleaned_line = re.sub(r"float64x2\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
+            cleaned_line = re.sub(r'float64x2\(\s*[^)]*\s*\)', '', cleaned_line, flags=re.IGNORECASE)
             if re.search(r'[0-9]\.[0-9]*[Dd][+-]?[0-9]', cleaned_line):
+                print(f'  {f.name}:{i}: {line.strip()}')
+                d_lits += 1
+    for f in f90_files:
+        for i, line in enumerate(f.read_text(errors='replace').splitlines(), 1):
+            if _is_free_form_comment(line):
+                continue
+            cleaned_line = re.sub(r"float64x2\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
+            cleaned_line = re.sub(r'float64x2\(\s*[^)]*\s*\)', '', cleaned_line, flags=re.IGNORECASE)
+            # In multifloats mode, also reject _wp suffixed literals
+            if is_multifloats and re.search(r'\d+\.\d*_wp', cleaned_line, re.IGNORECASE):
                 print(f'  {f.name}:{i}: {line.strip()}')
                 d_lits += 1
     if d_lits == 0:
@@ -198,12 +237,42 @@ def cmd_verify(args):
         errors += d_lits
     print()
 
+    if is_multifloats:
+        # Multifloats-specific check: residual unconverted FP PARAMETER /
+        # DATA statements (those that mention a value-shaped numeric and
+        # are not commented out).
+        print('Residual FP PARAMETER/DATA (code lines):')
+        leftover = 0
+        for f in all_files:
+            text = f.read_text(errors='replace')
+            is_fixed = f.suffix.lower() == '.f'
+            for i, line in enumerate(text.splitlines(), 1):
+                if is_fixed and _is_fixed_form_comment(line):
+                    continue
+                if not is_fixed and _is_free_form_comment(line):
+                    continue
+                m = re.match(r'\s+(PARAMETER|DATA)\b', line, re.IGNORECASE)
+                if not m:
+                    continue
+                # Check whether the line still mentions a real-looking
+                # literal (after stripping any constructors).
+                cleaned = re.sub(r"float64x2\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
+                cleaned = re.sub(r'float64x2\(\s*[^)]*\s*\)', '', cleaned, flags=re.IGNORECASE)
+                if re.search(r'\d+\.\d*[DdEe][+-]?\d+|\d*\.\d+', cleaned):
+                    print(f'  {f.name}:{i}: {line.strip()}')
+                    leftover += 1
+        if leftover == 0:
+            print('  OK')
+        else:
+            errors += leftover
+        print()
+
     # Check column width for fixed-form code lines
     print('Column overflow (code lines > 72 chars):')
     overflows = 0
     for f in f_files:
         for i, line in enumerate(f.read_text(errors='replace').splitlines(), 1):
-            if not line or line[0] in ('C', 'c', '*', '!'):
+            if _is_fixed_form_comment(line):
                 continue
             if len(line) > 72:
                 print(f'  {f.name}:{i}: {len(line)} chars')
