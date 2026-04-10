@@ -390,6 +390,10 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
             # Wrap complex constants (float64x2(...), float64x2(...)) in complex128x2(...).
             # An optional unary +/- is allowed before each component to
             # cover cases like ``(-1.0D0, 0.0D0)`` from LAPACK.
+            # Bare-name complex literals like ``(MF_ZERO, MF_ZERO)`` are
+            # wrapped later in the per-line pipeline by
+            # _wrap_bare_complex_literals (after replace_known_constants
+            # has produced the MF_* names).
             masked = re.sub(
                 r'\(\s*([-+]?\s*' + target_mode.real_constructor + r'\([^)]+\))\s*,\s*([-+]?\s*' + target_mode.real_constructor + r'\([^)]+\))\s*\)',
                 rf"{target_mode.complex_constructor}(\1,\2)",
@@ -407,7 +411,11 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
 # Intrinsic function replacement
 # ---------------------------------------------------------------------------
 
-def replace_intrinsic_calls(line: str, target_mode: TargetMode) -> str:
+def replace_intrinsic_calls(
+    line: str,
+    target_mode: TargetMode,
+    real_names: set[str] | None = None,
+) -> str:
     """Replace type-specific intrinsic function calls."""
     for old_name, (new_name, needs_kind) in INTRINSIC_MAP.items():
         pattern = re.compile(rf'\b{old_name}\s*\(', re.IGNORECASE)
@@ -464,12 +472,52 @@ def replace_intrinsic_calls(line: str, target_mode: TargetMode) -> str:
                         # accepts float64x2 / complex128x2, breaking
                         # ``DBLE(integer)`` from LAPACK.
                         # ``CMPLX`` / ``DCMPLX`` map to ``complex128x2``.
+                        # multifloats's complex128x2 interface only has
+                        # overloads for (float64x2[, float64x2]) and
+                        # (real(dp)[, real(dp)]) — there's no integer
+                        # overload, so a 1-arg call with an integer
+                        # argument falls back to the structure
+                        # constructor and fails. Pre-wrap any single-arg
+                        # cmplx with float64x2(...) so it always picks
+                        # the cx_from_mf_1 procedure.
                         # ``AIMAG`` / ``CONJG`` are module generics —
                         # leave the name alone.
                         if old_name.upper() in ('REAL', 'DREAL', 'DBLE'):
                             replacement = f'{target_mode.real_constructor}({inner})'
                         elif old_name.upper() in ('CMPLX', 'DCMPLX'):
-                            replacement = f'{target_mode.complex_constructor}({inner})'
+                            # Detect 1-arg vs 2-arg form (split top-level commas)
+                            commas = 0
+                            depth = 0
+                            for ch in inner:
+                                if ch == '(':
+                                    depth += 1
+                                elif ch == ')':
+                                    depth -= 1
+                                elif ch == ',' and depth == 0:
+                                    commas += 1
+                            if commas == 0:
+                                # 1-arg CMPLX. multifloats's
+                                # ``complex128x2`` interface only takes
+                                # float64x2 / real(dp), not integer.
+                                # Pre-wrap unless the inner is already a
+                                # float64x2 expression (known real var
+                                # name, MF_* constant, or already a
+                                # ``float64x2(...)`` call) — wrapping
+                                # those would fail because float64x2
+                                # has no identity constructor.
+                                stripped_inner = inner.strip()
+                                head = re.match(r'([A-Za-z_]\w*)', stripped_inner)
+                                already_mf = (
+                                    stripped_inner.lower().startswith('float64x2(')
+                                    or stripped_inner.upper().startswith('MF_')
+                                    or (head and real_names and head.group(1).upper() in real_names)
+                                )
+                                if already_mf:
+                                    replacement = f'{target_mode.complex_constructor}({inner})'
+                                else:
+                                    replacement = f'{target_mode.complex_constructor}({target_mode.real_constructor}({inner}))'
+                            else:
+                                replacement = f'{target_mode.complex_constructor}({inner})'
                         else:
                             replacement = f'{new_name}({inner})'
 
@@ -536,10 +584,26 @@ def replace_generic_conversions(line: str, target_mode: TargetMode) -> str:
                 # have overloads for every input type (int, real(sp/dp),
                 # float64x2, complex128x2 — extracts real part for the
                 # first), which DBLE/REAL/CMPLX in LAPACK rely on.
+                # Single-arg CMPLX(int) needs the inner pre-wrapped with
+                # float64x2 so it picks the (float64x2)→complex128x2
+                # interface procedure instead of the structure
+                # constructor (which has no integer overload).
                 if name.upper() == 'REAL':
                     replacement = f'{target_mode.real_constructor}({inner})'
                 else:
-                    replacement = f'{target_mode.complex_constructor}({inner})'
+                    commas = 0
+                    d = 0
+                    for ch in inner:
+                        if ch == '(':
+                            d += 1
+                        elif ch == ')':
+                            d -= 1
+                        elif ch == ',' and d == 0:
+                            commas += 1
+                    if commas == 0:
+                        replacement = f'{target_mode.complex_constructor}({target_mode.real_constructor}({inner}))'
+                    else:
+                        replacement = f'{target_mode.complex_constructor}({inner})'
 
             line = line[:name_start] + replacement + line[close_pos + 1:]
             search_start = name_start + len(replacement)
@@ -767,6 +831,168 @@ def replace_known_constants(
     return ''.join(parts) + tail
 
 
+_COMPLEX_DECL_RE = re.compile(
+    r'^\s+(?:DOUBLE\s+COMPLEX|COMPLEX\s*\*\s*(?:8|16)|COMPLEX(?!\s*[*(])|TYPE\s*\(\s*complex128x2\s*\))',
+    re.IGNORECASE,
+)
+_REAL_DECL_RE = re.compile(
+    r'^\s+(?:DOUBLE\s+PRECISION|REAL\s*\*\s*(?:4|8)|REAL(?!\s*[*(])|TYPE\s*\(\s*float64x2\s*\))',
+    re.IGNORECASE,
+)
+
+
+def _scan_typed_var_names(source: str, decl_re: re.Pattern) -> set[str]:
+    """Return the set of (uppercase) variable names declared by lines
+    matching ``decl_re``. Multi-line decls are joined first.
+    """
+    lines = source.splitlines()
+    out: set[str] = set()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line and line[0] in ('C', 'c', '*', '!'):
+            i += 1; continue
+        m = decl_re.match(line)
+        if not m:
+            i += 1; continue
+        joined = line
+        j = i + 1
+        while j < len(lines) and is_continuation_line(lines[j]):
+            joined += ' ' + lines[j][6:]
+            j += 1
+        m = decl_re.match(joined)
+        rest = joined[m.end():]
+        if '::' in rest:
+            rest = rest.split('::', 1)[1]
+        if '!' in rest:
+            rest = rest.split('!', 1)[0]
+        # Top-level comma split, ignoring parens
+        items, cur, depth = [], '', 0
+        for ch in rest:
+            if ch == '(':
+                depth += 1; cur += ch
+            elif ch == ')':
+                depth -= 1; cur += ch
+            elif ch == ',' and depth == 0:
+                items.append(cur); cur = ''
+            else:
+                cur += ch
+        if cur.strip():
+            items.append(cur)
+        for it in items:
+            nm = re.match(r'\s*([A-Za-z_]\w*)', it)
+            if nm:
+                out.add(nm.group(1).upper())
+        i = j
+    return out
+
+
+def _scan_complex_var_names(source: str) -> set[str]:
+    return _scan_typed_var_names(source, _COMPLEX_DECL_RE)
+
+
+def _scan_real_var_names(source: str) -> set[str]:
+    return _scan_typed_var_names(source, _REAL_DECL_RE)
+
+
+def _rewrite_int_of_complex(line: str, complex_names: set[str]) -> str:
+    """Wrap the argument of ``INT(...)`` / ``NINT(...)`` with ``MF_REAL``
+    when its leading identifier is a known complex variable.
+
+    Multifloats's ``int`` interface only accepts float64x2; calling it
+    on complex128x2 fails to dispatch (gfortran does NOT fall back to
+    the standard intrinsic for derived-type args, the way it does for
+    e.g. integer args). ``MF_REAL`` has overloads for both float64x2
+    (identity) and complex128x2 (real-part extraction), so wrapping
+    the argument is type-safe.
+    """
+    if not complex_names or not line:
+        return line
+    if line[0] in ('C', 'c', '*', '!'):
+        return line
+
+    def _process(name_re: re.Pattern, src: str) -> str:
+        out = src
+        pos = 0
+        while True:
+            m = name_re.search(out, pos)
+            if not m:
+                break
+            paren_open = m.end() - 1
+            depth = 1
+            i = paren_open + 1
+            while i < len(out) and depth > 0:
+                ch = out[i]
+                if ch == '(':
+                    depth += 1
+                elif ch == ')':
+                    depth -= 1
+                i += 1
+            if depth != 0:
+                break
+            paren_close = i - 1
+            inner = out[paren_open + 1:paren_close]
+            head = re.match(r'\s*([A-Za-z_]\w*)', inner)
+            if head and head.group(1).upper() in complex_names:
+                replacement = f'MF_REAL({inner.strip()})'
+                out = out[:paren_open + 1] + replacement + out[paren_close:]
+                pos = paren_open + 1 + len(replacement) + 1
+            else:
+                pos = paren_close + 1
+        return out
+
+    line = _process(re.compile(r'\bINT\s*\(', re.IGNORECASE), line)
+    line = _process(re.compile(r'\bNINT\s*\(', re.IGNORECASE), line)
+    return line
+
+
+def _unwrap_redundant_constructors(
+    line: str, target_mode: TargetMode, real_names: set[str] | None = None,
+) -> str:
+    """Drop ``float64x2(arg)`` wrappers when ``arg`` is already float64x2.
+
+    The migrator generates ``float64x2(arg)`` for ``DBLE(arg)`` /
+    ``REAL(arg)`` calls because the float64x2 interface is the
+    universal converter. After the rename pass, ``arg`` may be a bare
+    ``MF_*`` constant (which is itself float64x2), or a known
+    float64x2 local variable. Wrapping those in ``float64x2(...)``
+    fails because multifloats has no identity constructor.
+    """
+    if target_mode.is_kind_based or not target_mode.real_constructor:
+        return line
+    ctor = target_mode.real_constructor
+    pattern = re.compile(rf'\b{re.escape(ctor)}\s*\(\s*([A-Za-z_]\w*)\s*\)')
+
+    def _sub(m):
+        name = m.group(1)
+        upper = name.upper()
+        if upper.startswith('MF_'):
+            return name
+        if real_names and upper in real_names:
+            return name
+        return m.group(0)
+
+    return pattern.sub(_sub, line)
+
+
+def _wrap_bare_complex_literals(line: str, target_mode: TargetMode) -> str:
+    """Wrap ``(MF_NAME, MF_NAME)`` style complex literals.
+
+    After replace_known_constants has rewritten ``(ZERO, ZERO)`` (etc.)
+    to ``(MF_ZERO, MF_ZERO)``, the result is still a Fortran complex
+    literal whose components are non-numeric — gfortran rejects this
+    in PARAMETER and array-constructor contexts. Wrap with
+    ``complex128x2(...)`` so the structure constructor takes over.
+    """
+    if target_mode.is_kind_based or not target_mode.complex_constructor:
+        return line
+    return re.sub(
+        r'\(\s*([-+]?\s*MF_[A-Z][A-Z0-9_]*)\s*,\s*([-+]?\s*MF_[A-Z][A-Z0-9_]*)\s*\)',
+        rf"{target_mode.complex_constructor}(\1,\2)",
+        line,
+    )
+
+
 def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:
     """Replace routine names inside XERBLA string arguments."""
     for old_name, new_name in rename_map.items():
@@ -969,6 +1195,38 @@ def convert_data_stmts(
     return "".join(result), fp_assignments, dropped_known
 
 
+_STMT_FN_RE = re.compile(r'^[A-Za-z_]\w*\s*\(\s*[A-Za-z_]\w*\s*\)\s*=')
+
+
+def _looks_like_statement_function(stripped: str, lines: list[str], k: int) -> bool:
+    """Heuristic: does line k look like a LAPACK statement function
+    definition that the declaration-block walker should step over?
+
+    A statement function has the form ``NAME(SCALAR_ARG) = expression``
+    and appears in the LAPACK source between a comment marker like
+    ``*     .. Statement Function definitions ..`` and the executable
+    statements section. We detect by looking back at recent lines for
+    that marker (within ~10 lines).
+    """
+    if not _STMT_FN_RE.match(stripped):
+        return False
+    look = max(0, k - 12)
+    for kk in range(k - 1, look - 1, -1):
+        prev = lines[kk]
+        if not prev.strip():
+            continue
+        if 'Statement Function' in prev:
+            return True
+        if prev and prev[0] in ('C', 'c', '*', '!'):
+            continue
+        if prev.lstrip().startswith('!'):
+            continue
+        # Hit a code line that wasn't a statement function — stop.
+        if not _STMT_FN_RE.match(prev.lstrip()):
+            return False
+    return False
+
+
 def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: list[str] = None) -> str:
     """Insert USE multifloats statement and extra assignments after procedure headers."""
     if not target_mode.module_name and not extra_lines:
@@ -1035,6 +1293,17 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
                         'DATA', 'INTRINSIC', 'EXTERNAL', 'DIMENSION', 'SAVE',
                         'EQUIVALENCE', 'COMMON',
                     )):
+                        k += 1; continue
+                    # LAPACK statement-function definitions look like
+                    # ``CABS1( ZDUM ) = ABS( ... )`` and live between the
+                    # type-decl block and the executable statements. They
+                    # are NOT executable, so the walker should also walk
+                    # past them. We detect by looking back: if the
+                    # previous non-blank line was a comment marked
+                    # ``Statement Function`` (LAPACK convention) or this
+                    # line is the only thing between two ``*     ..``
+                    # separator comments, treat as still in decl section.
+                    if _looks_like_statement_function(stripped, lines, k):
                         k += 1; continue
                     break
                 # Copy declaration block as-is, then emit assignments.
@@ -1103,6 +1372,8 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
 def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
     if not target_mode.is_kind_based:
         _warn_on_fp_equivalence(source, target_mode)
+    complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
+    real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
@@ -1126,12 +1397,15 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
                 continue
             stripped = replace_standalone_real_complex(stripped, target_mode)
             stripped = replace_literals(stripped, target_mode)
-            stripped = replace_intrinsic_calls(stripped, target_mode)
+            stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
+            stripped = _rewrite_int_of_complex(stripped, complex_names)
+            stripped = _wrap_bare_complex_literals(stripped, target_mode)
+            stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
             stripped = reformat_fixed_line(stripped)
         result.append(stripped + nl)
 
@@ -1258,6 +1532,8 @@ def _la_constants_rename_map(target_mode: TargetMode) -> dict[str, str]:
 def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
     if not target_mode.is_kind_based:
         _warn_on_fp_equivalence(source, target_mode)
+    complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
+    real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source = rewrite_la_constants_use(source, target_mode)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     if not target_mode.is_kind_based:
@@ -1323,7 +1599,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
         if not stripped.lstrip().startswith('!'):
             stripped = _strip_iso_fortran_env_realN(stripped)
             if not stripped: continue
-            stripped = replace_intrinsic_calls(stripped, target_mode)
+            stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
@@ -1334,6 +1610,9 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
                 stripped = re.sub(r'REAL\(' + _KIND_PARAM_NAMES + r'\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
                 stripped = re.sub(r'COMPLEX\(' + _KIND_PARAM_NAMES + r'\)', target_mode.complex_type, stripped, flags=re.IGNORECASE)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
+            stripped = _rewrite_int_of_complex(stripped, complex_names)
+            stripped = _wrap_bare_complex_literals(stripped, target_mode)
+            stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
         result.append(stripped + nl)
 
     source = ''.join(result)
@@ -1428,6 +1707,8 @@ def _migrate_with_flang(source: str, ext: str, rename_map: dict[str, str], targe
 
 
 def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mode: TargetMode, has_float_types: bool, has_real_literals: bool) -> str:
+    complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
+    real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
@@ -1450,12 +1731,15 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
                     continue
                 stripped = replace_standalone_real_complex(stripped, target_mode)
             if has_real_literals: stripped = replace_literals(stripped, target_mode)
-            stripped = replace_intrinsic_calls(stripped, target_mode)
+            stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
+            stripped = _rewrite_int_of_complex(stripped, complex_names)
+            stripped = _wrap_bare_complex_literals(stripped, target_mode)
+            stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
             stripped = reformat_fixed_line(stripped)
         result.append(stripped + nl)
 
@@ -1468,6 +1752,8 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
 
 
 def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mode: TargetMode, has_float_types: bool) -> str:
+    complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
+    real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source = rewrite_la_constants_use(source, target_mode)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
@@ -1484,7 +1770,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
         if not stripped.lstrip().startswith('!'):
             stripped = _strip_iso_fortran_env_realN(stripped)
             if not stripped: continue
-            stripped = replace_intrinsic_calls(stripped, target_mode)
+            stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
             stripped = replace_intrinsic_decls(stripped)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
@@ -1495,6 +1781,9 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
                 stripped = re.sub(r'REAL\(' + _KIND_PARAM_NAMES + r'\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
                 stripped = re.sub(r'COMPLEX\(' + _KIND_PARAM_NAMES + r'\)', target_mode.complex_type, stripped, flags=re.IGNORECASE)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
+            stripped = _rewrite_int_of_complex(stripped, complex_names)
+            stripped = _wrap_bare_complex_literals(stripped, target_mode)
+            stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
         result.append(stripped + nl)
 
     source = ''.join(result)
