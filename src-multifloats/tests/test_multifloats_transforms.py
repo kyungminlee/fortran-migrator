@@ -15,6 +15,7 @@ from pyengine.target_mode import multifloats_target, kind_target
 from pyengine.fortran_migrator import (
     replace_type_decls,
     replace_literals,
+    replace_intrinsic_calls,
     replace_known_constants,
     strip_known_constants_from_decls,
     convert_parameter_stmts,
@@ -251,6 +252,49 @@ def test_replace_known_constants_kind_mode_is_noop():
     src = "      X = ZERO"
     out = replace_known_constants(src, kind_target(16), renames={'ZERO': 'MF_ZERO'})
     assert out == src
+
+
+# ---------------------------------------------------------------------------
+# replace_intrinsic_calls — Phase 7 multifloats intrinsic mapping
+# ---------------------------------------------------------------------------
+
+
+def test_intrinsic_dble_complex_real_part(mf):
+    """``DBLE(complex)`` extracts the real part. multifloats provides
+    a generic ``MF_REAL`` that handles both float64x2 and complex128x2."""
+    src = "      Y = DBLE(ZX(I))"
+    out = replace_intrinsic_calls(src, mf)
+    assert 'MF_REAL(ZX(I))' in out
+
+
+def test_intrinsic_dcmplx_to_complex128x2(mf):
+    src = "      Z = DCMPLX(A, B)"
+    out = replace_intrinsic_calls(src, mf)
+    assert 'complex128x2(A, B)' in out
+
+
+def test_intrinsic_dimag_to_aimag(mf):
+    src = "      Y = DIMAG(Z)"
+    out = replace_intrinsic_calls(src, mf)
+    assert 'AIMAG(Z)' in out
+
+
+def test_intrinsic_dconjg_to_conjg(mf):
+    src = "      Y = DCONJG(Z)"
+    out = replace_intrinsic_calls(src, mf)
+    assert 'CONJG(Z)' in out
+
+
+def test_intrinsic_dabs_to_abs(mf):
+    src = "      Y = DABS(X)"
+    out = replace_intrinsic_calls(src, mf)
+    assert 'ABS(X)' in out
+
+
+def test_intrinsic_dcos_to_cos(mf):
+    src = "      Y = DCOS(X)"
+    out = replace_intrinsic_calls(src, mf)
+    assert 'COS(X)' in out
 
 
 # ---------------------------------------------------------------------------

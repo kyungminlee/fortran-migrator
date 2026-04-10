@@ -739,6 +739,8 @@ def convert_parameter_stmts(
             if current: parts.append(''.join(current))
 
             kept_parts = []
+            line_assignments: list[str] = []
+            line_dropped_known: dict[str, str] = {}
             for part in parts:
                 if '=' in part:
                     name, val = part.split('=', 1)
@@ -746,14 +748,22 @@ def convert_parameter_stmts(
                     is_fp = ('.' in val or 'D' in val.upper() or 'E' in val.upper() or val.upper() in target_mode.known_constants)
                     if is_fp:
                         if name.upper() in target_mode.known_constants:
-                            dropped_known[name.upper()] = target_mode.known_constants[name.upper()]
+                            line_dropped_known[name.upper()] = target_mode.known_constants[name.upper()]
                             continue
-                        fp_assignments.append(f"{indent}{name} = {val}{comment}\n")
+                        line_assignments.append(f"{indent}{name} = {val}{comment}\n")
                     else: kept_parts.append(part)
                 else: kept_parts.append(part)
 
-            if kept_parts: result.append(f"{indent}PARAMETER ({', '.join(kept_parts)}){comment}\n")
-            else: result.append(f"{indent}! Converted to assignments: {line.strip()}\n")
+            fp_assignments.extend(line_assignments)
+            dropped_known.update(line_dropped_known)
+            if kept_parts:
+                result.append(f"{indent}PARAMETER ({', '.join(kept_parts)}){comment}\n")
+            elif line_assignments:
+                # Some FP entries became runtime assignments — leave a
+                # short marker comment so reviewers can find the source.
+                result.append(f"{indent}! Converted to assignments below: {line.strip()}\n")
+            # else: every entry was a known constant supplied by the
+            # multifloats module — drop the line entirely (no comment).
         else: result.append(line)
     return "".join(result), fp_assignments, dropped_known
 
@@ -792,12 +802,16 @@ def convert_data_stmts(
                 if current: vals_list.append(''.join(current).strip())
 
                 if len(vars_list) == len(vals_list):
+                    line_assignments: list[str] = []
                     for v, val in zip(vars_list, vals_list):
                         if v.upper() in target_mode.known_constants:
                             dropped_known[v.upper()] = target_mode.known_constants[v.upper()]
                             continue
-                        fp_assignments.append(f"{indent}{v} = {val}{comment}\n")
-                    result.append(f"{indent}! Converted to assignments: {line.strip()}\n")
+                        line_assignments.append(f"{indent}{v} = {val}{comment}\n")
+                    fp_assignments.extend(line_assignments)
+                    if line_assignments:
+                        result.append(f"{indent}! Converted to assignments below: {line.strip()}\n")
+                    # else: every name was a known constant — drop the line
                 else: result.append(line)
             else: result.append(line)
         else: result.append(line)
