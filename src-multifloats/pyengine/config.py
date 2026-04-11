@@ -46,6 +46,14 @@ class RecipeConfig:
     patches: list[str] = field(default_factory=list)
     depends: list[Path] = field(default_factory=list)  # Dependency recipe paths
     extra_symbol_dirs: list[Path] = field(default_factory=list)  # Extra dirs to scan for symbols
+    # Additional C source directories to *migrate* (not just scan) in
+    # the same generic-rename-map pass as ``source_dir``. Used by PBLAS
+    # to pull in the PTOOLS/ helper sources alongside the SRC/ entry
+    # points so the cloned ddgemm.c entry points have a real
+    # PB_Cddtypeset implementation to call. Files are flat-copied into
+    # ``output_dir`` (no subdirectory mirroring) so include resolution
+    # stays simple.
+    extra_c_dirs: list[Path] = field(default_factory=list)
     # Additional C return types to recognize when scanning for function
     # definitions, as regex fragments (e.g. ``r'PBTYP_T\s*\*'``). Used
     # only when ``language == 'c'``; the default set in
@@ -152,4 +160,6 @@ def load_recipe(recipe_path: Path,
         header_patches=list(data.get('header_patches', [])),
         overrides=dict(data.get('overrides') or {}),
         recipe_dir=recipe_path.parent,
+        extra_c_dirs=[project_root / d
+                      for d in (data.get('extra_c_dirs') or [])],
     )

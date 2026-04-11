@@ -100,6 +100,15 @@ static inline float64x2_t mf_cabs1(complex128x2_t z) {
     return mf_add(mf_abs(z.re), mf_abs(z.im));
 }
 
+/* PBLAS quick-return shorthand. PBLAS C entry points test scalar
+ * arguments with idioms like ``ALPHA[REAL_PART] == ZERO`` to skip
+ * trivial work. C ``==`` is not defined on the float64x2_t struct,
+ * so the migrator rewrites those expressions to use these macros.
+ * A normalized double-double is zero iff both limbs are bitwise zero;
+ * one iff the high limb is exactly 1.0 and the low limb is zero. */
+#define MF_IS_ZERO(x) ((x).limbs[0] == 0.0 && (x).limbs[1] == 0.0)
+#define MF_IS_ONE(x)  ((x).limbs[0] == 1.0 && (x).limbs[1] == 0.0)
+
 /* --------------------------------------------------------------------- */
 /* MPI handles                                                            */
 /* --------------------------------------------------------------------- */

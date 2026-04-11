@@ -267,7 +267,8 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                         rename_map: dict[str, str] | None = None,
                         c_type_aliases: list[dict] | None = None,
                         header_patches: list[dict] | None = None,
-                        overrides: list[tuple[Path, str]] | None = None) -> dict:
+                        overrides: list[tuple[Path, str]] | None = None,
+                        extra_c_dirs: list[Path] | None = None) -> dict:
     """Migrate a C source directory by cloning real/complex variants.
 
     Two modes:
@@ -299,6 +300,7 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             classification, rename_map,
             c_type_aliases=c_type_aliases,
             header_patches=header_patches,
+            extra_c_dirs=extra_c_dirs,
         )
     else:
         result = _migrate_blacs_c_directory(
@@ -343,6 +345,14 @@ def _build_rename_regex(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[st
     ``PB_Cctypeset`` are also renamed correctly; this dict carries the
     canonical lowercase form and the replacement is case-transferred
     from the matched text at callback time.
+
+    The pattern uses a negative lookbehind to skip C struct member
+    accesses (``foo.Cgesd2d``, ``ptr->Cgesd2d``). PBLAS's PBTYP_T
+    function-pointer struct happens to use field names that collide
+    with BLACS routine names — without this guard the migrator would
+    rewrite ``TypeStruct.Cgesd2d = Cdgesd2d`` to
+    ``TypeStruct.ZZgesd2d = ...``, breaking compilation since the
+    struct definition itself was not renamed.
     """
     combined: dict[str, str] = {}
     for old, new in rename_map.items():
@@ -353,7 +363,7 @@ def _build_rename_regex(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[st
     # Longest keys first so the alternation prefers the underscore forms
     keys_sorted = sorted(combined.keys(), key=len, reverse=True)
     pattern = re.compile(
-        r'\b(' + '|'.join(re.escape(k) for k in keys_sorted) + r')\b',
+        r'(?<![.>])\b(' + '|'.join(re.escape(k) for k in keys_sorted) + r')\b',
         re.IGNORECASE,
     )
     return pattern, combined
@@ -362,22 +372,70 @@ def _build_rename_regex(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[st
 def _make_rename_substituter(pattern: re.Pattern, combined: dict[str, str]):
     """Return a callback for ``pattern.sub`` that renames case-preservingly.
 
-    Renames performed by the migrator only change the precision letter
-    (e.g. ``D``→``Q``); all other characters of the identifier are
-    identical modulo case. So we look up the new name by the matched
-    text's lowercase form and then transfer each source character's case
-    onto the replacement, letting ``dgemm_`` → ``qgemm_``,
-    ``DGEMM_`` → ``QGEMM_``, and ``PB_Cctypeset`` → ``PB_Cxtypeset`` all
-    fall out of a single rule.
+    Renames performed by the migrator change the precision letter (e.g.
+    ``D``→``Q`` for KIND, ``D``→``DD`` for multifloats); all other
+    characters of the identifier are identical modulo case. So we look
+    up the new name by the matched text's lowercase form and then
+    transfer each source character's case onto the replacement.
+
+    For single-char swaps (D→Q) the source and target are the same
+    length and a positional case copy works directly. For multi-char
+    expansions (D→DD) the target is longer; we find the first
+    differing position, take the case of the original precision letter
+    there, and apply it to all the inserted characters. Suffix after
+    the old prefix is copied positionally from the source.
+
+    Examples:
+        ``dgemm_`` → ``qgemm_``      (KIND, equal length)
+        ``DGEMM_`` → ``QGEMM_``
+        ``PB_Cctypeset`` → ``PB_Cxtypeset``
+        ``PB_Cdtypeset`` → ``PB_Cddtypeset``  (multifloats, expansion)
     """
     def _sub(m: re.Match) -> str:
         src = m.group(0)
         new_lower = combined[src.lower()]
-        # Length is preserved: only the precision letter changes.
-        return ''.join(
+
+        if len(src) == len(new_lower):
+            # Equal-length: positional case transfer.
+            return ''.join(
+                c.upper() if s.isupper() else c
+                for s, c in zip(src, new_lower)
+            )
+
+        # Multi-char prefix expansion: locate the precision letter, copy
+        # its case onto the inserted target chars, and stitch the
+        # unchanged head and tail back in with positional case transfer.
+        src_lower = src.lower()
+        i = 0
+        end = min(len(src_lower), len(new_lower))
+        while i < end and src_lower[i] == new_lower[i]:
+            i += 1
+        # i is the first differing position. Assume a single-char source
+        # prefix is being replaced with N new chars (the only pattern
+        # the migrator currently emits): N = len(new) - len(src) + 1.
+        n_old = 1
+        n_new = len(new_lower) - len(src_lower) + n_old
+
+        head = ''.join(
             c.upper() if s.isupper() else c
-            for s, c in zip(src, new_lower)
+            for s, c in zip(src[:i], new_lower[:i])
         )
+        # The inserted prefix takes its case from the original precision
+        # letter at src[i]. For the typical lowercase identifier this is
+        # lowercase; for an UPPERCASE call site (xerbla strings, name
+        # mangling defines) it becomes uppercase consistently.
+        new_prefix = new_lower[i:i + n_new]
+        if i < len(src) and src[i].isupper():
+            new_prefix = new_prefix.upper()
+
+        tail_src = src[i + n_old:]
+        tail_new = new_lower[i + n_new:]
+        tail = ''.join(
+            c.upper() if s.isupper() else c
+            for s, c in zip(tail_src, tail_new)
+        )
+
+        return head + new_prefix + tail
     return _sub
 
 
@@ -388,15 +446,59 @@ def _expand_template(s: str, template_vars: dict[str, str]) -> str:
     return s
 
 
+# Cost-estimate local variable names used by PBLAS Level-3 entry points
+# (pdgemm/pdsymm/pdsyrk/...) for algorithm selection. These are pure
+# heuristic doubles that must NOT be promoted to the multifloats struct
+# type, otherwise (double) casts and `*=` arithmetic in the cost model
+# stop compiling. Survey of pblas/SRC/p[dz]*.c shows just two declaration
+# lines containing these names; recognising them by name is sufficient.
+_PBLAS_COST_LOCAL = (
+    r'ABest|ACest|BCest|ABestL|ABestR|Best|tmp\d+'
+)
+
+
 def _apply_c_type_subs(text: str, template_vars: dict[str, str],
-                      aliases: list[dict] | None = None) -> str:
+                      aliases: list[dict] | None = None,
+                      target_mode: TargetMode | None = None) -> str:
     """Upgrade C type names used by precision-specific source files.
 
     ``aliases`` is a list of recipe-level rename rules of the form
     ``{'from': [names...], 'to': '<target>'}``. The target may contain
     ``{KEY}`` placeholders that expand from ``template_vars``. Applied
     after the built-in double/float/SCOMPLEX/DCOMPLEX substitutions.
+
+    For multifloats targets we additionally:
+
+    - Protect ``(double)`` cast expressions and the standard PBLAS
+      cost-estimate local declarations (``double ABest, ACest, ...``)
+      from the broad ``double`` -> ``float64x2_t`` substitution. These
+      are heuristic algorithm-selection scalars that must stay as
+      primitive doubles so the surrounding ``*=``, comparison and
+      ``MAX(...)`` arithmetic continues to compile.
+    - Rewrite the PBLAS scalar quick-return idioms (``ALPHA[REAL_PART]
+      == ZERO`` etc.) into ``MF_IS_ZERO`` / ``MF_IS_ONE`` macro calls,
+      because C ``==`` is undefined on the float64x2_t struct.
     """
+    is_multifloats = target_mode is not None and not target_mode.is_kind_based
+
+    # Protect cost-estimate idioms before the broad sub.
+    cast_marker = '\x00MF_DOUBLE_CAST\x00'
+    decl_marker = '\x00MF_DOUBLE_KW\x00'
+    if is_multifloats:
+        # (double) cast expressions
+        text = re.sub(r'\(\s*double\s*\)', cast_marker, text)
+        # Local declaration lines for cost-estimate locals. Match the
+        # leading 'double' keyword on a line that mentions one of the
+        # known cost-estimate names somewhere on the same line.
+        def _protect_decl(m):
+            return decl_marker + m.group(2)
+        text = re.sub(
+            r'(?m)^(\s*)double(\s+[^;\n]*\b(?:'
+            + _PBLAS_COST_LOCAL
+            + r')\b[^;\n]*;)',
+            lambda m: m.group(1) + decl_marker + m.group(2),
+            text)
+
     text = re.sub(r'\bdouble\b', template_vars['REAL_TYPE'], text)
     text = re.sub(r'\bfloat\b', template_vars['REAL_TYPE'], text)
     text = re.sub(r'\bDCOMPLEX\b', template_vars['COMPLEX_TYPE'], text)
@@ -405,6 +507,38 @@ def _apply_c_type_subs(text: str, template_vars: dict[str, str],
         target = _expand_template(rule['to'], template_vars)
         for src in rule['from']:
             text = re.sub(r'\b' + re.escape(src) + r'\b', target, text)
+
+    if is_multifloats:
+        text = text.replace(cast_marker, '(double)')
+        text = text.replace(decl_marker, 'double')
+        text = _apply_multifloats_pblas_subs(text)
+    return text
+
+
+_MF_PBLAS_PART = r'(\w+)\s*\[\s*(REAL_PART|IMAG_PART)\s*\]'
+
+
+def _apply_multifloats_pblas_subs(text: str) -> str:
+    """Rewrite PBLAS scalar quick-return checks for the float64x2_t
+    struct type. C operators ``==`` / ``!=`` are not defined on
+    structs, so we replace ``ALPHA[REAL_PART] == ZERO`` with the
+    inline macro ``MF_IS_ZERO(ALPHA[REAL_PART])`` (and likewise for
+    ``ONE`` / ``IMAG_PART`` / negation).
+    """
+    # ZERO comparisons
+    text = re.sub(
+        _MF_PBLAS_PART + r'\s*==\s*ZERO\b',
+        r'MF_IS_ZERO(\1[\2])', text)
+    text = re.sub(
+        _MF_PBLAS_PART + r'\s*!=\s*ZERO\b',
+        r'(!MF_IS_ZERO(\1[\2]))', text)
+    # ONE comparisons
+    text = re.sub(
+        _MF_PBLAS_PART + r'\s*==\s*ONE\b',
+        r'MF_IS_ONE(\1[\2])', text)
+    text = re.sub(
+        _MF_PBLAS_PART + r'\s*!=\s*ONE\b',
+        r'(!MF_IS_ONE(\1[\2]))', text)
     return text
 
 
@@ -457,7 +591,8 @@ def migrate_c_file_to_string(
         sub = _make_rename_substituter(pattern, combined)
         text = src_path.read_text(errors='replace')
         text = pattern.sub(sub, text)
-        text = _apply_c_type_subs(text, template_vars, c_type_aliases)
+        text = _apply_c_type_subs(text, template_vars, c_type_aliases,
+                                  target_mode=target_mode)
         return new_name, text
 
     # Direct/BLACS mode.
@@ -511,15 +646,34 @@ def migrate_c_file_to_string(
 
 def _apply_header_patches(output_dir: Path,
                           patches: list[dict],
-                          template_vars: dict[str, str]) -> None:
+                          template_vars: dict[str, str],
+                          target_mode: TargetMode | None = None) -> None:
     """Insert recipe-declared lines into migrated headers.
 
     Each patch has ``file`` (relative name under output_dir), ``after``
     (literal anchor line that must be present exactly once) and
     ``insert`` (text to insert on the line after the anchor). The
     ``insert`` text is template-expanded.
+
+    Patches can be gated by an optional ``when`` field whose value is
+    matched against the active target_mode:
+
+      - ``when: kind``        - applied for any KIND target (10 / 16)
+      - ``when: multifloats`` - applied for multifloats target only
+      - ``when: <name>``      - applied if target_mode.name == name
+      - (absent)              - always applied (legacy behavior)
     """
     for patch in patches:
+        when = patch.get('when')
+        if when is not None and target_mode is not None:
+            if when == 'kind':
+                if not target_mode.is_kind_based:
+                    continue
+            elif when == 'multifloats':
+                if target_mode.is_kind_based:
+                    continue
+            elif when != target_mode.name:
+                continue
         target = output_dir / patch['file']
         if not target.exists():
             continue
@@ -542,7 +696,8 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                                  classification: SymbolClassification,
                                  rename_map: dict[str, str],
                                  c_type_aliases: list[dict] | None = None,
-                                 header_patches: list[dict] | None = None) -> dict:
+                                 header_patches: list[dict] | None = None,
+                                 extra_c_dirs: list[Path] | None = None) -> dict:
     """Rename-map-driven C migration for ScaLAPACK-style libraries.
 
     A file ``foo_.c`` is cloned iff its routine ``FOO`` is a D- or
@@ -550,20 +705,39 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     is written to ``<target>.c`` where ``<target>`` is the lowercase of
     ``rename_map[FOO]``, with all in-file routine names rewritten via
     ``rename_map`` and C types upgraded to the target precision.
+
+    ``extra_c_dirs`` is a list of additional directories whose .c
+    sources are flat-copied (and cloned-as-applicable) into
+    ``output_dir`` alongside ``src_dir``. Used by PBLAS to migrate the
+    PTOOLS/ helpers.
     """
     template_vars = _build_sub_vars(target_mode)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy all originals first (keeps S/D/C/Z entry points available)
+    all_src_dirs: list[Path] = [src_dir]
+    if extra_c_dirs:
+        all_src_dirs.extend(extra_c_dirs)
+
+    # Copy all originals first (keeps S/D/C/Z entry points available).
+    # When extra_c_dirs sources contain `#include "../foo.h"` paths
+    # (PTOOLS uses ../pblas.h etc.), strip the `..` part since we're
+    # flattening into a single output dir.
     if copy_originals:
-        for f in sorted(src_dir.iterdir()):
-            if f.suffix.lower() in ('.c', '.h'):
-                shutil.copy2(f, output_dir / f.name)
+        for d in all_src_dirs:
+            for f in sorted(d.iterdir()):
+                if f.suffix.lower() in ('.c', '.h'):
+                    text = f.read_text(errors='replace')
+                    if d != src_dir:
+                        text = re.sub(
+                            r'#include\s*"\.\./([^"]+)"',
+                            r'#include "\1"', text)
+                    (output_dir / f.name).write_text(text)
 
     # Apply recipe-declared header patches to the copied originals so
     # later clones can reference the newly introduced typedefs.
     if header_patches:
-        _apply_header_patches(output_dir, header_patches, template_vars)
+        _apply_header_patches(output_dir, header_patches, template_vars,
+                              target_mode=target_mode)
 
     rename_pattern, combined_map = _build_rename_regex(rename_map)
     _rename_sub = _make_rename_substituter(rename_pattern, combined_map)
@@ -583,8 +757,11 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         )
         return bool(key) and key[0] in ('D', 'Z')
 
+    all_c_files: list[Path] = []
+    for d in all_src_dirs:
+        all_c_files.extend(f for f in d.iterdir() if f.suffix.lower() == '.c')
     entries = sorted(
-        (f for f in src_dir.iterdir() if f.suffix.lower() == '.c'),
+        all_c_files,
         key=lambda f: (
             not _is_double_key(
                 (f.stem[:-1] if f.stem.endswith('_') else f.stem).upper()
@@ -632,11 +809,18 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         new_path = output_dir / new_name
 
         text = f.read_text(errors='replace')
+        # Files from extra_c_dirs (e.g. PBLAS PTOOLS/) are flattened
+        # into output_dir, so #include "../foo.h" must become "foo.h".
+        if f.parent != src_dir:
+            text = re.sub(
+                r'#include\s*"\.\./([^"]+)"',
+                r'#include "\1"', text)
         # Apply renames first, then type upgrades — the two domains
         # don't overlap but this order preserves identifier names that
         # happen to coincide with generic type keywords.
         text = _rename(text)
-        text = _apply_c_type_subs(text, template_vars, c_type_aliases)
+        text = _apply_c_type_subs(text, template_vars, c_type_aliases,
+                                  target_mode=target_mode)
 
         normalized = _normalize_for_compare(text)
         prior = canonical_normalized.get(new_name)

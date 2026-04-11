@@ -18,6 +18,13 @@ extra_symbol_dirs:
   - external/scalapack-2.2.3/PBLAS/SRC/PTZBLAS   # Fortran trapezoidal BLAS kernels
   - external/scalapack-2.2.3/PBLAS/SRC/PTOOLS    # C PBLAS helpers (PB_C*)
 
+# C helper directory whose .c sources are flat-copied (and cloned for
+# precision-family members) into output_dir alongside SRC/. Without
+# this the migrated entry points have nothing to call -- the original
+# PB_Cdtypeset symbol still exists but PB_Cddtypeset would not.
+extra_c_dirs:
+  - external/scalapack-2.2.3/PBLAS/SRC/PTOOLS
+
 prefix:
   style: scalapack   # P + S/D/C/Z entry points
 
@@ -34,18 +41,29 @@ c_return_types:
 # ``work[i][REAL_PART]`` / ``[IMAG_PART]``, so the migrated type must
 # keep the array layout — the generic ``QCOMPLEX`` struct cannot stand
 # in. Add a kind-specific array typedef (``cmplxQ`` for KIND=16,
-# ``cmplxE`` for KIND=10) via header_patches and point both originals
-# at it with c_type_aliases.
+# ``cmplxE`` for KIND=10, ``cmplxDD`` for multifloats) via
+# header_patches and point both originals at it with c_type_aliases.
 c_type_aliases:
   - from: [cmplx, cmplx16]
     to: 'cmplx{RPU}'
 
 header_patches:
+  # KIND targets: introduce primitive QREAL/EREAL typedef plus the
+  # cmplxQ/cmplxE array form.
   - file: pblas.h
+    when: kind
     after: 'typedef    double              cmplx16[2];'
     insert: |
       typedef    {C_REAL_TYPE}          cmplx{RPU}[2];
       typedef    {C_REAL_TYPE}          {REAL_TYPE};
+  # Multifloats target: float64x2_t comes from libmfc's multifloats_c.h.
+  # Just include the header and add the cmplxDD array typedef.
+  - file: pblas.h
+    when: multifloats
+    after: 'typedef    double              cmplx16[2];'
+    insert: |
+      #include "multifloats_c.h"
+      typedef    {C_REAL_TYPE}          cmplx{RPU}[2];
 
 # PBLAS/SRC contains 123 precision-specific C entry points (pdgemm_.c,
 # pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent

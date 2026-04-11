@@ -20,6 +20,8 @@ from pyengine.target_mode import multifloats_target, kind_target
 from pyengine.c_migrator import (
     _build_sub_vars,
     _apply_overrides,
+    _build_rename_regex,
+    _make_rename_substituter,
     _patch_bdef_header,
     migrate_c_file_to_string,
 )
@@ -249,3 +251,51 @@ def test_apply_overrides_missing_source_raises(tmp_path):
             output_dir,
             [(tmp_path / 'does_not_exist.c', 'BI_ddvvsum.c')],
         )
+
+
+# ---------------------------------------------------------------------------
+# _make_rename_substituter -- multi-char prefix expansion
+# ---------------------------------------------------------------------------
+
+
+def test_rename_substituter_equal_length_prefix():
+    """KIND-style single-char swap: D->Q, lengths match."""
+    rename_map = {'PB_CDTYPESET': 'PB_CQTYPESET', 'DGEMM': 'QGEMM'}
+    pattern, combined = _build_rename_regex(rename_map)
+    sub = _make_rename_substituter(pattern, combined)
+
+    # Lowercase identifier preserves case
+    assert pattern.sub(sub, 'PB_Cdtypeset') == 'PB_Cqtypeset'
+    # Trailing underscore form
+    assert pattern.sub(sub, 'dgemm_') == 'qgemm_'
+    # Uppercase form
+    assert pattern.sub(sub, 'DGEMM_') == 'QGEMM_'
+
+
+def test_rename_substituter_multichar_expansion():
+    """Multifloats-style expansion: D->DD, target one char longer.
+
+    Regression for the zip(src, new_lower) bug that truncated the
+    trailing 't' in PB_Cdtypeset -> PB_Cddtypese (missing 't').
+    """
+    rename_map = {'PB_CDTYPESET': 'PB_CDDTYPESET', 'DGEMM': 'DDGEMM'}
+    pattern, combined = _build_rename_regex(rename_map)
+    sub = _make_rename_substituter(pattern, combined)
+
+    # Mixed-case PascalCase identifier: head case preserved, inserted
+    # 'd' takes the case of the original precision letter (lowercase).
+    assert pattern.sub(sub, 'PB_Cdtypeset') == 'PB_Cddtypeset'
+    # Trailing underscore form
+    assert pattern.sub(sub, 'dgemm_') == 'ddgemm_'
+    # Uppercase form: inserted char is uppercase too
+    assert pattern.sub(sub, 'DGEMM_') == 'DDGEMM_'
+
+
+def test_rename_substituter_does_not_match_inside_longer_identifier():
+    """\\b boundaries prevent DGER inside PDGER from being renamed."""
+    rename_map = {'DGER': 'DDGER'}
+    pattern, combined = _build_rename_regex(rename_map)
+    sub = _make_rename_substituter(pattern, combined)
+
+    assert pattern.sub(sub, 'pdger_') == 'pdger_'    # untouched
+    assert pattern.sub(sub, 'dger_') == 'ddger_'
