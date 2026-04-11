@@ -77,8 +77,8 @@ def multifloats_target(
         # Quad: 'R' -> 'Q', 'C' -> 'X'
         # Multifloats: 'R' -> 'W', 'C' -> 'U'
         prefix_map = {
-            'R': 'W',
-            'C': 'U',
+            'R': 'DD',
+            'C': 'ZZ',
             # Int/Logical are unchanged, but we typically don't rename them.
             # Keep defaults just in case
             'I': 'I',

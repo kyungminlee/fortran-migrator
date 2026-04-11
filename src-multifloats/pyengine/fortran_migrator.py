@@ -104,6 +104,65 @@ def _warn_on_fp_equivalence(source: str, target_mode: TargetMode) -> None:
     return
 
 
+def fix_misdeclared_statement_functions(source: str) -> str:
+    """Correct the declared type of statement functions whose body is
+    a real-valued expression.
+
+    LAPACK's ``CABS1`` is the textbook example: it is declared
+    ``COMPLEX*16`` in ``zla_lin_berr.f`` but its body is
+    ``ABS( DBLE( CDUM ) ) + ABS( DIMAG( CDUM ) )`` — a real
+    expression. F77 tolerated the mismatch via implicit complex←real
+    promotion at assignment time, but the post-migration derived-type
+    version refuses to assign a ``float64x2`` RHS to a
+    ``complex128x2`` LHS inside a statement-function definition.
+
+    This pass scans for any statement function whose RHS is
+    syntactically a chain of ``ABS(...)`` terms joined by ``+``/``-``
+    — which always evaluates to real — and, if the corresponding
+    ``COMPLEX*16`` / ``DOUBLE COMPLEX`` declaration of the function
+    name exists in the same file, rewrites it to ``DOUBLE PRECISION``.
+    """
+    lines = source.splitlines(keepends=True)
+    # First pass: find statement function names whose body is real.
+    stmt_fn_re = re.compile(
+        r'^\s+([A-Za-z_]\w*)\s*\(\s*[A-Za-z_]\w*\s*\)\s*=\s*'
+        r'(?:[-+]?\s*ABS\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*[-+]?\s*)+$',
+        re.IGNORECASE,
+    )
+    real_names: set[str] = set()
+    for raw in lines:
+        if raw and raw[0] in ('C', 'c', '*', '!'):
+            continue
+        body = raw.rstrip()
+        m = stmt_fn_re.match(body)
+        if m:
+            real_names.add(m.group(1).upper())
+    if not real_names:
+        return source
+
+    # Second pass: demote any single-variable ``COMPLEX*16`` /
+    # ``DOUBLE COMPLEX`` declaration of one of those names to
+    # ``DOUBLE PRECISION``. Only rewrite declarations whose variable
+    # list is exactly a single unadorned identifier — a compound
+    # declaration like ``COMPLEX*16  CABS1, CDUM`` would require
+    # splitting the line and is left alone.
+    cplx_decl_re = re.compile(
+        r'^(\s+)(DOUBLE\s+COMPLEX|COMPLEX\s*\*\s*16|COMPLEX\s*\*\s*8|COMPLEX)'
+        r'(\s+)([A-Za-z_]\w*)\s*$',
+        re.IGNORECASE,
+    )
+    out: list[str] = []
+    for raw in lines:
+        if raw and raw[0] not in ('C', 'c', '*', '!'):
+            m = cplx_decl_re.match(raw.rstrip())
+            if m and m.group(4).upper() in real_names:
+                nl = '\n' if raw.endswith('\n') else ''
+                out.append(f'{m.group(1)}DOUBLE PRECISION{m.group(3)}{m.group(4)}{nl}')
+                continue
+        out.append(raw)
+    return ''.join(out)
+
+
 def strip_known_constants_from_decls(
     source: str, target_mode: TargetMode,
 ) -> tuple[str, dict[str, str]]:
@@ -1901,6 +1960,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
         _warn_on_fp_equivalence(source, target_mode)
     complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
     real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
+    source = fix_misdeclared_statement_functions(source)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
@@ -2039,7 +2099,7 @@ def _la_constants_rename_map(target_mode: TargetMode) -> dict[str, str]:
 
       KIND=10  → ``ezero``, ``ysafmin`` (la_constants_ep)
       KIND=16  → ``qzero``, ``xsafmin`` (la_constants_ep)
-      multifloats → ``wzero``, ``usafmin`` (la_constants_mf)
+      multifloats → ``ddzero``, ``zzsafmin`` (la_constants_mf)
 
     Only the prefixed names are mapped — the LHS aliases ``zero``,
     ``half`` etc. are intentionally left untouched so the body of the
@@ -2051,7 +2111,7 @@ def _la_constants_rename_map(target_mode: TargetMode) -> dict[str, str]:
             16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'},
         }[target_mode.kind_suffix]
     else:
-        pmap = {'S': 'W', 'D': 'W', 'C': 'U', 'Z': 'U'}
+        pmap = {'S': 'DD', 'D': 'DD', 'C': 'ZZ', 'Z': 'ZZ'}
 
     renames: dict[str, str] = {}
     for p in ('S', 'D'):
@@ -2069,6 +2129,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
     complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
     real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source = rewrite_la_constants_use(source, target_mode)
+    source = fix_misdeclared_statement_functions(source)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     if not target_mode.is_kind_based:
         lines_tmp = source.splitlines()
@@ -2253,6 +2314,7 @@ def _migrate_with_flang(source: str, ext: str, rename_map: dict[str, str], targe
 def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mode: TargetMode, has_float_types: bool, has_real_literals: bool) -> str:
     complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
     real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
+    source = fix_misdeclared_statement_functions(source)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
@@ -2302,6 +2364,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
     complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
     real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source = rewrite_la_constants_use(source, target_mode)
+    source = fix_misdeclared_statement_functions(source)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)

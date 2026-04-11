@@ -42,9 +42,12 @@ def test_multifloats_target_basic_shape():
     assert mf.real_constructor == 'float64x2'
     assert mf.complex_constructor == 'complex128x2'
     assert mf.module_name == 'multifloats'
-    # W (real) / U (complex) prefix per MULTIFLOATS.md
-    assert mf.prefix_map['R'] == 'W'
-    assert mf.prefix_map['C'] == 'U'
+    # DD (real) / ZZ (complex) — double-double prefixes. Single-letter
+    # prefixes like W collide with LAPACK's workspace-size idiom (e.g.
+    # WLALSD in DGELSD); the two-letter DD/ZZ form eliminates that
+    # whole class of collisions.
+    assert mf.prefix_map['R'] == 'DD'
+    assert mf.prefix_map['C'] == 'ZZ'
 
 
 def test_kind_target_is_kind_based():
@@ -434,11 +437,11 @@ def test_insert_use_multifloats_dedupes(mf):
 # ---------------------------------------------------------------------------
 
 
-def test_la_constants_rename_map_uses_w_u_for_multifloats(mf):
+def test_la_constants_rename_map_uses_dd_zz_for_multifloats(mf):
     m = _la_constants_rename_map(mf)
-    assert m['DZERO'] == 'WZERO'
-    assert m['DSAFMIN'] == 'WSAFMIN'
-    assert m['ZZERO'] == 'UZERO'
+    assert m['DZERO'] == 'DDZERO'
+    assert m['DSAFMIN'] == 'DDSAFMIN'
+    assert m['ZZERO'] == 'ZZZERO'
     # Unprefixed forms must NOT be in the map (would clobber USE alias LHS)
     assert 'ZERO' not in m
     assert 'SAFMIN' not in m
@@ -461,11 +464,11 @@ def test_rewrite_la_constants_use_pattern_b(mf):
     ''')
     out = rewrite_la_constants_use(src, mf)
     assert 'LA_CONSTANTS_MF' in out
-    # wp=>dp removed, but local aliases preserved with W-prefixed RHS
+    # wp=>dp removed, but local aliases preserved with DD-prefixed RHS
     assert 'wp=>dp' not in out
-    assert 'zero=>wzero' in out
-    assert 'safmin=>wsafmin' in out
-    assert 'safmax=>wsafmax' in out
+    assert 'zero=>ddzero' in out
+    assert 'safmin=>ddsafmin' in out
+    assert 'safmax=>ddsafmax' in out
 
 
 # ---------------------------------------------------------------------------
@@ -603,9 +606,9 @@ def test_end_to_end_free_form_pattern_b(mf):
     out = migrate_free_form(SYNTHETIC_LAPACK_FREE_FORM, {}, mf)
     assert 'LA_CONSTANTS_MF' in out
     assert 'wp=>dp' not in out
-    # Local aliases preserved (lowercase) with W-prefixed RHS
-    assert 'zero=>wzero' in out
-    assert 'safmin=>wsafmin' in out
+    # Local aliases preserved (lowercase) with DD-prefixed RHS
+    assert 'zero=>ddzero' in out
+    assert 'safmin=>ddsafmin' in out
     # real(wp) → TYPE(float64x2)
     assert 'TYPE(float64x2)' in out
     # Body references stay as the local alias names
