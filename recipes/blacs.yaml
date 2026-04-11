@@ -12,3 +12,28 @@ prefix:
 copy_all_originals: true
 
 skip_files: []
+
+# Multifloats target: replace the BI_*vv* reduction kernels with
+# hand-written versions that use libmfc's mf_add / mf_cmp / mf_abs
+# primitives (C operators are wrong on the struct type), and patch
+# blacs_pinfo_.c to call multifloats_mpi_init() so the custom MPI
+# datatypes and ops are registered before any BLACS communication.
+# Applied after cloning + header patching so the overrides win.
+overrides:
+  multifloats:
+    src_dir: blacs/mfc_overrides
+    files:
+      # Double-double scalar reductions
+      - BI_ddvvsum.c
+      - BI_ddvvamx.c
+      - BI_ddvvamx2.c
+      - BI_ddvvamn.c
+      - BI_ddvvamn2.c
+      # Complex double-double reductions
+      - BI_zzvvsum.c
+      - BI_zzvvamx.c
+      - BI_zzvvamx2.c
+      - BI_zzvvamn.c
+      - BI_zzvvamn2.c
+      # Lazy-init hook for multifloats MPI handles
+      - blacs_pinfo_.c

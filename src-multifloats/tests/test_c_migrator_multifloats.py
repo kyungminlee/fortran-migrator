@@ -1,0 +1,251 @@
+"""Unit tests for the multifloats branch of pyengine.c_migrator.
+
+These cover the c_migrator changes that unblock multifloats:
+- _build_sub_vars produces the right template variables for both
+  KIND and multifloats targets;
+- the BLACS regex substitution rules emit DD/ZZ-prefixed names plus
+  the new MPI_SUM->MPI_DD_SUM/MPI_ZZ_SUM rule;
+- _patch_bdef_header for multifloats emits an #include of the libmfc
+  header instead of the legacy __float128 typedef block;
+- the override_files post-pass copies hand-written replacement files
+  on top of clones.
+"""
+
+import textwrap
+from pathlib import Path
+
+import pytest
+
+from pyengine.target_mode import multifloats_target, kind_target
+from pyengine.c_migrator import (
+    _build_sub_vars,
+    _apply_overrides,
+    _patch_bdef_header,
+    migrate_c_file_to_string,
+)
+
+
+# ---------------------------------------------------------------------------
+# _build_sub_vars
+# ---------------------------------------------------------------------------
+
+
+def test_build_sub_vars_multifloats_struct_types():
+    mf = multifloats_target()
+    v = _build_sub_vars(mf)
+    assert v['REAL_TYPE'] == 'float64x2_t'
+    assert v['COMPLEX_TYPE'] == 'complex128x2_t'
+    assert v['C_REAL_TYPE'] == 'float64x2_t'
+    assert v['MPI_REAL'] == 'MPI_FLOAT64X2'
+    assert v['MPI_COMPLEX'] == 'MPI_COMPLEX128X2'
+    assert v['MPI_SUM_REAL'] == 'MPI_DD_SUM'
+    assert v['MPI_SUM_COMPLEX'] == 'MPI_ZZ_SUM'
+    assert v['RP'] == 'dd'
+    assert v['CP'] == 'zz'
+    assert v['RPU'] == 'DD'
+    assert v['CPU'] == 'ZZ'
+
+
+def test_build_sub_vars_kind16_unchanged():
+    """KIND targets keep the legacy values; the new MPI_SUM_* keys
+    expand to plain 'MPI_SUM' so the substitution rule is a no-op."""
+    k16 = kind_target(16)
+    v = _build_sub_vars(k16)
+    assert v['REAL_TYPE'] == 'QREAL'
+    assert v['COMPLEX_TYPE'] == 'XCOMPLEX'
+    assert v['C_REAL_TYPE'] == '__float128'
+    assert v['MPI_REAL'] == 'MPI_REAL16'
+    assert v['MPI_COMPLEX'] == 'MPI_COMPLEX32'
+    assert v['MPI_SUM_REAL'] == 'MPI_SUM'
+    assert v['MPI_SUM_COMPLEX'] == 'MPI_SUM'
+    assert v['RP'] == 'q'
+    assert v['CP'] == 'x'
+
+
+def test_build_sub_vars_kind10_unchanged():
+    k10 = kind_target(10)
+    v = _build_sub_vars(k10)
+    assert v['C_REAL_TYPE'] == 'long double'
+    assert v['MPI_REAL'] == 'MPI_LONG_DOUBLE'
+    assert v['MPI_SUM_REAL'] == 'MPI_SUM'
+
+
+# ---------------------------------------------------------------------------
+# Per-file BLACS substitution (REAL clone)
+# ---------------------------------------------------------------------------
+
+
+_BLACS_REAL_SAMPLE = '''\
+#include "Bdef.h"
+void BI_dvvsum(Int N, double *v1, double *v2) {
+   for (int k = 0; k < N; k++) v1[k] += v2[k];
+}
+
+void Cdgebs2d_aux(double *buf, Int n) {
+   MPI_Reduce(buf, buf, n, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+}
+
+void BI_dMPI_sum(double *a, double *b, int *len, MPI_Datatype *dt) {
+   for (int i = 0; i < *len; i++) b[i] += a[i];
+}
+'''
+
+
+def test_blacs_real_clone_multifloats(tmp_path):
+    src = tmp_path / 'BI_dvvsum.c'
+    src.write_text(_BLACS_REAL_SAMPLE)
+    target = multifloats_target()
+    result = migrate_c_file_to_string(src, target)
+    assert result is not None
+    new_name, text = result
+    assert new_name == 'BI_ddvvsum.c'
+    assert 'float64x2_t *v1' in text
+    assert 'float64x2_t *v2' in text
+    assert 'MPI_FLOAT64X2' in text
+    assert 'MPI_DOUBLE' not in text
+    # MPI_SUM must be rewritten to the user-defined op
+    assert 'MPI_DD_SUM' in text
+    assert 'MPI_SUM,' not in text  # the old constant is gone
+    # Routine name renames cover both Cd* and BI_d* prefixes
+    assert 'Cddgebs2d_aux' in text
+    assert 'BI_ddMPI_sum' in text
+
+
+def test_blacs_real_clone_kind16_still_uses_mpi_sum(tmp_path):
+    """Regression: the new MPI_SUM->{MPI_SUM_REAL} rule must be a
+    textual no-op for KIND targets."""
+    src = tmp_path / 'BI_dvvsum.c'
+    src.write_text(_BLACS_REAL_SAMPLE)
+    target = kind_target(16)
+    result = migrate_c_file_to_string(src, target)
+    assert result is not None
+    new_name, text = result
+    assert new_name == 'BI_qvvsum.c'
+    assert 'QREAL *v1' in text
+    assert 'MPI_REAL16' in text
+    # KIND target still uses stock MPI_SUM
+    assert 'MPI_SUM' in text
+    assert 'MPI_DD_SUM' not in text
+
+
+# ---------------------------------------------------------------------------
+# Per-file BLACS substitution (COMPLEX clone)
+# ---------------------------------------------------------------------------
+
+
+_BLACS_COMPLEX_SAMPLE = '''\
+#include "Bdef.h"
+void BI_zvvsum(Int N, DCOMPLEX *v1, DCOMPLEX *v2) {
+   N *= 2;
+   double *r1 = (double*)v1;
+   double *r2 = (double*)v2;
+   for (int k = 0; k < N; k++) r1[k] += r2[k];
+   MPI_Reduce(v1, v2, N, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
+}
+
+void Czgebs2d_aux(DCOMPLEX *buf, Int n) {
+   (void)buf;
+}
+'''
+
+
+def test_blacs_complex_clone_multifloats(tmp_path):
+    src = tmp_path / 'BI_zvvsum.c'
+    src.write_text(_BLACS_COMPLEX_SAMPLE)
+    target = multifloats_target()
+    result = migrate_c_file_to_string(src, target)
+    assert result is not None
+    new_name, text = result
+    assert new_name == 'BI_zzvvsum.c'
+    assert 'complex128x2_t *v1' in text
+    assert 'float64x2_t *r1' in text
+    assert 'MPI_COMPLEX128X2' in text
+    # Complex files use the zz reduction op
+    assert 'MPI_ZZ_SUM' in text
+    assert 'MPI_SUM,' not in text
+    assert 'Czzgebs2d_aux' in text
+
+
+# ---------------------------------------------------------------------------
+# _patch_bdef_header
+# ---------------------------------------------------------------------------
+
+
+_BDEF_SKELETON = '''\
+typedef struct {double r, i;} DCOMPLEX;
+typedef struct {float r, i;} SCOMPLEX;
+
+#define BI_zvmcopy(m, n, A, lda, buff) \\
+        BI_dvmcopy(2*(m), (n), (double *) (A), 2*(lda), (double *) (buff))
+#define zgamn2d_   zgamn2d
+#define zgamn2d_   ZGAMN2D
+'''
+
+
+def test_patch_bdef_header_multifloats_includes_mfc_header(tmp_path):
+    bdef = tmp_path / 'Bdef.h'
+    bdef.write_text(_BDEF_SKELETON)
+    mf = multifloats_target()
+    template_vars = _build_sub_vars(mf)
+    _patch_bdef_header(bdef, mf, template_vars)
+    out = bdef.read_text()
+    # Multifloats branch uses libmfc's plain-C header for type defs
+    assert '#include "multifloats_c.h"' in out
+    # Should NOT emit the legacy __float128 typedef
+    assert '__float128' not in out
+    assert 'typedef __float128' not in out
+    # Forward decls for the BI_*mvcopy/vmcopy helpers still present
+    assert 'BI_ddmvcopy' in out
+    assert 'BI_ddvmcopy' in out
+    # Name-mangling defines for the dd/zz prefixes
+    assert 'ddgamn2d_' in out
+    assert 'zzgamn2d_' in out
+
+
+def test_patch_bdef_header_kind16_emits_legacy_typedef(tmp_path):
+    """Regression: KIND=16 target keeps the original __float128 block."""
+    bdef = tmp_path / 'Bdef.h'
+    bdef.write_text(_BDEF_SKELETON)
+    k16 = kind_target(16)
+    template_vars = _build_sub_vars(k16)
+    _patch_bdef_header(bdef, k16, template_vars)
+    out = bdef.read_text()
+    assert 'typedef __float128 QREAL' in out
+    assert '#include "multifloats_c.h"' not in out
+
+
+# ---------------------------------------------------------------------------
+# _apply_overrides
+# ---------------------------------------------------------------------------
+
+
+def test_apply_overrides_overwrites_clone(tmp_path):
+    output_dir = tmp_path / 'output'
+    output_dir.mkdir()
+    src_dir = tmp_path / 'src'
+    src_dir.mkdir()
+
+    # Pre-existing clone (e.g. produced by the regex pass) -- will be
+    # overwritten.
+    (output_dir / 'BI_ddvvsum.c').write_text('// clone produced by regex\n')
+
+    # Hand-written override.
+    override_text = '// hand-written override\nvoid BI_ddvvsum(...) {}\n'
+    (src_dir / 'BI_ddvvsum.c').write_text(override_text)
+
+    applied = _apply_overrides(
+        output_dir,
+        [(src_dir / 'BI_ddvvsum.c', 'BI_ddvvsum.c')],
+    )
+    assert applied == ['BI_ddvvsum.c']
+    assert (output_dir / 'BI_ddvvsum.c').read_text() == override_text
+
+
+def test_apply_overrides_missing_source_raises(tmp_path):
+    output_dir = tmp_path / 'output'
+    output_dir.mkdir()
+    with pytest.raises(FileNotFoundError):
+        _apply_overrides(
+            output_dir,
+            [(tmp_path / 'does_not_exist.c', 'BI_ddvvsum.c')],
+        )

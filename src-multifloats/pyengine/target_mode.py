@@ -33,6 +33,19 @@ class TargetMode:
     known_constants: dict[str, str]    # {'ZERO': 'MF_ZERO', ...}
     la_constants_map: dict[str, str]   # la_constants rename map
 
+    # C-interop fields (None for KIND targets, populated for multifloats).
+    # Used by c_migrator to substitute types / MPI handles / reduction ops
+    # in cloned BLACS and PBLAS C sources. KIND targets derive these
+    # directly from kind_suffix via the legacy dict-based tables.
+    c_real_type: Optional[str] = None         # 'float64x2_t'
+    c_complex_type: Optional[str] = None      # 'complex128x2_t'
+    c_mpi_real: Optional[str] = None          # 'MPI_FLOAT64X2'
+    c_mpi_complex: Optional[str] = None       # 'MPI_COMPLEX128X2'
+    c_mpi_sum_real: Optional[str] = None      # 'MPI_DD_SUM'
+    c_mpi_sum_complex: Optional[str] = None   # 'MPI_ZZ_SUM'
+    c_header: Optional[str] = None            # 'multifloats_c.h'
+    c_init_fn: Optional[str] = None           # 'multifloats_mpi_init'
+
     @property
     def is_kind_based(self) -> bool:
         return self.kind_suffix is not None
@@ -136,5 +149,16 @@ def multifloats_target(
         kind_param_value=None,
         module_name=module,
         known_constants=known_constants,
-        la_constants_map=la_constants_map
+        la_constants_map=la_constants_map,
+        # C-interop: struct types and MPI handles provided by libmfc
+        # (external/multifloats/{include,src}/). The migrated BLACS and
+        # PBLAS C sources substitute these names via c_migrator.
+        c_real_type='float64x2_t',
+        c_complex_type='complex128x2_t',
+        c_mpi_real='MPI_FLOAT64X2',
+        c_mpi_complex='MPI_COMPLEX128X2',
+        c_mpi_sum_real='MPI_DD_SUM',
+        c_mpi_sum_complex='MPI_ZZ_SUM',
+        c_header='multifloats_c.h',
+        c_init_fn='multifloats_mpi_init',
     )

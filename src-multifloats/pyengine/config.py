@@ -65,6 +65,25 @@ class RecipeConfig:
     # library-specific extended-precision typedefs referenced by
     # c_type_aliases targets.
     header_patches: list[dict] = field(default_factory=list)
+    # Target-gated verbatim file overrides. Structure:
+    #
+    #     overrides:
+    #       <target_name>:
+    #         src_dir: <path relative to recipe file>
+    #         files:
+    #           - <filename>
+    #           - ...
+    #
+    # For the active target, each listed file is copied verbatim from
+    # ``<recipe_dir>/<src_dir>/<filename>`` to ``<output_dir>/<filename>``
+    # after the main C migration has produced clones and header patches,
+    # so the override wins. Used for hand-written replacement kernels
+    # that cannot be produced by regex substitution (e.g. BI_*vv* for
+    # multifloats double-double arithmetic).
+    overrides: dict = field(default_factory=dict)
+    # Directory containing the recipe file, used to resolve paths in
+    # ``overrides`` and similar recipe-relative references.
+    recipe_dir: Path | None = None
 
 
 def load_recipe(recipe_path: Path,
@@ -131,4 +150,6 @@ def load_recipe(recipe_path: Path,
         c_return_types=list(data.get('c_return_types', [])),
         c_type_aliases=list(data.get('c_type_aliases', [])),
         header_patches=list(data.get('header_patches', [])),
+        overrides=dict(data.get('overrides') or {}),
+        recipe_dir=recipe_path.parent,
     )

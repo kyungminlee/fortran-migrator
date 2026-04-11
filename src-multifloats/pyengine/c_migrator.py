@@ -36,6 +36,10 @@ REAL_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
     (r'MPI_DOUBLE', '{MPI_REAL}'),
+    # Reduction op. For KIND targets {MPI_SUM_REAL} expands to 'MPI_SUM'
+    # so the rule is a textual no-op. For multifloats it expands to
+    # 'MPI_DD_SUM', the user-defined op registered by libmfc.
+    (r'\bMPI_SUM\b', '{MPI_SUM_REAL}'),
     # Function name prefixes (allow uppercase after prefix for BI_dMPI_* etc.)
     (r'Cd([a-z])', r'C{RP}\1'),
     (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
@@ -54,6 +58,8 @@ COMPLEX_CLONE_SUBS = [
     (r'MPI_DOUBLE_COMPLEX', '{MPI_COMPLEX}'),
     (r'MPI_DOUBLE', '{MPI_REAL}'),
     (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'{MPI_COMPLEX}\1'),
+    # Reduction op (see REAL_CLONE_SUBS). Complex files use the zz op.
+    (r'\bMPI_SUM\b', '{MPI_SUM_COMPLEX}'),
     # Function name prefixes (allow uppercase after prefix for BI_zMPI_* etc.)
     (r'Cz([a-z])', r'C{CP}\1'),
     (r'BI_z([a-zA-Z])', r'BI_{CP}\1'),
@@ -71,6 +77,8 @@ SINGLE_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
     (r'MPI_FLOAT', '{MPI_REAL}'),
+    # Reduction op (see REAL_CLONE_SUBS)
+    (r'\bMPI_SUM\b', '{MPI_SUM_REAL}'),
     # Function name prefixes
     (r'Cs([a-z])', r'C{RP}\1'),
     (r'BI_s([a-zA-Z])', r'BI_{RP}\1'),
@@ -89,6 +97,8 @@ CSINGLE_CLONE_SUBS = [
     (r'MPI_FLOAT_COMPLEX', '{MPI_COMPLEX}'),
     (r'MPI_FLOAT', '{MPI_REAL}'),
     (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'{MPI_COMPLEX}\1'),
+    # Reduction op (see REAL_CLONE_SUBS). Complex files use the zz op.
+    (r'\bMPI_SUM\b', '{MPI_SUM_COMPLEX}'),
     # Function name prefixes
     (r'Cc([a-z])', r'C{CP}\1'),
     (r'BI_c([a-zA-Z])', r'BI_{CP}\1'),
@@ -117,22 +127,58 @@ _MPI_COMPLEX_TYPE = {
 
 
 def _build_sub_vars(target_mode: TargetMode) -> dict[str, str]:
-    """Build template substitution variables for a given target mode."""
-    if not target_mode.is_kind_based:
-        raise NotImplementedError("C migration not supported for multifloats")
-    kind = target_mode.kind_suffix
+    """Build template substitution variables for a given target mode.
 
+    Two branches: KIND targets (Q/X/E/Y) derive everything from the
+    legacy _C_REAL_TYPE / _MPI_REAL_TYPE / _MPI_COMPLEX_TYPE tables and
+    use the stock 'MPI_SUM' reduction op. The multifloats target pulls
+    its C-interop names from TargetMode fields populated by
+    ``multifloats_target()`` and uses user-defined MPI ops registered
+    at runtime by libmfc.
+    """
     rp = target_prefix(target_mode, is_complex=False).lower()
     cp = target_prefix(target_mode, is_complex=True).lower()
-    # Type names follow convention: Q/E for real prefix → QREAL/EREAL
-    real_type = f'{rp.upper()}REAL'
-    complex_type = f'{cp.upper()}COMPLEX'
+
+    if target_mode.is_kind_based:
+        kind = target_mode.kind_suffix
+        # Type names follow convention: Q/E for real prefix → QREAL/EREAL
+        real_type = f'{rp.upper()}REAL'
+        complex_type = f'{cp.upper()}COMPLEX'
+        return {
+            'REAL_TYPE': real_type,
+            'COMPLEX_TYPE': complex_type,
+            'C_REAL_TYPE': _C_REAL_TYPE[kind],
+            'MPI_REAL': _MPI_REAL_TYPE[kind],
+            'MPI_COMPLEX': _MPI_COMPLEX_TYPE[kind],
+            # Stock reduction op. {MPI_SUM_REAL} and {MPI_SUM_COMPLEX}
+            # both expand to 'MPI_SUM' so the new MPI_SUM→{MPI_SUM_*}
+            # substitution rules are textual no-ops for KIND targets.
+            'MPI_SUM_REAL': 'MPI_SUM',
+            'MPI_SUM_COMPLEX': 'MPI_SUM',
+            'RP': rp,
+            'CP': cp,
+            'RPU': rp.upper(),
+            'CPU': cp.upper(),
+        }
+
+    # Multifloats target -- read C-interop fields from target_mode.
+    # target_mode.c_real_type etc. are populated by multifloats_target().
+    assert target_mode.c_real_type is not None, (
+        "multifloats target_mode missing c_real_type; did you construct "
+        "it via multifloats_target()?"
+    )
     return {
-        'REAL_TYPE': real_type,
-        'COMPLEX_TYPE': complex_type,
-        'C_REAL_TYPE': _C_REAL_TYPE[kind],
-        'MPI_REAL': _MPI_REAL_TYPE[kind],
-        'MPI_COMPLEX': _MPI_COMPLEX_TYPE[kind],
+        'REAL_TYPE': target_mode.c_real_type,        # 'float64x2_t'
+        'COMPLEX_TYPE': target_mode.c_complex_type,  # 'complex128x2_t'
+        # For multifloats the "underlying C type" is the struct itself
+        # -- there is no primitive scalar beneath it. Use the same name
+        # so recipe header_patches that reference {C_REAL_TYPE} expand
+        # to the struct typedef, which is what libmfc provides.
+        'C_REAL_TYPE': target_mode.c_real_type,
+        'MPI_REAL': target_mode.c_mpi_real,          # 'MPI_FLOAT64X2'
+        'MPI_COMPLEX': target_mode.c_mpi_complex,    # 'MPI_COMPLEX128X2'
+        'MPI_SUM_REAL': target_mode.c_mpi_sum_real,      # 'MPI_DD_SUM'
+        'MPI_SUM_COMPLEX': target_mode.c_mpi_sum_complex, # 'MPI_ZZ_SUM'
         'RP': rp,
         'CP': cp,
         'RPU': rp.upper(),
@@ -159,11 +205,25 @@ def clone_c_file(src_path: Path, dst_path: Path,
             expanded = expanded.replace(f'{{{key}}}', val)
         text = re.sub(pattern, expanded, text, flags=re.MULTILINE)
 
-    # Apply routine name renames (lowercase and uppercase)
+    # Apply routine name renames. Use a left-side word-boundary
+    # negative lookbehind so we don't double-rename inside identifiers
+    # already produced by the regex prefix substitutions above. For
+    # example with multifloats, the regex pass turns ``Cdgesd2d`` into
+    # ``Cddgesd2d``; a plain text.replace('dgesd2d', 'ddgesd2d') would
+    # then find the substring inside ``Cddgesd2d`` and produce
+    # ``Cdddgesd2d``. The lookbehind prevents that because the 'd' at
+    # offset 1 is preceded by another word character ('C' / 'd').
+    # Single-char-prefix KIND targets dodge this because their regex
+    # produces names like ``Cqgesd2d`` that no longer contain
+    # ``dgesd2d`` as a substring.
     if routine_renames:
         for old_name, new_name in routine_renames:
-            text = text.replace(old_name, new_name)
-            text = text.replace(old_name.upper(), new_name.upper())
+            text = re.sub(
+                r'(?<![A-Za-z0-9_])' + re.escape(old_name),
+                new_name, text)
+            text = re.sub(
+                r'(?<![A-Za-z0-9_])' + re.escape(old_name.upper()),
+                new_name.upper(), text)
 
     dst_path.write_text(text)
 
@@ -206,7 +266,8 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                         classification: SymbolClassification | None = None,
                         rename_map: dict[str, str] | None = None,
                         c_type_aliases: list[dict] | None = None,
-                        header_patches: list[dict] | None = None) -> dict:
+                        header_patches: list[dict] | None = None,
+                        overrides: list[tuple[Path, str]] | None = None) -> dict:
     """Migrate a C source directory by cloning real/complex variants.
 
     Two modes:
@@ -225,16 +286,48 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
       MPI_REAL16 check module for KIND=16. Preserved for backward
       compatibility.
 
+    ``overrides`` is a list of (src_path, dst_name) pairs that are
+    copied verbatim on top of clones after the main migration step
+    and after header patches have run. Used for hand-written
+    replacement kernels that cannot be produced by regex substitution.
+
     Returns a summary dict.
     """
     if classification is not None and rename_map is not None:
-        return _migrate_generic_c_directory(
+        result = _migrate_generic_c_directory(
             src_dir, output_dir, target_mode, copy_originals,
             classification, rename_map,
             c_type_aliases=c_type_aliases,
             header_patches=header_patches,
         )
-    return _migrate_blacs_c_directory(src_dir, output_dir, target_mode, copy_originals)
+    else:
+        result = _migrate_blacs_c_directory(
+            src_dir, output_dir, target_mode, copy_originals,
+        )
+    if overrides:
+        applied = _apply_overrides(output_dir, overrides)
+        result['overrides'] = applied
+    return result
+
+
+def _apply_overrides(output_dir: Path,
+                     overrides: list[tuple[Path, str]]) -> list[str]:
+    """Copy hand-written replacement files on top of migrated clones.
+
+    Each entry is ``(src_path, dst_name)``. Any pre-existing
+    ``<output_dir>/<dst_name>`` is overwritten. Missing sources raise
+    FileNotFoundError so recipe typos are caught early.
+    """
+    applied: list[str] = []
+    for src_path, dst_name in overrides:
+        if not src_path.is_file():
+            raise FileNotFoundError(
+                f"override file not found: {src_path}"
+            )
+        dst = output_dir / dst_name
+        shutil.copy2(src_path, dst)
+        applied.append(dst_name)
+    return applied
 
 
 def _build_rename_regex(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[str, str]]:
@@ -404,9 +497,14 @@ def migrate_c_file_to_string(
     for pat, repl in subs:
         expanded = _expand_template(repl, template_vars)
         text = re.sub(pat, expanded, text, flags=re.MULTILINE)
+    # See clone_c_file for the multi-char-prefix lookbehind rationale.
     for old_name, new_routine in renames:
-        text = text.replace(old_name, new_routine)
-        text = text.replace(old_name.upper(), new_routine.upper())
+        text = re.sub(
+            r'(?<![A-Za-z0-9_])' + re.escape(old_name),
+            new_routine, text)
+        text = re.sub(
+            r'(?<![A-Za-z0-9_])' + re.escape(old_name.upper()),
+            new_routine.upper(), text)
     return new_name, text
 
 
@@ -565,7 +663,6 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
                                  target_mode: TargetMode, copy_originals: bool) -> dict:
     """BLACS-specific C migration (original behavior)."""
     template_vars = _build_sub_vars(target_mode)
-    kind = target_mode.kind_suffix
     rp = template_vars['RP']
     cp = template_vars['CP']
 
@@ -620,8 +717,11 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
     if bdef_path.exists():
         _patch_bdef_header(bdef_path, target_mode, template_vars)
 
-    # Generate MPI requirement check for KIND=16
-    if kind == 16:
+    # Generate MPI requirement check for KIND=16 (verifies the stock
+    # MPI_REAL16 / MPI_COMPLEX32 datatypes are available). Multifloats
+    # builds its own MPI handles at runtime via libmfc and does not
+    # require this check.
+    if target_mode.is_kind_based and target_mode.kind_suffix == 16:
         _generate_mpi_real16_check(output_dir)
 
     return {
@@ -641,15 +741,15 @@ _BLACS_ROUTINE_SUFFIXES = [
 def _patch_bdef_header(bdef_path: Path, target_mode: TargetMode,
                        template_vars: dict[str, str]) -> None:
     """Add extended-precision type definitions and macros to Bdef.h."""
-    kind = target_mode.kind_suffix
     rp = template_vars['RP']
     cp = template_vars['CP']
-    real_type = template_vars['REAL_TYPE']      # e.g. QREAL
-    complex_type = template_vars['COMPLEX_TYPE']  # e.g. XCOMPLEX
-    c_type = _C_REAL_TYPE[kind]
+    real_type = template_vars['REAL_TYPE']      # e.g. QREAL / float64x2_t
+    complex_type = template_vars['COMPLEX_TYPE']  # e.g. XCOMPLEX / complex128x2_t
 
-    # --- Type definitions and prototypes ---
-    type_block = f"""
+    if target_mode.is_kind_based:
+        # KIND targets: emit primitive typedefs (__float128, long double).
+        c_type = _C_REAL_TYPE[target_mode.kind_suffix]
+        type_block = f"""
 /*
  *  Extended-precision types for migrated {{prefix}} routines.
  */
@@ -659,6 +759,21 @@ typedef struct {{{real_type} r, i;}} {complex_type};
 void BI_{rp}mvcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
 void BI_{rp}vmcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
 """.replace('{prefix}', f'{rp}/{cp}')
+    else:
+        # Multifloats target: types and MPI handles come from libmfc's
+        # plain-C header. Just include it and forward-declare the copy
+        # helpers the cloned BLACS sources will call.
+        type_block = f"""
+/*
+ *  Multifloats companion types for migrated {rp}/{cp} routines.
+ *  Struct layouts match the Fortran SEQUENCE derived types so
+ *  pointer aliasing between C and Fortran is well-defined.
+ */
+#include "{target_mode.c_header}"
+
+void BI_{rp}mvcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
+void BI_{rp}vmcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
+"""
 
     # --- Complex copy macros ---
     macro_block = f"""#define BI_{cp}mvcopy(m, n, A, lda, buff) \\

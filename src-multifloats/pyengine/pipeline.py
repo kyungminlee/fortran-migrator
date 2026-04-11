@@ -1115,6 +1115,8 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         print('  (dry-run for C migration not yet implemented)')
         return {'cloned': [], 'template_vars': {}}
 
+    overrides = _resolve_overrides(config, target_mode)
+
     result = migrate_c_directory(
         config.source_dir, output_dir, target_mode,
         copy_originals=config.copy_all_originals,
@@ -1122,8 +1124,31 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         rename_map=rename_map,
         c_type_aliases=config.c_type_aliases,
         header_patches=config.header_patches,
+        overrides=overrides,
     )
     return result
+
+
+def _resolve_overrides(config: RecipeConfig,
+                       target_mode: TargetMode) -> list[tuple[Path, str]]:
+    """Select the active target's override entries from the recipe.
+
+    The ``overrides`` recipe field is a dict keyed by target name. For
+    the currently active target, return a list of ``(src_path, dst_name)``
+    pairs with ``src_path`` resolved against the recipe directory.
+    Returns an empty list if the recipe has no overrides for this target.
+    """
+    target_entry = (config.overrides or {}).get(target_mode.name)
+    if not target_entry:
+        return []
+    src_dir_rel = target_entry.get('src_dir', '')
+    files = target_entry.get('files', [])
+    if config.recipe_dir is None:
+        raise RuntimeError(
+            'RecipeConfig.recipe_dir is not set; cannot resolve overrides'
+        )
+    src_dir = (config.recipe_dir / src_dir_rel).resolve()
+    return [(src_dir / fname, fname) for fname in files]
 
 
 def run_migration(recipe_path: Path, output_dir: Path,
