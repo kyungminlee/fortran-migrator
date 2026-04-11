@@ -169,26 +169,26 @@ def test_strip_kind_target_is_noop():
 def test_replace_literals_d_exponent(mf):
     src = "      X = 1.0D+0 + 2.5D-3"
     out = replace_literals(src, mf)
-    assert "float64x2('1.0D+0')" in out
-    assert "float64x2('2.5D-3')" in out
+    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
+    assert "float64x2(limbs=[2.5D-3, 0.0_8])" in out
 
 
 def test_replace_literals_bare_float(mf):
     src = "      X = 0.5"
     out = replace_literals(src, mf)
-    assert "float64x2('0.5D0')" in out
+    assert "float64x2(limbs=[0.5D0, 0.0_8])" in out
 
 
 def test_replace_literals_wp_suffix(mf):
     src = "   x = 0.5_wp + 1.0_wp"
     out = replace_literals(src, mf)
-    assert "float64x2('0.5D0')" in out
-    assert "float64x2('1.0D0')" in out
+    assert "float64x2(limbs=[0.5D0, 0.0_8])" in out
+    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
 
 
 def test_replace_literals_does_not_double_wrap(mf):
     """Idempotence: re-running on already-wrapped output is a no-op."""
-    src = "      X = float64x2('1.0D+0')"
+    src = "      X = float64x2(limbs=[1.0D0, 0.0_8])"
     out1 = replace_literals(src, mf)
     out2 = replace_literals(out1, mf)
     # Second pass mustn't add another constructor layer.
@@ -209,7 +209,7 @@ def test_replace_literals_skips_fortran_operators(mf):
     src = "      IF (X.EQ.1.0D+0) GO TO 10"
     out = replace_literals(src, mf)
     assert '.EQ.' in out
-    assert "float64x2('1.0D+0')" in out
+    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
 
 
 # ---------------------------------------------------------------------------

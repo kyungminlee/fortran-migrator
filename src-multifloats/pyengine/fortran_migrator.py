@@ -53,6 +53,19 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
     line = re.sub(r'COMPLEX\*8', complex_target, line, flags=re.IGNORECASE)
     line = re.sub(r'REAL\*8', real_target, line, flags=re.IGNORECASE)
     line = re.sub(r'REAL\*4', real_target, line, flags=re.IGNORECASE)
+    # ``REAL(KIND=WP)`` / ``REAL(WP)`` / ``COMPLEX(KIND=WP)`` etc.
+    # appear in newer-style LAPACK files (e.g. DGEDMD, DGEDMDQ). The
+    # ``wp`` parameter declaration is independently stripped earlier
+    # in the pipeline, so the bare ``KIND=WP`` reference would dangle.
+    # Rewrite both real and complex forms to the multifloats type.
+    line = re.sub(
+        r'REAL\s*\(\s*(?:KIND\s*=\s*)?WP\s*\)',
+        real_target, line, flags=re.IGNORECASE,
+    )
+    line = re.sub(
+        r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?WP\s*\)',
+        complex_target, line, flags=re.IGNORECASE,
+    )
 
     if not target_mode.is_kind_based:
         line = _filter_known_constants_from_decl(line, target_mode)
@@ -136,6 +149,16 @@ def strip_known_constants_from_decls(
 
         # Bail on function-return decls: 'REAL FUNCTION FOO(...)'.
         if re.match(r'^\s*FUNCTION\b', vars_part, re.IGNORECASE):
+            out.append(raw); i += 1; continue
+
+        # ZERO/ONE/etc. that are declared as a COMPLEX type carry
+        # complex semantics. Replacing them globally with MF_ONE
+        # (a real float64x2 constant) breaks call sites such as
+        # CALL UGEMV(..., ONE, ...) where the dummy is complex.
+        # Skip stripping for complex declarations: the local var
+        # remains, and convert_parameter_stmts emits an assignment
+        # ``ONE = complex128x2(MF_ONE, MF_ZERO)`` later.
+        if re.search(r'COMPLEX', type_text, re.IGNORECASE):
             out.append(raw); i += 1; continue
 
         # Collect continuation lines (fixed-form col-6 marker, OR
@@ -244,6 +267,13 @@ def _filter_known_constants_from_decl(line: str, target_mode: TargetMode) -> str
     if not m:
         return line
     indent, type_text, sep, vars_part, trailer = m.groups()
+    # Skip stripping when the declared type is COMPLEX. ZERO/ONE/etc.
+    # declared as complex carry complex semantics; replacing them
+    # globally with the real ``MF_ONE``/``MF_ZERO`` would break call
+    # sites that pass them as a complex argument (e.g.
+    # ``CALL UGEMV(..., ONE, ...)``).
+    if complex_target in type_text or 'COMPLEX' in type_text.upper():
+        return line
     # Only handle simple comma-separated identifier lists. If any
     # entry contains parens (array spec) or '=' (initializer), bail
     # out — those need a smarter parser and the wholesale rewrite
@@ -300,13 +330,20 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
         exp_rest = m.group(3)
         if exp_rest.startswith('+'):
             exp_rest = exp_rest[1:]
-            
+
         if target_mode.literal_mode == 'kind_suffix':
             return f'{mantissa}E{exp_rest}_{target_mode.kind_suffix}'
         else:
-            orig = m.group(0)
-            # Use string constructor for ALL literals in multifloats mode to avoid REAL(4) issues
-            return f"{target_mode.real_constructor}('{orig}')"
+            # Named-component (``limbs=...``) structure-constructor
+            # form. This is a constant expression and is therefore
+            # legal in PARAMETER initializers — the alternative
+            # ``float64x2('1.0D0')`` is a function call (the
+            # ``mf_from_char`` generic) and would be rejected by the
+            # compiler in PARAMETER context.
+            return (
+                f"{target_mode.real_constructor}"
+                f"(limbs=[{mantissa}D{exp_rest}, 0.0_8])"
+            )
 
     parts = re.split(r"('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\")", line)
     _FORTRAN_OP = re.compile(
@@ -318,20 +355,37 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
         masked = _FORTRAN_OP.sub(
             lambda m: '\x00' + m.group(1) + '\x00', seg,
         )
-        
+
+        # ``1.23_wp`` style literals are normalized first into a
+        # placeholder so that the subsequent passes (D/E exponent and
+        # bare-literal substitution) do not see the substituted form
+        # and re-wrap its inner ``1.23D0`` text. We restore the
+        # placeholders at the very end of the loop.
+        wp_placeholders: list[str] = []
+
+        def _wp_sub(m):
+            val = m.group(1)
+            if 'D' not in val.upper() and 'E' not in val.upper():
+                if '.' in val:
+                    val += 'D0'
+                else:
+                    val += '.0D0'
+            tok = f"\x01WP{len(wp_placeholders)}\x01"
+            wp_placeholders.append(
+                f"{target_mode.real_constructor}(limbs=[{val}, 0.0_8])"
+            )
+            return tok
+
         if target_mode.literal_mode == 'constructor':
-            def _wp_sub(m):
-                val = m.group(1)
-                if 'D' not in val.upper() and 'E' not in val.upper():
-                    if '.' in val:
-                        val += 'D0'
-                    else:
-                        val += '.0D0'
-                return f"{target_mode.real_constructor}('{val}')"
             masked = re.sub(r'(\d+\.\d*|\d*\.\d+)_wp', _wp_sub, masked, flags=re.IGNORECASE)
 
+        # The negative lookbehind also rejects ``[`` (so we don't
+        # match the inner ``.0D0`` of a previously-wrapped
+        # ``float64x2(limbs=[1.0D0, 0.0_8])`` form) and rejects a
+        # leading digit (so we don't match the ``.0D0`` substring of
+        # a complete ``1.0D0`` literal that's already been consumed).
         masked = re.sub(
-            r'(\d+\.\d*|\d*\.\d+)([DEde])([+-]?\d+)',
+            r'(?<![\[\d])(\d+\.\d*|\d*\.\d+)([DEde])([+-]?\d+)',
             literal_sub, masked,
         )
         if target_mode.literal_mode == 'kind_suffix':
@@ -342,9 +396,15 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
         else:
             def bare_sub(m):
                 val = m.group(1)
-                return f"{target_mode.real_constructor}('{val}D0')"
+                return (
+                    f"{target_mode.real_constructor}"
+                    f"(limbs=[{val}D0, 0.0_8])"
+                )
+            # The negative lookbehind on ``[`` skips literals that
+            # already live inside a previously-wrapped
+            # ``float64x2(limbs=[...])`` form.
             masked = re.sub(
-                r'(?<![.\w])(\d+\.\d*|\d*\.\d+)(?![DdEe\w]|_\d)',
+                r'(?<![.\w\[])(\d+\.\d*|\d*\.\d+)(?![DdEe\w]|_\d)',
                 bare_sub, masked,
             )
             
@@ -362,6 +422,12 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
                 masked,
                 flags=re.IGNORECASE
             )
+
+        # Restore the ``_wp`` literal placeholders.
+        if wp_placeholders:
+            def _wp_restore(m):
+                return wp_placeholders[int(m.group(1))]
+            masked = re.sub(r'\x01WP(\d+)\x01', _wp_restore, masked)
 
         parts[idx] = re.sub(
             r'\x00([A-Za-z]+)\x00', r'.\1.', masked,
@@ -828,11 +894,17 @@ def replace_known_constants(
 
 
 _COMPLEX_DECL_RE = re.compile(
-    r'^\s+(?:DOUBLE\s+COMPLEX|COMPLEX\s*\*\s*(?:8|16)|COMPLEX(?!\s*[*(])|TYPE\s*\(\s*complex128x2\s*\))',
+    r'^\s+(?:DOUBLE\s+COMPLEX|COMPLEX\s*\*\s*(?:8|16)'
+    r'|COMPLEX\s*\(\s*(?:KIND\s*=\s*)?\w+\s*\)'
+    r'|COMPLEX(?!\s*[*(])'
+    r'|TYPE\s*\(\s*complex128x2\s*\))',
     re.IGNORECASE,
 )
 _REAL_DECL_RE = re.compile(
-    r'^\s+(?:DOUBLE\s+PRECISION|REAL\s*\*\s*(?:4|8)|REAL(?!\s*[*(])|TYPE\s*\(\s*float64x2\s*\))',
+    r'^\s+(?:DOUBLE\s+PRECISION|REAL\s*\*\s*(?:4|8)'
+    r'|REAL\s*\(\s*(?:KIND\s*=\s*)?\w+\s*\)'
+    r'|REAL(?!\s*[*(])'
+    r'|TYPE\s*\(\s*float64x2\s*\))',
     re.IGNORECASE,
 )
 _INTEGER_DECL_RE = re.compile(
@@ -993,6 +1065,11 @@ def _wrap_complex_args(
     if cur:
         parts.append(cur)
 
+    # Drop a trailing ``KIND=...`` argument. The kind selector is only
+    # meaningful in the original CMPLX call signature; the multifloats
+    # ``complex128x2`` interface has no equivalent.
+    parts = [p for p in parts if not re.match(r'\s*KIND\s*=', p, re.IGNORECASE)]
+
     def _wrap_one(arg: str) -> str:
         s = arg.strip()
         if not s:
@@ -1056,14 +1133,37 @@ def _wrap_bare_complex_literals(line: str, target_mode: TargetMode) -> str:
     literal whose components are non-numeric — gfortran rejects this
     in PARAMETER and array-constructor contexts. Wrap with
     ``complex128x2(...)`` so the structure constructor takes over.
+
+    The same fix-up applies to literals whose components have been
+    rewritten to ``float64x2('...')`` calls (e.g. when the original
+    source used ``(1.0_WP, 0.0_WP)``): the parenthesized pair is no
+    longer a recognized Fortran complex literal once the components
+    contain function calls, so the outer wrap is necessary.
     """
     if target_mode.is_kind_based or not target_mode.complex_constructor:
         return line
-    return re.sub(
-        r'\(\s*([-+]?\s*MF_[A-Z][A-Z0-9_]*)\s*,\s*([-+]?\s*MF_[A-Z][A-Z0-9_]*)\s*\)',
-        rf"{target_mode.complex_constructor}(\1,\2)",
+    # Use named-component form (``re=..., im=...``) so the result
+    # binds to the complex128x2 *structure constructor* and not to the
+    # generic interface — the latter is a function call and is illegal
+    # inside PARAMETER initializers (e.g. ``ZONE = complex128x2(re=...,
+    # im=...)`` in DGEDMD/UGEDMD). The negative lookbehind on the
+    # opening paren prevents re-wrapping an existing
+    # ``complex128x2(...)`` call, e.g. one that the migrator already
+    # produced from ``DCMPLX(ONE, ZERO)``.
+    line = re.sub(
+        r'(?<![A-Za-z0-9_])\(\s*([-+]?\s*MF_[A-Z][A-Z0-9_]*)\s*,\s*'
+        r'([-+]?\s*MF_[A-Z][A-Z0-9_]*)\s*\)',
+        rf"{target_mode.complex_constructor}(re=\1, im=\2)",
         line,
     )
+    real_ctor = re.escape(target_mode.real_constructor or 'float64x2')
+    line = re.sub(
+        rf"(?<![A-Za-z0-9_])\(\s*([-+]?\s*{real_ctor}\([^()]*\))\s*,"
+        rf"\s*([-+]?\s*{real_ctor}\([^()]*\))\s*\)",
+        rf"{target_mode.complex_constructor}(re=\1, im=\2)",
+        line,
+    )
+    return line
 
 
 def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:
@@ -1143,6 +1243,15 @@ def convert_parameter_stmts(
     if target_mode.is_kind_based:
         return source, [], {}
 
+    # Pre-scan declarations so we can tell whether a name like ``ONE``
+    # was declared COMPLEX. The original LAPACK convention in
+    # Z-prefixed routines is ``COMPLEX*16 ONE; PARAMETER(ONE = 1.0D+0)``
+    # — the value is a real literal but it carries complex semantics
+    # because Fortran promotes the literal to the declared type. The
+    # multifloats migrator must NOT fold such names into the real
+    # ``MF_ONE`` constant.
+    complex_names = _scan_complex_var_names(source)
+
     lines = source.splitlines(keepends=True)
     result, fp_assignments = [], []
     dropped_known: dict[str, str] = {}
@@ -1178,7 +1287,23 @@ def convert_parameter_stmts(
                     name, val = part.split('=', 1)
                     name, val = name.strip(), val.strip()
                     if _is_fp_value(val, target_mode.known_constants):
-                        if name.upper() in target_mode.known_constants:
+                        # A known-constant name carries complex
+                        # semantics if either (a) the value is a
+                        # complex literal / constructor, or (b) the
+                        # local declaration of the name is COMPLEX.
+                        # In either case it must NOT be folded into
+                        # the multifloats real-constant rename map —
+                        # we keep it as a runtime assignment so the
+                        # variable retains its complex type.
+                        is_cx_value = (
+                            ('(' in val and ',' in val) or
+                            'complex128x2' in val.lower() or
+                            'cmplx' in val.lower() or
+                            'dcmplx' in val.lower() or
+                            name.upper() in complex_names
+                        )
+                        if (name.upper() in target_mode.known_constants
+                                and not is_cx_value):
                             line_dropped_known[name.upper()] = target_mode.known_constants[name.upper()]
                             continue
                         line_assignments.append(f"{indent}{name} = {val}{comment}\n")
@@ -1425,8 +1550,23 @@ def _scan_local_declared_names(proc_lines: list[str]) -> set[str]:
             if new_tail == tail:
                 break
             tail = new_tail
-        for m in _IDENT_RE.finditer(tail):
-            names.add(m.group(1).lower())
+        # Drop ``= initializer`` clauses (PARAMETER initializers may
+        # contain references to module names like ``complex128x2``
+        # that should not be treated as locally-declared variables).
+        # Split at top-level commas, then drop everything from ``=``
+        # onward in each item.
+        items = []
+        cur = ''
+        for ch in tail + ',':
+            if ch == ',':
+                items.append(cur)
+                cur = ''
+            else:
+                cur += ch
+        for item in items:
+            lhs = item.split('=', 1)[0]
+            for m in _IDENT_RE.finditer(lhs):
+                names.add(m.group(1).lower())
     return names
 
 
@@ -1766,6 +1906,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
     removed_known.update(dropped_p)
     removed_known.update(dropped_d)
+    source = _dedup_intrinsic_stmts(source, target_mode)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
     lines = source.splitlines(keepends=True)
     result = []
@@ -1982,6 +2123,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
     removed_known.update(dropped_p)
     removed_known.update(dropped_d)
 
+    source = _dedup_intrinsic_stmts(source, target_mode)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
     lines = source.splitlines(keepends=True)
     result = []
@@ -2000,8 +2142,15 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
             stripped = replace_type_decls(stripped, target_mode)
         else:
             if not target_mode.is_kind_based:
-                stripped = re.sub(r'REAL\(' + _KIND_PARAM_NAMES + r'\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
-                stripped = re.sub(r'COMPLEX\(' + _KIND_PARAM_NAMES + r'\)', target_mode.complex_type, stripped, flags=re.IGNORECASE)
+                stripped = re.sub(r'REAL\s*\(\s*(?:KIND\s*=\s*)?' + _KIND_PARAM_NAMES + r'\s*\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
+                stripped = re.sub(r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?' + _KIND_PARAM_NAMES + r'\s*\)', target_mode.complex_type, stripped, flags=re.IGNORECASE)
+            # Rewrite floating-point literals (D/E exponents and the
+            # ``1.23_wp`` form). Without this, ``( 1.0_WP, 0.0_WP )``
+            # complex constants in modern LAPACK files (DGEDMD/DGEDMDQ)
+            # would be left untouched and gfortran would reject the
+            # KIND parameter once ``wp`` itself has been stripped.
+            if not target_mode.is_kind_based:
+                stripped = replace_literals(stripped, target_mode)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
             stripped = _wrap_bare_complex_literals(stripped, target_mode)
@@ -2109,6 +2258,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
     removed_known.update(dropped_p)
     removed_known.update(dropped_d)
+    source = _dedup_intrinsic_stmts(source, target_mode)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
     lines = source.splitlines(keepends=True)
     result = []
@@ -2157,6 +2307,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
     removed_known.update(dropped_p)
     removed_known.update(dropped_d)
+    source = _dedup_intrinsic_stmts(source, target_mode)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
     lines = source.splitlines(keepends=True)
     result = []
@@ -2175,8 +2326,15 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
             stripped = replace_type_decls(stripped, target_mode)
         else:
             if not target_mode.is_kind_based:
-                stripped = re.sub(r'REAL\(' + _KIND_PARAM_NAMES + r'\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
-                stripped = re.sub(r'COMPLEX\(' + _KIND_PARAM_NAMES + r'\)', target_mode.complex_type, stripped, flags=re.IGNORECASE)
+                stripped = re.sub(r'REAL\s*\(\s*(?:KIND\s*=\s*)?' + _KIND_PARAM_NAMES + r'\s*\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
+                stripped = re.sub(r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?' + _KIND_PARAM_NAMES + r'\s*\)', target_mode.complex_type, stripped, flags=re.IGNORECASE)
+            # Rewrite floating-point literals (D/E exponents and the
+            # ``1.23_wp`` form). Without this, ``( 1.0_WP, 0.0_WP )``
+            # complex constants in modern LAPACK files (DGEDMD/DGEDMDQ)
+            # would be left untouched and gfortran would reject the
+            # KIND parameter once ``wp`` itself has been stripped.
+            if not target_mode.is_kind_based:
+                stripped = replace_literals(stripped, target_mode)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
             stripped = _wrap_bare_complex_literals(stripped, target_mode)
