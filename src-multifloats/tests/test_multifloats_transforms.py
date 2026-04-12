@@ -336,7 +336,7 @@ def test_convert_parameter_drops_known_constant(mf):
 def test_convert_parameter_keeps_unknown_fp(mf):
     src = '      PARAMETER (R=ONE/IPW2)\n'
     new, assigns, dropped = convert_parameter_stmts(src, mf)
-    assert any('R = ONE/IPW2' in a for a in assigns)
+    assert any('R = ONE/IPW2' in text for _, text in assigns)
     assert dropped == {}
 
 
@@ -347,7 +347,7 @@ def test_convert_parameter_mixed_type_keeps_integers(mf):
     assert 'LV=128' in new
     assert 'IPW2=4096' in new
     assert 'PARAMETER' in new
-    assert any('R = 1.0D0' in a for a in assigns)
+    assert any('R = 1.0D0' in text for _, text in assigns)
 
 
 def test_convert_data_drops_known_constants(mf):
@@ -360,8 +360,8 @@ def test_convert_data_drops_known_constants(mf):
 def test_convert_data_keeps_unknown_names(mf):
     src = '      DATA GAM,GAMSQ/4096.D0,16777216.D0/\n'
     new, assigns, dropped = convert_data_stmts(src, mf)
-    assert any('GAM = 4096.D0' in a for a in assigns)
-    assert any('GAMSQ = 16777216.D0' in a for a in assigns)
+    assert any('GAM = 4096.D0' in text for _, text in assigns)
+    assert any('GAMSQ = 16777216.D0' in text for _, text in assigns)
     assert dropped == {}
 
 
@@ -372,8 +372,8 @@ def test_convert_parameter_multiline_continuation(mf):
         '     $           Y = 2.0D+0)\n'
     )
     new, assigns, dropped = convert_parameter_stmts(src, mf)
-    assert any('X = 1.0D+0' in a for a in assigns)
-    assert any('Y = 2.0D+0' in a for a in assigns)
+    assert any('X = 1.0D+0' in text for _, text in assigns)
+    assert any('Y = 2.0D+0' in text for _, text in assigns)
 
 
 def test_convert_parameter_rejects_identifier_with_e(mf):
@@ -391,8 +391,8 @@ def test_convert_data_multiline_continuation(mf):
         '     $          2.0D0/\n'
     )
     new, assigns, dropped = convert_data_stmts(src, mf)
-    assert any('A = 1.0D0' in a for a in assigns)
-    assert any('B = 2.0D0' in a for a in assigns)
+    assert any('A = 1.0D0' in text for _, text in assigns)
+    assert any('B = 2.0D0' in text for _, text in assigns)
 
 
 # ---------------------------------------------------------------------------

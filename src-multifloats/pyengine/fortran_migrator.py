@@ -1284,15 +1284,43 @@ def _join_continued_lines(lines: list[str], start: int) -> tuple[str, int]:
     return out, j
 
 
+_PROC_HEADER_RE_SCOPE = re.compile(
+    r'^\s*(?:RECURSIVE\s+|PURE\s+|ELEMENTAL\s+)*'
+    r'(?:(?:INTEGER|REAL|COMPLEX|LOGICAL|CHARACTER|TYPE\s*\([^)]+\)|DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX)'
+    r'(?:\s*\*\s*\d+)?\s+)?'
+    r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s+DATA)\b',
+    re.IGNORECASE,
+)
+
+
+def _scope_index_at(lines: list[str], line_idx: int) -> int:
+    """Return the 0-based procedure scope index for ``line_idx``.
+
+    Scope index 0 is the first SUBROUTINE/FUNCTION header encountered
+    when scanning forward from the top of the file. Lines before any
+    header are scope -1 (module/global level). Used by
+    ``convert_parameter_stmts`` to tag each converted assignment with
+    the scope it belongs to, so that ``insert_use_multifloats`` can
+    insert only the assignments belonging to the current scope.
+    """
+    scope = -1
+    for i in range(line_idx + 1):
+        if _PROC_HEADER_RE_SCOPE.match(lines[i]):
+            scope += 1
+    return scope
+
+
 def convert_parameter_stmts(
     source: str, target_mode: TargetMode,
-) -> tuple[str, list[str], dict[str, str]]:
+) -> tuple[str, list[tuple[int, str]], dict[str, str]]:
     """Convert floating-point PARAMETER statements to executable assignments.
 
     Returns ``(new_source, fp_assignments, dropped_known)`` where
-    ``dropped_known`` maps each known-constant name skipped from the
-    PARAMETER list to its multifloats replacement (so the caller can
-    add it to the per-file rename set).
+    ``fp_assignments`` is a list of ``(scope_index, assignment_text)``
+    tuples so the caller can insert each assignment into the correct
+    procedure scope. ``dropped_known`` maps each known-constant name
+    skipped from the PARAMETER list to its multifloats replacement (so
+    the caller can add it to the per-file rename set).
 
     Multi-line PARAMETER statements (fixed-form column-6 continuation)
     are joined into a single logical statement before parsing. The
@@ -1369,7 +1397,8 @@ def convert_parameter_stmts(
                     else: kept_parts.append(part)
                 else: kept_parts.append(part)
 
-            fp_assignments.extend(line_assignments)
+            scope = _scope_index_at(lines, i)
+            fp_assignments.extend((scope, a) for a in line_assignments)
             dropped_known.update(line_dropped_known)
             if kept_parts:
                 result.append(f"{indent}PARAMETER ({', '.join(kept_parts)}){comment}\n")
@@ -1388,7 +1417,7 @@ def convert_parameter_stmts(
 
 def convert_data_stmts(
     source: str, target_mode: TargetMode,
-) -> tuple[str, list[str], dict[str, str]]:
+) -> tuple[str, list[tuple[int, str]], dict[str, str]]:
     """Convert floating-point DATA statements to executable assignments.
 
     Returns ``(new_source, fp_assignments, dropped_known)`` — see
@@ -1438,7 +1467,8 @@ def convert_data_stmts(
                             dropped_known[v.upper()] = target_mode.known_constants[v.upper()]
                             continue
                         line_assignments.append(f"{indent}{v} = {val}{comment}\n")
-                    fp_assignments.extend(line_assignments)
+                    scope = _scope_index_at(lines, i)
+                    fp_assignments.extend((scope, a) for a in line_assignments)
                     if line_assignments:
                         result.append(f"{indent}! Converted to assignments below: {joined.strip()}\n")
                     # else: every name was a known constant — drop the line
@@ -1789,7 +1819,8 @@ def _build_use_only_clause(proc_lines: list[str], target_mode: TargetMode) -> st
     return ', only: ' + ', '.join(parts) if parts else ''
 
 
-def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: list[str] = None) -> str:
+def insert_use_multifloats(source: str, target_mode: TargetMode,
+                           extra_lines: list[tuple[int, str]] | list[str] | None = None) -> str:
     """Insert USE multifloats statement and extra assignments after procedure headers.
 
     The USE statement is emitted with an explicit ``only:`` clause that
@@ -1818,12 +1849,26 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
         re.IGNORECASE,
     )
 
+    # Normalise extra_lines: support both scoped (int, str) tuples and
+    # legacy flat strings (all go to scope -1 which matches every scope
+    # for backward compat with callers that don't use scoping).
+    scoped_extras: list[tuple[int, str]] = []
+    if extra_lines:
+        for item in extra_lines:
+            if isinstance(item, tuple):
+                scoped_extras.append(item)
+            else:
+                scoped_extras.append((-1, item))
+
+    scope_counter = -1
+
     i = 0
     while i < len(lines):
         line = lines[i]
         result.append(line)
         m = proc_header_re.match(line)
         if m:
+            scope_counter += 1
             j = i + 1
             # Walk past continuation lines so the USE clause is
             # inserted AFTER the entire procedure header, not in the
@@ -1849,7 +1894,13 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
                 already_has = any(f"USE {target_mode.module_name}".upper() in lines[kk].upper() for kk in range(j, min(j+20, len(lines))))
                 if not already_has: result.append(use_line)
 
-            if extra_lines:
+            # Filter extra_lines to those belonging to this scope
+            # (scope_counter). Entries tagged with -1 are unscoped
+            # (legacy) and go into every scope.
+            scope_lines = [text for sc, text in scoped_extras
+                           if sc == scope_counter or sc == -1]
+
+            if scope_lines:
                 # Walk past the declaration block (blank lines, comments,
                 # and any line whose first token is a declaration keyword
                 # or a fixed-form continuation of one). Insert the
@@ -1895,7 +1946,7 @@ def insert_use_multifloats(source: str, target_mode: TargetMode, extra_lines: li
                 # Copy declaration block as-is, then emit assignments.
                 for kk in range(j, k):
                     result.append(lines[kk])
-                for al in extra_lines:
+                for al in scope_lines:
                     result.append(al)
                 result.append("\n")
                 i = k
