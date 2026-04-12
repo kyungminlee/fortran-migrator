@@ -1126,6 +1126,7 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         header_patches=config.header_patches,
         overrides=overrides,
         extra_c_dirs=config.extra_c_dirs,
+        skip_files=config.skip_files,
     )
     return result
 

@@ -1,0 +1,49 @@
+library: scalapack_c
+language: c
+source_dir: external/scalapack-2.2.3/SRC
+extensions: [.c, .h]
+
+symbols:
+  method: scan_source
+
+depends:
+  - lapack.yaml
+  - blacs.yaml
+  - pblas.yaml
+  - scalapack.yaml
+
+extra_symbol_dirs:
+  - external/scalapack-2.2.3/TOOLS
+  - external/scalapack-2.2.3/SRC
+
+prefix:
+  style: scalapack   # P + S/D/C/Z
+
+# These routines already exist in PBLAS/SRC (modern ANSI C) and were
+# migrated as part of the PBLAS pipeline. The SRC/ copies are older
+# K&R-style duplicates — skip them to avoid symbol conflicts at link time.
+skip_files:
+  - PZAXPY
+  - PZDOTC
+  - PZDOTU
+
+# ScaLAPACK SRC uses complex16 (from pblas.h) for double-complex.
+# Map it to complex128x2_t for multifloats.
+c_type_aliases:
+  - from: [complex16]
+    to: '{COMPLEX_TYPE}'
+
+copy_all_originals: true
+
+header_patches:
+  - file: pblas.h
+    when: multifloats
+    after: 'typedef struct { double re, im; } complex16;'
+    insert: |
+      #include "multifloats_bridge.h"
+
+overrides:
+  multifloats:
+    src_dir: scalapack/mfc_overrides
+    files:
+      - pddlaiect.c

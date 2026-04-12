@@ -186,6 +186,154 @@ def _build_sub_vars(target_mode: TargetMode) -> dict[str, str]:
     }
 
 
+# ------------------------------------------------------------------ #
+# K&R → ANSI function-definition converter                           #
+# ------------------------------------------------------------------ #
+
+# Regex for the start of a K&R-style function definition:
+#   <return_type> <name>( <ident>, <ident>, ... )
+# where the identifiers are NOT preceded by a type specifier.
+_KR_FUNC_START_RE = re.compile(
+    r'^(\w[\w\s*]*?\s+)'        # return type (e.g. "void ")
+    r'(\w+\s*\()'               # function name + '('
+)
+
+_KR_DECL_RE = re.compile(
+    r'^\s*'
+    r'([\w][\w\s]*?)'           # base type (e.g. "Int", "complex16")
+    r'\s+'
+    r'((?:[*\s]*\w+(?:\s*\[\s*\])*'
+    r'(?:\s*,\s*[*\s]*\w+(?:\s*\[\s*\])*)*)'  # declarators
+    r')\s*;\s*$'
+)
+
+
+def _convert_kr_to_ansi(text: str) -> str:
+    """Convert K&R-style function definitions to ANSI C prototypes.
+
+    K&R style (invalid in C++):
+        void func(a, b, c)
+           int *a;
+           float *b, *c;
+        {
+
+    Becomes ANSI style:
+        void func(int *a, float *b, float *c)
+        {
+
+    Only rewrites definitions where *all* parameter names can be
+    resolved to a type declaration. Leaves everything else untouched.
+    """
+    lines = text.split('\n')
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        # Quick check: does this line look like a function definition?
+        m = _KR_FUNC_START_RE.match(lines[i])
+        if not m:
+            result.append(lines[i])
+            i += 1
+            continue
+
+        # Collect the full signature up to and including ')'
+        sig_lines = [lines[i]]
+        j = i
+        sig_text = lines[i]
+        while ')' not in sig_text:
+            j += 1
+            if j >= len(lines):
+                break
+            sig_lines.append(lines[j])
+            sig_text += ' ' + lines[j]
+
+        # Extract parameter names from between ( and )
+        paren_open = sig_text.index('(')
+        paren_close = sig_text.index(')')
+        params_str = sig_text[paren_open + 1:paren_close]
+        param_names = [p.strip() for p in params_str.split(',') if p.strip()]
+
+        # If any param name contains a type keyword, this is already ANSI
+        type_keywords = {'int', 'char', 'float', 'double', 'void', 'long',
+                         'short', 'unsigned', 'signed', 'struct', 'enum',
+                         'const', 'Int', 'complex', 'complex16',
+                         'float64x2_t', 'complex128x2_t',
+                         'F_CHAR', 'F_VOID_FCT', 'F_INTG_FCT', 'F_DBLE_FCT',
+                         'SCOMPLEX', 'DCOMPLEX'}
+        if any(any(kw in name for kw in type_keywords) for name in param_names):
+            # Already ANSI style
+            result.extend(sig_lines)
+            i = j + 1
+            continue
+
+        # Collect lines between ')' and '{', parsing declarations
+        j += 1
+        param_type_map: dict[str, str] = {}  # name → "Type *name" or "Type name[]"
+        comment_lines: list[str] = []
+        decl_region_end = j
+        in_comment = False
+
+        while j < len(lines):
+            line = lines[j]
+            stripped = line.strip()
+
+            # Track block comments
+            if in_comment:
+                comment_lines.append(line)
+                if '*/' in stripped:
+                    in_comment = False
+                j += 1
+                continue
+
+            if stripped.startswith('/*'):
+                comment_lines.append(line)
+                if '*/' not in stripped:
+                    in_comment = True
+                j += 1
+                continue
+
+            if stripped == '{':
+                decl_region_end = j
+                break
+
+            if stripped == '':
+                j += 1
+                continue
+
+            # Try to parse as a type declaration
+            dm = _KR_DECL_RE.match(line)
+            if dm:
+                base_type = dm.group(1).strip()
+                declarators = dm.group(2)
+                for decl in declarators.split(','):
+                    decl = decl.strip()
+                    # Extract the name from the declarator
+                    # Forms: "*name", "name[]", "* name", "name"
+                    name_m = re.search(r'(\w+)', decl)
+                    if name_m:
+                        name = name_m.group(1)
+                        if name in param_names:
+                            param_type_map[name] = f'{base_type} {decl}'
+            j += 1
+
+        # Check if all parameter names were resolved
+        if len(param_type_map) == len(param_names) and param_names:
+            # Build ANSI signature
+            prefix = sig_text[:paren_open + 1].rstrip()
+            # Normalize multi-line prefix to single line
+            prefix = ' '.join(prefix.split())
+            ansi_params = ', '.join(param_type_map[n] for n in param_names)
+            result.append(f'{prefix} {ansi_params} )')
+            result.extend(comment_lines)
+            result.append('{')
+            i = decl_region_end + 1
+        else:
+            # Could not resolve — keep original lines
+            result.extend(sig_lines)
+            i = j if j > i else i + 1
+
+    return '\n'.join(result)
+
+
 def clone_c_file(src_path: Path, dst_path: Path,
                  subs: list[tuple[str, str]],
                  template_vars: dict[str, str],
@@ -268,7 +416,8 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                         c_type_aliases: list[dict] | None = None,
                         header_patches: list[dict] | None = None,
                         overrides: list[tuple[Path, str]] | None = None,
-                        extra_c_dirs: list[Path] | None = None) -> dict:
+                        extra_c_dirs: list[Path] | None = None,
+                        skip_files: set[str] | None = None) -> dict:
     """Migrate a C source directory by cloning real/complex variants.
 
     Two modes:
@@ -301,6 +450,7 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             c_type_aliases=c_type_aliases,
             header_patches=header_patches,
             extra_c_dirs=extra_c_dirs,
+            skip_files=skip_files,
         )
     else:
         result = _migrate_blacs_c_directory(
@@ -749,7 +899,8 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                                  rename_map: dict[str, str],
                                  c_type_aliases: list[dict] | None = None,
                                  header_patches: list[dict] | None = None,
-                                 extra_c_dirs: list[Path] | None = None) -> dict:
+                                 extra_c_dirs: list[Path] | None = None,
+                                 skip_files: set[str] | None = None) -> dict:
     """Rename-map-driven C migration for ScaLAPACK-style libraries.
 
     A file ``foo_.c`` is cloned iff its routine ``FOO`` is a D- or
@@ -774,15 +925,24 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     # When extra_c_dirs sources contain `#include "../foo.h"` paths
     # (PTOOLS uses ../pblas.h etc.), strip the `..` part since we're
     # flattening into a single output dir.
+    # K&R-style function definitions are converted to ANSI so originals
+    # compile as C++ (mpicxx).
+    _skip = skip_files or set()
     if copy_originals:
         for d in all_src_dirs:
             for f in sorted(d.iterdir()):
                 if f.suffix.lower() in ('.c', '.h'):
+                    stem_upper = (f.stem[:-1] if f.stem.endswith('_')
+                                  else f.stem).upper()
+                    if stem_upper in _skip:
+                        continue
                     text = f.read_text(errors='replace')
                     if d != src_dir:
                         text = re.sub(
                             r'#include\s*"\.\./([^"]+)"',
                             r'#include "\1"', text)
+                    if f.suffix.lower() == '.c':
+                        text = _convert_kr_to_ansi(text)
                     (output_dir / f.name).write_text(text)
 
     # Apply recipe-declared header patches to the copied originals so
@@ -873,6 +1033,8 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         routine = f.stem[:-1] if has_underscore else f.stem
         upper_routine = routine.upper()
 
+        if upper_routine in _skip:
+            continue
         if upper_routine not in rename_map:
             continue
         if classification.get_family(upper_routine) is None:
@@ -891,6 +1053,8 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
             text = re.sub(
                 r'#include\s*"\.\./([^"]+)"',
                 r'#include "\1"', text)
+        # Convert K&R function definitions to ANSI for C++ compatibility.
+        text = _convert_kr_to_ansi(text)
         # Apply renames first, then type upgrades — the two domains
         # don't overlap but this order preserves identifier names that
         # happen to coincide with generic type keywords.
