@@ -10,14 +10,14 @@ Targets tested: `kind16` (KIND=16, Q/X prefix) and `multifloats` (float64x2, DD/
 | Library      | Lang    | Files | kind16 div | multifloats div |
 |:-------------|:--------|------:|-----------:|----------------:|
 | BLAS         | Fortran |    78 |          3 |               3 |
-| LAPACK       | Fortran |  1037 |        431 |             418 |
+| LAPACK       | Fortran |  1037 |        431 |             415 |
 | PBBLAS       | Fortran |    14 |          0 |               0 |
 | PTZBLAS      | Fortran |    52 |          0 |               0 |
-| ScaLAPACK    | Fortran |   342 |         24 |              70 |
+| ScaLAPACK    | Fortran |   342 |         24 |              24 |
 | BLACS        | C       |   213 |          0 |               0 |
 | PBLAS        | C       |   293 |         61 |              61 |
 | ScaLAPACK-C  | C       |    17 |          1 |               1 |
-| **Total**    |         |  2046 |      **520** |          **553** |
+| **Total**    |         |  2046 |      **520** |          **504** |
 
 "Divergence" means the S-half and C-half (or D-half and Z-half) of a
 co-family pair produce different normalized output after migration.
@@ -57,13 +57,13 @@ D-half; only one survives normalization (variable-name mismatch).
 | Complex-specific only | ~67 | `PARAMETER(ONE=(...))`, `QCABS1`, `INTRINSIC AIMAG/ABS` |
 | Source asymmetry only | ~71 | Variable names, control-flow, literal formatting |
 
-### multifloats: 418 divergences
+### multifloats: 415 divergences
 
 | Category | Files | Description |
 |:---------|------:|:------------|
-| `ROUNDUP_LWORK` | 237 | Same as kind16 |
-| Complex-specific only | 15 | Fewer than kind16 (constructor wrapping normalizes some) |
-| Source asymmetry + constructor wrapping | 166 | Includes `FLOAT64X2(N)` wrapping differences |
+| `ROUNDUP_LWORK` | ~237 | Same as kind16 |
+| Complex-specific only | ~15 | Fewer than kind16 (constructor wrapping normalizes some) |
+| Source asymmetry | ~163 | Includes `FLOAT64X2(N)` wrapping differences |
 
 ### Root causes
 
@@ -145,13 +145,9 @@ No divergences.  All 47 co-family pairs converge perfectly.
 
 All are upstream source asymmetries.
 
-### multifloats: 70 divergences
+### multifloats: 24 divergences
 
-The 24 kind16 divergences all reappear.  The additional 46 come from
-C/Z complex-half routines (`pzgebd2.f`, `pzgebrd.f`, `pzgehd2.f`, ...,
-`pzunmtr.f`) where the constructor-based migration produces
-`USE MULTIFLOATS` / `EXTERNAL` declaration differences between the
-S-half and C-half migration paths — typically +4 diff lines each.
+Same 24 files as kind16.  All are upstream source asymmetries.
 
 
 ## BLACS — C (0 / 0)
