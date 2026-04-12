@@ -644,6 +644,51 @@ def migrate_c_file_to_string(
 
 
 
+def _duplicate_header_lines(text: str,
+                            rename_pattern: re.Pattern,
+                            rename_sub,
+                            type_transform=None) -> str:
+    """Duplicate header lines that mention precision-family identifiers.
+
+    For each line (or multi-line declaration block) containing an
+    identifier in the rename map, keep the original verbatim AND
+    append a copy with rename + ``type_transform`` applied. The type
+    transform is applied to the duplicated lines only so that the
+    original ``void pdcopy_(double *)`` declaration coexists with a
+    new ``void pddcopy_(float64x2_t *)`` declaration without
+    introducing a conflicting redeclaration of either name.
+
+    Multi-line declarations are detected by an open paren count: a
+    line that opens an unbalanced ``(`` continues until the matching
+    ``)`` is reached.
+    """
+    out_lines: list[str] = []
+    lines = text.splitlines(keepends=True)
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        new_line = rename_pattern.sub(rename_sub, line)
+        if new_line == line:
+            out_lines.append(line)
+            i += 1
+            continue
+        block: list[str] = [line]
+        new_block: list[str] = [new_line]
+        depth = line.count('(') - line.count(')')
+        j = i + 1
+        while depth > 0 and j < len(lines):
+            block.append(lines[j])
+            new_block.append(rename_pattern.sub(rename_sub, lines[j]))
+            depth += lines[j].count('(') - lines[j].count(')')
+            j += 1
+        out_lines.extend(block)
+        if type_transform is not None:
+            new_block = [type_transform(b) for b in new_block]
+        out_lines.extend(new_block)
+        i = j
+    return ''.join(out_lines)
+
+
 def _apply_header_patches(output_dir: Path,
                           patches: list[dict],
                           template_vars: dict[str, str],
@@ -744,6 +789,30 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
 
     def _rename(text: str) -> str:
         return rename_pattern.sub(_rename_sub, text)
+
+    # Header rename pass: each header in output_dir gets its precision-
+    # family declarations duplicated. Lines that mention an identifier
+    # in the rename map are kept verbatim AND a copy with the rename
+    # applied is appended right after. This propagates BLACS / PBLAS
+    # function prototypes to both the original (Cdgesd2d) and the
+    # cloned (Cddgesd2d) name so cloned source files compile.
+    # The duplicated lines also get type subs (double -> float64x2_t,
+    # etc.) so the cloned signature uses the right types.
+    # Only header declarations are duplicated, not the .c sources --
+    # those go through the per-file rename + clone path below.
+    def _hdr_type_transform(line: str) -> str:
+        return _apply_c_type_subs(line, template_vars, c_type_aliases,
+                                  target_mode=target_mode)
+
+    for hdr in sorted(output_dir.iterdir()):
+        if hdr.suffix.lower() != '.h':
+            continue
+        text = hdr.read_text(errors='replace')
+        new_text = _duplicate_header_lines(
+            text, rename_pattern, _rename_sub,
+            type_transform=_hdr_type_transform)
+        if new_text != text:
+            hdr.write_text(new_text)
 
     # Process D/Z-sourced files first so they become the canonical
     # output; S/C co-family members are verified against them.
