@@ -31,9 +31,12 @@ from .target_mode import TargetMode
 #   {C_REAL_TYPE}  → underlying C type (e.g., "__float128")
 
 REAL_CLONE_SUBS = [
-    # Type names (run twice to catch adjacent matches)
-    (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
+    # Type names (run twice to catch adjacent matches).
+    # Boundary excludes [a-zA-Z_0-9] so we don't re-match inside
+    # replacement types that contain the original as a prefix
+    # (e.g. 'float' inside 'float64x2_t').
+    (r'(^|[^a-zA-Z_0-9])double([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])double([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
     (r'MPI_DOUBLE', '{MPI_REAL}'),
     # Reduction op. For KIND targets {MPI_SUM_REAL} expands to 'MPI_SUM'
@@ -47,13 +50,13 @@ REAL_CLONE_SUBS = [
 
 COMPLEX_CLONE_SUBS = [
     # Complex struct types
-    (r'(^|[^a-zA-Z_])DCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])DCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])SCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])SCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])DCOMPLEX([^a-zA-Z_0-9]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])DCOMPLEX([^a-zA-Z_0-9]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])SCOMPLEX([^a-zA-Z_0-9]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])SCOMPLEX([^a-zA-Z_0-9]|$)', r'\1{COMPLEX_TYPE}\2'),
     # Underlying real type
-    (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])double([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])double([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])double([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types (order matters: DOUBLE_COMPLEX before DOUBLE)
     (r'MPI_DOUBLE_COMPLEX', '{MPI_COMPLEX}'),
     (r'MPI_DOUBLE', '{MPI_REAL}'),
@@ -73,8 +76,8 @@ COMPLEX_CLONE_SUBS = [
 # convergence checking against the on-disk canonical produced from D/Z.
 SINGLE_CLONE_SUBS = [
     # Type names (run twice to catch adjacent matches)
-    (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])float([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])float([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
     (r'MPI_FLOAT', '{MPI_REAL}'),
     # Reduction op (see REAL_CLONE_SUBS)
@@ -86,13 +89,13 @@ SINGLE_CLONE_SUBS = [
 
 CSINGLE_CLONE_SUBS = [
     # Complex struct types
-    (r'(^|[^a-zA-Z_])SCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])SCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])DCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])DCOMPLEX([^a-zA-Z_]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])SCOMPLEX([^a-zA-Z_0-9]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])SCOMPLEX([^a-zA-Z_0-9]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])DCOMPLEX([^a-zA-Z_0-9]|$)', r'\1{COMPLEX_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])DCOMPLEX([^a-zA-Z_0-9]|$)', r'\1{COMPLEX_TYPE}\2'),
     # Underlying real type
-    (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
-    (r'(^|[^a-zA-Z_])float([^a-zA-Z_]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])float([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
+    (r'(^|[^a-zA-Z_0-9])float([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types (order matters: FLOAT_COMPLEX before FLOAT, MPI_COMPLEX gated)
     (r'MPI_FLOAT_COMPLEX', '{MPI_COMPLEX}'),
     (r'MPI_FLOAT', '{MPI_REAL}'),

@@ -1091,6 +1091,13 @@ def _wrap_complex_args(
     # ``complex128x2`` interface has no equivalent.
     parts = [p for p in parts if not re.match(r'\s*KIND\s*=', p, re.IGNORECASE)]
 
+    # Type-conversion intrinsics that replace_generic_conversions() will
+    # handle later — don't pre-wrap them or we get double wrapping.
+    _CONVERSION_INTRINSICS = frozenset({
+        'REAL', 'DBLE', 'SNGL', 'DREAL', 'DFLOAT', 'FLOAT',
+        'CMPLX', 'DCMPLX',
+    })
+
     def _wrap_one(arg: str) -> str:
         s = arg.strip()
         if not s:
@@ -1105,6 +1112,12 @@ def _wrap_complex_args(
         # again with float64x2(...) would fail.
         if body.lower().startswith(target_mode.real_constructor.lower() + '('):
             return arg
+        # Skip type-conversion intrinsics — they will be replaced by
+        # replace_generic_conversions() later in the pipeline.
+        if head and head.group(1).upper() in _CONVERSION_INTRINSICS:
+            after_name = body[head.end():]
+            if after_name.lstrip().startswith('('):
+                return arg
         if real_names:
             for tok in re.finditer(r'\b([A-Za-z_]\w*)\b', body):
                 u = tok.group(1).upper()
