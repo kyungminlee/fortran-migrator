@@ -21,7 +21,7 @@
 #ifndef PBLAS_MF_OVERLAY_H
 #define PBLAS_MF_OVERLAY_H 1
 
-#include "multifloats_c.h"
+#include "multifloats_bridge.h"
 
 #ifdef ZERO
 #  undef ZERO

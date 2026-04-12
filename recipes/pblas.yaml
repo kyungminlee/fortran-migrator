@@ -56,14 +56,13 @@ header_patches:
     insert: |
       typedef    {C_REAL_TYPE}          cmplx{RPU}[2];
       typedef    {C_REAL_TYPE}          {REAL_TYPE};
-  # Multifloats target: float64x2_t comes from libmfc's multifloats_c.h.
-  # Just include the header and add the cmplxDD array typedef.
+  # Multifloats target: float64x2_t comes from the C++ bridge header.
+  # cmplxDD is already defined there, so only the include is needed.
   - file: pblas.h
     when: multifloats
     after: 'typedef    double              cmplx16[2];'
     insert: |
-      #include "multifloats_c.h"
-      typedef    {C_REAL_TYPE}          cmplx{RPU}[2];
+      #include "multifloats_bridge.h"
 
 # PBLAS/SRC contains 123 precision-specific C entry points (pdgemm_.c,
 # pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent

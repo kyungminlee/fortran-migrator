@@ -10,7 +10,7 @@
 #include "PBtools.h"
 #include "PBblacs.h"
 #include "PBblas.h"
-#include "multifloats_c.h"
+#include "multifloats_bridge.h"
 
 PBTYP_T * PB_Czztypeset(void)
 {

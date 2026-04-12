@@ -192,7 +192,7 @@ def test_patch_bdef_header_multifloats_includes_mfc_header(tmp_path):
     _patch_bdef_header(bdef, mf, template_vars)
     out = bdef.read_text()
     # Multifloats branch uses libmfc's plain-C header for type defs
-    assert '#include "multifloats_c.h"' in out
+    assert '#include "multifloats_bridge.h"' in out
     # Should NOT emit the legacy __float128 typedef
     assert '__float128' not in out
     assert 'typedef __float128' not in out
@@ -213,7 +213,7 @@ def test_patch_bdef_header_kind16_emits_legacy_typedef(tmp_path):
     _patch_bdef_header(bdef, k16, template_vars)
     out = bdef.read_text()
     assert 'typedef __float128 QREAL' in out
-    assert '#include "multifloats_c.h"' not in out
+    assert '#include "multifloats_bridge.h"' not in out
 
 
 # ---------------------------------------------------------------------------

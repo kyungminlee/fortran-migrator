@@ -16,9 +16,10 @@ REPO="$(cd "$(dirname "$0")"/.. && pwd)"
 OUT_DIR="${1:-/tmp/mf_pblas_full}"
 WORKERS="${WORKERS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)}"
 
-MFC_INC="$REPO/external/multifloats/include"
+MF_BRIDGE_INC="$REPO/external/multifloats/include"
 MF_HH_DIR="$REPO/external"
 MF_MOD="$REPO/external/multifloats/build"
+MF_MPI_SRC="$REPO/external/multifloats/src/multifloats_mpi.cpp"
 MPICC="${MPICC:-mpicc}"
 MPICXX="${MPICXX:-mpicxx}"
 
@@ -62,14 +63,15 @@ echo "  Fortran: $f_ok ok / $f_fail failed"
 
 echo "[5/5] Compiling C/C++ entry points + PTOOLS with mpicxx..."
 BLACS_DEFS="-DCSAMEF77=1 -DInt=int -DUseMpi2=1 -DAdd_"
-BRIDGE="$PBLAS_C_DIR/pblas_mf_bridge.h"
 c_ok=0; c_fail=0
+# Copy bridge header into PBLAS output for override includes
+cp "$MF_BRIDGE_INC/multifloats_bridge.h" "$PBLAS_C_DIR/"
 for f in "$PBLAS_C_DIR"/*.c; do
     [ -f "$f" ] || continue
-    out=$($MPICXX -O2 -std=c++17 -DAdd_ -DMULTIFLOATS_C_H=1 \
+    out=$($MPICXX -O2 -std=c++17 -DAdd_ \
         -fpermissive -Wno-write-strings \
-        -I "$MF_HH_DIR" -I "$MFC_INC" -I "$PBLAS_C_DIR" \
-        -include "$BRIDGE" \
+        -I "$MF_HH_DIR" -I "$MF_BRIDGE_INC" -I "$PBLAS_C_DIR" \
+        -include multifloats_bridge.h \
         -c "$f" -o "$OUT_DIR/objs/$(basename "$f").o" 2>&1)
     if [ $? -eq 0 ]; then
         c_ok=$((c_ok+1))

@@ -1020,14 +1020,16 @@ void BI_{rp}mvcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
 void BI_{rp}vmcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
 """.replace('{prefix}', f'{rp}/{cp}')
     else:
-        # Multifloats target: types and MPI handles come from libmfc's
-        # plain-C header. Just include it and forward-declare the copy
-        # helpers the cloned BLACS sources will call.
+        # Multifloats target: types and MPI handles come from the C++
+        # bridge header (multifloats_bridge.h) which aliases to
+        # multifloats.hh's template types with full operator overloading.
+        # The header is force-included via compiler flag (-include), but
+        # we also include it here so it's available to non-force-included
+        # code paths (overrides, etc.).
         type_block = f"""
 /*
  *  Multifloats companion types for migrated {rp}/{cp} routines.
- *  Struct layouts match the Fortran SEQUENCE derived types so
- *  pointer aliasing between C and Fortran is well-defined.
+ *  Provided by multifloats_bridge.h via the C++ multifloats.hh library.
  */
 #include "{target_mode.c_header}"
 

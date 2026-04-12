@@ -159,6 +159,6 @@ def multifloats_target(
         c_mpi_complex='MPI_COMPLEX128X2',
         c_mpi_sum_real='MPI_DD_SUM',
         c_mpi_sum_complex='MPI_ZZ_SUM',
-        c_header='multifloats_c.h',
+        c_header='multifloats_bridge.h',
         c_init_fn='multifloats_mpi_init',
     )
