@@ -1,0 +1,18 @@
+# PTZBLAS -- trapezoidal BLAS kernels used by PBLAS.
+# Pure Fortran fixed-form files with S/D/C/Z precision prefixes.
+# They call serial BLAS routines (dgemv, daxpy, etc.) but not MPI.
+library: ptzblas
+language: fortran
+source_dir: external/scalapack-2.2.3/PBLAS/SRC/PTZBLAS
+extensions: [.f]
+
+symbols:
+  method: scan_source
+
+depends:
+  - blas.yaml
+
+prefix:
+  style: direct
+
+skip_files: []

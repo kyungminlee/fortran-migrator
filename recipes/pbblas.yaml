@@ -1,0 +1,23 @@
+# PBBLAS -- distributed PB-BLAS kernels used by PBLAS.
+# Pure Fortran fixed-form files. These call BLACS communication
+# routines (DGEBR2D, DGEBS2D, etc.) and serial BLAS routines.
+library: pbblas
+language: fortran
+source_dir: external/scalapack-2.2.3/PBLAS/SRC/PBBLAS
+extensions: [.f]
+
+symbols:
+  method: scan_source
+
+depends:
+  - blas.yaml
+  - blacs.yaml
+
+# PBBLAS files also reference PTZBLAS routines (DAGEMV, etc.)
+extra_symbol_dirs:
+  - external/scalapack-2.2.3/PBLAS/SRC/PTZBLAS
+
+prefix:
+  style: direct
+
+skip_files: []
