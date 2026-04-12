@@ -12,12 +12,12 @@ Targets tested: `kind16` (KIND=16, Q/X prefix) and `multifloats` (float64x2, DD/
 | BLAS         | Fortran |    78 |          3 |               3 |
 | LAPACK       | Fortran |  1037 |        431 |             418 |
 | PBBLAS       | Fortran |    14 |          0 |               0 |
-| PTZBLAS      | Fortran |    52 |          0 |               2 |
+| PTZBLAS      | Fortran |    52 |          0 |               0 |
 | ScaLAPACK    | Fortran |   342 |         24 |              70 |
-| BLACS        | C       |   213 |          0 |              34 |
+| BLACS        | C       |   213 |          0 |               0 |
 | PBLAS        | C       |   293 |         61 |              61 |
 | ScaLAPACK-C  | C       |    17 |          1 |               1 |
-| **Total**    |         |  2046 |      **520** |          **589** |
+| **Total**    |         |  2046 |      **520** |          **553** |
 
 "Divergence" means the S-half and C-half (or D-half and Z-half) of a
 co-family pair produce different normalized output after migration.
@@ -107,32 +107,9 @@ S/C and D/Z variants:
 No divergences.  All 14 co-family pairs converge perfectly.
 
 
-## PTZBLAS (0 / 2)
+## PTZBLAS (0 / 0)
 
-### kind16: 0 divergences
-
-All pairs converge.
-
-### multifloats: 2 divergences
-
-Both are the **double-wrapping** bug in the constructor-based migrator:
-
-- `chescal.f` vs `zhescal.f` → `zzhescal.f`
-- `ctzpad.f` vs `ztzpad.f` → `zztzpad.f`
-
-The S-half (migrated from C) produces:
-```fortran
-A(JTMP,J) = COMPLEX128X2(FLOAT64X2(FLOAT64X2(A(JTMP,J))), RZERO)
-```
-while the D-half (migrated from Z) produces:
-```fortran
-A(JTMP,J) = COMPLEX128X2(FLOAT64X2(A(JTMP,J)), RZERO)
-```
-
-The extra `FLOAT64X2(...)` wrapping comes from the migrator applying
-both a `REAL()→FLOAT64X2()` intrinsic replacement and a separate
-constructor wrapping pass.  *This is a migrator issue* — the double
-wrapping is redundant, though it compiles and produces correct results.
+No divergences.  All 47 co-family pairs converge perfectly.
 
 
 ## ScaLAPACK — Fortran (24 / 70)
@@ -177,30 +154,20 @@ C/Z complex-half routines (`pzgebd2.f`, `pzgebrd.f`, `pzgehd2.f`, ...,
 S-half and C-half migration paths — typically +4 diff lines each.
 
 
-## BLACS — C (0 / 34)
+## BLACS — C (0 / 0)
 
-### kind16: 0 divergences
+No divergences.  All pairs converge perfectly.
 
-All pairs converge.
+The BLACS reduction kernels (`BI_*vvamn.c`, `BI_*vvamx.c`,
+`BI_*vvsum.c`) use the `Rabs`/`Cabs` macros from `Bdef.h` and `.r`/`.i`
+struct member access on complex types.  These work out of the box with
+`float64x2_t` and `complex128x2_t` because:
+- `Rabs` uses ternary `?:` which works via overloaded `operator<`
+- `Cabs` accesses `.r`/`.i` members which match the `complex128x2_t` struct
+- All arithmetic operators are overloaded in `multifloats_bridge.h`
 
-### multifloats: 34 divergences
-
-These fall into two groups:
-
-**Double type-suffix bug (S-half, 12 files):**
-S-half files (`BI_svvamn.c`, `BI_svvamx.c`, `BI_svvsum.c`, etc.)
-produce `float64x2_t64x2_t` instead of `float64x2_t`.  The C migrator
-applies the type substitution twice (once for `float` → `float64x2_t`,
-then the `_t` suffix gets re-expanded).  The D-half produces the
-correct `float64x2_t`.
-
-*This is a migrator bug* in the C migrator's type substitution for
-S-family BLACS sources.
-
-**MPI / include differences (22 files):**
-Complex-half files (`cgamn2d_.c`, `sgamn2d_.c`, etc.) have small
-differences in include paths or MPI type references between the two
-halves.
+The only remaining override is `blacs_pinfo_.c` which adds a call to
+`multifloats_mpi_init()` for MPI datatype registration.
 
 
 ## PBLAS — C (61 / 61)
@@ -232,14 +199,18 @@ The C-half defines `#define TYPE complex` while the Z-half defines
 
 ## Known Migrator Issues
 
-Two classes of migrator-caused divergences were identified:
+No migrator-caused divergences remain.  Two bugs were fixed:
 
-1. **Double constructor wrapping** (multifloats, PTZBLAS, 2 files):
-   `FLOAT64X2(FLOAT64X2(x))` instead of `FLOAT64X2(x)`.
-   Functionally correct but redundant.
+1. **Double constructor wrapping** (fixed): `_wrap_complex_args()` now
+   skips type-conversion intrinsics (`REAL`, `DBLE`, etc.) that will
+   be handled by `replace_generic_conversions()` later in the pipeline.
 
-2. **Double type-suffix in C** (multifloats, BLACS, 12 files):
-   `float64x2_t64x2_t` instead of `float64x2_t` in S-family sources.
-   This produces incorrect C code that will not compile.
+2. **Double type-suffix in C** (fixed): type-substitution regexes now
+   use `[^a-zA-Z_0-9]` boundaries so the second pass cannot re-match
+   `float` inside `float64x2_t`.
 
-All other divergences are upstream source asymmetries.
+Additionally, the 10 hand-written BLACS reduction kernel overrides were
+eliminated by renaming `complex128x2_t` members from `.re`/`.im` to
+`.r`/`.i`, matching the BLACS `DCOMPLEX`/`SCOMPLEX` struct convention.
+
+All remaining divergences are upstream source asymmetries.

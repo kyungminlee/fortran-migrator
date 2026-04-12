@@ -26,7 +26,7 @@
 
 using float64x2_t = multifloats::float64x2;
 typedef float64x2_t cmplxDD[2];
-struct complex128x2_t { float64x2_t re, im; };
+struct complex128x2_t { float64x2_t r, i; };
 
 /* ------------------------------------------------------------------ */
 /* MF_IS_* macros injected by c_migrator for C scalar comparisons.    */
@@ -68,7 +68,7 @@ inline int mf_to_int(float64x2_t x) {
 /* ------------------------------------------------------------------ */
 
 inline float64x2_t mf_abs(float64x2_t x) { return x < float64x2_t{0.0} ? -x : x; }
-inline float64x2_t mf_cabs1(complex128x2_t z) { return mf_abs(z.re) + mf_abs(z.im); }
+inline float64x2_t mf_cabs1(complex128x2_t z) { return mf_abs(z.r) + mf_abs(z.i); }
 
 /* ------------------------------------------------------------------ */
 /* MPI handle externs + init (defined in multifloats_mpi.cpp).        */
