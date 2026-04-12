@@ -72,3 +72,16 @@ header_patches:
 copy_all_originals: true
 
 skip_files: []
+
+# Hand-written replacements for the PB_C[dz]typeset typeset functions.
+# The migrated-by-regex versions try to assign the macro ZERO (= 0.0)
+# directly to a float64x2_t local, which the C type system rejects.
+# These overrides use libmfc's struct constructors instead and refer
+# to the migrated BLACS / BLAS / PBBLAS / PTZBLAS routine names by
+# the renamed dd / zz prefixes.
+overrides:
+  multifloats:
+    src_dir: pblas/mfc_overrides
+    files:
+      - pb_cddtypeset.c
+      - pb_czztypeset.c
