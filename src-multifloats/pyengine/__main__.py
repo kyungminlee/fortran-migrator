@@ -20,20 +20,12 @@ from .pipeline import (
 )
 from .prefix_classifier import classify_symbols
 from .symbol_scanner import scan_symbols
-from .target_mode import kind_target, multifloats_target
+from .target_mode import load_target
 
 def _get_target_mode(args):
     """Construct TargetMode based on CLI arguments."""
-    if args.target == 'multifloats':
-        return multifloats_target()
-    else:
-        # Default is kind 10 or 16
-        # If target isn't multifloats, we expect it to be a string like '10' or '16'
-        # but backward compatibility allows using the raw int if args.target is None and --kind is used.
-        kind = getattr(args, 'kind', 16)
-        if args.target and args.target.isdigit():
-            kind = int(args.target)
-        return kind_target(kind)
+    target_str = getattr(args, 'target', None) or 'kind16'
+    return load_target(target_str)
 
 def _parser_args(args):
     """Extract parser/parser_cmd from CLI args."""
@@ -167,6 +159,8 @@ def cmd_verify(args):
         src_dir = out_dir
     errors = 0
 
+    target_mode = _get_target_mode(args)
+
     f_files = sorted(src_dir.glob('*.f'))
     f90_files = sorted(list(src_dir.glob('*.f90')) + list(src_dir.glob('*.F90')))
     all_files = f_files + f90_files
@@ -174,12 +168,8 @@ def cmd_verify(args):
     print(f'Verifying {len(all_files)} files in {src_dir}')
     print()
 
-    # Auto-detect target mode by sniffing for TYPE(float64x2) anywhere.
-    is_multifloats = any(
-        'TYPE(float64x2)' in f.read_text(errors='replace')
-        or 'type(float64x2)' in f.read_text(errors='replace')
-        for f in all_files
-    )
+    # Determine if the target uses module-based constructors
+    is_constructor_based = target_mode.real_constructor is not None
 
     # Check residual precision types in code lines
     print('Residual precision types (code lines):')
@@ -208,6 +198,20 @@ def cmd_verify(args):
         errors += residuals
     print()
 
+    # Build constructor-stripping patterns from target_mode
+    def _strip_constructors(line: str) -> str:
+        """Remove target-type constructor wrappers from a line."""
+        if not target_mode.real_constructor:
+            return line
+        ctor = re.escape(target_mode.real_constructor)
+        line = re.sub(rf"{ctor}\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
+        line = re.sub(rf'{ctor}\(\s*[^)]*\s*\)', '', line, flags=re.IGNORECASE)
+        if target_mode.complex_constructor:
+            cctor = re.escape(target_mode.complex_constructor)
+            line = re.sub(rf"{cctor}\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
+            line = re.sub(rf'{cctor}\(\s*[^)]*\s*\)', '', line, flags=re.IGNORECASE)
+        return line
+
     # Check residual D-exponent literals in code lines
     print('Residual D-exponent literals (code lines):')
     d_lits = 0
@@ -215,9 +219,7 @@ def cmd_verify(args):
         for i, line in enumerate(f.read_text(errors='replace').splitlines(), 1):
             if _is_fixed_form_comment(line):
                 continue
-            # Remove valid constructor wrapped literals before checking
-            cleaned_line = re.sub(r"float64x2\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
-            cleaned_line = re.sub(r'float64x2\(\s*[^)]*\s*\)', '', cleaned_line, flags=re.IGNORECASE)
+            cleaned_line = _strip_constructors(line)
             if re.search(r'[0-9]\.[0-9]*[Dd][+-]?[0-9]', cleaned_line):
                 print(f'  {f.name}:{i}: {line.strip()}')
                 d_lits += 1
@@ -225,10 +227,9 @@ def cmd_verify(args):
         for i, line in enumerate(f.read_text(errors='replace').splitlines(), 1):
             if _is_free_form_comment(line):
                 continue
-            cleaned_line = re.sub(r"float64x2\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
-            cleaned_line = re.sub(r'float64x2\(\s*[^)]*\s*\)', '', cleaned_line, flags=re.IGNORECASE)
-            # In multifloats mode, also reject _wp suffixed literals
-            if is_multifloats and re.search(r'\d+\.\d*_wp', cleaned_line, re.IGNORECASE):
+            cleaned_line = _strip_constructors(line)
+            # In constructor mode, also reject _wp suffixed literals
+            if is_constructor_based and re.search(r'\d+\.\d*_wp', cleaned_line, re.IGNORECASE):
                 print(f'  {f.name}:{i}: {line.strip()}')
                 d_lits += 1
     if d_lits == 0:
@@ -237,8 +238,8 @@ def cmd_verify(args):
         errors += d_lits
     print()
 
-    if is_multifloats:
-        # Multifloats-specific check: residual unconverted FP PARAMETER /
+    if is_constructor_based:
+        # Constructor-based target: residual unconverted FP PARAMETER /
         # DATA statements (those that mention a value-shaped numeric and
         # are not commented out).
         print('Residual FP PARAMETER/DATA (code lines):')
@@ -254,10 +255,7 @@ def cmd_verify(args):
                 m = re.match(r'\s+(PARAMETER|DATA)\b', line, re.IGNORECASE)
                 if not m:
                     continue
-                # Check whether the line still mentions a real-looking
-                # literal (after stripping any constructors).
-                cleaned = re.sub(r"float64x2\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
-                cleaned = re.sub(r'float64x2\(\s*[^)]*\s*\)', '', cleaned, flags=re.IGNORECASE)
+                cleaned = _strip_constructors(line)
                 if re.search(r'\d+\.\d*[DdEe][+-]?\d+|\d*\.\d+', cleaned):
                     print(f'  {f.name}:{i}: {line.strip()}')
                     leftover += 1
@@ -350,7 +348,7 @@ endif()
         # that the migrated source depends on for la_constants USE clauses.
         mf_link = ""
         mf_deps = ""
-        if target_mode.module_name == 'multifloats':
+        if target_mode.module_name is not None:
             mf_link = f"""
 # Find or link multifloats. The location can be overridden via the
 # MULTIFLOATS_DIR cache variable; otherwise we try the in-tree path
@@ -631,8 +629,8 @@ def _add_parser_args(p):
              '(overrides PATH lookup)')
 
 def _add_target_args(p):
-    p.add_argument('--kind', type=int, default=16, choices=[10, 16], help='Legacy target selection (overridden by --target)')
-    p.add_argument('--target', type=str, default=None, help='Target format (10, 16, or multifloats)')
+    p.add_argument('--target', type=str, default='kind16',
+                   help='Target name (e.g. "multifloats", "kind16") or path to a target .yaml file')
 
 def main():
     parser = argparse.ArgumentParser(

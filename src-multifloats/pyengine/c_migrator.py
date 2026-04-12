@@ -161,11 +161,12 @@ def _build_sub_vars(target_mode: TargetMode) -> dict[str, str]:
             'CPU': cp.upper(),
         }
 
-    # Multifloats target -- read C-interop fields from target_mode.
-    # target_mode.c_real_type etc. are populated by multifloats_target().
+    # Module-based target -- read C-interop fields from target_mode.
+    # target_mode.c_real_type etc. are populated by load_target() or
+    # the deprecated multifloats_target() factory.
     assert target_mode.c_real_type is not None, (
-        "multifloats target_mode missing c_real_type; did you construct "
-        "it via multifloats_target()?"
+        "target_mode missing c_real_type; ensure the target YAML has a "
+        "c_interop section with real_type defined."
     )
     return {
         'REAL_TYPE': target_mode.c_real_type,        # 'float64x2_t'

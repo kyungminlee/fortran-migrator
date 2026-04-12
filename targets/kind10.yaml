@@ -1,0 +1,28 @@
+name: kind10
+
+types:
+  real: "REAL(KIND=10)"
+  complex: "COMPLEX(KIND=10)"
+
+literals:
+  mode: kind_suffix
+  kind_suffix: 10
+  real_constructor: null
+  complex_constructor: null
+
+intrinsics:
+  mode: add_kind
+
+prefixes:
+  R: E
+  C: Y
+  I: I
+  L: L
+  S: S
+
+module: null
+known_constants: {}
+la_constants_map: {}
+la_constants_suffix: _EP
+
+c_interop: null

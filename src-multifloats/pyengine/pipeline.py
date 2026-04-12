@@ -302,7 +302,7 @@ def _light_normalize(text: str) -> str:
             sorted(names, key=_prec_neutral_key))
 
     text = re.sub(
-        r'^(INTEGER|LOGICAL|REAL\(KIND=\d+\)|COMPLEX\(KIND=\d+\)|TYPE\(float64x2\)|TYPE\(complex128x2\))\s+'
+        r'^(INTEGER|LOGICAL|REAL\(KIND=\d+\)|COMPLEX\(KIND=\d+\)|TYPE\(\w+\))\s+'
         r'([A-Z_][A-Z0-9_]*(?:,[A-Z_][A-Z0-9_]*)+)$',
         _sort_typed_decl, text, flags=re.MULTILINE,
     )
@@ -466,11 +466,12 @@ def _canonicalize_for_compare(text: str) -> str:
     """Normalize text to ignore cosmetic precision-specific differences
     that remain after migration.
     """
-    # 0. Strip multifloats constructors: float64x2('...') -> '...' or float64x2(...) -> ...
-    # Match float64x2('1.0D0') and extract '1.0D0'
-    text = re.sub(r"\b(?:float64x2|complex128x2)\s*\(\s*'([^']+)'\s*\)", r"\1", text, flags=re.IGNORECASE)
-    # Match float64x2(0.0E0) and extract 0.0E0
-    text = re.sub(r"\b(?:float64x2|complex128x2)\s*\(([^)]+)\)", r"\1", text, flags=re.IGNORECASE)
+    # 0. Strip module-based type constructors: e.g. float64x2('1.0D0') -> '1.0D0'
+    # Matches identifiers containing a digit (type names like float64x2,
+    # complex128x2, real256, etc.) followed by a single-argument call.
+    # This avoids matching Fortran keywords or subroutine calls.
+    text = re.sub(r"\b(\w*\d\w*)\s*\(\s*'([^']+)'\s*\)", r"\2", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(\w*\d\w*)\s*\(([^)]+)\)", r"\2", text, flags=re.IGNORECASE)
 
     # 1. d/D exponent → E in numeric literals
     text = re.sub(r'(\d)[dD]([+-]?\d)', r'\1E\2', text)
@@ -491,12 +492,13 @@ def _canonicalize_for_compare(text: str) -> str:
     text = re.sub(
         r'\bCOMPLEX\s*\(\s*KIND\s*=\s*\d+\s*\)',
         r'COMPLEX', text, flags=re.IGNORECASE)
+    # Canonicalize TYPE(...) declarations to REAL/COMPLEX.
+    # Any TYPE(...) that remains after KIND canonicalization is a module-
+    # based type (e.g. TYPE(float64x2), TYPE(real256)) — normalize to
+    # base precision for comparison purposes.
     text = re.sub(
-        r'\bTYPE\s*\(\s*float64x2\s*\)',
+        r'\bTYPE\s*\(\s*\w+\s*\)',
         r'REAL', text, flags=re.IGNORECASE)
-    text = re.sub(
-        r'\bTYPE\s*\(\s*complex128x2\s*\)',
-        r'COMPLEX', text, flags=re.IGNORECASE)
     
     # 5. Canonicalize prefix-dependent identifiers
     text = re.sub(

@@ -1,0 +1,161 @@
+name: multifloats
+
+types:
+  real: "TYPE(float64x2)"
+  complex: "TYPE(complex128x2)"
+
+literals:
+  mode: constructor
+  kind_suffix: null
+  real_constructor: float64x2
+  complex_constructor: complex128x2
+
+intrinsics:
+  mode: wrap_constructor
+
+prefixes:
+  R: DD
+  C: ZZ
+  I: I
+  L: L
+  S: S
+
+module:
+  name: multifloats
+  type_names: [float64x2, complex128x2]
+  constant_names:
+    - mf_zero
+    - mf_one
+    - mf_two
+    - mf_half
+    - mf_eight
+    - mf_safmin
+    - mf_safmax
+    - mf_tsml
+    - mf_tbig
+    - mf_ssml
+    - mf_sbig
+    - mf_rtmin
+    - mf_rtmax
+    - mf_to_double
+    - mf_real
+  generic_names:
+    - abs
+    - sqrt
+    - sin
+    - cos
+    - tan
+    - exp
+    - log
+    - log10
+    - atan
+    - asin
+    - acos
+    - aint
+    - anint
+    - sinh
+    - cosh
+    - tanh
+    - asinh
+    - acosh
+    - atanh
+    - erf
+    - erfc
+    - erfc_scaled
+    - gamma
+    - log_gamma
+    - bessel_j0
+    - bessel_j1
+    - bessel_y0
+    - bessel_y1
+    - bessel_jn
+    - bessel_yn
+    - fraction
+    - rrspacing
+    - spacing
+    - epsilon
+    - huge
+    - tiny
+    - aimag
+    - conjg
+    - sign
+    - mod
+    - atan2
+    - dim
+    - modulo
+    - hypot
+    - nearest
+    - min
+    - max
+    - maxval
+    - minval
+    - maxloc
+    - minloc
+    - sum
+    - product
+    - dot_product
+    - norm2
+    - findloc
+    - matmul
+    - digits
+    - maxexponent
+    - minexponent
+    - radix
+    - precision
+    - range
+    - exponent
+    - dble
+    - int
+    - nint
+    - real
+    - cmplx
+    - ceiling
+    - floor
+    - scale
+    - set_exponent
+    - storage_size
+    - random_number
+  operator_generics:
+    - "operator(+)"
+    - "operator(-)"
+    - "operator(*)"
+    - "operator(/)"
+    - "operator(**)"
+    - "operator(==)"
+    - "operator(/=)"
+    - "operator(<)"
+    - "operator(>)"
+    - "operator(<=)"
+    - "operator(>=)"
+    - "assignment(=)"
+
+known_constants:
+  ZERO: MF_ZERO
+  ONE: MF_ONE
+  TWO: MF_TWO
+  HALF: MF_HALF
+  EIGHT: MF_EIGHT
+
+la_constants_map:
+  zero: MF_ZERO
+  half: MF_HALF
+  one: MF_ONE
+  two: MF_TWO
+  eight: MF_EIGHT
+  safmin: MF_SAFMIN
+  safmax: MF_SAFMAX
+  tsml: MF_TSML
+  tbig: MF_TBIG
+  ssml: MF_SSML
+  sbig: MF_SBIG
+
+la_constants_suffix: _MF
+
+c_interop:
+  real_type: float64x2_t
+  complex_type: complex128x2_t
+  mpi_real: MPI_FLOAT64X2
+  mpi_complex: MPI_COMPLEX128X2
+  mpi_sum_real: MPI_DD_SUM
+  mpi_sum_complex: MPI_ZZ_SUM
+  header: multifloats_bridge.h

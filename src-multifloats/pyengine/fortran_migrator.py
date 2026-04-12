@@ -697,7 +697,7 @@ def replace_intrinsic_decls(line: str, target_mode: TargetMode | None = None) ->
                 seen.add(key)
                 deduped.append(n)
         if target_mode is not None and target_mode.intrinsic_mode == 'wrap_constructor':
-            overloaded = _multifloats_overloaded_intrinsics()
+            overloaded = frozenset(n.upper() for n in target_mode.module_generic_names)
             deduped = [n for n in deduped if n.upper() not in overloaded]
         if not deduped:
             # Whole declaration empty — drop the line so we don't emit a
@@ -707,44 +707,6 @@ def replace_intrinsic_decls(line: str, target_mode: TargetMode | None = None) ->
         line = prefix + sep + ', '.join(deduped) + trail + newline
     return line
 
-
-# Names that the mock multifloats module exposes via USE-associated
-# generic interfaces. When the migrator emits ``USE multifloats``, any
-# residual ``INTRINSIC :: name`` clause for one of these names causes
-# gfortran to reject the generic with "is not consistent with a specific
-# intrinsic interface". Keep this list in sync with multifloats.fypp.
-_MULTIFLOATS_OVERLOADED_INTRINSICS: frozenset[str] | None = None
-
-
-def _multifloats_overloaded_intrinsics() -> frozenset[str]:
-    global _MULTIFLOATS_OVERLOADED_INTRINSICS
-    if _MULTIFLOATS_OVERLOADED_INTRINSICS is not None:
-        return _MULTIFLOATS_OVERLOADED_INTRINSICS
-    names = {
-        # Unary real/complex math
-        'ABS', 'SQRT', 'SIN', 'COS', 'TAN', 'EXP', 'LOG', 'LOG10',
-        'ATAN', 'ASIN', 'ACOS', 'AINT', 'ANINT', 'SINH', 'COSH', 'TANH',
-        'ASINH', 'ACOSH', 'ATANH', 'ERF', 'ERFC', 'ERFC_SCALED',
-        'GAMMA', 'LOG_GAMMA',
-        'BESSEL_J0', 'BESSEL_J1', 'BESSEL_Y0', 'BESSEL_Y1',
-        'BESSEL_JN', 'BESSEL_YN',
-        'FRACTION', 'RRSPACING', 'SPACING', 'EPSILON', 'HUGE', 'TINY',
-        'AIMAG', 'CONJG',
-        # Binary real
-        'SIGN', 'MOD', 'ATAN2', 'DIM', 'MODULO', 'HYPOT', 'NEAREST',
-        'MIN', 'MAX',
-        # Array reductions
-        'MAXVAL', 'MINVAL', 'MAXLOC', 'MINLOC', 'SUM', 'PRODUCT',
-        # Inquiry
-        'DIGITS', 'MAXEXPONENT', 'MINEXPONENT', 'RADIX',
-        'PRECISION', 'RANGE', 'EXPONENT',
-        # Conversions
-        'DBLE', 'INT', 'NINT', 'REAL', 'CMPLX', 'CEILING', 'FLOOR',
-        # (mf, integer) -> mf
-        'SCALE', 'SET_EXPONENT',
-    }
-    _MULTIFLOATS_OVERLOADED_INTRINSICS = frozenset(names)
-    return _MULTIFLOATS_OVERLOADED_INTRINSICS
 
 
 def _dedup_intrinsic_stmts(text: str, target_mode: TargetMode | None = None) -> str:
@@ -807,7 +769,7 @@ def _dedup_intrinsic_stmts(text: str, target_mode: TargetMode | None = None) -> 
                 seen.add(key)
                 deduped.append(n)
         if target_mode is not None and target_mode.intrinsic_mode == 'wrap_constructor':
-            overloaded = _multifloats_overloaded_intrinsics()
+            overloaded = frozenset(n.upper() for n in target_mode.module_generic_names)
             deduped = [n for n in deduped if n.upper() not in overloaded]
 
         if not deduped:
@@ -1215,7 +1177,7 @@ def _wrap_bare_complex_literals(line: str, target_mode: TargetMode) -> str:
         rf"{target_mode.complex_constructor}(re=\1, im=\2)",
         line,
     )
-    real_ctor = re.escape(target_mode.real_constructor or 'float64x2')
+    real_ctor = re.escape(target_mode.real_constructor or '')
     line = re.sub(
         rf"(?<![A-Za-z0-9_])\(\s*([-+]?\s*{real_ctor}\([^()]*\))\s*,"
         rf"\s*([-+]?\s*{real_ctor}\([^()]*\))\s*\)",
@@ -1382,9 +1344,10 @@ def convert_parameter_stmts(
                         # the multifloats real-constant rename map —
                         # we keep it as a runtime assignment so the
                         # variable retains its complex type.
+                        cx_ctor = (target_mode.complex_constructor or '').lower()
                         is_cx_value = (
                             ('(' in val and ',' in val) or
-                            'complex128x2' in val.lower() or
+                            (cx_ctor and cx_ctor in val.lower()) or
                             'cmplx' in val.lower() or
                             'dcmplx' in val.lower() or
                             name.upper() in complex_names
@@ -1514,66 +1477,13 @@ def _looks_like_statement_function(stripped: str, lines: list[str], k: int) -> b
     return False
 
 
-# Multifloats public names that the migrator may legitimately need to
-# import. Operators and the assignment generic are always added on top
-# of any name-based selections, so they are not listed here.
-_MULTIFLOATS_TYPE_NAMES = frozenset(['float64x2', 'complex128x2'])
-
-_MULTIFLOATS_CONSTANT_NAMES = frozenset([
-    'mf_zero', 'mf_one', 'mf_two', 'mf_half', 'mf_eight',
-    'mf_safmin', 'mf_safmax', 'mf_tsml', 'mf_tbig', 'mf_ssml', 'mf_sbig',
-    'mf_rtmin', 'mf_rtmax',
-    'mf_to_double', 'mf_real',
-])
-
-# Generic interface names exposed by multifloats. Keep in sync with
-# multifloats.fypp. Names that gfortran already provides as intrinsics
-# (abs, sqrt, sin, …, dble, int, nint, cmplx, real, etc.) need to be
-# in this list because the migrated source typically calls them on
-# float64x2 / complex128x2 arguments, which only the use-associated
-# generic can resolve.
-_MULTIFLOATS_GENERIC_NAMES = frozenset([
-    # Unary math
-    'abs', 'sqrt', 'sin', 'cos', 'tan', 'exp', 'log', 'log10',
-    'atan', 'asin', 'acos', 'aint', 'anint', 'sinh', 'cosh', 'tanh',
-    'asinh', 'acosh', 'atanh', 'erf', 'erfc', 'erfc_scaled',
-    'gamma', 'log_gamma',
-    'bessel_j0', 'bessel_j1', 'bessel_y0', 'bessel_y1',
-    'bessel_jn', 'bessel_yn',
-    'fraction', 'rrspacing', 'spacing', 'epsilon', 'huge', 'tiny',
-    'aimag', 'conjg',
-    # Binary real
-    'sign', 'mod', 'atan2', 'dim', 'modulo', 'hypot', 'nearest',
-    'min', 'max',
-    # Array reductions
-    'maxval', 'minval', 'maxloc', 'minloc', 'sum', 'product',
-    'dot_product', 'norm2', 'findloc', 'matmul',
-    # Inquiry
-    'digits', 'maxexponent', 'minexponent', 'radix',
-    'precision', 'range', 'exponent',
-    # Conversions
-    'dble', 'int', 'nint', 'real', 'cmplx', 'ceiling', 'floor',
-    # (mf, integer) -> mf
-    'scale', 'set_exponent',
-    # Misc
-    'storage_size', 'random_number',
-])
-
-_MULTIFLOATS_PUBLIC_NAMES = (
-    _MULTIFLOATS_TYPE_NAMES
-    | _MULTIFLOATS_CONSTANT_NAMES
-    | _MULTIFLOATS_GENERIC_NAMES
-)
-
-# Operator generics. These never collide with local variable names, so
-# they are always included in the ONLY clause.
-_MULTIFLOATS_ALWAYS_INCLUDE = (
-    'operator(+)', 'operator(-)', 'operator(*)', 'operator(/)',
-    'operator(**)',
-    'operator(==)', 'operator(/=)',
-    'operator(<)', 'operator(>)', 'operator(<=)', 'operator(>=)',
-    'assignment(=)',
-)
+# Module public names (type names, constants, generics, operator generics)
+# are now loaded from the target YAML via TargetMode fields:
+#   target_mode.module_type_names
+#   target_mode.module_constant_names
+#   target_mode.module_generic_names
+#   target_mode.module_public_names  (union of the above three)
+#   target_mode.module_operator_generics
 
 _DECL_LINE_RE = re.compile(
     r'^\s+(?:TYPE\s*\([^)]*\)|INTEGER\b|REAL\b|COMPLEX\b|LOGICAL\b|'
@@ -1683,23 +1593,24 @@ _END_PROC_RE = re.compile(
     r'^\s*END\s*(?:(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s*DATA)\b\s*\w*)?\s*(?:!.*)?$',
     re.IGNORECASE,
 )
-_USE_MF_RE = re.compile(r'^(\s*)USE\s+multifloats\s*(?:!.*)?$', re.IGNORECASE)
-
-
-def specialize_use_multifloats(source: str, target_mode: TargetMode, fixed_form: bool) -> str:
-    """Replace bare ``USE multifloats`` clauses with explicit ``only:``
+def specialize_use_module(source: str, target_mode: TargetMode, fixed_form: bool) -> str:
+    """Replace bare ``USE <module>`` clauses with explicit ``only:``
     lists tailored to each procedure.
 
     Operates on the fully-migrated source so that scanned identifiers
-    reflect the post-transform names (``float64x2``, ``MF_ZERO``, ...).
-    Each procedure body between its header and matching END statement
-    is scanned for referenced multifloats names; the only-list excludes
-    any name that the procedure declares as a local variable, so that
-    LAPACK locals like ``SUM``/``SCALE``/``GAMMA``/``TINY``/``NINT`` do
-    not collide with use-associated generic interfaces.
+    reflect the post-transform names. Each procedure body between its
+    header and matching END statement is scanned for referenced module
+    names; the only-list excludes any name that the procedure declares
+    as a local variable, so that LAPACK locals like ``SUM``/``SCALE``
+    etc. do not collide with use-associated generic interfaces.
     """
     if not target_mode.module_name or target_mode.intrinsic_mode != 'wrap_constructor':
         return source
+
+    use_mod_re = re.compile(
+        rf'^(\s*)USE\s+{re.escape(target_mode.module_name)}\s*(?:!.*)?$',
+        re.IGNORECASE,
+    )
 
     lines = source.splitlines(keepends=True)
     # Find all procedure boundaries.
@@ -1722,10 +1633,10 @@ def specialize_use_multifloats(source: str, target_mode: TargetMode, fixed_form:
         only_clause = _build_use_only_clause(proc_lines, target_mode)
         if not only_clause:
             continue
-        # Replace the bare ``USE multifloats`` line(s) inside this
+        # Replace the bare ``USE <module>`` line(s) inside this
         # procedure with the only-form. There should be exactly one.
         for k in range(h, next_end + 1):
-            m = _USE_MF_RE.match(out[k])
+            m = use_mod_re.match(out[k])
             if not m:
                 continue
             indent = m.group(1) or ('      ' if fixed_form else '    ')
@@ -1733,6 +1644,10 @@ def specialize_use_multifloats(source: str, target_mode: TargetMode, fixed_form:
             wrapped = _wrap_use_clause(indent, body, fixed_form)
             out[k] = wrapped
     return ''.join(out)
+
+
+# Keep old name as alias for backward compatibility
+specialize_use_multifloats = specialize_use_module
 
 
 def _wrap_use_clause(indent: str, body: str, fixed_form: bool) -> str:
@@ -1798,24 +1713,31 @@ def _wrap_use_clause(indent: str, body: str, fixed_form: bool) -> str:
 
 
 def _build_use_only_clause(proc_lines: list[str], target_mode: TargetMode) -> str:
-    """Compute the ``, only:`` clause for ``USE multifloats``.
+    """Compute the ``, only:`` clause for a module-based USE statement.
 
-    Returns the empty string if the target is not multifloats. Otherwise
+    Returns the empty string if the target does not use a module. Otherwise
     returns ``", only: name1, name2, ..., operator(+), ..."`` listing
-    the multifloats public names referenced by ``proc_lines`` (minus
-    any name that the procedure declares as a local variable, so that
-    the local declaration is not shadowed by the use-associated
-    generic interface).
+    the module public names referenced by ``proc_lines`` (minus any name
+    that the procedure declares as a local variable, so that the local
+    declaration is not shadowed by the use-associated generic interface).
     """
     if target_mode.intrinsic_mode != 'wrap_constructor':
         return ''
     referenced = _scan_referenced_identifiers(proc_lines)
     declared = _scan_local_declared_names(proc_lines)
+    # Determine constant name prefix for sorting (e.g. 'mf_' for multifloats)
+    const_prefixes = set()
+    for cn in target_mode.module_constant_names:
+        idx = cn.find('_')
+        if idx >= 0:
+            const_prefixes.add(cn[:idx + 1])
+    def _sort_key(s: str) -> tuple:
+        return (any(s.startswith(p) for p in const_prefixes), s)
     selected = sorted(
-        (referenced & _MULTIFLOATS_PUBLIC_NAMES) - declared,
-        key=lambda s: (s.startswith('mf_'), s),
+        (referenced & target_mode.module_public_names) - declared,
+        key=_sort_key,
     )
-    parts = list(selected) + list(_MULTIFLOATS_ALWAYS_INCLUDE)
+    parts = list(selected) + list(target_mode.module_operator_generics)
     return ', only: ' + ', '.join(parts) if parts else ''
 
 
@@ -2094,7 +2016,7 @@ def rewrite_la_constants_use(source: str, target_mode: TargetMode) -> str:
     """
     const_renames = _la_constants_rename_map(target_mode)
     lines, result, in_use_stmt = source.split('\n'), [], False
-    suffix = '_MF' if not target_mode.is_kind_based else '_EP'
+    suffix = target_mode.la_constants_suffix
     target_module_upper = f'LA_CONSTANTS{suffix}'
     target_module_lower = f'la_constants{suffix.lower()}'
     target_xisnan_upper = f'LA_XISNAN{suffix}'
@@ -2156,13 +2078,11 @@ def _la_constants_rename_map(target_mode: TargetMode) -> dict[str, str]:
     ``half`` etc. are intentionally left untouched so the body of the
     routine continues to reference them through the local alias.
     """
-    if target_mode.is_kind_based:
-        pmap = {
-            10: {'S': 'E', 'D': 'E', 'C': 'Y', 'Z': 'Y'},
-            16: {'S': 'Q', 'D': 'Q', 'C': 'X', 'Z': 'X'},
-        }[target_mode.kind_suffix]
-    else:
-        pmap = {'S': 'DD', 'D': 'DD', 'C': 'ZZ', 'Z': 'ZZ'}
+    # Build S/D → target_real_prefix, C/Z → target_complex_prefix map
+    # from the target's prefix_map (which maps R→prefix, C→prefix).
+    real_pfx = target_mode.prefix_map.get('R', 'Q')
+    cmplx_pfx = target_mode.prefix_map.get('C', 'X')
+    pmap = {'S': real_pfx, 'D': real_pfx, 'C': cmplx_pfx, 'Z': cmplx_pfx}
 
     renames: dict[str, str] = {}
     for p in ('S', 'D'):
