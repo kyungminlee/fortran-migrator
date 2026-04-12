@@ -539,6 +539,13 @@ def _apply_multifloats_pblas_subs(text: str) -> str:
     text = re.sub(
         _MF_PBLAS_PART + r'\s*!=\s*ONE\b',
         r'(!MF_IS_ONE(\1[\2]))', text)
+    # Integer truncation. PBLAS packs integer indices into work
+    # buffers: ``(Int)(work[1])`` or ``(Int)(work[1][REAL_PART])``
+    # becomes invalid on struct types. Rewrite to ``mf_to_int(...)``
+    # (defined in both multifloats_c.h and the C++ bridge header).
+    text = re.sub(
+        r'\(Int\)\(\s*(\w+(?:\[\s*\w+\s*\])+)\s*\)',
+        r'mf_to_int(\1)', text)
     return text
 
 

@@ -109,6 +109,12 @@ static inline float64x2_t mf_cabs1(complex128x2_t z) {
 #define MF_IS_ZERO(x) ((x).limbs[0] == 0.0 && (x).limbs[1] == 0.0)
 #define MF_IS_ONE(x)  ((x).limbs[0] == 1.0 && (x).limbs[1] == 0.0)
 
+/* Truncation to integer. PBLAS packs integer indices into work
+ * buffers; the original ``(Int)(work[1])`` becomes invalid when work
+ * elements are float64x2_t structs. The migrator rewrites such casts
+ * into ``mf_to_int(work[1])`` which extracts the leading limb. */
+static inline int mf_to_int(float64x2_t x) { return (int)(x.limbs[0]); }
+
 /* --------------------------------------------------------------------- */
 /* MPI handles                                                            */
 /* --------------------------------------------------------------------- */

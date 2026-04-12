@@ -28,9 +28,9 @@ PBTYP_T * PB_Cddtypeset(void)
    TypeStruct.usiz = sizeof(float64x2_t);
    TypeStruct.size = sizeof(float64x2_t);
 
-   zero.limbs[0]   = 0.0;  zero.limbs[1]   = 0.0;
-   one.limbs[0]    = 1.0;  one.limbs[1]    = 0.0;
-   negone.limbs[0] = -1.0; negone.limbs[1] = 0.0;
+   zero   = 0.0;
+   one    = 1.0;
+   negone = -1.0;
 
    TypeStruct.zero      = (char *) (&zero);
    TypeStruct.one       = (char *) (&one);

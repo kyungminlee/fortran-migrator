@@ -25,12 +25,12 @@ PBTYP_T * PB_Czztypeset(void)
    TypeStruct.usiz = sizeof(float64x2_t);
    TypeStruct.size = sizeof(cmplxDD);
 
-   zero[REAL_PART].limbs[0]   = 0.0; zero[REAL_PART].limbs[1]   = 0.0;
-   zero[IMAG_PART].limbs[0]   = 0.0; zero[IMAG_PART].limbs[1]   = 0.0;
-   one[REAL_PART].limbs[0]    = 1.0; one[REAL_PART].limbs[1]    = 0.0;
-   one[IMAG_PART].limbs[0]    = 0.0; one[IMAG_PART].limbs[1]    = 0.0;
-   negone[REAL_PART].limbs[0] = -1.0; negone[REAL_PART].limbs[1] = 0.0;
-   negone[IMAG_PART].limbs[0] = 0.0; negone[IMAG_PART].limbs[1] = 0.0;
+   zero[REAL_PART]   = 0.0;
+   zero[IMAG_PART]   = 0.0;
+   one[REAL_PART]    = 1.0;
+   one[IMAG_PART]    = 0.0;
+   negone[REAL_PART] = -1.0;
+   negone[IMAG_PART] = 0.0;
 
    TypeStruct.zero      = ((char *) zero);
    TypeStruct.one       = ((char *) one);
