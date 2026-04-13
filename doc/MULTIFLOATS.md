@@ -562,26 +562,26 @@ implemented externally; Phase 0 validates this API against the actual module.
 **Goal:** The migrator accepts `--target multifloats` without breaking KIND=10/16.
 
 **Sub-phase 1a** (1 PR):
-- [ ] Create `src/pyengine/target_mode.py` with `TargetMode` dataclass
-- [ ] Implement `kind_target(kind)` and `multifloats_target(...)` factories
-- [ ] Unit tests for both factories
+- [x] Create `src/pyengine/target_mode.py` with `TargetMode` dataclass
+- [x] Implement `kind_target(kind)` and `multifloats_target(...)` factories
+- [x] Unit tests for both factories
 
 **Sub-phase 1b** (1 PR):
 - [x] Update CLI: `--target` option replaces `--kind`
-- [ ] Construct `TargetMode` at CLI entry point via factory functions
-- [ ] Thread `TargetMode` through pipeline functions
-- [ ] Adapter layer: leaf functions still accept `kind: int` via `target.kind_suffix`
-- [ ] `PREFIX_MAP` lookups -> `target.prefix_map`
-- [ ] Regression tests: KIND=10/16 produce identical output
+- [x] Construct `TargetMode` at CLI entry point via factory functions
+- [x] Thread `TargetMode` through pipeline functions
+- [x] Adapter layer: leaf functions still accept `kind: int` via `target.kind_suffix`
+- [x] `PREFIX_MAP` lookups -> `target.prefix_map`
+- [x] Regression tests: KIND=10/16 produce identical output
 
 **Sub-phase 1c** (per-function PRs):
-- [ ] Update `replace_type_decls()` to accept `TargetMode`, branch on `is_kind_based`
-- [ ] Update `replace_literals()` — same pattern
-- [ ] Update `replace_intrinsic_calls()` — same pattern
-- [ ] Update `replace_generic_conversions()` — same pattern
-- [ ] Update `_replace_kind_parameter()` — same pattern
-- [ ] Update `rewrite_la_constants_use()` — same pattern
-- [ ] Update `_build_sub_vars()` in `c_migrator.py` — same pattern
+- [x] Update `replace_type_decls()` to accept `TargetMode`, branch on `is_kind_based`
+- [x] Update `replace_literals()` — same pattern
+- [x] Update `replace_intrinsic_calls()` — same pattern
+- [x] Update `replace_generic_conversions()` — same pattern
+- [x] Update `_replace_kind_parameter()` — same pattern
+- [x] Update `rewrite_la_constants_use()` — same pattern
+- [x] Update `_build_sub_vars()` in `c_migrator.py` — same pattern
 
 ### Phase 1.5: Semantic Oracle Enrichment
 
@@ -600,12 +600,12 @@ implemented externally; Phase 0 validates this API against the actual module.
   entries (for Pattern B structural replacement)
 
 **Tasks:**
-- [ ] Add `use_sema: bool` parameter to `run_flang_parse_tree()`
-- [ ] When `use_sema=True`, invoke `-fdebug-dump-parse-tree` (with sema)
-- [ ] Provide multifloats `.mod` via `-I` flag
-- [ ] Extract PARAMETER/DATA/procedure/USE-statement facts
-- [ ] Handle sema failures: fall back to no-sema + regex heuristics
-- [ ] Implement equivalent extraction in `gfortran_parser.py`
+- [x] Add `use_sema: bool` parameter to `run_flang_parse_tree()`
+- [x] When `use_sema=True`, invoke `-fdebug-dump-parse-tree` (with sema)
+- [x] Provide multifloats `.mod` via `-I` flag
+- [x] Extract PARAMETER/DATA/procedure/USE-statement facts
+- [x] Handle sema failures: fall back to no-sema + regex heuristics
+- [x] Implement equivalent extraction in `gfortran_parser.py`
 
 ### Phase 2: Type Declaration Rewriting
 
@@ -615,13 +615,13 @@ implemented externally; Phase 0 validates this API against the actual module.
 `target.is_kind_based is False`. Emits `target.real_type` / `target.complex_type`.
 
 **Tasks:**
-- [ ] New regex patterns for `TYPE(...)` output syntax
-- [ ] All input forms: `DOUBLE PRECISION`, `REAL*8`, `REAL(KIND=8)`, `REAL(8)`,
+- [x] New regex patterns for `TYPE(...)` output syntax
+- [x] All input forms: `DOUBLE PRECISION`, `REAL*8`, `REAL(KIND=8)`, `REAL(8)`,
       `DOUBLE COMPLEX`, `COMPLEX*16`, `COMPLEX(KIND=8)`
-- [ ] Function return types: `DOUBLE PRECISION FUNCTION FOO` ->
+- [x] Function return types: `DOUBLE PRECISION FUNCTION FOO` ->
       `TYPE(float64x2) FUNCTION FOO`
-- [ ] Preserve attributes (INTENT, DIMENSION, ALLOCATABLE, etc.)
-- [ ] `replace_standalone_real_complex()` multifloats branch
+- [x] Preserve attributes (INTENT, DIMENSION, ALLOCATABLE, etc.)
+- [x] `replace_standalone_real_complex()` multifloats branch
 
 ### Phase 3: USE Statement Insertion
 
@@ -631,11 +631,11 @@ implemented externally; Phase 0 validates this API against the actual module.
 as a whole-source pass (not line-by-line).
 
 **Tasks:**
-- [ ] Detect procedure boundaries (SUBROUTINE/FUNCTION/PROGRAM)
-- [ ] Insert `USE multifloats` after header, before IMPLICIT NONE
-- [ ] Build ONLY clause dynamically (type names + needed constants)
-- [ ] Avoid duplicate insertion
-- [ ] Fixed-form column constraints (`      USE multifloats` = 22 chars, fits)
+- [x] Detect procedure boundaries (SUBROUTINE/FUNCTION/PROGRAM)
+- [x] Insert `USE multifloats` after header, before IMPLICIT NONE
+- [x] Build ONLY clause dynamically (type names + needed constants)
+- [x] Avoid duplicate insertion
+- [x] Fixed-form column constraints (`      USE multifloats` = 22 chars, fits)
 
 ### Phase 4: Literal Replacement
 
@@ -655,9 +655,9 @@ as a whole-source pass (not line-by-line).
 - New regex: `(\d+\.\d*|\d*\.\d+)_wp`
 
 **Line breaking enhancement:**
-- [ ] Implement `_build_split_mask()` — string-literal-only protection (Section 4)
-- [ ] Modify `reformat_fixed_line()` to use the mask
-- [ ] Verify no self-interference (constructor string literals not re-processed)
+- [x] Implement `_build_split_mask()` — string-literal-only protection (Section 4)
+- [x] Modify `reformat_fixed_line()` to use the mask
+- [x] Verify no self-interference (constructor string literals not re-processed)
 
 ### Phase 5: PARAMETER Statement Conversion
 
@@ -667,15 +667,15 @@ runtime initialization.
 **Implementation:** New whole-source pass `convert_parameter_stmts()`.
 
 **Tasks:**
-- [ ] Parse PARAMETER statements (multi-line, multi-name)
-- [ ] Mixed-type PARAMETER lines: extract only FP entries, preserve integers
-- [ ] Known constants: remove PARAMETER + type decl, add to USE..ONLY
-- [ ] Unknown constants: convert to `TYPE(float64x2) :: name` + exec assignment
-- [ ] Chained PARAMETERs: topological sort, emit assignments in dependency order
-- [ ] Scaling PARAMETERs (free-form `safmin`, `safmax`, etc.): replace entire
+- [x] Parse PARAMETER statements (multi-line, multi-name)
+- [x] Mixed-type PARAMETER lines: extract only FP entries, preserve integers
+- [x] Known constants: remove PARAMETER + type decl, add to USE..ONLY
+- [x] Unknown constants: convert to `TYPE(float64x2) :: name` + exec assignment
+- [x] Chained PARAMETERs: topological sort, emit assignments in dependency order
+- [x] Scaling PARAMETERs (free-form `safmin`, `safmax`, etc.): replace entire
       block with module imports
-- [ ] Diagnostic: flag PARAMETERs used in constant-expression contexts
-- [ ] Handle `real(wp), parameter :: zero = 0.0_wp` in free-form (combined
+- [x] Diagnostic: flag PARAMETERs used in constant-expression contexts
+- [x] Handle `real(wp), parameter :: zero = 0.0_wp` in free-form (combined
       type-decl + PARAMETER + literal)
 
 ### Phase 6: DATA Statement Conversion
@@ -685,14 +685,14 @@ runtime initialization.
 **Implementation:** New whole-source pass `convert_data_stmts()`.
 
 **Tasks:**
-- [ ] Join continuation lines for multi-line DATA statements
-- [ ] Identify FP variables via type declarations or semantic oracle
-- [ ] Mixed DATA: extract only FP parts, leave integer/logical parts
-- [ ] Generate declarations: `TYPE(float64x2) :: name`
-- [ ] Generate executable assignments with constructor calls
-- [ ] String constructor for non-exact values (RGAMSQ)
-- [ ] Insert assignments at executable section boundary
-- [ ] Diagnostic: warn if DATA-initialized variable is later written in routine
+- [x] Join continuation lines for multi-line DATA statements
+- [x] Identify FP variables via type declarations or semantic oracle
+- [x] Mixed DATA: extract only FP parts, leave integer/logical parts
+- [x] Generate declarations: `TYPE(float64x2) :: name`
+- [x] Generate executable assignments with constructor calls
+- [x] String constructor for non-exact values (RGAMSQ)
+- [x] Insert assignments at executable section boundary
+- [x] Diagnostic: warn if DATA-initialized variable is later written in routine
 
 ### Phase 7: Intrinsic Function Mapping
 

@@ -420,15 +420,27 @@ counts each divergent pair once.
 
 All C-language co-family pairs converge perfectly after migration.
 
-### PBLAS (1 diverged)
+### PBLAS (61 diverged)
 
-`psamax_.c` vs `pdamax_.c` → `pqamax_.c` (+12): the S half accesses
-matrix elements via direct array indexing (`X[Xii + Xjj * Xld]`)
-while the D half uses the `Mptr` macro (`*Mptr(X, Xii, Xjj, Xld, 1)`).
-The S half also adds extra parentheses around `Mptr` in `iqamax_`
-calls: `(char*)(Mptr(...))` vs `(char*)Mptr(...)`. Both compute the
-same address; this is upstream editorial drift in the ScaLAPACK C
-sources.
+All 61 divergences are due to **K&R-style vs ANSI-style function
+declarations** in the C sources.  The S/C halves retain K&R-style
+parameter declarations while the D/Z halves use ANSI prototypes:
+
+```c
+// S half (K&R style):
+void pqagemv_ ( TRANS, M, N, ALPHA, ... )
+F_CHAR_T TRANS ;
+Int * IA , * INCX , ... ;
+
+// D half (ANSI style):
+void pqagemv_ ( F_CHAR_T TRANS, Int * M, Int * N, ... )
+```
+
+Additionally, `psamax_.c` vs `pdamax_.c` (+12) has editorial
+differences: the S half uses direct array indexing while the D half
+uses the `Mptr` macro.
+
+This is upstream source asymmetry in ScaLAPACK's PBLAS C sources.
 
 ### ScaLAPACK (24 diverged)
 

@@ -1,10 +1,10 @@
 """CLI entry point for the general-purpose migration pipeline.
 
-Usage:
-    uv run python -m pyengine migrate  recipes/blas.yaml output/ --target kind16
+Usage (from the src/ directory):
+    uv run python -m pyengine migrate  ../recipes/blas.yaml output/ --target kind16
     uv run python -m pyengine verify   output/
-    uv run python -m pyengine build    recipes/blas.yaml output/ --target kind16
-    uv run python -m pyengine run      recipes/blas.yaml work/ --target kind16
+    uv run python -m pyengine build    ../recipes/blas.yaml output/ --target kind16
+    uv run python -m pyengine run      ../recipes/blas.yaml work/ --target kind16
 """
 
 import argparse
