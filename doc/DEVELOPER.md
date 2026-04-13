@@ -467,6 +467,45 @@ intrinsic calls, and routine names — regardless of the starting precision.
 that automatically runs both migrations and reports a categorized diff
 (code vs comments, algorithmic vs cosmetic).
 
+### 3b. Divergence Patterns by Target
+
+The dual-origin convergence test (§3) reveals different divergence counts
+depending on the target mode.  Two target families are supported:
+
+| Target | Type Declarations | Literal Mode | Intrinsic Mode |
+|--------|-------------------|--------------|----------------|
+| `kind16` | `REAL(KIND=16)` | `_16` suffix | `REAL(x, KIND=16)` |
+| `multifloats` | `TYPE(float64x2)` | `float64x2(...)` constructor | Constructor wrapping |
+
+**Why multifloats has fewer divergences than KIND-based targets:**
+
+The multifloats target eliminates certain S/D asymmetries that KIND targets
+preserve.  Two mechanisms drive this:
+
+1. **Named-constant replacement.**  The `known_constants` map in the target
+   YAML replaces local `PARAMETER` constants (`ONE`, `ZERO`, `HALF`, etc.)
+   with module-provided values (`MF_ONE`, `MF_ZERO`, `MF_HALF`).  Many
+   LAPACK D/Z routines define these constants locally while their S/C
+   counterparts do not.  In KIND mode the D-half's `PARAMETER (ONE=1.0E0_16)`
+   declaration survives into the output, creating a divergence.  In
+   multifloats mode both halves use `MF_ONE` from `USE MULTIFLOATS`, so
+   the local declaration is removed and the pair converges.
+
+   *Example:* `dgehd2.f` defines `DOUBLE PRECISION ONE; PARAMETER(ONE=1.0D+0)`.
+   `sgehd2.f` has no such constant.
+   - KIND=16: D-half output has `REAL(KIND=16) ONE; PARAMETER(ONE=1.0E0_16)` → diverges (+2).
+   - Multifloats: `ONE` is replaced by `MF_ONE` in both halves → converges.
+
+2. **Constructor wrapping normalizes type conversions.**  In KIND mode,
+   `REAL(x, KIND=16)` preserves the original intrinsic call structure, so
+   differences in whether the S-half or D-half uses an explicit `REAL()`
+   show up as divergences.  In multifloats mode, both `REAL(x)` and bare
+   usage get wrapped uniformly in `float64x2(x)`, collapsing the
+   distinction.
+
+**Detailed divergence counts** are maintained in
+`src-multifloats/DIVERGENCE.md`.
+
 ### 4. Compilation Test
 Compile the migrated library with a Fortran compiler that supports `KIND=16`
 (e.g., GFortran with `-freal-8-real-16`) and verify it compiles without errors.
