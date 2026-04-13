@@ -16,3 +16,6 @@ work/
 output/
 _build/
 _lib/
+*.o
+*.mod
+external/multifloats/multifloats.f90
