@@ -37,7 +37,7 @@ $MPICXX -O2 -std=c++17 \
 echo "[2/4] Running migrator (recipes/blacs.yaml --target multifloats)..."
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
-(cd "$REPO/src-multifloats" && uv run --project .. python -m pyengine migrate \
+(cd "$REPO/src" && uv run --project .. python -m pyengine migrate \
     "$REPO/recipes/blacs.yaml" "$OUT_DIR" \
     --target multifloats) || {
     echo "ERROR: migration failed"

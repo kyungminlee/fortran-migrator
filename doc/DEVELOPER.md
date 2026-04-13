@@ -311,7 +311,7 @@ Every BLAS/LAPACK routine exists in both single- and double-precision variants.
 When both are migrated to the same target, they should produce identical output.
 This is implemented as the `converge` CLI command (see [USAGE.md](USAGE.md)).
 
-Divergence counts are tracked in `src-multifloats/DIVERGENCE.md`.
+Divergence counts are tracked in `src/DIVERGENCE.md`.
 
 ### 3b. Divergence Patterns by Target
 

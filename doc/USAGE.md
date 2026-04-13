@@ -2,7 +2,7 @@
 
 **fortran-migrator** provides a multi-step pipeline to migrate numerical Fortran/C libraries to extended precision.
 
-The tool is primarily used through the Python engine (`pyengine`) in `src-multifloats/`.
+The tool is primarily used through the Python engine (`pyengine`) in `src/`.
 
 ## Prerequisite: uv
 
@@ -20,7 +20,7 @@ The most common way to use the tool is the `run` command, which executes the ful
 4.  **Build**: Create static libraries from the migrated source.
 
 ```bash
-cd src-multifloats
+cd src
 uv run python -m pyengine run recipes/blas.yaml work/ --target kind16
 ```
 
@@ -41,7 +41,7 @@ uv run python -m pyengine migrate recipes/blas.yaml output/ --target multifloats
 
 ## CLI Commands
 
-All commands are run from the `src-multifloats/` directory.
+All commands are run from the `src/` directory.
 
 ### `migrate`
 Performs the source-to-source rewriting step.
@@ -122,4 +122,4 @@ The migrator normalizes all precision-dependent constructs (type declarations, l
 *   **Hardcoded constants**: Precision-dependent tolerances (e.g., `1.0E-6` vs `1.0D-12`).
 *   **Missing conversions**: A residual `DBLE()` or unrenamed routine name reveals a migrator bug.
 
-The `converge` command automates this for all co-family pairs and generates a summary report. Detailed divergence analysis is in `src-multifloats/DIVERGENCE.md`.
+The `converge` command automates this for all co-family pairs and generates a summary report. Detailed divergence analysis is in `src/DIVERGENCE.md`.

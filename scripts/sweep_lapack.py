@@ -16,7 +16,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO / 'src-multifloats'))
+sys.path.insert(0, str(REPO / 'src'))
 
 from pyengine.target_mode import multifloats_target  # noqa: E402
 from pyengine.fortran_migrator import migrate_file_to_string  # noqa: E402

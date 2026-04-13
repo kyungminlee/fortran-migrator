@@ -1,4 +1,4 @@
-"""Make ``pyengine`` (the src-multifloats fork) importable from tests."""
+"""Make ``pyengine`` importable from tests."""
 
 import sys
 from pathlib import Path

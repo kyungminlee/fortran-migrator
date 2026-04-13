@@ -18,7 +18,7 @@ The tool uses a **hybrid approach** that combines the accuracy of a compiler-bas
 
 ## Core Components
 
-### Python Engine (`src-multifloats/pyengine/`)
+### Python Engine (`src/pyengine/`)
 The primary driver of the tool. It orchestrates the migration pipeline:
 *   **`pipeline.py`**: Manages the multi-file migration process.
 *   **`target_mode.py`**: Defines `TargetMode` — the abstraction for different target precisions (KIND=10/16, multifloats).

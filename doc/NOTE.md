@@ -2,7 +2,7 @@
 
 This document provides a detailed technical analysis of convergence divergences
 for the `kind16` target. For the authoritative summary covering all targets
-(kind16 and multifloats), see `src-multifloats/DIVERGENCE.md`.
+(kind16 and multifloats), see `src/DIVERGENCE.md`.
 
 ---
 

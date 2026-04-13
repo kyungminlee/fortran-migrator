@@ -1,7 +1,7 @@
 # Divergence Report
 
 End-to-end migration and convergence check for all libraries,
-run on 2026-04-12 from `src-multifloats/pyengine` with YAML-based targets.
+run on 2026-04-12 from `src/pyengine` with YAML-based targets.
 
 Targets tested: `kind16` (KIND=16, Q/X prefix) and `multifloats` (float64x2, DD/ZZ prefix).
 

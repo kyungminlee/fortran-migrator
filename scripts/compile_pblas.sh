@@ -32,15 +32,15 @@ PBBLAS_DIR="/tmp/mf_pbblas"
 PBLAS_C_DIR="/tmp/mf_pblas_c"
 
 echo "[1/5] Migrating PTZBLAS (Fortran kernels)..."
-(cd "$REPO/src-multifloats" && uv run --project .. python -m pyengine migrate \
+(cd "$REPO/src" && uv run --project .. python -m pyengine migrate \
     "$REPO/recipes/ptzblas.yaml" "$PTZBLAS_DIR" --target multifloats) 2>&1 | tail -3
 
 echo "[2/5] Migrating PBBLAS (Fortran kernels)..."
-(cd "$REPO/src-multifloats" && uv run --project .. python -m pyengine migrate \
+(cd "$REPO/src" && uv run --project .. python -m pyengine migrate \
     "$REPO/recipes/pbblas.yaml" "$PBBLAS_DIR" --target multifloats) 2>&1 | tail -3
 
 echo "[3/5] Migrating PBLAS C entry points + PTOOLS..."
-(cd "$REPO/src-multifloats" && uv run --project .. python -m pyengine migrate \
+(cd "$REPO/src" && uv run --project .. python -m pyengine migrate \
     "$REPO/recipes/pblas.yaml" "$PBLAS_C_DIR" --target multifloats) 2>&1 | tail -3
 
 echo "[4/5] Compiling Fortran kernels with gfortran..."

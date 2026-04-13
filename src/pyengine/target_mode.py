@@ -71,7 +71,7 @@ def load_target(name_or_path: str, project_root: Path | None = None) -> TargetMo
     """
     if project_root is None:
         # Default: repo root is two levels up from this file
-        # (src-multifloats/pyengine/target_mode.py → repo root)
+        # (src/pyengine/target_mode.py → repo root)
         project_root = Path(__file__).resolve().parent.parent.parent
 
     # 1. Direct path
