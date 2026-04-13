@@ -290,7 +290,8 @@ def cmd_verify(args):
 
 def _generate_cmake(output_dir: Path, lib_name: str, target_mode,
                     common_files: list[str], precision_files: list[str],
-                    language: str = 'fortran'):
+                    language: str = 'fortran',
+                    project_root: Path | None = None):
     """Generate a self-contained CMakeLists.txt in the output directory."""
     pmap = target_mode.prefix_map
     real_pfx = pmap['R'].lower()
@@ -349,12 +350,17 @@ endif()
         mf_link = ""
         mf_deps = ""
         if target_mode.module_name is not None:
+            # Resolve absolute paths to external dependencies so the
+            # generated CMakeLists.txt works from any output directory.
+            _root = project_root or Path.cwd()
+            _mf_default = str((_root / 'external' / 'multifloats').resolve())
+            _helpers_default = str((_root / 'external' / 'lapack-3.12.1' / 'SRC').resolve())
             mf_link = f"""
 # Find or link multifloats. The location can be overridden via the
-# MULTIFLOATS_DIR cache variable; otherwise we try the in-tree path
-# next to the migrated output.
+# MULTIFLOATS_DIR cache variable; otherwise we use the resolved path
+# from the project root at generation time.
 if(NOT DEFINED MULTIFLOATS_DIR)
-    set(MULTIFLOATS_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/../../external/multifloats"
+    set(MULTIFLOATS_DIR "{_mf_default}"
         CACHE PATH "Path to the external multifloats source tree")
 endif()
 if(EXISTS "${{MULTIFLOATS_DIR}}/CMakeLists.txt")
@@ -366,10 +372,10 @@ else()
 endif()
 
 # Build the la_constants_mf and la_xisnan_mf helper modules. These
-# re-export multifloats's MF_* constants under the W/U-prefixed names
+# re-export multifloats's MF_* constants under the DD/ZZ-prefixed names
 # that the migrated LAPACK source uses via its rewritten
 # ``USE LA_CONSTANTS_MF`` clause.
-set(MF_HELPERS_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/../../external/lapack-3.12.1/SRC"
+set(MF_HELPERS_DIR "{_helpers_default}"
     CACHE PATH "Directory containing la_constants_mf.f90 / la_xisnan_mf.f90")
 if(EXISTS "${{MF_HELPERS_DIR}}/la_constants_mf.f90")
     add_library(la_constants_mf STATIC
@@ -508,8 +514,9 @@ def cmd_build(args):
     print(f'  Common:    {len(common_files)} files')
     print(f'  Precision: {len(precision_files)} files')
 
+    proj_root = (args.project_root or args.recipe.resolve().parent.parent)
     _generate_cmake(output_dir, lib_name, target_mode, common_files, precision_files,
-                    language=config.language)
+                    language=config.language, project_root=proj_root)
 
     # Configure and build
     build_dir = output_dir / '_build'
