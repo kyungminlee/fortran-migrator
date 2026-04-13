@@ -1,10 +1,10 @@
 """CLI entry point for the general-purpose migration pipeline.
 
 Usage:
-    uv run python -m pyengine migrate  recipes/blas.yaml output/ --kind 16
+    uv run python -m pyengine migrate  recipes/blas.yaml output/ --target kind16
     uv run python -m pyengine verify   output/
-    uv run python -m pyengine build    recipes/blas.yaml output/ --kind 16
-    uv run python -m pyengine run      recipes/blas.yaml work/ --kind 16
+    uv run python -m pyengine build    recipes/blas.yaml output/ --target kind16
+    uv run python -m pyengine run      recipes/blas.yaml work/ --target kind16
 """
 
 import argparse
@@ -573,7 +573,7 @@ def cmd_build(args):
 
 
 def cmd_run(args):
-    """Run the full pipeline: migrate → verify → build."""
+    """Run the full pipeline: migrate → converge → verify → build."""
     work_dir = args.work_dir
     output_dir = work_dir / 'output'
     src_dir = output_dir / 'src'

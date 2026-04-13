@@ -88,7 +88,7 @@ dataclass with factory functions is transparent and extensible.
 ### Factory Functions
 
 ```python
-# In pyengine/target_mode.py
+# In src/pyengine/target_mode.py
 def kind_target(kind: int) -> TargetMode:
     """Construct TargetMode for KIND=10 or KIND=16."""
     ...
@@ -562,12 +562,12 @@ implemented externally; Phase 0 validates this API against the actual module.
 **Goal:** The migrator accepts `--target multifloats` without breaking KIND=10/16.
 
 **Sub-phase 1a** (1 PR):
-- [ ] Create `pyengine/target_mode.py` with `TargetMode` dataclass
+- [ ] Create `src/pyengine/target_mode.py` with `TargetMode` dataclass
 - [ ] Implement `kind_target(kind)` and `multifloats_target(...)` factories
 - [ ] Unit tests for both factories
 
 **Sub-phase 1b** (1 PR):
-- [ ] Update CLI: add `--target` option alongside `--kind`
+- [x] Update CLI: `--target` option replaces `--kind`
 - [ ] Construct `TargetMode` at CLI entry point via factory functions
 - [ ] Thread `TargetMode` through pipeline functions
 - [ ] Adapter layer: leaf functions still accept `kind: int` via `target.kind_suffix`
@@ -587,7 +587,7 @@ implemented externally; Phase 0 validates this API against the actual module.
 
 **Goal:** Extract PARAMETER, DATA, and procedure boundary facts.
 
-**Files affected:** `pyengine/flang_parser.py`, `pyengine/gfortran_parser.py`
+**Files affected:** `src/pyengine/flang_parser.py`, `src/pyengine/gfortran_parser.py`
 
 **New `ParseTreeFacts` fields:**
 - `parameter_stmts: list[ParameterInfo]` — name, value, type (FP/integer),

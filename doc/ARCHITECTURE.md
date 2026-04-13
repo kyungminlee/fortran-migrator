@@ -7,13 +7,13 @@
 The tool uses a **hybrid approach** that combines the accuracy of a compiler-based parse tree with the formatting preservation of source-level rewriting.
 
 1.  **Parse with a Fortran compiler**: The tool invokes either `flang-new` (LLVM) or `gfortran` as a subprocess to generate a textual dump of the source's parse tree. The `--parser` flag selects the backend; without it, the tool falls back to regex-only scanning.
-2.  **Extract Facts**: The parser module (`pyengine/flang_parser.py` or `pyengine/gfortran_parser.py`) scans the parse tree dump to extract key information:
+2.  **Extract Facts**: The parser module (`src/pyengine/flang_parser.py` or `src/pyengine/gfortran_parser.py`) scans the parse tree dump to extract key information:
     *   **Type Declarations**: Location and nature of `REAL`, `DOUBLE PRECISION`, etc.
     *   **Routine Definitions**: `SUBROUTINE` and `FUNCTION` names.
     *   **Call Sites**: Locations where other routines are called.
     *   **Literals**: Floating-point constants with D or E exponents.
     *   **Intrinsics**: Calls to type-specific intrinsic functions.
-3.  **Apply Transformations**: The `pyengine/fortran_migrator.py` uses these facts as an "oracle" to guide line-by-line regex replacements. This ensures that only relevant code is modified while comments, whitespace, and preprocessor directives are left exactly as-is.
+3.  **Apply Transformations**: The `src/pyengine/fortran_migrator.py` uses these facts as an "oracle" to guide line-by-line regex replacements. This ensures that only relevant code is modified while comments, whitespace, and preprocessor directives are left exactly as-is.
 4.  **Reformat**: For fixed-form Fortran, the tool automatically reformats lines that exceed the 72-character limit after transformation, ensuring they remain syntactically valid.
 
 ## Core Components
@@ -41,4 +41,4 @@ For C-based libraries, the tool uses a **template-based cloning** strategy. Sinc
 3.  Updates MPI datatype constants (e.g., `MPI_DOUBLE` → `MPI_FLOAT128`).
 4.  Generates a new file with the correct prefix (e.g., `qgebr2d_.c`).
 
-This process is handled by `pyengine/c_migrator.py`.
+This process is handled by `src/pyengine/c_migrator.py`.

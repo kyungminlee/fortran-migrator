@@ -173,9 +173,9 @@ Output files are renamed to reflect the new prefix:
 
 ## Symbol Database
 
-The tool uses a **symbol scanner** (`pyengine/symbol_scanner.py`) to discover
+The tool uses a **symbol scanner** (`src/pyengine/symbol_scanner.py`) to discover
 routine names from source files or compiled libraries, then a **prefix
-classifier** (`pyengine/prefix_classifier.py`) to classify each by its precision
+classifier** (`src/pyengine/prefix_classifier.py`) to classify each by its precision
 prefix (S/D/C/Z) and build a rename map. Only symbols with confirmed precision
 variants are renamed, avoiding false positives on identifiers that happen to
 start with `d`/`s`/`c`/`z`.
