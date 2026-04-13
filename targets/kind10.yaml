@@ -25,4 +25,13 @@ known_constants: {}
 la_constants_map: {}
 la_constants_suffix: _EP
 
-c_interop: null
+c_interop:
+  real_type: EREAL
+  complex_type: YCOMPLEX
+  c_real_type: long double
+  mpi_real: MPI_LONG_DOUBLE
+  mpi_complex: MPI_C_LONG_DOUBLE_COMPLEX
+  mpi_sum_real: MPI_SUM
+  mpi_sum_complex: MPI_SUM
+  needs_mpi_check: false
+  header_mode: typedef

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from pyengine.target_mode import multifloats_target, kind_target
+from pyengine.target_mode import load_target
 from pyengine.c_migrator import (
     _build_sub_vars,
     _apply_overrides,
@@ -33,7 +33,7 @@ from pyengine.c_migrator import (
 
 
 def test_build_sub_vars_multifloats_struct_types():
-    mf = multifloats_target()
+    mf = load_target('multifloats')
     v = _build_sub_vars(mf)
     assert v['REAL_TYPE'] == 'float64x2_t'
     assert v['COMPLEX_TYPE'] == 'complex128x2_t'
@@ -51,7 +51,7 @@ def test_build_sub_vars_multifloats_struct_types():
 def test_build_sub_vars_kind16_unchanged():
     """KIND targets keep the legacy values; the new MPI_SUM_* keys
     expand to plain 'MPI_SUM' so the substitution rule is a no-op."""
-    k16 = kind_target(16)
+    k16 = load_target('kind16')
     v = _build_sub_vars(k16)
     assert v['REAL_TYPE'] == 'QREAL'
     assert v['COMPLEX_TYPE'] == 'XCOMPLEX'
@@ -65,7 +65,7 @@ def test_build_sub_vars_kind16_unchanged():
 
 
 def test_build_sub_vars_kind10_unchanged():
-    k10 = kind_target(10)
+    k10 = load_target('kind10')
     v = _build_sub_vars(k10)
     assert v['C_REAL_TYPE'] == 'long double'
     assert v['MPI_REAL'] == 'MPI_LONG_DOUBLE'
@@ -96,7 +96,7 @@ void BI_dMPI_sum(double *a, double *b, int *len, MPI_Datatype *dt) {
 def test_blacs_real_clone_multifloats(tmp_path):
     src = tmp_path / 'BI_dvvsum.c'
     src.write_text(_BLACS_REAL_SAMPLE)
-    target = multifloats_target()
+    target = load_target('multifloats')
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
@@ -118,7 +118,7 @@ def test_blacs_real_clone_kind16_still_uses_mpi_sum(tmp_path):
     textual no-op for KIND targets."""
     src = tmp_path / 'BI_dvvsum.c'
     src.write_text(_BLACS_REAL_SAMPLE)
-    target = kind_target(16)
+    target = load_target('kind16')
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
@@ -154,7 +154,7 @@ void Czgebs2d_aux(DCOMPLEX *buf, Int n) {
 def test_blacs_complex_clone_multifloats(tmp_path):
     src = tmp_path / 'BI_zvvsum.c'
     src.write_text(_BLACS_COMPLEX_SAMPLE)
-    target = multifloats_target()
+    target = load_target('multifloats')
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
@@ -187,7 +187,7 @@ typedef struct {float r, i;} SCOMPLEX;
 def test_patch_bdef_header_multifloats_includes_mfc_header(tmp_path):
     bdef = tmp_path / 'Bdef.h'
     bdef.write_text(_BDEF_SKELETON)
-    mf = multifloats_target()
+    mf = load_target('multifloats')
     template_vars = _build_sub_vars(mf)
     _patch_bdef_header(bdef, mf, template_vars)
     out = bdef.read_text()
@@ -208,7 +208,7 @@ def test_patch_bdef_header_kind16_emits_legacy_typedef(tmp_path):
     """Regression: KIND=16 target keeps the original __float128 block."""
     bdef = tmp_path / 'Bdef.h'
     bdef.write_text(_BDEF_SKELETON)
-    k16 = kind_target(16)
+    k16 = load_target('kind16')
     template_vars = _build_sub_vars(k16)
     _patch_bdef_header(bdef, k16, template_vars)
     out = bdef.read_text()

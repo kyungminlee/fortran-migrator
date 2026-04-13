@@ -40,15 +40,18 @@ class TargetMode:
     module_generic_names: frozenset[str] = field(default_factory=frozenset)
     module_operator_generics: tuple[str, ...] = ()
 
-    # C-interop fields (None for KIND targets, populated for module-based).
-    # Used by c_migrator to substitute types / MPI handles / reduction ops
-    # in cloned BLACS and PBLAS C sources.
-    c_real_type: Optional[str] = None         # 'float64x2_t'
-    c_complex_type: Optional[str] = None      # 'complex128x2_t'
-    c_mpi_real: Optional[str] = None          # 'MPI_FLOAT64X2'
-    c_mpi_complex: Optional[str] = None       # 'MPI_COMPLEX128X2'
-    c_mpi_sum_real: Optional[str] = None      # 'MPI_DD_SUM'
-    c_mpi_sum_complex: Optional[str] = None   # 'MPI_ZZ_SUM'
+    # C-interop fields.  Used by c_migrator to substitute types / MPI
+    # handles / reduction ops in cloned BLACS and PBLAS C sources.
+    # All targets (KIND and module-based) populate these via YAML.
+    c_real_type: Optional[str] = None         # 'QREAL' / 'float64x2_t'
+    c_complex_type: Optional[str] = None      # 'XCOMPLEX' / 'complex128x2_t'
+    c_c_real_type: Optional[str] = None       # '__float128' / 'float64x2_t'
+    c_mpi_real: Optional[str] = None          # 'MPI_REAL16' / 'MPI_FLOAT64X2'
+    c_mpi_complex: Optional[str] = None       # 'MPI_COMPLEX32' / 'MPI_COMPLEX128X2'
+    c_mpi_sum_real: Optional[str] = None      # 'MPI_SUM' / 'MPI_DD_SUM'
+    c_mpi_sum_complex: Optional[str] = None   # 'MPI_SUM' / 'MPI_ZZ_SUM'
+    c_needs_mpi_check: bool = False           # True only for KIND=16
+    c_header_mode: Optional[str] = None       # 'typedef' or 'include'
     c_header: Optional[str] = None            # 'multifloats_bridge.h'
 
     @property
@@ -139,138 +142,12 @@ def _load_target_yaml(path: Path) -> TargetMode:
         module_operator_generics=module_operator_generics,
         c_real_type=c.get('real_type'),
         c_complex_type=c.get('complex_type'),
+        c_c_real_type=c.get('c_real_type'),
         c_mpi_real=c.get('mpi_real'),
         c_mpi_complex=c.get('mpi_complex'),
         c_mpi_sum_real=c.get('mpi_sum_real'),
         c_mpi_sum_complex=c.get('mpi_sum_complex'),
+        c_needs_mpi_check=c.get('needs_mpi_check', False),
+        c_header_mode=c.get('header_mode'),
         c_header=c.get('header'),
-    )
-
-
-# -- Deprecated factory functions (kept for backward compatibility) ----------
-
-def kind_target(kind: int) -> TargetMode:
-    """Construct TargetMode for standard KIND=10 or KIND=16 compilation.
-
-    .. deprecated:: Use ``load_target('kind10')`` or ``load_target('kind16')`` instead.
-    """
-    from .prefix_classifier import PREFIX_MAP
-
-    if kind not in PREFIX_MAP:
-        raise ValueError(f"Unsupported kind: {kind}")
-
-    return TargetMode(
-        name=f"kind{kind}",
-        real_type=f"REAL(KIND={kind})",
-        complex_type=f"COMPLEX(KIND={kind})",
-        literal_mode="kind_suffix",
-        kind_suffix=kind,
-        real_constructor=None,
-        complex_constructor=None,
-        intrinsic_mode="add_kind",
-        prefix_map=PREFIX_MAP[kind],
-        module_name=None,
-        known_constants={},
-        la_constants_map={},
-        la_constants_suffix='_EP',
-    )
-
-
-def multifloats_target(
-    module: str = 'multifloats',
-    real_type: str = 'float64x2',
-    complex_type: str = 'complex128x2',
-    prefix_style: str = 'wide',
-) -> TargetMode:
-    """Construct TargetMode for multifloats library migration.
-
-    .. deprecated:: Use ``load_target('multifloats')`` instead.
-    """
-    if prefix_style == 'wide':
-        prefix_map = {
-            'R': 'DD',
-            'C': 'ZZ',
-            'I': 'I',
-            'L': 'L',
-            'S': 'S',
-        }
-    else:
-        raise ValueError(f"Unknown prefix_style: {prefix_style}")
-
-    known_constants = {
-        'ZERO': 'MF_ZERO',
-        'ONE': 'MF_ONE',
-        'TWO': 'MF_TWO',
-        'HALF': 'MF_HALF',
-        'EIGHT': 'MF_EIGHT',
-    }
-
-    la_constants_map = {
-        'zero': 'MF_ZERO',
-        'half': 'MF_HALF',
-        'one': 'MF_ONE',
-        'two': 'MF_TWO',
-        'eight': 'MF_EIGHT',
-        'safmin': 'MF_SAFMIN',
-        'safmax': 'MF_SAFMAX',
-        'tsml': 'MF_TSML',
-        'tbig': 'MF_TBIG',
-        'ssml': 'MF_SSML',
-        'sbig': 'MF_SBIG',
-    }
-
-    return TargetMode(
-        name="multifloats",
-        real_type=f"TYPE({real_type})",
-        complex_type=f"TYPE({complex_type})",
-        literal_mode="constructor",
-        kind_suffix=None,
-        real_constructor=real_type,
-        complex_constructor=complex_type,
-        intrinsic_mode="wrap_constructor",
-        prefix_map=prefix_map,
-        module_name=module,
-        known_constants=known_constants,
-        la_constants_map=la_constants_map,
-        la_constants_suffix='_MF',
-        module_type_names=frozenset([real_type, complex_type]),
-        module_constant_names=frozenset([
-            'mf_zero', 'mf_one', 'mf_two', 'mf_half', 'mf_eight',
-            'mf_safmin', 'mf_safmax', 'mf_tsml', 'mf_tbig', 'mf_ssml', 'mf_sbig',
-            'mf_rtmin', 'mf_rtmax',
-            'mf_to_double', 'mf_real',
-        ]),
-        module_generic_names=frozenset([
-            'abs', 'sqrt', 'sin', 'cos', 'tan', 'exp', 'log', 'log10',
-            'atan', 'asin', 'acos', 'aint', 'anint', 'sinh', 'cosh', 'tanh',
-            'asinh', 'acosh', 'atanh', 'erf', 'erfc', 'erfc_scaled',
-            'gamma', 'log_gamma',
-            'bessel_j0', 'bessel_j1', 'bessel_y0', 'bessel_y1',
-            'bessel_jn', 'bessel_yn',
-            'fraction', 'rrspacing', 'spacing', 'epsilon', 'huge', 'tiny',
-            'aimag', 'conjg',
-            'sign', 'mod', 'atan2', 'dim', 'modulo', 'hypot', 'nearest',
-            'min', 'max',
-            'maxval', 'minval', 'maxloc', 'minloc', 'sum', 'product',
-            'dot_product', 'norm2', 'findloc', 'matmul',
-            'digits', 'maxexponent', 'minexponent', 'radix',
-            'precision', 'range', 'exponent',
-            'dble', 'int', 'nint', 'real', 'cmplx', 'ceiling', 'floor',
-            'scale', 'set_exponent',
-            'storage_size', 'random_number',
-        ]),
-        module_operator_generics=(
-            'operator(+)', 'operator(-)', 'operator(*)', 'operator(/)',
-            'operator(**)',
-            'operator(==)', 'operator(/=)',
-            'operator(<)', 'operator(>)', 'operator(<=)', 'operator(>=)',
-            'assignment(=)',
-        ),
-        c_real_type='float64x2_t',
-        c_complex_type='complex128x2_t',
-        c_mpi_real='MPI_FLOAT64X2',
-        c_mpi_complex='MPI_COMPLEX128X2',
-        c_mpi_sum_real='MPI_DD_SUM',
-        c_mpi_sum_complex='MPI_ZZ_SUM',
-        c_header='multifloats_bridge.h',
     )

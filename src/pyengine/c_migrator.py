@@ -109,80 +109,26 @@ CSINGLE_CLONE_SUBS = [
 ]
 
 
-# Standard MPI datatype names for each target KIND.
-# KIND=16 (quad precision): MPI_REAL16 / MPI_COMPLEX32 — requires MPI
-#   implementation with quad-precision support.
-# KIND=10 (extended precision): maps to long double on x86.
-# C type underlying each target KIND.
-_C_REAL_TYPE = {
-    16: '__float128',
-    10: 'long double',
-}
-
-_MPI_REAL_TYPE = {
-    16: 'MPI_REAL16',
-    10: 'MPI_LONG_DOUBLE',
-}
-_MPI_COMPLEX_TYPE = {
-    16: 'MPI_COMPLEX32',
-    10: 'MPI_C_LONG_DOUBLE_COMPLEX',
-}
-
-
 def _build_sub_vars(target_mode: TargetMode) -> dict[str, str]:
     """Build template substitution variables for a given target mode.
 
-    Two branches: KIND targets (Q/X/E/Y) derive everything from the
-    legacy _C_REAL_TYPE / _MPI_REAL_TYPE / _MPI_COMPLEX_TYPE tables and
-    use the stock 'MPI_SUM' reduction op. The multifloats target pulls
-    its C-interop names from TargetMode fields populated by
-    ``multifloats_target()`` and uses user-defined MPI ops registered
-    at runtime by libmfc.
+    All values are read from the target's c_interop YAML section
+    (populated in TargetMode by ``load_target()``).
     """
-    rp = target_prefix(target_mode, is_complex=False).lower()
-    cp = target_prefix(target_mode, is_complex=True).lower()
-
-    if target_mode.is_kind_based:
-        kind = target_mode.kind_suffix
-        # Type names follow convention: Q/E for real prefix → QREAL/EREAL
-        real_type = f'{rp.upper()}REAL'
-        complex_type = f'{cp.upper()}COMPLEX'
-        return {
-            'REAL_TYPE': real_type,
-            'COMPLEX_TYPE': complex_type,
-            'C_REAL_TYPE': _C_REAL_TYPE[kind],
-            'MPI_REAL': _MPI_REAL_TYPE[kind],
-            'MPI_COMPLEX': _MPI_COMPLEX_TYPE[kind],
-            # Stock reduction op. {MPI_SUM_REAL} and {MPI_SUM_COMPLEX}
-            # both expand to 'MPI_SUM' so the new MPI_SUM→{MPI_SUM_*}
-            # substitution rules are textual no-ops for KIND targets.
-            'MPI_SUM_REAL': 'MPI_SUM',
-            'MPI_SUM_COMPLEX': 'MPI_SUM',
-            'RP': rp,
-            'CP': cp,
-            'RPU': rp.upper(),
-            'CPU': cp.upper(),
-        }
-
-    # Module-based target -- read C-interop fields from target_mode.
-    # target_mode.c_real_type etc. are populated by load_target() or
-    # the deprecated multifloats_target() factory.
     assert target_mode.c_real_type is not None, (
         "target_mode missing c_real_type; ensure the target YAML has a "
         "c_interop section with real_type defined."
     )
+    rp = target_prefix(target_mode, is_complex=False).lower()
+    cp = target_prefix(target_mode, is_complex=True).lower()
     return {
-        'REAL_TYPE': target_mode.c_real_type,        # 'float64x2_t'
-        'COMPLEX_TYPE': target_mode.c_complex_type,  # 'complex128x2_t'
-        # For multifloats the "underlying C type" is the struct itself
-        # -- there is no primitive scalar beneath it. Use the same name
-        # so recipe header_patches that reference {C_REAL_TYPE} expand
-        # to the struct typedef, which is what libmfc provides.
-        'C_REAL_TYPE': target_mode.c_real_type,
-        'MPI_REAL': target_mode.c_mpi_real,          # 'MPI_FLOAT64X2'
-        'MPI_COMPLEX': target_mode.c_mpi_complex,    # 'MPI_COMPLEX128X2'
-        'MPI_SUM_REAL': target_mode.c_mpi_sum_real,      # 'MPI_DD_SUM'
-        'MPI_SUM_COMPLEX': target_mode.c_mpi_sum_complex, # 'MPI_ZZ_SUM'
+        'REAL_TYPE': target_mode.c_real_type,
+        'COMPLEX_TYPE': target_mode.c_complex_type,
+        'C_REAL_TYPE': target_mode.c_c_real_type,
+        'MPI_REAL': target_mode.c_mpi_real,
+        'MPI_COMPLEX': target_mode.c_mpi_complex,
+        'MPI_SUM_REAL': target_mode.c_mpi_sum_real,
+        'MPI_SUM_COMPLEX': target_mode.c_mpi_sum_complex,
         'RP': rp,
         'CP': cp,
         'RPU': rp.upper(),
@@ -1145,11 +1091,10 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
     if bdef_path.exists():
         _patch_bdef_header(bdef_path, target_mode, template_vars)
 
-    # Generate MPI requirement check for KIND=16 (verifies the stock
-    # MPI_REAL16 / MPI_COMPLEX32 datatypes are available). Multifloats
-    # builds its own MPI handles at runtime via libmfc and does not
-    # require this check.
-    if target_mode.is_kind_based and target_mode.kind_suffix == 16:
+    # Generate MPI datatype availability check when the target requires
+    # stock MPI datatypes that may not be universally available (e.g.
+    # MPI_REAL16 / MPI_COMPLEX32 for KIND=16).
+    if target_mode.c_needs_mpi_check:
         _generate_mpi_real16_check(output_dir)
 
     return {
@@ -1174,9 +1119,24 @@ def _patch_bdef_header(bdef_path: Path, target_mode: TargetMode,
     real_type = template_vars['REAL_TYPE']      # e.g. QREAL / float64x2_t
     complex_type = template_vars['COMPLEX_TYPE']  # e.g. XCOMPLEX / complex128x2_t
 
-    if target_mode.is_kind_based:
-        # KIND targets: emit primitive typedefs (__float128, long double).
-        c_type = _C_REAL_TYPE[target_mode.kind_suffix]
+    c_type = template_vars['C_REAL_TYPE']
+
+    if target_mode.c_header_mode == 'include':
+        # Module-based target: types come from an external header
+        # (e.g. multifloats_bridge.h) which provides full operator
+        # overloading via C++ templates.
+        type_block = f"""
+/*
+ *  Companion types for migrated {rp}/{cp} routines.
+ *  Provided by {target_mode.c_header}.
+ */
+#include "{target_mode.c_header}"
+
+void BI_{rp}mvcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
+void BI_{rp}vmcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
+"""
+    else:
+        # typedef mode (KIND targets): emit primitive typedefs.
         type_block = f"""
 /*
  *  Extended-precision types for migrated {{prefix}} routines.
@@ -1187,23 +1147,6 @@ typedef struct {{{real_type} r, i;}} {complex_type};
 void BI_{rp}mvcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
 void BI_{rp}vmcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
 """.replace('{prefix}', f'{rp}/{cp}')
-    else:
-        # Multifloats target: types and MPI handles come from the C++
-        # bridge header (multifloats_bridge.h) which aliases to
-        # multifloats.hh's template types with full operator overloading.
-        # The header is force-included via compiler flag (-include), but
-        # we also include it here so it's available to non-force-included
-        # code paths (overrides, etc.).
-        type_block = f"""
-/*
- *  Multifloats companion types for migrated {rp}/{cp} routines.
- *  Provided by multifloats_bridge.h via the C++ multifloats.hh library.
- */
-#include "{target_mode.c_header}"
-
-void BI_{rp}mvcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
-void BI_{rp}vmcopy(Int m, Int n, {real_type} *A, Int lda, {real_type} *buff);
-"""
 
     # --- Complex copy macros ---
     macro_block = f"""#define BI_{cp}mvcopy(m, n, A, lda, buff) \\

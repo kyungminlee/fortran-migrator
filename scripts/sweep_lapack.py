@@ -18,7 +18,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / 'src'))
 
-from pyengine.target_mode import multifloats_target  # noqa: E402
+from pyengine.target_mode import load_target  # noqa: E402
 from pyengine.fortran_migrator import migrate_file_to_string  # noqa: E402
 from pyengine.symbol_scanner import scan_symbols  # noqa: E402
 from pyengine.prefix_classifier import classify_symbols  # noqa: E402
@@ -39,7 +39,7 @@ def main() -> int:
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
 
-    target_mode = multifloats_target()
+    target_mode = load_target('multifloats')
     config = load_recipe(REPO / 'recipes' / 'lapack.yaml')
     blas_cfg = load_recipe(REPO / 'recipes' / 'blas.yaml')
 

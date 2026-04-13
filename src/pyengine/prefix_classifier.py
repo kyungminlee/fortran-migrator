@@ -35,17 +35,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Target prefix mapping by KIND, keyed by slot type tag ('R' or 'C').
-# Every family member maps to the SAME target char (determined by the
-# slot's type tag), regardless of whether its source char is S/D (real)
-# or C/Z (complex). So SGEMM and DGEMM both target QGEMM, and the
-# pipeline runs a convergence check to confirm their type-migrated
-# bodies agree.
-PREFIX_MAP: dict[int, dict[str, str]] = {
-    10: {'R': 'E', 'C': 'Y'},
-    16: {'R': 'Q', 'C': 'X'},
-}
-
 # Character → type tag. Real and complex never merge: pass-1 and pass-2
 # only share a tagged pattern when their tags agree position-by-position.
 CHAR_TYPE: dict[str, str] = {

@@ -154,8 +154,11 @@ la_constants_suffix: _MF
 c_interop:
   real_type: float64x2_t
   complex_type: complex128x2_t
+  c_real_type: float64x2_t
   mpi_real: MPI_FLOAT64X2
   mpi_complex: MPI_COMPLEX128X2
   mpi_sum_real: MPI_DD_SUM
   mpi_sum_complex: MPI_ZZ_SUM
+  needs_mpi_check: false
+  header_mode: include
   header: multifloats_bridge.h

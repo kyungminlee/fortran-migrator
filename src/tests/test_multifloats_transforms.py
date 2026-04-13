@@ -11,7 +11,7 @@ import textwrap
 
 import pytest
 
-from pyengine.target_mode import multifloats_target, kind_target
+from pyengine.target_mode import load_target
 from pyengine.fortran_migrator import (
     replace_type_decls,
     replace_literals,
@@ -34,7 +34,7 @@ from pyengine.fortran_migrator import (
 
 
 def test_multifloats_target_basic_shape():
-    mf = multifloats_target()
+    mf = load_target('multifloats')
     assert mf.name == 'multifloats'
     assert mf.is_kind_based is False
     assert mf.real_type == 'TYPE(float64x2)'
@@ -51,7 +51,7 @@ def test_multifloats_target_basic_shape():
 
 
 def test_kind_target_is_kind_based():
-    k16 = kind_target(16)
+    k16 = load_target('kind16')
     assert k16.is_kind_based is True
     assert k16.real_type == 'REAL(KIND=16)'
     assert k16.kind_suffix == 16
@@ -60,7 +60,7 @@ def test_kind_target_is_kind_based():
 def test_multifloats_known_constants_excludes_rtmin_rtmax():
     """RTMIN/RTMAX collide with local LAPACK variables — must NOT be in
     the auto-rename set."""
-    mf = multifloats_target()
+    mf = load_target('multifloats')
     assert 'RTMIN' not in mf.known_constants
     assert 'RTMAX' not in mf.known_constants
     assert 'ZERO' in mf.known_constants
@@ -74,7 +74,7 @@ def test_multifloats_known_constants_excludes_rtmin_rtmax():
 
 @pytest.fixture
 def mf():
-    return multifloats_target()
+    return load_target('multifloats')
 
 
 @pytest.mark.parametrize('src,expected', [
@@ -159,7 +159,7 @@ def test_strip_skips_function_return_decl(mf):
 
 def test_strip_kind_target_is_noop():
     src = '      DOUBLE PRECISION ZERO,ONE\n'
-    new, removed = strip_known_constants_from_decls(src, kind_target(16))
+    new, removed = strip_known_constants_from_decls(src, load_target('kind16'))
     assert new == src
     assert removed == {}
 
@@ -253,7 +253,7 @@ def test_replace_known_constants_skips_decl_lines(mf):
 
 def test_replace_known_constants_kind_mode_is_noop():
     src = "      X = ZERO"
-    out = replace_known_constants(src, kind_target(16), renames={'ZERO': 'MF_ZERO'})
+    out = replace_known_constants(src, load_target('kind16'), renames={'ZERO': 'MF_ZERO'})
     assert out == src
 
 
@@ -448,7 +448,7 @@ def test_la_constants_rename_map_uses_dd_zz_for_multifloats(mf):
 
 
 def test_la_constants_rename_map_kind16():
-    m = _la_constants_rename_map(kind_target(16))
+    m = _la_constants_rename_map(load_target('kind16'))
     assert m['DZERO'] == 'QZERO'
     assert m['ZZERO'] == 'XZERO'
 
