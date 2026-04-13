@@ -19,52 +19,122 @@ prefix:
 
 ## Recipe Fields
 
-### `library` (string, required)
-The short name of the library (e.g., `blas`, `lapack`, `scalapack`). This is used for generating output filenames and library archives.
+### Core Fields
 
-### `language` (string, required)
-The primary language of the source files. Supported values:
-*   `fortran`: Uses the hybrid Flang-guided / regex migrator.
-*   `c`: Uses the "clone-and-substitute" template migrator (used for BLACS).
+#### `library` (string, required)
+The short name of the library (e.g., `blas`, `lapack`, `scalapack`). Used for generating output filenames and library archives.
 
-### `source_dir` (string, required)
+#### `language` (string, required)
+The primary language of the source files:
+*   `fortran`: Uses the hybrid parser-guided / regex migrator.
+*   `c`: Uses the "clone-and-substitute" template migrator.
+
+#### `source_dir` (string, required)
 The relative path from the project root to the directory containing the source files.
 
-### `extensions` (list of strings, optional)
-The list of file extensions to include in the migration. Defaults to `[.f, .f90]`.
+#### `extensions` (list of strings, optional)
+File extensions to include. Defaults to `[.f, .f90]`. Use `[.c, .h]` for C libraries. Note: `.F90` (uppercase) triggers preprocessing.
 
-### `symbols` (object, optional)
-Configuration for how routine names are discovered for the rename map.
+### Symbol Discovery
+
+#### `symbols` (object, optional)
 *   `method`:
     *   `scan_source` (default): Scans the `source_dir` for `SUBROUTINE` and `FUNCTION` definitions.
-    *   `nm_library`: Uses the `nm` tool to extract symbols from a pre-built static or shared library.
-*   `library_path`: The path to the pre-built library file (required if `method` is `nm_library`).
+    *   `nm_library`: Uses the `nm` tool to extract symbols from a pre-built library.
+*   `library_path`: Path to the pre-built library file (required if `method` is `nm_library`).
 
-### `prefix` (object, optional)
-Configuration for the naming convention style.
+### Naming Convention
+
+#### `prefix` (object, optional)
 *   `style`:
     *   `direct` (default): Single-character prefix (e.g., `DGEMM` → `QGEMM`).
     *   `scalapack`: `P` + precision character (e.g., `PDGESV` → `PQGESV`).
 
-### `skip_files` (list of strings, optional)
-A list of filenames (without extension) to skip during migration. This is useful for:
-*   Mixed-precision routines that don't have a direct target equivalent (e.g., `DSDOT`).
-*   Iterative-refinement routines that require manual porting.
+### File Handling
 
-### `copy_all_originals` (boolean, optional)
-*For C migration only.* If `true`, all original source files are copied to the output directory before the migrated "clones" are added. This is useful for libraries where only a subset of files are precision-specific.
+#### `skip_files` (list of strings, optional)
+Source stems to skip during migration (case-insensitive). Useful for mixed-precision routines without a direct target equivalent (e.g., `DSDOT`).
 
-### `patches` (list of strings, optional)
-*Future work.* A list of patch files to apply to the migrated source to handle complex manual adjustments.
+#### `copy_files` (list of strings, optional)
+Source stems to copy unchanged. Used for multi-precision utility routines that don't need transformation.
 
-## Symbol Discovery Strategies
+#### `copy_all_originals` (boolean, optional)
+*For C migration only.* If `true`, all original source files are copied to the output directory before migrated clones are added. Useful for libraries where only a subset of files are precision-specific.
 
-### `scan_source`
-The tool scans the `source_dir` for Fortran definitions. It identifies which files define which routines and uses this to build the prefix map.
-*   **Pros**: No pre-built library required.
-*   **Cons**: May miss symbols hidden behind preprocessor directives or non-standard syntax.
+### Dependencies
 
-### `nm_library`
-The tool runs `nm --defined-only` on the provided library file.
-*   **Pros**: Most accurate way to find the actual public API of the library.
-*   **Cons**: Requires the library to be compiled in its original precision first.
+#### `depends` (list of strings, optional)
+Paths to dependency recipe files (resolved relative to the recipe's directory). Symbols from dependency libraries are included in the rename map. Example:
+```yaml
+depends:
+  - blas.yaml
+  - blacs.yaml
+```
+
+#### `extra_symbol_dirs` (list of strings, optional)
+Extra directories to scan for symbols (resolved relative to project root). Used when symbols needed for renaming are defined outside the main `source_dir`:
+```yaml
+extra_symbol_dirs:
+  - external/lapack-3.12.1/INSTALL
+```
+
+### Precision Family Control
+
+#### `prefer_source` (list of strings, optional)
+Source stems whose S/C-migrated output should be kept as canonical instead of the default D/Z-first preference. Used when the S/C variant is more correct.
+
+#### `local_renames` (dict, optional)
+Maps S/C-half local identifiers to D/Z-half counterparts for convergence normalization:
+```yaml
+local_renames:
+  CR: ZR
+  SX: DX
+```
+
+### C-Specific Fields
+
+#### `extra_c_dirs` (list of strings, optional)
+Additional C source directories to migrate (flat-copied to output_dir). Resolved relative to project root.
+
+#### `c_return_types` (list of strings, optional)
+Regex fragments for additional C return types to recognize when scanning for function definitions:
+```yaml
+c_return_types:
+  - 'PBTYP_T\s*\*'
+```
+
+#### `c_type_aliases` (list of dicts, optional)
+Library-specific C typedef renames. Each entry maps a list of source identifiers to a target using template substitution:
+```yaml
+c_type_aliases:
+  - from: [cmplx, cmplx8]
+    to: 'cmplx{RPU}'
+  - from: [cmplx16]
+    to: 'cmplx{CPU}'
+```
+Template variables: `{REAL_TYPE}`, `{COMPLEX_TYPE}`, `{C_REAL_TYPE}`, `{RP}`, `{CP}`, `{RPU}`, `{CPU}`.
+
+#### `header_patches` (list of dicts, optional)
+Insert content into migrated headers. Each entry specifies an anchor line and text to insert:
+```yaml
+header_patches:
+  - file: TOOLS/PBblacs.h
+    after: '#define MPI_DOUBLE_COMPLEX ...'
+    insert: '#define MPI_QREAL ...'
+    when: kind    # optional: only apply for this target family
+```
+
+### Overrides
+
+#### `overrides` (dict, optional)
+Target-gated verbatim file overrides. Hand-written files replace migrated output for a specific target:
+```yaml
+overrides:
+  multifloats:
+    src_dir: blacs/mfc_overrides
+    files:
+      - blacs_pinfo_.c
+```
+
+#### `patches` (list of strings, optional)
+Patch files to apply to the migrated source for complex manual adjustments.

@@ -1,4 +1,10 @@
-# Notes
+# Notes — KIND=16 Divergence Analysis
+
+This document provides a detailed technical analysis of convergence divergences
+for the `kind16` target. For the authoritative summary covering all targets
+(kind16 and multifloats), see `src-multifloats/DIVERGENCE.md`.
+
+---
 
 ## Remaining BLAS convergence divergences
 
@@ -377,8 +383,8 @@ survives is either migrator slop or genuine upstream drift.
 | BLAS       | 3        | 0       | upstream S≠D asymmetry (see above)         |
 | LAPACK     | 431      | 0       | SROUNDUP_LWORK, ILAPREC, upstream drift    |
 | BLACS      | 0        | 0       | clean                                      |
-| PBLAS      | 1        | 0       | psamax_/pdamax_ Mptr macro vs direct index |
-| ScaLAPACK  | 26       | 0       | upstream S≠D / C≠Z drift                   |
+| PBLAS      | 61       | 0       | K&R vs ANSI function style + editorial drift |
+| ScaLAPACK  | 24       | 0       | upstream S≠D / C≠Z drift                   |
 
 ### BLAS (3 diverged)
 
@@ -424,9 +430,9 @@ calls: `(char*)(Mptr(...))` vs `(char*)Mptr(...)`. Both compute the
 same address; this is upstream editorial drift in the ScaLAPACK C
 sources.
 
-### ScaLAPACK (26 diverged)
+### ScaLAPACK (24 diverged)
 
-26 Fortran pairs diverge due to upstream S≠D or C≠Z asymmetries.
+24 Fortran pairs diverge due to upstream S≠D or C≠Z asymmetries.
 Full file-by-file listing:
 
 #### Precision-dependent algorithmic constants (6 files)

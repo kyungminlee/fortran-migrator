@@ -5,14 +5,16 @@
 *   [Usage Guide](USAGE.md) — How to run the `pyengine` CLI.
 *   [Migration Recipes](RECIPES.md) — How to write library recipes.
 *   [Architecture](ARCHITECTURE.md) — Technical overview and component details.
-*   [Convergence Testing](CONVERGENCE_TESTING.md) — The dual-origin verification strategy.
+*   [Intrinsics Reference](INTRINSICS.md) — Fortran generic intrinsics for KIND=16/128.
+*   [Multifloats Specification](MULTIFLOATS.md) — Design plan for the `multifloats` target.
 
 ## Project Goal
 
 **fortran-migrator** converts BLAS, LAPACK, BLACS, ScaLAPACK, and similar
 numerical Fortran libraries from standard precision (`REAL`/`DOUBLE PRECISION`,
 `COMPLEX`/`DOUBLE COMPLEX`) to extended precision (`KIND=10` for 80-bit,
-`KIND=16` for 128-bit). This involves:
+`KIND=16` for 128-bit) or multiword floating-point (`float64x2` via the
+multifloats target). This involves:
 
 1. Rewriting type declarations
 2. Renaming subroutine/function names (both definitions and call sites)
@@ -25,7 +27,7 @@ The tool must preserve all preprocessor directives, comments, and formatting.
 
 ---
 
-## Approach: Hybrid (Flang Parse Tree + Source-Level Rewriting)
+## Approach: Hybrid (Parser + Source-Level Rewriting)
 
 ### Why Not Pure String Manipulation?
 
@@ -47,39 +49,22 @@ rearranged.
 
 ### The Hybrid Strategy
 
-1. **Parse with Flang's parser library** (`flang/lib/Parser`) to produce a
-   parse tree with full source provenance (exact byte offsets in original source).
+1. **Parse with a Fortran compiler** (Flang or GFortran, selected via `--parser`)
+   to produce a parse tree with source provenance. Without `--parser`, the tool
+   falls back to regex-only scanning.
 2. **Walk the parse tree** to identify all locations that need transformation:
    type declarations, function/subroutine names, `EXTERNAL` statements, literal
    constants, intrinsic function calls, `CALL` statements, and string literals
    containing routine names (e.g., `CALL XERBLA('DGEMM ', INFO)`).
-3. **Apply transformations as source-level byte-range replacements**, preserving
+3. **Apply transformations as source-level regex replacements**, preserving
    everything else (comments, preprocessor directives, whitespace, column
    alignment) exactly as-is.
 4. **Handle column-width constraints** for fixed-form: when a replacement string
-   is longer than the original (e.g., `DOUBLE PRECISION` → `REAL(KIND=16)` is
-   shorter, but `REAL` → `REAL(KIND=16)` is longer), adjust spacing or split
-   into continuation lines as needed while staying within columns 7-72.
+   is longer than the original, adjust spacing or split into continuation lines
+   as needed while staying within columns 7-72.
 
-This gives us the accuracy of an AST-based approach with the preservation
+This gives us the accuracy of a parser-guided approach with the preservation
 guarantees of text-level patching.
-
-### Alternative: Lightweight Custom Scanner (Fallback)
-
-If linking against LLVM/Flang proves too heavyweight for distribution, a
-fallback approach is a purpose-built Fortran scanner in C++ that understands
-just enough of Fortran's lexical structure to identify:
-- Type declaration statements (at the start of a declaration section)
-- `SUBROUTINE` / `FUNCTION` / `ENTRY` names
-- `CALL` targets
-- `EXTERNAL` listed names
-- Literal constants (`1.0D+0`, `1.0E+0`)
-- Intrinsic function names in `INTRINSIC` statements and call expressions
-
-This scanner would not need to be a full parser — it only needs to distinguish
-statements from comments and string literals, handle continuation lines, and
-recognize the specific syntactic patterns we care about. It can be significantly
-simpler than a full Fortran parser.
 
 ---
 
@@ -107,16 +92,20 @@ or double-precision (`DOUBLE PRECISION`, `DOUBLE COMPLEX`, `REAL*8`,
 `COMPLEX*16`) depending on the routine variant (`s*`/`c*` vs `d*`/`z*`).
 All floating-point types get mapped to the target kind.
 
+For the multifloats target, `REAL` → `TYPE(float64x2)` and
+`COMPLEX` → `TYPE(complex128x2)`, with constructor wrapping instead of
+KIND suffixes.
+
 ### 2. Subroutine/Function Name Prefixes
 
 Standard BLAS/LAPACK naming convention uses a single-character prefix:
 
-| Source Prefix | Meaning           | KIND=10 Prefix | KIND=16 Prefix |
-|---------------|-------------------|----------------|----------------|
-| `S`           | Single real       | `E`            | `Q`            |
-| `D`           | Double real       | `E`            | `Q`            |
-| `C`           | Single complex    | `Y`            | `X`            |
-| `Z`           | Double complex    | `Y`            | `X`            |
+| Source Prefix | Meaning           | KIND=10 | KIND=16 | Multifloats |
+|---------------|-------------------|---------|---------|-------------|
+| `S`           | Single real       | `E`     | `Q`     | `DD`        |
+| `D`           | Double real       | `E`     | `Q`     | `DD`        |
+| `C`           | Single complex    | `Y`     | `X`     | `ZZ`        |
+| `Z`           | Double complex    | `Y`     | `X`     | `ZZ`        |
 
 Names must be updated in:
 - `SUBROUTINE` / `FUNCTION` / `ENTRY` definition lines
@@ -132,16 +121,13 @@ For ScaLAPACK, the prefix is `P` + precision character (e.g., `PDGESV` →
 
 | Source Literal  | KIND=10 Replacement    | KIND=16 Replacement    |
 |-----------------|------------------------|------------------------|
-| `1.0E+0`        | `1.0E+0_10`*           | `1.0E+0_16`*           |
-| `1.0D+0`        | `1.0E+0_10`*           | `1.0E+0_16`*           |
-| `0.0D0`         | `0.0E0_10`*            | `0.0E0_16`*            |
+| `1.0E+0`        | `1.0E+0_10`            | `1.0E+0_16`            |
+| `1.0D+0`        | `1.0E+0_10`            | `1.0E+0_16`            |
+| `0.0D0`         | `0.0E0_10`             | `0.0E0_16`             |
 
-\* The exact syntax for extended-precision literals in Fortran is
-`value_kind` (e.g., `1.0_16`). The `D` exponent letter is specific to
-`DOUBLE PRECISION` and must be replaced with `E` when using explicit `KIND`.
-Alternatively, for `KIND=16`, the `Q` exponent letter is a common extension
-(`1.0Q+0`), but this is non-standard and compiler-dependent. Prefer the
-standard `_kind` suffix form.
+The `D` exponent letter is specific to `DOUBLE PRECISION` and must be replaced
+with `E` when using explicit `KIND`. For the multifloats target, literals are
+wrapped in constructors instead: `1.0D+0` → `float64x2(1.0D+0)`.
 
 ### 4. Intrinsic Functions
 
@@ -166,6 +152,8 @@ extended-precision equivalents:
 | `DNINT(x)`       | `ANINT(x)` | Generic |
 | `IDNINT(x)`      | `NINT(x)` | Generic |
 
+See [INTRINSICS.md](INTRINSICS.md) for the complete catalog.
+
 ### 5. Machine-Parameter Routines
 
 `DLAMCH` / `SLAMCH` provide machine epsilon, overflow/underflow thresholds, etc.
@@ -173,8 +161,6 @@ These routines must be regenerated for the target precision — they cannot simp
 be renamed because the constants they return are precision-dependent. The
 migrated version (`QLAMCH` / `ELAMCH` / `XLAMCH` / `YLAMCH`) needs to compute
 and return the correct machine parameters for the target `KIND`.
-
-Similarly, `DLAMC3` and other helper routines used by `DLAMCH` need attention.
 
 ### 6. File Names
 
@@ -187,31 +173,15 @@ Output files are renamed to reflect the new prefix:
 
 ## Symbol Database
 
-The tool uses a **symbol database** built from compiled libraries to drive
-renaming decisions. This ensures only functions that actually exist in the
-library are renamed, avoiding false positives on identifiers that happen to
-start with `d`/`s`/`c`/`z`.
+The tool uses a **prefix classifier** (`pyengine/prefix_classifier.py`) to drive
+renaming decisions. It scans source files for `SUBROUTINE` and `FUNCTION`
+definitions, classifies each by its precision prefix (S/D/C/Z), and builds
+a rename map. Only symbols with confirmed precision variants are renamed,
+avoiding false positives on identifiers that happen to start with `d`/`s`/`c`/`z`.
 
-### Building the Symbol Database
-
-1. **Extract symbols** from a built static library (`.a`) or shared library
-   (`.so`/`.dylib`) using `nm`:
-   ```
-   nm --defined-only liblapack.a | grep ' [TtWw] ' | awk '{print $3}'
-   ```
-2. **Normalize** symbol names: strip leading underscore (macOS convention),
-   strip trailing underscore (Fortran convention), convert to uppercase.
-3. **Classify** each symbol by its precision prefix to build a mapping:
-   `DGEMM` maps to `{base: "GEMM", prefix: "D", type: "real"}`.
-4. **Generate rename map**: for each symbol, compute the target name using the
-   prefix mapping table.
-
-### Handling Libraries Without Pre-Built Binaries
-
-For source-only distributions, the tool can scan the source directory for
-`SUBROUTINE` and `FUNCTION` definitions to build the symbol list. This is
-less reliable (conditional compilation may hide some definitions) but works
-for the common case.
+For source-only distributions, `scan_source` is the default method. For
+libraries with pre-built binaries, the `nm_library` method uses `nm` to extract
+symbols from `.a`/`.so`/`.dylib` files.
 
 ---
 
@@ -221,48 +191,36 @@ for the common case.
 - **Source format**: Fixed-form (`.f`)
 - **Naming**: Single-character prefix (`DGEMM`, `SGEMV`, `ZHER2K`)
 - **Location**: `external/lapack-3.12.1/BLAS/SRC/`
-- **Notes**: Pure Fortran, no preprocessor usage in source files.
-  Uses `COMPLEX*16` rather than `DOUBLE COMPLEX` in some routines.
+- **Notes**: Pure Fortran, no preprocessor usage.
 
 ### LAPACK (Linear Algebra PACKage)
 - **Source format**: Fixed-form (`.f`)
 - **Naming**: Single-character prefix (`DGESV`, `ZHEEV`, `SGEQRF`)
 - **Location**: `external/lapack-3.12.1/SRC/`
-- **Notes**: Large library (~2000 source files). Pure Fortran,
-  no preprocessor. Heavy use of `EXTERNAL` declarations and cross-routine calls.
+- **Notes**: Large library (~2000 source files). Pure Fortran, heavy use of
+  `EXTERNAL` declarations and cross-routine calls.
 
 ### BLACS (Basic Linear Algebra Communication Subprograms)
 - **Source format**: C (`.c`) with headers
 - **Location**: `external/scalapack-2.2.3/BLACS/SRC/`
-- **Notes**: BLACS is implemented entirely in C. Type-specific routines use
-  `d`/`s`/`c`/`z` in C function names. Migration is done via **templated
-  cloning** (clone `d*` → `q*`, `z*` → `x*` with mechanical text
-  substitution) rather than AST-based transformation. The C code is
-  structurally simpler than Fortran — no column constraints, no multi-word
-  type keywords, and type-specific files are near-identical clones of each
-  other. The header `Bdef.h` must be extended to add `QCOMPLEX`/`QREAL`
-  typedefs, copy macros, and Fortran naming `#define` entries. Custom MPI
-  datatypes must be registered for the extended-precision types. A clang
-  parser is not needed. See `recipes/blacs/README.md` for the full recipe.
+- **Notes**: Implemented entirely in C. Migration via template-based cloning.
+  The `Bdef.h` header is patched to add extended-precision typedefs and MPI
+  datatypes. For multifloats, `complex128x2_t` uses `.r`/`.i` members matching
+  the BLACS `DCOMPLEX`/`SCOMPLEX` struct convention, so `Rabs`/`Cabs` macros
+  work without overrides.
 
 ### ScaLAPACK (Scalable LAPACK)
 - **Source format**: Fixed-form Fortran (`.f`) and some C (`.c`)
 - **Naming**: `P` + precision prefix (`PDGESV`, `PZHEEV`)
 - **Location**: `external/scalapack-2.2.3/SRC/`
-- **Notes**: Follows same patterns as LAPACK but with distributed-memory
-  descriptors. Calls BLACS and PBLAS routines. Some C source files exist
-  alongside Fortran.
+- **Notes**: Follows same patterns as LAPACK with distributed-memory descriptors.
+  Calls BLACS and PBLAS routines.
 
 ### PBLAS (Parallel BLAS)
 - **Source format**: Mixed C and Fortran
 - **Location**: `external/scalapack-2.2.3/PBLAS/SRC/`
 - **Notes**: C wrapper layer around BLAS with MPI. Uses preprocessor macros
-  extensively.
-
-### MUMPS (future)
-- **Naming**: Prefix + `MUMPS` (`DMUMPS`, `ZMUMPS`)
-- **Notes**: Same `S`/`D`/`C`/`Z` prefix convention. Free-form Fortran (`.f90`).
-  Uses preprocessor directives extensively. Good test case for free-form support.
+  extensively. Contains Fortran kernel subdirectories (PBBLAS, PTZBLAS).
 
 ---
 
@@ -270,11 +228,10 @@ for the common case.
 
 ### Fixed-Form (`.f`, `.for`)
 - **Columns 1-5**: Statement label (numeric)
-- **Column 6**: Continuation character (any non-blank, non-zero character; typically `+`, `$`, `&`, or `*`)
+- **Column 6**: Continuation character (any non-blank, non-zero; typically `+`, `$`, `&`, or `*`)
 - **Columns 7-72**: Statement body
 - **Column 73+**: Ignored (historically sequence numbers)
 - **Comments**: `C`, `c`, `*`, or `!` in column 1
-- Continuation lines in BLAS/LAPACK typically use `+` or `$` in column 6
 
 When a replacement makes a line exceed column 72, the tool must:
 1. Try to reduce whitespace within the statement
@@ -291,71 +248,6 @@ When a replacement makes a line exceed column 72, the tool must:
 - Lines starting with `#` (after optional whitespace in free-form)
 - Must be preserved verbatim — never modified
 - Code inside `#ifdef` blocks should still be transformed
-- `#include` files may need separate processing
-
----
-
-## Architecture
-
-### Pipeline
-
-```
-Input Files ──→ [Symbol DB] ──→ [Scanner/Parser] ──→ [Transformation Plan] ──→ [Rewriter] ──→ Output Files
-                    │                  │                       │
-                 nm / source        Flang or             List of
-                 scan              custom scanner      (offset, len, replacement)
-```
-
-### Components
-
-1. **SymbolDatabase**
-   - Input: library archive (`.a`) or source directory
-   - Output: set of known routine names with prefix classification
-   - Builds rename map from source prefix to target prefix
-
-2. **SourceScanner**
-   - Input: single Fortran source file
-   - Output: list of `Transformation` records `{offset, length, replacement_text}`
-   - Uses Flang parse tree (or custom scanner) to identify all sites
-   - Must handle both fixed-form and free-form
-
-3. **TransformationEngine**
-   - Validates that transformations don't overlap
-   - Sorts by offset (descending) for safe in-place replacement
-   - Handles column-width adjustments for fixed-form
-
-4. **FileRewriter**
-   - Applies transformations to produce output text
-   - Writes output file with renamed filename
-
-5. **Driver / CLI**
-   - Accepts: source directory, output directory, target KIND, library archive
-   - Orchestrates the pipeline
-   - Supports dry-run mode (show what would change)
-   - Parallel processing of independent files
-
----
-
-## Build Dependencies
-
-| Dependency     | Purpose | Required? |
-|----------------|---------|-----------|
-| CMake ≥ 3.27   | Build system | Yes |
-| C++20 compiler | Implementation language | Yes |
-| LLVM/Flang     | Fortran parser library (`libflangParser`, `libflangCommon`, `libflangSupport`) | Yes (for Flang-based approach) |
-| `nm` / `objdump` | Symbol extraction from compiled libraries | Optional (system tool) |
-
-### Linking Against Flang
-
-Flang's parser is part of the LLVM monorepo. The relevant libraries are:
-
-- `flangParser` — tokenizer, prescan, parse tree
-- `flangCommon` — Fortran kind parameters, character utilities
-- `flangSupport` — source provenance, encoding
-- `flangEvaluate` — expression semantics (may be useful for constant folding)
-
-These can be found via CMake's `find_package(Flang)` or by pointing to an
-LLVM build directory.
 
 ---
 
@@ -383,30 +275,22 @@ LLVM build directory.
 
 7. **Comment-only name references**: Names in comments (especially the header
    documentation blocks) should ideally be updated for consistency but are not
-   semantically critical. The tool should update them since LAPACK uses these
-   comments as API documentation.
+   semantically critical.
 
 8. **`PARAMETER` constants**: e.g., `PARAMETER (ONE=1.0D+0, ZERO=0.0D+0)` —
-   both the literal format and the variable type must be consistent.
+   both the literal format and the variable type must be consistent. For
+   multifloats, these can be replaced with module-provided constants
+   (`MF_ONE`, `MF_ZERO`) via the `known_constants` recipe mechanism.
 
-9. **C source files (BLACS, CBLAS, LAPACKE)**: BLACS is implemented
-   entirely in C and uses a template-clone pattern — type-specific files
-   (`dgebr2d_.c`, `sgebr2d_.c`, etc.) are near-identical and differ only
-   in C type names (`double`→`float`) and MPI datatype constants. Migration
-   is done by cloning `d*`→`q*` / `z*`→`x*` with mechanical text
-   substitution on a fixed set of tokens (`double`→`QREAL`,
-   `MPI_DOUBLE`→`MPI_QREAL`, etc.). No clang parser is needed because C
-   types are unambiguous single tokens, there are no column constraints,
-   and no floating-point literal format issues (C has no `D` exponent).
-   New extended-precision type definitions (`QCOMPLEX`, `QREAL`) and
-   custom MPI datatypes are added to the `Bdef.h` header.
-   CBLAS and LAPACKE are C wrappers around Fortran routines and follow
-   a similar clone pattern.
+9. **C source files (BLACS, PBLAS)**: Migration via template-clone with
+   mechanical text substitution on C types (`double`→`__float128` or
+   `float64x2_t`), MPI datatypes, and function-name prefixes. No clang parser
+   is needed. Regex boundaries use `[^a-zA-Z_0-9]` to prevent re-matching
+   inside replacement types (e.g., `float` inside `float64x2_t`).
 
 10. **Non-prefixed helper routines**: Some LAPACK internal routines don't
     follow the prefix convention (e.g., `LSAME`, `XERBLA`, `ILAENV`).
-    These are type-independent and should *not* be renamed. The symbol database
-    handles this by only renaming symbols that have confirmed precision variants.
+    These are type-independent and should *not* be renamed.
 
 ---
 
@@ -422,50 +306,11 @@ Manually create expected output for a small set of files (`dgemm.f` → `qgemm.f
 
 ### 3. Dual-Origin Convergence Test
 
-Every BLAS/LAPACK routine exists in both single- and double-precision variants
-(e.g., `sgemm.f` and `dgemm.f`). When both are migrated to the same target
-precision, they should produce **identical** output (modulo the source origin
-comment, if any). This is a powerful validation technique:
+Every BLAS/LAPACK routine exists in both single- and double-precision variants.
+When both are migrated to the same target, they should produce identical output.
+This is implemented as the `converge` CLI command (see [USAGE.md](USAGE.md)).
 
-```
-sgemm.f ──migrate(KIND=16)──→ qgemm_from_s.f ─┐
-                                                ├── diff
-dgemm.f ──migrate(KIND=16)──→ qgemm_from_d.f ─┘
-```
-
-Similarly for complex:
-```
-cgemm.f ──migrate(KIND=16)──→ xgemm_from_c.f ─┐
-                                                ├── diff
-zgemm.f ──migrate(KIND=16)──→ xgemm_from_d.f ─┘
-```
-
-**What agreement tells us**: the migrator correctly normalizes all
-precision-dependent constructs — type declarations, literal constants,
-intrinsic calls, and routine names — regardless of the starting precision.
-
-**What differences reveal**:
-- **Algorithm differences**: Some routines have genuinely different
-  implementations between single and double precision (e.g., different
-  blocking factors, different convergence thresholds, extra iteration
-  steps). These are intentional and the diff highlights them for review.
-- **Hardcoded constants**: A literal `1.0E-6` in a single-precision routine
-  vs `1.0D-12` in the double-precision version indicates a precision-dependent
-  tolerance that needs manual attention for the target precision.
-- **Missing intrinsic conversions**: If `SNRM2` became `QNRM2` but `DNRM2`
-  also became `QNRM2` via a different path, the result should match. A
-  mismatch means one path missed a conversion.
-- **Mixed-precision routines**: Routines like `DSDOT` (double-precision result
-  from single-precision inputs) or `ZCGESV` (mixed single/double complex
-  iterative refinement) have no single-precision counterpart. These will
-  naturally be flagged as having no convergence pair.
-- **Comment/documentation drift**: Different wording in comment blocks
-  between `s*` and `d*` variants is harmless but shows up in the diff.
-  These can be filtered out or accepted.
-
-**Implementation**: The driver should support a `--convergence-check` mode
-that automatically runs both migrations and reports a categorized diff
-(code vs comments, algorithmic vs cosmetic).
+Divergence counts are tracked in `src-multifloats/DIVERGENCE.md`.
 
 ### 3b. Divergence Patterns by Target
 
@@ -502,9 +347,6 @@ preserve.  Two mechanisms drive this:
    show up as divergences.  In multifloats mode, both `REAL(x)` and bare
    usage get wrapped uniformly in `float64x2(x)`, collapsing the
    distinction.
-
-**Detailed divergence counts** are maintained in
-`src-multifloats/DIVERGENCE.md`.
 
 ### 4. Compilation Test
 Compile the migrated library with a Fortran compiler that supports `KIND=16`

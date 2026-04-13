@@ -1,31 +1,43 @@
 # fortran-migrator
 
-**fortran-migrator** is an automated type-migration tool for Fortran codebases, built specifically for high-performance computing libraries such as BLAS, LAPACK, BLACS, and ScaLAPACK. 
+**fortran-migrator** is an automated type-migration tool for Fortran and C codebases, built specifically for high-performance computing libraries such as BLAS, LAPACK, BLACS, PBLAS, and ScaLAPACK.
 
 It parses existing fixed- and free-form Fortran source code to safely convert `REAL` and `COMPLEX` types from one kind to another, automatically updating the corresponding function names to match the new precision prefixes.
 
 ## Key Features
-* **Automated Type Conversion:** Seamlessly upgrades standard precision types to extended precisions (`KIND=10` and `KIND=16`).
-* **Smart Renaming:** Automatically updates function prefixes (e.g., converting `dgemm` to `qgemm`, or `zgemm` to `xgemm`).
+* **Automated Type Conversion:** Upgrades standard precision types to extended precisions (`KIND=10`, `KIND=16`) or multiword floating-point (`float64x2` via the multifloats target).
+* **Smart Renaming:** Automatically updates function prefixes (e.g., converting `dgemm` to `qgemm` for KIND=16, or `ddgemm` for multifloats).
 * **Format Agnostic:** Supports both fixed-form and free-form Fortran source code.
-* **Macro Preservation:** Safely retains all preprocessor macros during the parse and rewrite cycle.
+* **C Migration:** Template-based cloning for C libraries (BLACS, PBLAS) with mechanical type substitution.
+* **Convergence Testing:** Dual-origin verification confirms migration correctness by comparing S-half and D-half migrated output.
+* **YAML Recipes:** Declarative library descriptions drive the migration pipeline.
 
-## Type Mapping & Naming Conventions
+## Target Modes
 
-In standard BLAS/LAPACK, function prefixes denote the data type (`s` for `REAL`, `d` for `DOUBLE PRECISION`, `c` for `COMPLEX`, and `z` for `DOUBLE COMPLEX`). 
-
-**fortran-migrator** extends this convention to support 80-bit and 128-bit floating-point types:
+### KIND-based targets
 
 | Data Type | Target Extended Type | New Prefix | Example Conversion |
 | :--- | :--- | :--- | :--- |
-| `REAL` | `REAL(KIND=10)` * | `e` | `dgemm` → `egemm` |
-| `REAL` | `REAL(KIND=16)` | `q` | `dgemm` → `qgemm` |
-| `COMPLEX` | `COMPLEX(KIND=10)` * | `y` | `zgemm` → `ygemm` |
-| `COMPLEX` | `COMPLEX(KIND=16)` | `x` | `zgemm` → `xgemm` |
+| `REAL` | `REAL(KIND=10)` * | `E` | `dgemm` → `egemm` |
+| `REAL` | `REAL(KIND=16)` | `Q` | `dgemm` → `qgemm` |
+| `COMPLEX` | `COMPLEX(KIND=10)` * | `Y` | `zgemm` → `ygemm` |
+| `COMPLEX` | `COMPLEX(KIND=16)` | `X` | `zgemm` → `xgemm` |
 
 *\* Note: `KIND=10` is specifically targeted for supported x86 architectures.*
 
+### Multifloats target
+
+Uses `float64x2` (double-double) arithmetic via an external module:
+
+| Data Type | Target Type | New Prefix | Example Conversion |
+| :--- | :--- | :--- | :--- |
+| `REAL` | `TYPE(float64x2)` | `DD` | `dgemm` → `ddgemm` |
+| `COMPLEX` | `TYPE(complex128x2)` | `ZZ` | `zgemm` → `zzgemm` |
+
+See [MULTIFLOATS.md](MULTIFLOATS.md) for the full design specification.
+
 ## Implementation Details
 
-Under the hood, **fortran-migrator** leverages the **LLVM/Flang** compiler infrastructure. By generating and inspecting the parse tree of the Fortran source files, the tool guarantees syntactically aware conversions rather than relying on simple text replacement. This allows it to accurately identify type declarations and function calls while leaving preprocessor directives completely intact.
-It also takes symbols from a built library (static or shared) for smart renaming.
+Under the hood, **fortran-migrator** uses a **hybrid approach**: a compiler-based parser (Flang or GFortran) extracts structural facts from source files, and the Python engine applies regex-based transformations guided by those facts. This ensures syntactically aware conversions while preserving all formatting, comments, and preprocessor directives.
+
+See [DEVELOPER.md](DEVELOPER.md) for the full developer guide.

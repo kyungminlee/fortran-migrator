@@ -16,7 +16,7 @@ This document supersedes `04-plan-claude.md`, incorporating feedback from
 3. **Factory function exclusivity** — `TargetMode` should only be instantiated
    via factory functions (`kind_target`, `multifloats_target`) to enforce
    field consistency.
-4. **W/U prefix convention** — multifloats routines use W (real) and U (complex)
+4. **DD/ZZ prefix convention** — multifloats routines use DD (real) and ZZ (complex)
    prefixes, distinct from Q/X (KIND=16).
 5. **All open questions resolved** — gfortran parser support, external module
    availability, mixed-precision strategy, I/O conversion, initial scope.
@@ -98,7 +98,7 @@ def multifloats_target(
     real_type: str = 'float64x2',
     complex_type: str = 'complex128x2',
     known_constants: dict[str, str] | None = None,
-    prefix_style: str = 'wide',   # W/U prefixes for float64x2
+    prefix_style: str = 'wide',   # DD/ZZ prefixes for float64x2
 ) -> TargetMode:
     """Construct TargetMode for multifloats."""
     ...
@@ -112,10 +112,10 @@ for frozen dataclasses, but all call sites should use the factories).
 
 ### Prefix Convention
 
-**Multifloats uses W/U prefixes** — W for real (`float64x2`), U for complex
-(`complex128x2`). "W" stands for "Wide" (double-double provides wider precision
-than double, via a different mechanism than hardware quad). These prefixes are
-distinct from all existing conventions:
+**Multifloats uses DD/ZZ prefixes** — DD for real (`float64x2`), ZZ for complex
+(`complex128x2`). The two-letter prefix avoids single-letter collisions and
+makes the double-double nature explicit. These prefixes are distinct from all
+existing conventions:
 
 | Real | Complex | Precision |
 |------|---------|-----------|
@@ -123,9 +123,9 @@ distinct from all existing conventions:
 | D | Z | Double (64-bit) |
 | E | Y | Extended (80-bit, KIND=10) |
 | Q | X | Quad (128-bit, KIND=16) |
-| **W** | **U** | **Wide (float64x2, multifloats)** |
+| **DD** | **ZZ** | **Double-double (float64x2, multifloats)** |
 
-Examples: `WGEMM`, `WAXPY`, `WNRM2` (real); `UGEMM`, `UAXPY` (complex).
+Examples: `DDGEMM`, `DDAXPY`, `DDNRM2` (real); `ZZGEMM`, `ZZAXPY` (complex).
 
 `PREFIX_MAP` remains keyed by int for backward compatibility. The `TargetMode`
 carries its own `prefix_map` field, set by the factory function. The four
@@ -800,9 +800,10 @@ Per transformation function, covering:
 
 ## 13. Resolved Open Questions
 
-1. **Routine naming convention:** Use W/U prefixes — W for real (`float64x2`),
-   U for complex (`complex128x2`). "W" = "Wide" precision. Distinct from Q/X
-   (KIND=16) to avoid ambiguity between quad and double-double.
+1. **Routine naming convention:** Use DD/ZZ prefixes — DD for real (`float64x2`),
+   ZZ for complex (`complex128x2`). The two-letter prefix avoids single-letter
+   collisions. Distinct from Q/X (KIND=16) to avoid ambiguity between quad
+   and double-double.
 
 2. **EQUIVALENCE handling:** Mandatory manual intervention for `dlaln2.f`/
    `slaln2.f`. Concrete rewrite strategy: replace flat-index CRV(k) with 2D
