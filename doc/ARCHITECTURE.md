@@ -18,12 +18,13 @@ The tool uses a **hybrid approach** that combines the accuracy of a compiler-bas
 
 ## Core Components
 
-### Python Engine (`pyengine/`)
+### Python Engine (`src-multifloats/pyengine/`)
 The primary driver of the tool. It orchestrates the migration pipeline:
 *   **`pipeline.py`**: Manages the multi-file migration process.
 *   **`target_mode.py`**: Defines `TargetMode` — the abstraction for different target precisions (KIND=10/16, multifloats).
 *   **`config.py`**: Loads and validates YAML recipe files.
-*   **`prefix_classifier.py`**: Discovers routine names and classifies precision prefixes to build the rename map.
+*   **`symbol_scanner.py`**: Discovers the API of the source library by scanning source files or compiled libraries.
+*   **`prefix_classifier.py`**: Classifies routine names by precision prefix and builds the rename map.
 *   **`fortran_migrator.py`**: Implements the Fortran rewriting logic.
 *   **`c_migrator.py`**: Implements the C template-based cloning (used for BLACS, PBLAS).
 *   **`flang_parser.py`**: Interfaces with the Flang compiler for parse tree extraction.

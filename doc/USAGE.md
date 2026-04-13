@@ -15,8 +15,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 The most common way to use the tool is the `run` command, which executes the full pipeline:
 1.  **Migrate**: Rewrite source files to the target precision.
-2.  **Verify**: Check the output for residual types, literals, or column-width overflows.
-3.  **Build**: Create static libraries from the migrated source.
+2.  **Converge**: Run convergence checks (dual-origin verification).
+3.  **Verify**: Check the output for residual types, literals, or column-width overflows.
+4.  **Build**: Create static libraries from the migrated source.
 
 ```bash
 cd src-multifloats
@@ -29,6 +30,7 @@ The `--target` option selects the precision target. It accepts either a built-in
 
 | Target | Description | Prefix (Real/Complex) |
 | :--- | :--- | :--- |
+| `kind10` | 80-bit extended precision (x86) | `E` / `Y` |
 | `kind16` (default) | 128-bit quad precision | `Q` / `X` |
 | `multifloats` | Double-double (`float64x2`) | `DD` / `ZZ` |
 
@@ -58,7 +60,7 @@ uv run python -m pyengine migrate recipes/blas.yaml output/ --target kind16
 Performs heuristic checks on migrated source files to identify potential issues.
 
 ```bash
-uv run python -m pyengine verify output/ --target kind16
+uv run python -m pyengine verify output/
 ```
 Checks for:
 *   Residual precision types (e.g., `DOUBLE PRECISION` that wasn't converted).
@@ -97,7 +99,7 @@ uv run python -m pyengine converge recipes/blas.yaml output/ --target kind16
 See [Convergence Testing](#convergence-testing) for the underlying methodology.
 
 ### `run`
-Runs the full pipeline: migrate → verify → build.
+Runs the full pipeline: migrate → converge → verify → build.
 
 ```bash
 uv run python -m pyengine run recipes/blas.yaml work/ --target kind16

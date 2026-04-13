@@ -80,12 +80,12 @@ Source precision types and their target mappings:
 | `REAL*4`               | `REAL(KIND=10)`    | `REAL(KIND=16)`    |
 | `REAL*8`               | `REAL(KIND=10)`    | `REAL(KIND=16)`    |
 | `DOUBLE PRECISION`     | `REAL(KIND=10)`    | `REAL(KIND=16)`    |
-| `REAL(KIND=8)`         | `REAL(KIND=10)`    | `REAL(KIND=16)`    |
+| `REAL(KIND=WP)`        | `REAL(KIND=10)`    | `REAL(KIND=16)`    |
 | `COMPLEX`              | `COMPLEX(KIND=10)` | `COMPLEX(KIND=16)` |
 | `COMPLEX*8`            | `COMPLEX(KIND=10)` | `COMPLEX(KIND=16)` |
 | `COMPLEX*16`           | `COMPLEX(KIND=10)` | `COMPLEX(KIND=16)` |
 | `DOUBLE COMPLEX`       | `COMPLEX(KIND=10)` | `COMPLEX(KIND=16)` |
-| `COMPLEX(KIND=8)`      | `COMPLEX(KIND=10)` | `COMPLEX(KIND=16)` |
+| `COMPLEX(KIND=WP)`     | `COMPLEX(KIND=10)` | `COMPLEX(KIND=16)` |
 
 Note: the source files may use *either* single-precision (`REAL`, `COMPLEX`)
 or double-precision (`DOUBLE PRECISION`, `DOUBLE COMPLEX`, `REAL*8`,
@@ -173,11 +173,12 @@ Output files are renamed to reflect the new prefix:
 
 ## Symbol Database
 
-The tool uses a **prefix classifier** (`pyengine/prefix_classifier.py`) to drive
-renaming decisions. It scans source files for `SUBROUTINE` and `FUNCTION`
-definitions, classifies each by its precision prefix (S/D/C/Z), and builds
-a rename map. Only symbols with confirmed precision variants are renamed,
-avoiding false positives on identifiers that happen to start with `d`/`s`/`c`/`z`.
+The tool uses a **symbol scanner** (`pyengine/symbol_scanner.py`) to discover
+routine names from source files or compiled libraries, then a **prefix
+classifier** (`pyengine/prefix_classifier.py`) to classify each by its precision
+prefix (S/D/C/Z) and build a rename map. Only symbols with confirmed precision
+variants are renamed, avoiding false positives on identifiers that happen to
+start with `d`/`s`/`c`/`z`.
 
 For source-only distributions, `scan_source` is the default method. For
 libraries with pre-built binaries, the `nm_library` method uses `nm` to extract
