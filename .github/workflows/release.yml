@@ -13,16 +13,13 @@ on:
 permissions:
   contents: write
 
-env:
-  MF_HELPERS_DIR: ${{ github.workspace }}/external/lapack-3.12.1/SRC
-
 jobs:
-  # ── Stage migrated sources (runs once, shared across builds) ──────
+  # ── Stage migrated sources (one per target) ──────────────────────
   stage:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [kind16, multifloats]
+        target: [kind16, kind10, multifloats]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,24 +48,28 @@ jobs:
           path: staging-${{ matrix.target }}/
           retention-days: 1
 
-  # ── Build matrix: target x compiler ───────────────────────────────
+  # ── Build matrix: target x compiler ──────────────────────────────
   build:
     needs: stage
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        target: [kind16, multifloats]
+        target: [kind16, kind10, multifloats]
         compiler:
-          - { name: gfortran-12,  fc: gfortran-12,  cc: gcc-12,  cxx: g++-12,  pkg: gcc-12 gfortran-12,  kind10: true  }
-          - { name: gfortran-15,  fc: gfortran-15,  cc: gcc-15,  cxx: g++-15,  pkg: gcc-15 gfortran-15,  kind10: true  }
-          - { name: ifx-2024,     fc: ifx,           cc: icx,     cxx: icpx,    pkg: "",                  kind10: true,  oneapi: "2024.2" }
-          - { name: ifx-2025,     fc: ifx,           cc: icx,     cxx: icpx,    pkg: "",                  kind10: true,  oneapi: "2025.1" }
-          - { name: flang-20,     fc: flang-new-20,  cc: clang-20, cxx: clang++-20, pkg: "",              kind10: false }
+          - { name: gfortran-12,  fc: gfortran-12,   cc: gcc-12,    cxx: g++-12,      pkg: gcc-12 gfortran-12 }
+          - { name: gfortran-15,  fc: gfortran-15,   cc: gcc-15,    cxx: g++-15,      pkg: gcc-15 gfortran-15 }
+          - { name: ifx-2024,     fc: ifx,            cc: icx,       cxx: icpx,        pkg: "",  oneapi: "2024.2" }
+          - { name: ifx-2025,     fc: ifx,            cc: icx,       cxx: icpx,        pkg: "",  oneapi: "2025.1" }
+          - { name: flang-20,     fc: flang-new-20,   cc: clang-20,  cxx: clang++-20,  pkg: "" }
         exclude:
-          # kind10 not supported by flang
+          # Only gfortran supports REAL(KIND=10) (80-bit x86 extended)
           - target: kind10
             compiler: { name: flang-20 }
+          - target: kind10
+            compiler: { name: ifx-2024 }
+          - target: kind10
+            compiler: { name: ifx-2025 }
 
     steps:
       - uses: actions/checkout@v4
@@ -92,21 +93,17 @@ jobs:
       - name: Install Intel oneAPI
         if: startsWith(matrix.compiler.name, 'ifx')
         run: |
-          # Intel APT repository
           wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
             | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
           echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
             | sudo tee /etc/apt/sources.list.d/oneAPI.list
           sudo apt-get update
-          # Install specific version
           YEAR=$(echo "${{ matrix.compiler.oneapi }}" | cut -d. -f1)
           MINOR=$(echo "${{ matrix.compiler.oneapi }}" | cut -d. -f2)
           sudo apt-get install -y \
             intel-oneapi-compiler-fortran-${YEAR}.${MINOR} \
             intel-oneapi-compiler-dpcpp-cpp-${YEAR}.${MINOR} \
             intel-oneapi-mpi-devel-${YEAR}
-          # Source environment
-          echo "source /opt/intel/oneapi/setvars.sh" >> $GITHUB_ENV
 
       - name: Install LLVM Flang 20
         if: matrix.compiler.name == 'flang-20'
@@ -122,7 +119,6 @@ jobs:
 
       - name: Configure
         run: |
-          # Source oneAPI if needed
           if [ -n "${{ matrix.compiler.oneapi }}" ]; then
             source /opt/intel/oneapi/setvars.sh
           fi
@@ -161,109 +157,9 @@ jobs:
           path: ${{ env.ARCHIVE }}.tar.gz
           retention-days: 7
 
-  # ── Also build kind10 for compilers that support it ───────────────
-  build-kind10:
-    needs: stage
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        compiler:
-          - { name: gfortran-12,  fc: gfortran-12,  cc: gcc-12,  cxx: g++-12,  pkg: gcc-12 gfortran-12  }
-          - { name: gfortran-15,  fc: gfortran-15,  cc: gcc-15,  cxx: g++-15,  pkg: gcc-15 gfortran-15  }
-          - { name: ifx-2024,     fc: ifx,           cc: icx,     cxx: icpx,    pkg: "",  oneapi: "2024.2" }
-          - { name: ifx-2025,     fc: ifx,           cc: icx,     cxx: icpx,    pkg: "",  oneapi: "2025.1" }
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Extract external sources
-        run: |
-          cd external
-          [ -d lapack-3.12.1 ] || tar xzf lapack-3.12.1.tar.gz
-          [ -d scalapack-2.2.3 ] || tar xzf scalapack-2.2.3.tar.gz
-
-      - name: Stage kind10
-        run: |
-          cd src
-          uv run python -m pyengine stage \
-            ${{ github.workspace }}/staging-kind10 \
-            --target kind10
-
-      - name: Install GCC (gfortran)
-        if: startsWith(matrix.compiler.name, 'gfortran')
-        run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.compiler.pkg }}
-
-      - name: Install Intel oneAPI
-        if: startsWith(matrix.compiler.name, 'ifx')
-        run: |
-          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
-            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
-            | sudo tee /etc/apt/sources.list.d/oneAPI.list
-          sudo apt-get update
-          YEAR=$(echo "${{ matrix.compiler.oneapi }}" | cut -d. -f1)
-          MINOR=$(echo "${{ matrix.compiler.oneapi }}" | cut -d. -f2)
-          sudo apt-get install -y \
-            intel-oneapi-compiler-fortran-${YEAR}.${MINOR} \
-            intel-oneapi-compiler-dpcpp-cpp-${YEAR}.${MINOR} \
-            intel-oneapi-mpi-devel-${YEAR}
-
-      - name: Install MPI
-        if: "!startsWith(matrix.compiler.name, 'ifx')"
-        run: sudo apt-get install -y libopenmpi-dev
-
-      - name: Configure
-        run: |
-          if [ -n "${{ matrix.compiler.oneapi }}" ]; then
-            source /opt/intel/oneapi/setvars.sh
-          fi
-          cmake -S staging-kind10 -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_Fortran_COMPILER=${{ matrix.compiler.fc }} \
-            -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }} \
-            -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }} \
-            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
-
-      - name: Build
-        run: |
-          if [ -n "${{ matrix.compiler.oneapi }}" ]; then
-            source /opt/intel/oneapi/setvars.sh
-          fi
-          cmake --build build -j$(nproc)
-
-      - name: Install
-        run: |
-          if [ -n "${{ matrix.compiler.oneapi }}" ]; then
-            source /opt/intel/oneapi/setvars.sh
-          fi
-          cmake --install build
-
-      - name: Package
-        run: |
-          cd install
-          ARCHIVE="kind10-${{ matrix.compiler.name }}-linux-x86_64"
-          tar czf ${{ github.workspace }}/${ARCHIVE}.tar.gz .
-          echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARCHIVE }}
-          path: ${{ env.ARCHIVE }}.tar.gz
-          retention-days: 7
-
-  # ── Create GitHub Release ─────────────────────────────────────────
+  # ── Create GitHub Release ────────────────────────────────────────
   release:
-    needs: [build, build-kind10]
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -303,7 +199,7 @@ jobs:
             | GCC/gfortran 15 | `gfortran-15` |
             | Intel oneAPI 2024 (ifx) | `ifx-2024` |
             | Intel oneAPI 2025 (ifx) | `ifx-2025` |
-            | LLVM Flang 20 | `flang-20` |
+            | LLVM Flang 20 | `flang-20` (kind16 and multifloats only) |
 
             ### Installation
             ```bash
