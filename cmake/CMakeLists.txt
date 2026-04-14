@@ -46,12 +46,14 @@ find_package(MPI COMPONENTS C CXX Fortran QUIET)
 
 # ── Multifloats (conditional) ────────────────────────────────────────
 if(NEEDS_MULTIFLOATS)
+    find_program(FYPP_EXECUTABLE fypp REQUIRED)
+
     if(DEFINED MULTIFLOATS_DIR)
         # Use a local directory (for offline builds or development)
         message(STATUS "Using local multifloats: ${MULTIFLOATS_DIR}")
         add_subdirectory(${MULTIFLOATS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/_multifloats)
     else()
-        # Fetch from GitHub
+        # Fetch from GitHub — only include library targets, not tests
         include(FetchContent)
         set(MULTIFLOATS_GIT_REPO "https://github.com/kyungminlee/multifloats.git"
             CACHE STRING "Git URL for the multifloats library")
@@ -62,21 +64,41 @@ if(NEEDS_MULTIFLOATS)
             GIT_REPOSITORY ${MULTIFLOATS_GIT_REPO}
             GIT_TAG        ${MULTIFLOATS_GIT_TAG}
         )
-        FetchContent_MakeAvailable(multifloats_fetch)
+        FetchContent_Populate(multifloats_fetch)
+        add_subdirectory(
+            ${multifloats_fetch_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_BINARY_DIR}/_mf_src)
+        add_subdirectory(
+            ${multifloats_fetch_SOURCE_DIR}/fsrc
+            ${CMAKE_CURRENT_BINARY_DIR}/_mf_fsrc)
     endif()
 
-    # la_constants_mf helper module
+    # la_constants_mf helper module (needs Fortran multifloats module)
     if(EXISTS "${MF_HELPERS_DIR}/la_constants_mf.f90")
         add_library(la_constants_mf STATIC "${MF_HELPERS_DIR}/la_constants_mf.f90")
         fortran_module_layout(la_constants_mf)
-        target_link_libraries(la_constants_mf PUBLIC multifloats)
+        target_link_libraries(la_constants_mf PUBLIC multifloatsf)
     endif()
 
-    # la_xisnan_mf helper module
+    # la_xisnan_mf helper module (needs Fortran multifloats module)
     if(EXISTS "${MF_HELPERS_DIR}/la_xisnan_mf.f90")
         add_library(la_xisnan_mf STATIC "${MF_HELPERS_DIR}/la_xisnan_mf.f90")
         fortran_module_layout(la_xisnan_mf)
-        target_link_libraries(la_xisnan_mf PUBLIC multifloats)
+        target_link_libraries(la_xisnan_mf PUBLIC multifloatsf)
+    endif()
+
+    # multifloats_mpi — C++ MPI handle registration + bridge header
+    if(EXISTS "${MF_HELPERS_DIR}/multifloats_mpi.cpp" AND MPI_CXX_FOUND)
+        add_library(multifloats_mpi STATIC "${MF_HELPERS_DIR}/multifloats_mpi.cpp")
+        target_include_directories(multifloats_mpi PUBLIC
+            $<BUILD_INTERFACE:${MF_HELPERS_DIR}>)
+        target_link_libraries(multifloats_mpi PUBLIC MPI::MPI_CXX multifloats)
+        target_compile_features(multifloats_mpi PRIVATE cxx_std_17)
+    elseif(EXISTS "${MF_HELPERS_DIR}/multifloats_bridge.h")
+        # No MPI — still provide the bridge header via an interface target
+        add_library(multifloats_mpi INTERFACE)
+        target_include_directories(multifloats_mpi INTERFACE
+            $<BUILD_INTERFACE:${MF_HELPERS_DIR}>)
     endif()
 endif()
 
@@ -115,7 +137,7 @@ function(add_migrated_fortran_library lib_name)
 
     # Link multifloats helpers for Fortran libraries
     if(NEEDS_MULTIFLOATS)
-        target_link_libraries(${_precision_target} PUBLIC multifloats)
+        target_link_libraries(${_precision_target} PUBLIC multifloatsf)
         if(TARGET la_constants_mf)
             target_link_libraries(${_precision_target} PUBLIC la_constants_mf)
         endif()
@@ -173,9 +195,15 @@ function(add_migrated_c_library lib_name)
         endif()
         target_compile_features(${_precision_target} PRIVATE cxx_std_17)
         target_compile_options(${_precision_target} PRIVATE -fpermissive -Wno-write-strings)
-        # Link multifloats for C libraries in multifloats mode
+        # Link multifloats + bridge for C libraries in multifloats mode
         if(TARGET multifloats)
             target_link_libraries(${_precision_target} PUBLIC multifloats)
+        endif()
+        if(TARGET multifloats_mpi)
+            target_link_libraries(${_precision_target} PUBLIC multifloats_mpi)
+            if(TARGET ${_common_target})
+                target_link_libraries(${_common_target} PUBLIC multifloats_mpi)
+            endif()
         endif()
     endif()
 endfunction()
@@ -279,7 +307,8 @@ foreach(_lib ${STAGED_LIBRARIES})
 endforeach()
 
 if(NEEDS_MULTIFLOATS)
-    foreach(_t multifloats la_constants_mf la_xisnan_mf)
+    # multifloats defines its own install rules; only install local helpers
+    foreach(_t la_constants_mf la_xisnan_mf multifloats_mpi)
         if(TARGET ${_t})
             fortran_install_library(${_t} EXPORT ${_t}Targets)
             get_target_property(_fc_moddir ${_t} Fortran_MODULE_DIRECTORY)

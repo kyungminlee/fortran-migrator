@@ -35,8 +35,8 @@ static void zz_sum_fn(void *in, void *inout, int *len, MPI_Datatype *) {
     auto *a = static_cast<complex128x2_t *>(in);
     auto *b = static_cast<complex128x2_t *>(inout);
     for (int i = 0; i < *len; ++i) {
-        b[i].r = b[i].r + a[i].r;
-        b[i].i = b[i].i + a[i].i;
+        b[i].re = b[i].re + a[i].re;
+        b[i].im = b[i].im + a[i].im;
     }
 }
 
