@@ -61,7 +61,7 @@ jobs:
               echo "### ${lib}"
               echo '```'
               uv run python -m pyengine converge "$RECIPE" "$OUTDIR" \
-                --target ${{ matrix.target }} --context 4 2>&1 || true
+                --target ${{ matrix.target }} --full 2>&1 || true
               echo '```'
               echo ""
             done
