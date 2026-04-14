@@ -132,7 +132,7 @@ jobs:
           sudo apt-get install -y \
             intel-oneapi-compiler-fortran-${YEAR}.${MINOR} \
             intel-oneapi-compiler-dpcpp-cpp-${YEAR}.${MINOR} \
-            intel-oneapi-mpi-devel-${YEAR}
+            intel-oneapi-mpi-devel
 
       - name: Install LLVM Flang 20
         if: matrix.compiler.name == 'flang-20'
