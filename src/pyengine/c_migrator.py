@@ -158,6 +158,55 @@ _KR_DECL_RE = re.compile(
 )
 
 
+def _resolve_stdc_ifdefs(text: str) -> str:
+    """Resolve ``#ifdef __STDC__`` / ``#else`` / ``#endif`` blocks.
+
+    Legacy C libraries (ScaLAPACK/PBLAS) wrap function signatures in::
+
+        #ifdef __STDC__
+        void func( int *a, float *b )   /* ANSI signature */
+        #else
+        void func( a, b )               /* K&R signature */
+           int *a;
+           float *b;
+        #endif
+        {
+
+    Since all modern compilers define ``__STDC__``, we keep only the
+    ``#ifdef`` branch and drop the ``#else`` branch entirely.
+    """
+    lines = text.split('\n')
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if stripped == '#ifdef __STDC__':
+            # Keep lines from after #ifdef until #else
+            i += 1
+            while i < len(lines):
+                s = lines[i].strip()
+                if s == '#else':
+                    # Skip lines from #else until #endif
+                    i += 1
+                    while i < len(lines):
+                        if lines[i].strip() == '#endif':
+                            i += 1
+                            break
+                        i += 1
+                    break
+                elif s == '#endif':
+                    # No #else branch — just drop the #endif
+                    i += 1
+                    break
+                else:
+                    result.append(lines[i])
+                    i += 1
+        else:
+            result.append(lines[i])
+            i += 1
+    return '\n'.join(result)
+
+
 def _convert_kr_to_ansi(text: str) -> str:
     """Convert K&R-style function definitions to ANSI C prototypes.
 
@@ -246,12 +295,6 @@ def _convert_kr_to_ansi(text: str) -> str:
                 break
 
             if stripped == '':
-                j += 1
-                continue
-
-            # Preserve preprocessor directives (#endif, #else, etc.)
-            if stripped.startswith('#'):
-                comment_lines.append(line)
                 j += 1
                 continue
 
@@ -898,6 +941,7 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                             r'#include\s*"\.\./([^"]+)"',
                             r'#include "\1"', text)
                     if f.suffix.lower() == '.c':
+                        text = _resolve_stdc_ifdefs(text)
                         text = _convert_kr_to_ansi(text)
                     (output_dir / f.name).write_text(text)
 
@@ -1009,7 +1053,9 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
             text = re.sub(
                 r'#include\s*"\.\./([^"]+)"',
                 r'#include "\1"', text)
-        # Convert K&R function definitions to ANSI for C++ compatibility.
+        # Resolve #ifdef __STDC__ blocks (keep ANSI branch, drop K&R branch).
+        text = _resolve_stdc_ifdefs(text)
+        # Convert any remaining K&R function definitions to ANSI for C++ compatibility.
         text = _convert_kr_to_ansi(text)
         # Apply renames first, then type upgrades — the two domains
         # don't overlap but this order preserves identifier names that
