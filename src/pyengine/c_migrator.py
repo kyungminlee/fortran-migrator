@@ -249,6 +249,12 @@ def _convert_kr_to_ansi(text: str) -> str:
                 j += 1
                 continue
 
+            # Preserve preprocessor directives (#endif, #else, etc.)
+            if stripped.startswith('#'):
+                comment_lines.append(line)
+                j += 1
+                continue
+
             # Try to parse as a type declaration
             dm = _KR_DECL_RE.match(line)
             if dm:

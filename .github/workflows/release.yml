@@ -77,7 +77,7 @@ jobs:
           path: staging-${{ matrix.target }}/
           retention-days: 1
 
-  # ── Build matrix: target x compiler ──────────────────────────────
+  # ── Build matrix: target x compiler x MPI ────────────────────────
   build:
     needs: stage
     runs-on: ubuntu-latest
@@ -86,11 +86,15 @@ jobs:
       matrix:
         target: [kind16, kind10, multifloats]
         compiler:
-          - { name: gfortran-12,  fc: gfortran-12,   cc: gcc-12,    cxx: g++-12,      pkg: gcc-12 gfortran-12 }
-          - { name: gfortran-15,  fc: gfortran-15,   cc: gcc-15,    cxx: g++-15,      pkg: gcc-15 gfortran-15 }
+          - { name: gfortran-12,  fc: gfortran-12,   cc: gcc-12,    cxx: g++-12,      pkg: gcc-12 g++-12 gfortran-12 }
+          - { name: gfortran-15,  fc: gfortran-15,   cc: gcc-15,    cxx: g++-15,      pkg: gcc-15 g++-15 gfortran-15 }
           - { name: ifx-2024,     fc: ifx,            cc: icx,       cxx: icpx,        pkg: "",  oneapi: "2024.2" }
           - { name: ifx-2025,     fc: ifx,            cc: icx,       cxx: icpx,        pkg: "",  oneapi: "2025.1" }
           - { name: flang-20,     fc: flang-new-20,   cc: clang-20,  cxx: clang++-20,  pkg: "" }
+        mpi:
+          - { name: openmpi,  pkg: libopenmpi-dev }
+          - { name: mpich,    pkg: libmpich-dev }
+          - { name: intelmpi }
         exclude:
           # Only gfortran supports REAL(KIND=10) (80-bit x86 extended)
           - target: kind10
@@ -119,7 +123,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.compiler.pkg }}
 
-      - name: Install Intel oneAPI
+      - name: Install Intel oneAPI compilers
         if: startsWith(matrix.compiler.name, 'ifx')
         run: |
           wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
@@ -131,8 +135,7 @@ jobs:
           MINOR=$(echo "${{ matrix.compiler.oneapi }}" | cut -d. -f2)
           sudo apt-get install -y \
             intel-oneapi-compiler-fortran-${YEAR}.${MINOR} \
-            intel-oneapi-compiler-dpcpp-cpp-${YEAR}.${MINOR} \
-            intel-oneapi-mpi-devel
+            intel-oneapi-compiler-dpcpp-cpp-${YEAR}.${MINOR}
 
       - name: Install LLVM Flang 20
         if: matrix.compiler.name == 'flang-20'
@@ -142,14 +145,44 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y flang-20 clang-20 libomp-20-dev
 
-      - name: Install MPI
-        if: "!startsWith(matrix.compiler.name, 'ifx')"
+      - name: Install OpenMPI
+        if: matrix.mpi.name == 'openmpi'
         run: sudo apt-get install -y libopenmpi-dev
+
+      - name: Install MPICH
+        if: matrix.mpi.name == 'mpich'
+        run: sudo apt-get install -y libmpich-dev
+
+      - name: Install Intel MPI
+        if: matrix.mpi.name == 'intelmpi' && !startsWith(matrix.compiler.name, 'ifx')
+        run: |
+          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get install -y intel-oneapi-mpi-devel
+
+      - name: Install Intel MPI (with oneAPI compilers)
+        if: matrix.mpi.name == 'intelmpi' && startsWith(matrix.compiler.name, 'ifx')
+        run: |
+          sudo apt-get install -y intel-oneapi-mpi-devel
+
+      - name: Install fypp (needed by multifloats)
+        if: matrix.target == 'multifloats'
+        run: pip install fypp
 
       - name: Configure
         run: |
-          if [ -n "${{ matrix.compiler.oneapi }}" ]; then
+          # Source Intel oneAPI environment if needed
+          if [ -n "${{ matrix.compiler.oneapi }}" ] || [ "${{ matrix.mpi.name }}" = "intelmpi" ]; then
             source /opt/intel/oneapi/setvars.sh
+          fi
+          # For Intel MPI with non-Intel compilers, set underlying compiler
+          if [ "${{ matrix.mpi.name }}" = "intelmpi" ] && [ -z "${{ matrix.compiler.oneapi }}" ]; then
+            export I_MPI_F90=${{ matrix.compiler.fc }}
+            export I_MPI_CC=${{ matrix.compiler.cc }}
+            export I_MPI_CXX=${{ matrix.compiler.cxx }}
           fi
           cmake -S staging -B build \
             -DCMAKE_BUILD_TYPE=Release \
@@ -160,14 +193,19 @@ jobs:
 
       - name: Build
         run: |
-          if [ -n "${{ matrix.compiler.oneapi }}" ]; then
+          if [ -n "${{ matrix.compiler.oneapi }}" ] || [ "${{ matrix.mpi.name }}" = "intelmpi" ]; then
             source /opt/intel/oneapi/setvars.sh
+          fi
+          if [ "${{ matrix.mpi.name }}" = "intelmpi" ] && [ -z "${{ matrix.compiler.oneapi }}" ]; then
+            export I_MPI_F90=${{ matrix.compiler.fc }}
+            export I_MPI_CC=${{ matrix.compiler.cc }}
+            export I_MPI_CXX=${{ matrix.compiler.cxx }}
           fi
           cmake --build build -j$(nproc)
 
       - name: Install
         run: |
-          if [ -n "${{ matrix.compiler.oneapi }}" ]; then
+          if [ -n "${{ matrix.compiler.oneapi }}" ] || [ "${{ matrix.mpi.name }}" = "intelmpi" ]; then
             source /opt/intel/oneapi/setvars.sh
           fi
           cmake --install build
@@ -175,7 +213,7 @@ jobs:
       - name: Package
         run: |
           cd install
-          ARCHIVE="${{ matrix.target }}-${{ matrix.compiler.name }}-linux-x86_64"
+          ARCHIVE="${{ matrix.target }}-${{ matrix.compiler.name }}-${{ matrix.mpi.name }}-linux-x86_64"
           tar czf ${{ github.workspace }}/${ARCHIVE}.tar.gz .
           echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
 
@@ -196,7 +234,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-          pattern: '*-linux-x86_64'
+          pattern: '*-*-*-linux-x86_64'
 
       - name: Collect tarballs
         run: |
@@ -230,9 +268,19 @@ jobs:
             | Intel oneAPI 2025 (ifx) | `ifx-2025` |
             | LLVM Flang 20 | `flang-20` (kind16 and multifloats only) |
 
+            ### MPI Implementations
+            MPI-dependent libraries (BLACS, PBLAS, PBBLAS, ScaLAPACK, ScaLAPACK_C)
+            are built with each MPI implementation:
+
+            | MPI | Tag |
+            |-----|-----|
+            | OpenMPI | `openmpi` |
+            | MPICH | `mpich` |
+            | Intel MPI | `intelmpi` |
+
             ### Installation
             ```bash
-            tar xzf kind16-gfortran-15-linux-x86_64.tar.gz -C /usr/local
+            tar xzf kind16-gfortran-15-openmpi-linux-x86_64.tar.gz -C /usr/local
             ```
 
             Libraries are compiler-tagged (e.g. `libqblas-gfortran-15.a`).
