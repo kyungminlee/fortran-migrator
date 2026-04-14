@@ -45,6 +45,28 @@ jobs:
             ${{ github.workspace }}/staging-${{ matrix.target }} \
             --target ${{ matrix.target }}
 
+      - name: Convergence report
+        run: |
+          cd src
+          RECIPES=(blas blacs lapack ptzblas pbblas pblas scalapack scalapack_c)
+          {
+            echo "## Convergence report: \`${{ matrix.target }}\`"
+            echo ""
+            for lib in "${RECIPES[@]}"; do
+              RECIPE="../recipes/${lib}.yaml"
+              OUTDIR="${{ github.workspace }}/staging-${{ matrix.target }}/${lib}/src"
+              if [ ! -d "$OUTDIR" ]; then
+                continue
+              fi
+              echo "### ${lib}"
+              echo '```'
+              uv run python -m pyengine converge "$RECIPE" "$OUTDIR" \
+                --target ${{ matrix.target }} --context 4 2>&1 || true
+              echo '```'
+              echo ""
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload staged sources
         uses: actions/upload-artifact@v4
         with:
