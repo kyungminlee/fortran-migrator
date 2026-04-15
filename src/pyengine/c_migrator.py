@@ -981,6 +981,12 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         if new_text != text:
             hdr.write_text(new_text)
 
+    # Insert real-type typedef into pblas.h for KIND targets so that
+    # migrated declarations (QREAL, QCOMPLEX etc.) resolve.
+    pblas_path = output_dir / 'pblas.h'
+    if pblas_path.exists() and target_mode.c_header_mode == 'typedef':
+        _patch_pblas_header(pblas_path, template_vars)
+
     # Process D/Z-sourced files first so they become the canonical
     # output; S/C co-family members are verified against them.
     def _is_double_key(routine_upper: str) -> bool:
@@ -1153,6 +1159,32 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
         'cloned': cloned,
         'template_vars': template_vars,
     }
+
+
+def _patch_pblas_header(pblas_path: Path,
+                        template_vars: dict[str, str]) -> None:
+    """Insert extended-precision typedefs into pblas.h for KIND targets.
+
+    The migrator replaces ``double``/``complex16`` with the target type
+    names (e.g. QREAL, QCOMPLEX) in .c files, but pblas.h keeps the
+    original types.  We add typedefs so both old and new names compile.
+    """
+    real_type = template_vars['REAL_TYPE']
+    complex_type = template_vars['COMPLEX_TYPE']
+    c_type = template_vars['C_REAL_TYPE']
+
+    block = (f'typedef {c_type} {real_type};\n'
+             f'typedef struct {{ {real_type} re, im; }} {complex_type};\n')
+
+    text = pblas_path.read_text(errors='replace')
+    if real_type in text and f'typedef' in text.split(real_type)[0]:
+        return  # already patched
+    # Insert just before the first "typedef struct" line
+    marker = 'typedef struct'
+    idx = text.find(marker)
+    if idx >= 0:
+        text = text[:idx] + block + '\n' + text[idx:]
+        pblas_path.write_text(text)
 
 
 # The 11 BLACS user-facing routine suffixes (same for each type prefix).

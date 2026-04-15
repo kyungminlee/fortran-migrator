@@ -27,7 +27,7 @@ la_constants_suffix: _EP
 
 c_interop:
   real_type: QREAL
-  complex_type: XCOMPLEX
+  complex_type: QCOMPLEX
   c_real_type: __float128
   mpi_real: MPI_REAL16
   mpi_complex: MPI_COMPLEX32

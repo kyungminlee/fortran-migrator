@@ -27,7 +27,7 @@ la_constants_suffix: _EP
 
 c_interop:
   real_type: EREAL
-  complex_type: YCOMPLEX
+  complex_type: ECOMPLEX
   c_real_type: long double
   mpi_real: MPI_LONG_DOUBLE
   mpi_complex: MPI_C_LONG_DOUBLE_COMPLEX
