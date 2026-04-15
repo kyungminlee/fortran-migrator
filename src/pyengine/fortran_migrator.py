@@ -2052,7 +2052,18 @@ def rewrite_la_constants_use(source: str, target_mode: TargetMode) -> str:
             )
         if in_use_stmt:
             line = replace_routine_names(line, const_renames)
-            if not target_mode.is_kind_based:
+            if target_mode.is_kind_based:
+                # Rename ``wp=>dp`` / ``wp=>sp`` to ``wp=>qp`` (kind16) or
+                # ``wp=>ep`` (kind10).  The target kind parameter is the
+                # real prefix lowercased + "p".
+                target_kp = target_mode.prefix_map['R'].lower() + 'p'
+                for kindname in ('dp', 'sp'):
+                    line = re.sub(
+                        rf'(?i)\b{kindname}\b',
+                        lambda m, kp=target_kp: kp if m.group().islower() else kp.upper(),
+                        line,
+                    )
+            else:
                 # Strip ``wp=>dp`` (D-source) and ``wp=>sp`` (S-source)
                 # entries — both become meaningless after the migrator
                 # collapses both halves to float64x2.
