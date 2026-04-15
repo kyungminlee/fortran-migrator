@@ -96,13 +96,18 @@ jobs:
           - { name: mpich,    pkg: libmpich-dev }
           - { name: intelmpi }
         exclude:
-          # Only gfortran supports REAL(KIND=10) (80-bit x86 extended)
-          - target: kind10
-            compiler: { name: flang-20 }
+          # ifx on Linux/x86-64 does not implement REAL(KIND=10)
+          # (80-bit x87 extended), so the kind10 target cannot be
+          # built with Intel's compiler.
           - target: kind10
             compiler: { name: ifx-2024 }
           - target: kind10
             compiler: { name: ifx-2025 }
+          # LLVM Flang 20 has no REAL(KIND=16) (IEEE binary128) support
+          # yet, so it cannot build the kind16 target. It *does*
+          # support REAL(KIND=10), so kind10 and multifloats are OK.
+          - target: kind16
+            compiler: { name: flang-20 }
 
     steps:
       - uses: actions/checkout@v4
@@ -266,7 +271,7 @@ jobs:
             | GCC/gfortran 15 | `gfortran-15` |
             | Intel oneAPI 2024 (ifx) | `ifx-2024` |
             | Intel oneAPI 2025 (ifx) | `ifx-2025` |
-            | LLVM Flang 20 | `flang-20` (kind16 and multifloats only) |
+            | LLVM Flang 20 | `flang-20` (kind10 and multifloats only) |
 
             ### MPI Implementations
             MPI-dependent libraries (BLACS, PBLAS, PBBLAS, ScaLAPACK, ScaLAPACK_C)

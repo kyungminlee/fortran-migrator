@@ -70,6 +70,7 @@ module LA_CONSTANTS_EP
 
 #endif
 
+#ifdef HAVE_REAL16
 ! =====================================================================
 !  Quadruple precision (KIND=16) — 128-bit IEEE binary128
 ! =====================================================================
@@ -115,5 +116,7 @@ module LA_CONSTANTS_EP
 !  sbig = 1/S, where S was defined in https://doi.org/10.1145/355769.355771
    real(qp), parameter :: qsbig = real(radix(0._qp), qp)**( - ceiling( &
        (maxexponent(0._qp) + digits(0._qp) - 1) * 0.5_qp))
+
+#endif
 
 end module LA_CONSTANTS_EP

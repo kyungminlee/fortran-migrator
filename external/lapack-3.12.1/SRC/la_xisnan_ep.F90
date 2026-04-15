@@ -10,7 +10,9 @@ module LA_XISNAN_EP
 #ifdef HAVE_REAL10
    module procedure EISNAN
 #endif
+#ifdef HAVE_REAL16
    module procedure QISNAN
+#endif
 
    end interface
 
@@ -42,6 +44,7 @@ contains
    end function EISNAN
 #endif
 
+#ifdef HAVE_REAL16
    logical function QISNAN( x )
    use LA_CONSTANTS_EP, only: wp=>qp
 #ifdef USE_IEEE_INTRINSIC
@@ -65,5 +68,6 @@ contains
    end function QLAISNAN
 #endif
    end function QISNAN
+#endif
 
 end module LA_XISNAN_EP

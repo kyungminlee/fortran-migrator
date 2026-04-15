@@ -28,17 +28,45 @@ if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
 endif()
 set(CMAKE_Fortran_PREPROCESS ON)
 
-# Detect 80-bit extended precision (KIND=10) support
+# Detect 80-bit extended precision (KIND=10) support.
+#
+# We probe the literal ``REAL(KIND=10)`` on purpose, not
+# ``selected_real_kind(18, 4931)``. On compilers that lack x87 80-bit
+# reals (ifx on Linux/x86-64), the latter returns 16 and silently
+# aliases the KIND=10 path onto KIND=16, which makes the EISNAN and
+# QISNAN overloads in LA_XISNAN_EP collapse to the same argument type
+# and triggers an ambiguous-generic-interface error. Asking for
+# KIND=10 directly fails to compile on such compilers, which is the
+# behavior we want.
 include(CheckFortranSourceCompiles)
 check_fortran_source_compiles("
     program test_real10
-    integer, parameter :: ep = selected_real_kind(18, 4931)
-    real(ep) :: x
-    x = 1.0_ep
+    real(kind=10) :: x
+    x = 1.0_10
     end program
 " HAVE_REAL10 SRC_EXT F90)
 if(HAVE_REAL10)
     add_compile_definitions(HAVE_REAL10)
+endif()
+
+# Detect 128-bit quadruple precision (IEEE binary128) support.
+#
+# We probe ``selected_real_kind(33, 4931)`` (the pattern used inside
+# la_constants_ep to pick ``qp``), not the literal ``REAL(KIND=16)``.
+# LLVM Flang 20 accepts the KIND=16 literal but then returns -1 for
+# ``selected_real_kind(33)``, so the module ends up with ``qp = -1``
+# and every subsequent ``real(qp)`` declaration fails. Probing the
+# real selector catches this case; the module's qp block is then
+# gated behind HAVE_REAL16 for flang's benefit.
+check_fortran_source_compiles("
+    program test_real16
+    integer, parameter :: qp = selected_real_kind(33, 4931)
+    real(qp) :: x
+    x = 1.0_qp
+    end program
+" HAVE_REAL16 SRC_EXT F90)
+if(HAVE_REAL16)
+    add_compile_definitions(HAVE_REAL16)
 endif()
 
 # ── MPI (needed by BLACS, PBLAS, ScaLAPACK C) ───────────────────────
@@ -172,7 +200,13 @@ function(add_migrated_c_library lib_name)
         add_library(${_common_target} STATIC ${_common})
         target_include_directories(${_common_target} PUBLIC $<BUILD_INTERFACE:${_dir}/src>)
         if(MPI_C_FOUND)
-            target_link_libraries(${_common_target} PUBLIC MPI::MPI_C)
+            # Link MPI privately (needed for compiling the C sources) and
+            # propagate it via INTERFACE link-only, so downstream Fortran
+            # targets inherit the link dependency without MPI's C-only
+            # compile flags (e.g. mpich's ``-ffat-lto-objects`` is rejected
+            # by flang-new-20).
+            target_link_libraries(${_common_target} PRIVATE MPI::MPI_C)
+            target_link_libraries(${_common_target} INTERFACE $<LINK_ONLY:MPI::MPI_C>)
         endif()
     endif()
 
@@ -182,7 +216,8 @@ function(add_migrated_c_library lib_name)
         target_link_libraries(${_precision_target} PUBLIC ${_common_target})
     endif()
     if(MPI_C_FOUND)
-        target_link_libraries(${_precision_target} PUBLIC MPI::MPI_C)
+        target_link_libraries(${_precision_target} PRIVATE MPI::MPI_C)
+        target_link_libraries(${_precision_target} INTERFACE $<LINK_ONLY:MPI::MPI_C>)
     endif()
 
     # Multifloats: compile C as C++ for operator overloading support

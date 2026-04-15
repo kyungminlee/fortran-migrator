@@ -18,9 +18,21 @@ skip_files: []
 # communication.  The BI_*vv* reduction kernels no longer need overrides:
 # Bdef.h is patched to redefine Rabs/Cabs as mf_abs/mf_cabs1, and
 # complex128x2_t uses .r/.i members matching the BLACS convention.
+#
+# The BI_*Buff*.c / BI_Pack.c overrides add explicit ``(char *)`` casts
+# to their ``malloc`` calls. In multifloats mode the BLACS C sources
+# are compiled as C++ (to get operator overloading on the multifloats
+# type), and C++ does not allow the implicit ``void *`` -> ``char *``
+# conversion that C happily performs. clang++ rejects the implicit
+# cast outright and does not honor ``-fpermissive``, so the casts are
+# required for the flang-20 / clang-20 build to succeed.
 overrides:
   multifloats:
     src_dir: blacs/mfc_overrides
     files:
       # Lazy-init hook for multifloats MPI handles
       - blacs_pinfo_.c
+      # Explicit (char *) casts on malloc() for C++ compilation
+      - BI_EmergencyBuff.c
+      - BI_GetBuff.c
+      - BI_Pack.c

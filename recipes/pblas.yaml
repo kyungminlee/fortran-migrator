@@ -63,6 +63,108 @@ header_patches:
     after: 'typedef    double              cmplx16[2];'
     insert: |
       #include "multifloats_bridge.h"
+  # Multifloats target: in multifloats mode the C sources are compiled
+  # as C++ (for multifloats operator overloading). Clang++ rejects the
+  # implicit ``const char[]`` → ``char *`` conversion on string-literal
+  # macros like ``NOCONJG`` when they are passed to BLAS-style
+  # ``char *`` parameters, and it does not honor ``-fpermissive``. Shadow
+  # the originals with C-style-cast versions under ``__cplusplus`` so
+  # call sites compile without any source edits.
+  - file: PBblas.h
+    when: multifloats
+    after: '#define    ALLOCATE            "A"'
+    insert: |
+      #ifdef __cplusplus
+      #undef NOTRAN
+      #undef NOCONJG
+      #undef TRAN
+      #undef CONJG
+      #undef COTRAN
+      #undef ALL
+      #undef LOWER
+      #undef UPPER
+      #undef DIAGONAL
+      #undef LEFT
+      #undef RIGHT
+      #undef UNIT
+      #undef NOUNIT
+      #undef INIT
+      #undef NOINIT
+      #undef FORWARD
+      #undef BACKWARD
+      #undef REUSE
+      #undef ALLOCATE
+      #define NOTRAN    ((char *)"N")
+      #define NOCONJG   ((char *)"N")
+      #define TRAN      ((char *)"T")
+      #define CONJG     ((char *)"Z")
+      #define COTRAN    ((char *)"C")
+      #define ALL       ((char *)"A")
+      #define LOWER     ((char *)"L")
+      #define UPPER     ((char *)"U")
+      #define DIAGONAL  ((char *)"D")
+      #define LEFT      ((char *)"L")
+      #define RIGHT     ((char *)"R")
+      #define UNIT      ((char *)"U")
+      #define NOUNIT    ((char *)"N")
+      #define INIT      ((char *)"I")
+      #define NOINIT    ((char *)"N")
+      #define FORWARD   ((char *)"F")
+      #define BACKWARD  ((char *)"B")
+      #define REUSE     ((char *)"R")
+      #define ALLOCATE  ((char *)"A")
+      #endif
+  # Same treatment for PBblacs.h (ROW / COLUMN / BCAST / TOP_*).
+  - file: PBblacs.h
+    when: multifloats
+    after: '#define    TOP_TREE9           "9"'
+    insert: |
+      #ifdef __cplusplus
+      #undef COLUMN
+      #undef ROW
+      #undef BCAST
+      #undef COMBINE
+      #undef TOP_GET
+      #undef TOP_DEFAULT
+      #undef TOP_IRING
+      #undef TOP_DRING
+      #undef TOP_SRING
+      #undef TOP_HYPER
+      #undef TOP_FULL
+      #undef TOP_MRING
+      #undef TOP_TTREE
+      #undef TOP_TREE1
+      #undef TOP_TREE2
+      #undef TOP_TREE3
+      #undef TOP_TREE4
+      #undef TOP_TREE5
+      #undef TOP_TREE6
+      #undef TOP_TREE7
+      #undef TOP_TREE8
+      #undef TOP_TREE9
+      #define COLUMN       ((char *)"C")
+      #define ROW          ((char *)"R")
+      #define BCAST        ((char *)"B")
+      #define COMBINE      ((char *)"C")
+      #define TOP_GET      ((char *)"!")
+      #define TOP_DEFAULT  ((char *)" ")
+      #define TOP_IRING    ((char *)"I")
+      #define TOP_DRING    ((char *)"D")
+      #define TOP_SRING    ((char *)"S")
+      #define TOP_HYPER    ((char *)"H")
+      #define TOP_FULL     ((char *)"F")
+      #define TOP_MRING    ((char *)"M")
+      #define TOP_TTREE    ((char *)"T")
+      #define TOP_TREE1    ((char *)"1")
+      #define TOP_TREE2    ((char *)"2")
+      #define TOP_TREE3    ((char *)"3")
+      #define TOP_TREE4    ((char *)"4")
+      #define TOP_TREE5    ((char *)"5")
+      #define TOP_TREE6    ((char *)"6")
+      #define TOP_TREE7    ((char *)"7")
+      #define TOP_TREE8    ((char *)"8")
+      #define TOP_TREE9    ((char *)"9")
+      #endif
 
 # PBLAS/SRC contains 123 precision-specific C entry points (pdgemm_.c,
 # pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent
