@@ -2267,6 +2267,35 @@ def _restore_keep_kind_sentinel(source: str) -> str:
     return source.replace(_KK_SENTINEL, 'DOUBLE PRECISION')
 
 
+# Fortran-side MPI datatype name rewriter. In an `s*`/`c*` source MUMPS
+# uses ``MPI_REAL`` and ``MPI_COMPLEX``; in `d*`/`z*` it uses
+# ``MPI_DOUBLE_PRECISION`` and ``MPI_DOUBLE_COMPLEX``. After migration
+# both halves must refer to the target's wider datatype (e.g.
+# ``MPI_REAL16``/``MPI_COMPLEX32`` for kind16). Without this pass the two
+# halves' outputs disagree on every MPI call, even though they are
+# semantically identical. Word boundaries keep the rewrite idempotent —
+# ``MPI_REAL16`` already has no ``\b`` after ``REAL`` so it is not
+# rematched.
+_MPI_DOUBLE_COMPLEX_RE = re.compile(r'\bMPI_DOUBLE_COMPLEX\b')
+_MPI_DOUBLE_PRECISION_RE = re.compile(r'\bMPI_DOUBLE_PRECISION\b')
+_MPI_COMPLEX_RE = re.compile(r'\bMPI_COMPLEX\b')
+_MPI_REAL_RE = re.compile(r'\bMPI_REAL\b')
+
+
+def _rewrite_mpi_datatypes(source: str, target_mode: TargetMode) -> str:
+    mpi_real = target_mode.c_mpi_real
+    mpi_complex = target_mode.c_mpi_complex
+    if not mpi_real and not mpi_complex:
+        return source
+    if mpi_complex:
+        source = _MPI_DOUBLE_COMPLEX_RE.sub(mpi_complex, source)
+        source = _MPI_COMPLEX_RE.sub(mpi_complex, source)
+    if mpi_real:
+        source = _MPI_DOUBLE_PRECISION_RE.sub(mpi_real, source)
+        source = _MPI_REAL_RE.sub(mpi_real, source)
+    return source
+
+
 def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None, keep_kind_lines: frozenset[int] | None = None) -> tuple[str, str] | None:
     ext, source = src_path.suffix.lower(), src_path.read_text(errors='replace')
     facts = None
@@ -2289,6 +2318,8 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
 
     if keep_kind_lines:
         migrated = _restore_keep_kind_sentinel(migrated)
+
+    migrated = _rewrite_mpi_datatypes(migrated, target_mode)
 
     out_name = target_filename(src_path.name, rename_map, target_mode)
     if not target_mode.is_kind_based:
