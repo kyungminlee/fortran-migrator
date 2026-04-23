@@ -427,6 +427,9 @@ endif()
 # Enable Fortran preprocessing for .F90 files
 set(CMAKE_Fortran_PREPROCESS ON)
 
+# --- MPI (optional, for libraries like MUMPS that INCLUDE 'mpif.h') ---
+find_package(MPI COMPONENTS Fortran QUIET)
+
 # Detect 80-bit extended precision (KIND=10) support
 if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
     include(CheckFortranSourceCompiles)
@@ -464,9 +467,16 @@ add_library({precision_lib} STATIC ${{PRECISION_SOURCES}})
 set_target_properties({precision_lib} PROPERTIES
     Fortran_MODULE_DIRECTORY ${{CMAKE_CURRENT_BINARY_DIR}}/mod)
 target_include_directories({precision_lib} PUBLIC
-    $<BUILD_INTERFACE:${{CMAKE_CURRENT_BINARY_DIR}}/mod>)
+    $<BUILD_INTERFACE:${{CMAKE_CURRENT_BINARY_DIR}}/mod>
+    $<BUILD_INTERFACE:${{CMAKE_CURRENT_SOURCE_DIR}}>)
 if(TARGET {common_lib})
     target_link_libraries({precision_lib} PUBLIC {common_lib})
+endif()
+if(MPI_Fortran_FOUND)
+    target_link_libraries({precision_lib} PUBLIC MPI::MPI_Fortran)
+    if(TARGET {common_lib})
+        target_link_libraries({common_lib} PUBLIC MPI::MPI_Fortran)
+    endif()
 endif()
 {mf_deps}
 
@@ -500,9 +510,14 @@ def cmd_build(args):
     if config.language == 'c':
         files = sorted(list(src_dir.glob('*.c')))
     else:
+        # Honor the recipe's extensions list (normalized to lowercase in
+        # load_recipe) so libraries that use .F (MUMPS) or any
+        # non-default extension are picked up. Case-insensitive match on
+        # the actual filename suffix.
+        allowed = {e.lower() for e in config.extensions}
         files = sorted(
-            list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
-            + list(src_dir.glob('*.F90'))
+            p for p in src_dir.iterdir()
+            if p.is_file() and p.suffix.lower() in allowed
         )
     common_files, precision_files = [], []
     for f in files:

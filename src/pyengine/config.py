@@ -54,6 +54,14 @@ class RecipeConfig:
     # ``output_dir`` (no subdirectory mirroring) so include resolution
     # stays simple.
     extra_c_dirs: list[Path] = field(default_factory=list)
+    # Additional Fortran source directories whose files are migrated in
+    # the same pass as ``source_dir``. Used by MUMPS to pull in the
+    # per-arithmetic header files under ``external/MUMPS_5.8.2/include/``
+    # (``dmumps_struc.h`` etc.), which are Fortran content despite the
+    # ``.h`` extension and must be migrated so the ``INCLUDE`` statements
+    # in ``dmumps_struc_def.F`` resolve against the renamed target file.
+    # Files are flat-copied into ``output_dir`` (no subdir mirroring).
+    extra_fortran_dirs: list[Path] = field(default_factory=list)
     # Additional C return types to recognize when scanning for function
     # definitions, as regex fragments (e.g. ``r'PBTYP_T\s*\*'``). Used
     # only when ``language == 'c'``; the default set in
@@ -188,5 +196,7 @@ def load_recipe(recipe_path: Path,
         recipe_dir=recipe_path.parent,
         extra_c_dirs=[project_root / d
                       for d in (data.get('extra_c_dirs') or [])],
+        extra_fortran_dirs=[project_root / d
+                            for d in (data.get('extra_fortran_dirs') or [])],
         keep_kind_lines=keep_kind_frozen,
     )

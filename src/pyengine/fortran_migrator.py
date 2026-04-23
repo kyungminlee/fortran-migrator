@@ -66,6 +66,18 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
         r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?WP\s*\)',
         complex_target, line, flags=re.IGNORECASE,
     )
+    # Explicit numeric kinds on working-precision-like types. MUMPS's
+    # z-half uses ``COMPLEX(kind=8) A(LA)`` where its s/c/d siblings
+    # say ``REAL``/``COMPLEX``/``DOUBLE PRECISION``; rewrite all four
+    # spellings so they land on the same target type.
+    line = re.sub(
+        r'REAL\s*\(\s*(?:KIND\s*=\s*)?[48]\s*\)',
+        real_target, line, flags=re.IGNORECASE,
+    )
+    line = re.sub(
+        r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?[48]\s*\)',
+        complex_target, line, flags=re.IGNORECASE,
+    )
 
     if not target_mode.is_kind_based:
         line = _filter_known_constants_from_decl(line, target_mode)
@@ -405,8 +417,14 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
             )
 
     parts = re.split(r"('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\")", line)
+    # Allow internal whitespace between the leading/trailing dots and
+    # the operator word (``. AND .`` is a valid fixed-form spelling of
+    # ``.AND.``; MUMPS uses ``KEEP(50).EQ.0. AND. (...)`` with a space
+    # after the trailing dot of ``0.``). Without the ``\s*`` here, the
+    # bare-literal pass below would consume that trailing dot as part
+    # of ``0.`` and leave a dangling ``AND.`` that gfortran rejects.
     _FORTRAN_OP = re.compile(
-        r'\.(EQ|NE|LT|GT|LE|GE|AND|OR|NOT|TRUE|FALSE|EQV|NEQV)\.',
+        r'\.\s*(EQ|NE|LT|GT|LE|GE|AND|OR|NOT|TRUE|FALSE|EQV|NEQV)\s*\.',
         re.IGNORECASE,
     )
     for idx in range(0, len(parts), 2):
@@ -1925,8 +1943,31 @@ def _build_split_mask(body: str) -> list[bool]:
     return mask
 
 def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
+    # Preprocessor directives (``#if``, ``#include``, ``#define`` ...) are
+    # not bound by fixed-form column 72 and must not be split into
+    # continuation lines — doing so produces a truncated directive on
+    # the first line (e.g. ``#if A || B ||`` dangling) and a second line
+    # the preprocessor doesn't understand. Leave them alone regardless
+    # of length.
+    if line.lstrip().startswith('#'):
+        return line
     if len(line) <= 72 or is_comment_line(line) or (len(line) > 6 and line[6:].lstrip().startswith('!')):
         return line
+    # If an inline ``!`` comment sits within the first 72 columns, keep
+    # the whole line intact — fixed-form Fortran ignores columns past
+    # 72, and we must NOT split across the comment (the text after
+    # ``!`` would otherwise land on a continuation line as code).
+    # Scan for the first ``!`` outside a string literal.
+    in_s = in_d = False
+    for i, ch in enumerate(line):
+        if ch == "'" and not in_d:
+            in_s = not in_s
+        elif ch == '"' and not in_s:
+            in_d = not in_d
+        elif ch == '!' and not in_s and not in_d:
+            if i < 72:
+                return line
+            break
     prefix, body = line[:6] if len(line) >= 6 else line.ljust(6), line[6:]
     safe = _build_split_mask(body)
     chunks = []
@@ -2290,6 +2331,34 @@ _MPI_COMPLEX_RE = re.compile(r'\bMPI_COMPLEX\b')
 _MPI_REAL_RE = re.compile(r'\bMPI_REAL\b')
 
 
+# Fortran ``INCLUDE 'foo.h'`` whose filename starts with an arithmetic
+# letter. MUMPS uses this for per-arithmetic C-interop headers
+# (``INCLUDE 'dmumps_struc.h'`` in dmumps_struc_def.F). After migration
+# the file on disk is renamed by target_filename's first-char fallback
+# (dmumps_struc.h → qmumps_struc.h); the INCLUDE string must be
+# rewritten to match, otherwise the compiler can't find it.
+_INCLUDE_PREFIXED_H_RE = re.compile(
+    r"(INCLUDE\s*['\"])([SsDdCcZz])([\w]*\.h)(['\"])",
+    re.IGNORECASE,
+)
+
+
+def _rewrite_prefixed_includes(source: str, target_mode: TargetMode) -> str:
+    from .prefix_classifier import CHAR_TYPE
+    pmap = target_mode.prefix_map
+
+    def sub(m: re.Match) -> str:
+        head, prefix, rest, tail = m.group(1), m.group(2), m.group(3), m.group(4)
+        family = CHAR_TYPE.get(prefix.upper())
+        new = pmap.get(family) if family else None
+        if not new:
+            return m.group(0)
+        first = new if prefix.isupper() else new.lower()
+        return head + first + rest + tail
+
+    return _INCLUDE_PREFIXED_H_RE.sub(sub, source)
+
+
 def _rewrite_mpi_datatypes(source: str, target_mode: TargetMode) -> str:
     mpi_real = target_mode.c_mpi_real
     mpi_complex = target_mode.c_mpi_complex
@@ -2320,7 +2389,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
         source = _apply_keep_kind_sentinel(source, keep_kind_lines)
 
     if facts is not None: migrated = _migrate_with_flang(source, ext, rename_map, target_mode, facts)
-    elif ext in ('.f', '.for'): migrated = migrate_fixed_form(source, rename_map, target_mode)
+    elif ext in ('.f', '.for', '.h'): migrated = migrate_fixed_form(source, rename_map, target_mode)
     elif ext in ('.f90', '.f95', '.F90'): migrated = migrate_free_form(source, rename_map, target_mode)
     else: return None
 
@@ -2328,6 +2397,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
         migrated = _restore_keep_kind_sentinel(migrated)
 
     migrated = _rewrite_mpi_datatypes(migrated, target_mode)
+    migrated = _rewrite_prefixed_includes(migrated, target_mode)
 
     out_name = target_filename(src_path.name, rename_map, target_mode)
     if not target_mode.is_kind_based:

@@ -602,10 +602,25 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     skipped: list[str] = []
     divergences: list[str] = []
 
-    # Collect eligible source files
+    # Collect eligible source files. In addition to files with the
+    # recipe's declared extensions, include any file whose stem is listed
+    # in copy_files (regardless of extension) — this lets libraries
+    # carry shared, type-independent headers (e.g. MUMPS's
+    # mumps_tags.h / mumps_headers.h) through without having to widen
+    # the extensions list and accidentally migrate them.
+    #
+    # extra_fortran_dirs contributes additional directories whose files
+    # are migrated alongside source_dir. MUMPS uses this for
+    # per-arithmetic headers (``dmumps_struc.h`` → ``qmumps_struc.h``)
+    # that live in a parallel ``include/`` directory but are Fortran
+    # content that must go through the full migration pipeline.
+    src_dirs = [config.source_dir] + list(
+        getattr(config, 'extra_fortran_dirs', []) or []
+    )
     src_files = sorted(
-        p for p in config.source_dir.iterdir()
+        p for d in src_dirs for p in d.iterdir()
         if p.suffix.lower() in config.extensions
+        or p.stem.upper() in config.copy_files
     )
 
     # Convergence buffer: first writer of each output name stores its
