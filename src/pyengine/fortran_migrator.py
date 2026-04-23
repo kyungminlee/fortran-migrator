@@ -53,6 +53,19 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
     line = re.sub(r'COMPLEX\*8', complex_target, line, flags=re.IGNORECASE)
     line = re.sub(r'REAL\*8', real_target, line, flags=re.IGNORECASE)
     line = re.sub(r'REAL\*4', real_target, line, flags=re.IGNORECASE)
+    # ``REAL(kind(0.E0))`` (single) / ``REAL(kind(0.D0))`` (double) — an
+    # older idiom that predates F90's REAL*N form. MUMPS's dmumps_struc.h
+    # uses ``REAL(kind(0.E0))`` for single-precision fields. Must be
+    # handled BEFORE replace_literals rewrites the inner 0.E0 literal to
+    # a multifloats constructor that breaks the KIND intrinsic.
+    line = re.sub(
+        r'REAL\s*\(\s*kind\s*\(\s*0\.[DdEe]0\s*\)\s*\)',
+        real_target, line, flags=re.IGNORECASE,
+    )
+    line = re.sub(
+        r'COMPLEX\s*\(\s*kind\s*\(\s*0\.[DdEe]0\s*\)\s*\)',
+        complex_target, line, flags=re.IGNORECASE,
+    )
     # ``REAL(KIND=WP)`` / ``REAL(WP)`` / ``COMPLEX(KIND=WP)`` etc.
     # appear in newer-style LAPACK files (e.g. DGEDMD, DGEDMDQ). The
     # ``wp`` parameter declaration is independently stripped earlier
@@ -848,13 +861,50 @@ def replace_routine_names(line: str, rename_map: dict[str, str]) -> str:
 
     return pattern.sub(case_replace, line)
 
-_RENAME_PATTERN_CACHE: dict[frozenset, tuple[re.Pattern, dict[str, str]]] = {}
+
+_INCLUDE_RE = re.compile(
+    r'''^(?P<lead>\s*(?:INCLUDE|include|Include))\s+(?P<q>['"])(?P<name>[^'"]+)(?P=q)(?P<tail>.*)$''',
+)
+
+
+def replace_include_filenames(line: str, rename_map: dict[str, str]) -> str:
+    """Rewrite ``INCLUDE 'xxx.h'`` when ``xxx`` is in the rename_map.
+
+    Needed for precision-prefixed headers (e.g. MUMPS's ``dmumps_struc.h``,
+    which the ``mumps_struc`` recipe migrates to ``ddmumps_struc.h`` in
+    multifloats mode). The including ``.F`` file's literal filename
+    string isn't touched by :func:`replace_routine_names` because it's
+    inside a quoted Fortran string, so it needs a dedicated rewrite.
+    """
+    # Fast reject: ``INCLUDE`` statements are rare (≈1 per file) so we
+    # avoid the per-call rename_map scan until we know the line matches.
+    m = _INCLUDE_RE.match(line)
+    if not m:
+        return line
+    name = m.group('name')
+    stem = Path(name).stem
+    ext = Path(name).suffix
+    upper_stem = stem.upper()
+    # rename_map keys are already uppercase (built by build_rename_map);
+    # fall back to a case-insensitive lookup if not.
+    new_stem = rename_map.get(upper_stem) or rename_map.get(stem)
+    if new_stem is None:
+        return line
+    new_name = (new_stem.upper() if stem.isupper() else
+                (new_stem.lower() if stem.islower() else new_stem)) + ext
+    return f'{m.group("lead")} {m.group("q")}{new_name}{m.group("q")}{m.group("tail")}'
+
+_RENAME_PATTERN_CACHE: dict[int, tuple[re.Pattern, dict[str, str]]] = {}
 
 def _get_rename_pattern(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[str, str]]:
-    upper_map = {k.upper(): v for k, v in rename_map.items()}
-    key = frozenset(upper_map.items())
+    # Cache by id(rename_map) — within a single migration run every
+    # file shares the same dict object, so this skips the O(N) upper()
+    # + frozenset build that dominated the MUMPS-scale (6k renames)
+    # workload.
+    key = id(rename_map)
     cached = _RENAME_PATTERN_CACHE.get(key)
     if cached is not None: return cached
+    upper_map = {k.upper(): v for k, v in rename_map.items()}
     names = sorted(upper_map.keys(), key=len, reverse=True)
     pattern = re.compile(r'\b(' + '|'.join(re.escape(n) for n in names) + r')\b', re.IGNORECASE) if names else re.compile(r'(?!x)x')
     _RENAME_PATTERN_CACHE[key] = (pattern, upper_map)
@@ -1234,13 +1284,28 @@ def _wrap_bare_complex_literals(line: str, target_mode: TargetMode) -> str:
     return line
 
 
+_XERBLA_STR_RE = re.compile(r"'([A-Za-z][A-Za-z0-9_]*)( ?)'")
+
+
 def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:
-    """Replace routine names inside XERBLA string arguments."""
-    for old_name, new_name in rename_map.items():
-        old_upper, new_upper = old_name.upper(), new_name.upper()
-        line = line.replace(f"'{old_upper} '", f"'{new_upper} '")
-        line = line.replace(f"'{old_upper}'", f"'{new_upper}'")
-    return line
+    """Replace routine names inside XERBLA string arguments.
+
+    XERBLA's first argument is a Fortran string literal naming the
+    failing routine — e.g. ``CALL XERBLA('DGEMM ', 1)``. A routine
+    rename must rewrite that literal too. Previously this function
+    looped over the whole rename_map and called ``str.replace`` twice
+    per entry per line, which is O(N * lines) — catastrophic once the
+    map hits MUMPS scale (6k+ entries). The regex version below is
+    O(lines) with a dict lookup per quoted identifier found.
+    """
+    def sub(m):
+        name = m.group(1)
+        upper = name.upper()
+        new = rename_map.get(upper)
+        if new is None:
+            return m.group(0)
+        return f"'{new.upper()}{m.group(2)}'"
+    return _XERBLA_STR_RE.sub(sub, line)
 
 
 _FP_VALUE_RE = re.compile(
@@ -1771,6 +1836,18 @@ def _build_use_only_clause(proc_lines: list[str], target_mode: TargetMode) -> st
     if target_mode.intrinsic_mode != 'wrap_constructor':
         return ''
     referenced = _scan_referenced_identifiers(proc_lines)
+    # If the procedure body pulls in content via ``INCLUDE 'xxx.h'``,
+    # the walker can't see inside the header — but migrated struct
+    # headers (e.g. MUMPS's ddmumps_struc.h) reference the target-mode
+    # type names. Unconditionally surface those type names so the
+    # host module's USE clause imports them. Type names rarely collide
+    # with local variables so the over-inclusion is safe.
+    for raw in proc_lines:
+        if raw[:1] in ('C', 'c', '*', '!'):
+            continue
+        if _INCLUDE_RE.match(raw):
+            referenced |= {n.lower() for n in target_mode.module_type_names}
+            break
     declared = _scan_local_declared_names(proc_lines)
     # Determine constant name prefix for sorting (e.g. 'mf_' for multifloats)
     const_prefixes = set()
@@ -2032,6 +2109,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
             stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
+            stripped = replace_include_filenames(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
@@ -2251,6 +2329,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
             stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
+        stripped = replace_include_filenames(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
             stripped = replace_type_decls(stripped, target_mode)
         else:
@@ -2510,6 +2589,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
             stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
+            stripped = replace_include_filenames(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
@@ -2553,6 +2633,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
             stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
+        stripped = replace_include_filenames(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
             stripped = replace_type_decls(stripped, target_mode)
         else:
