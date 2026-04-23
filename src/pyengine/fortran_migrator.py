@@ -2223,11 +2223,23 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
     return source
 
 
-def target_filename(name: str, rename_map: dict[str, str]) -> str:
+def target_filename(name: str, rename_map: dict[str, str],
+                    target_mode: TargetMode | None = None) -> str:
     stem, ext = Path(name).stem, Path(name).suffix
     if stem.upper() in rename_map:
         new = rename_map[stem.upper()]
         return (new.upper() if stem.isupper() else (new.lower() if stem.islower() else new.upper())) + ext
+    # Fallback for libraries whose filenames encode the arithmetic only in
+    # the first character (e.g. MUMPS: ``dana_aux.F``, ``zfac_driver.F``).
+    # When the stem is not a routine name, translate the leading s/d/c/z
+    # into the target's arithmetic letter via the family prefix map.
+    if target_mode is not None and stem and stem[0].upper() in ('S', 'D', 'C', 'Z'):
+        from .prefix_classifier import CHAR_TYPE
+        family = CHAR_TYPE[stem[0].upper()]         # 'R' or 'C'
+        new_char = target_mode.prefix_map.get(family)
+        if new_char:
+            first = new_char if stem[0].isupper() else new_char.lower()
+            return first + stem[1:] + ext
     return name
 
 
@@ -2278,7 +2290,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
     if keep_kind_lines:
         migrated = _restore_keep_kind_sentinel(migrated)
 
-    out_name = target_filename(src_path.name, rename_map)
+    out_name = target_filename(src_path.name, rename_map, target_mode)
     if not target_mode.is_kind_based:
         import re
         # Names that the multifloats module overloads as generic

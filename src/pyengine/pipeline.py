@@ -642,11 +642,15 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
         if stem_upper in config.skip_files:
             skipped.append(src_path.name)
             continue
+        is_copy = stem_upper in config.copy_files or stem_upper in independent
         if dry_run:
-            out_name = target_filename(src_path.name, rename_map)
-            tqdm.write(f'  {src_path.name} → {out_name}')
+            if is_copy:
+                tqdm.write(f'  {src_path.name} (copy)')
+            else:
+                out_name = target_filename(src_path.name, rename_map, target_mode)
+                tqdm.write(f'  {src_path.name} → {out_name}')
             continue
-        if stem_upper in config.copy_files or stem_upper in independent:
+        if is_copy:
             (output_dir / src_path.name).write_text(
                 src_path.read_text(errors='replace'))
             copied_count += 1
@@ -805,7 +809,7 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
             continue
         if stem_u in classification.independent:
             continue
-        by_target.setdefault(target_filename(p.name, rename_map), []).append(p)
+        by_target.setdefault(target_filename(p.name, rename_map, target_mode), []).append(p)
 
     # Migrate every member of every multi-member group in parallel.
     pairs: list[tuple[Path, Path]] = []
@@ -860,7 +864,7 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
             and not line.startswith(('---', '+++'))
         ]
         report.append({
-            'target': target_filename(canonical.name, rename_map),
+            'target': target_filename(canonical.name, rename_map, target_mode),
             'canonical': canonical.name,
             'other': other.name,
             'diff': diff,
@@ -916,7 +920,7 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
             continue
         if stem_u in classification.independent:
             continue
-        by_target.setdefault(target_filename(p.name, rename_map), []).append(p)
+        by_target.setdefault(target_filename(p.name, rename_map, target_mode), []).append(p)
 
     pairs: list[tuple[Path, Path]] = []
     for tn, members in by_target.items():
@@ -955,7 +959,7 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
 
     report: list[dict] = []
     for canonical, other in pairs:
-        target_name = target_filename(canonical.name, rename_map)
+        target_name = target_filename(canonical.name, rename_map, target_mode)
         on_disk = output_dir / target_name
         if not on_disk.is_file():
             report.append({

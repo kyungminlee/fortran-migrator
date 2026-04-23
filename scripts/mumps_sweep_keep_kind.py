@@ -49,12 +49,33 @@ def dp_lines(path: Path) -> list[tuple[int, str, str]]:
 
 
 def classify_pair(lo: Path, hi: Path):
-    """Classify DP decls in `hi` (d or z) against `lo` (s or c)."""
-    lo_set = {n for _, _, n in dp_lines(lo)}
-    keep, promote = [], []
+    """Classify DP decls in the (lo, hi) pair. A declaration is keep-kind
+    iff the same normalized text appears in BOTH halves — in that case
+    both halves must be protected from promotion to avoid cross-half
+    divergence (the hi stays DP; an unprotected lo would promote and
+    produce a different output).
+
+    Returns
+    -------
+    keep_hi : list[(lineno, raw)]   lines in ``hi`` to protect
+    keep_lo : list[(lineno, raw)]   lines in ``lo`` to protect
+    promote_hi : list[(lineno, raw)] working-precision DPs in ``hi``
+    """
+    lo_by_norm: dict[str, list[tuple[int, str]]] = {}
+    for ln, raw, norm in dp_lines(lo):
+        lo_by_norm.setdefault(norm, []).append((ln, raw))
+
+    keep_hi, promote_hi = [], []
+    keep_lo_pairs: set[tuple[int, str]] = set()
     for ln, raw, norm in dp_lines(hi):
-        (keep if norm in lo_set else promote).append((ln, raw))
-    return keep, promote
+        if norm in lo_by_norm:
+            keep_hi.append((ln, raw))
+            for entry in lo_by_norm[norm]:
+                keep_lo_pairs.add(entry)
+        else:
+            promote_hi.append((ln, raw))
+    keep_lo = sorted(keep_lo_pairs)
+    return keep_hi, keep_lo, promote_hi
 
 
 def main():
@@ -82,14 +103,18 @@ def main():
             hi_dp = dp_lines(hi_path)
             if not hi_dp:
                 continue
-            keep, promote = classify_pair(lo_path, hi_path)
+            keep_hi, keep_lo, promote_hi = classify_pair(lo_path, hi_path)
             totals["pairs"] += 1
-            totals["keep"] += len(keep)
-            totals["promote"] += len(promote)
-            per_file.append((hi_path.name, lo_path.name, len(keep), len(promote)))
-            for ln, _ in keep:
+            totals["keep"] += len(keep_hi) + len(keep_lo)
+            totals["promote"] += len(promote_hi)
+            per_file.append((hi_path.name, lo_path.name,
+                             len(keep_hi) + len(keep_lo), len(promote_hi)))
+            for ln, _ in keep_hi:
                 manifest_lines.append(
                     f"{hi_path.relative_to(SRC.parents[2])}:{ln}")
+            for ln, _ in keep_lo:
+                manifest_lines.append(
+                    f"{lo_path.relative_to(SRC.parents[2])}:{ln}")
 
     # Pass 2: discover shared files (for the copy_files report).
     shared_files = sorted(
