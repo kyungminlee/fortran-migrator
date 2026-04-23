@@ -525,8 +525,16 @@ def replace_intrinsic_calls(
                     inner_stripped = inner.strip().upper()
                     old_upper = old_name.upper()
                     is_type_spec_name = old_upper in ('REAL', 'CMPLX', 'COMPLEX')
+                    # Bare integer literals are skipped only for the
+                    # ambiguous names — ``REAL(3)`` might be the type
+                    # spec ``REAL(KIND=3)``, so we leave it alone.
+                    # ``DBLE(3)``/``DCMPLX(3)``/etc. are unambiguously
+                    # conversion-function calls and must be rewritten
+                    # (otherwise an `s*` sibling that wrote ``real(3)``
+                    # diverges post-migration: `real(3)` strips to `3`
+                    # in the light-diff normalizer; `dble(3)` does not).
                     if (re.match(r'KIND\s*=', inner_stripped)
-                            or inner_stripped.isdigit()
+                            or (is_type_spec_name and inner_stripped.isdigit())
                             or (is_type_spec_name and re.match(r'^[A-Z_]\w*$', inner_stripped))):
                         search_start = pos
                         continue
