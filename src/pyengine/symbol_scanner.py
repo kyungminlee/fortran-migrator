@@ -19,6 +19,16 @@ _FORTRAN_DEF_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Derived-type definitions: ``TYPE FOO``, ``TYPE :: FOO``, ``TYPE,
+# attr :: FOO``. Anchored so ``TYPE(FOO)`` (a type reference, not a
+# definition) is rejected. Needed so precision-prefixed types like
+# MUMPS's ``DMUMPS_STRUC`` — defined in dmumps_struc.h — are picked up
+# and renamed alongside routines in the same family.
+_FORTRAN_TYPE_DEF_RE = re.compile(
+    r'^\s*TYPE\b(?!\s*\()(?:\s*,[^:]*)?(?:\s*::)?\s*([A-Za-z]\w*)\s*(?:!.*)?$',
+    re.IGNORECASE,
+)
+
 # Built-in C return types recognized by the function-definition scanner.
 # Recipes may add more via the ``c_return_types`` YAML key; the final
 # regex is constructed by :func:`_build_c_func_re`.
@@ -73,6 +83,10 @@ def scan_fortran_source(src_dir: Path,
             if stripped.startswith('!'):
                 continue
             m = _FORTRAN_DEF_RE.search(line)
+            if m:
+                names.add(m.group(1).upper())
+                continue
+            m = _FORTRAN_TYPE_DEF_RE.match(line)
             if m:
                 names.add(m.group(1).upper())
     return names
