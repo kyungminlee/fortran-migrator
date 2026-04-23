@@ -2231,7 +2231,31 @@ def target_filename(name: str, rename_map: dict[str, str]) -> str:
     return name
 
 
-def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None) -> tuple[str, str] | None:
+_KK_SENTINEL = '__KEEPKIND_DP__'
+
+
+def _apply_keep_kind_sentinel(source: str, keep_kind_lines: frozenset[int]) -> str:
+    """Replace ``DOUBLE PRECISION`` with a non-matching sentinel on each
+    1-based line number in ``keep_kind_lines``. Every migrator regex
+    that rewrites DP looks for ``DOUBLE`` + whitespace + ``PRECISION``;
+    the sentinel has neither the keyword split nor whitespace, so it
+    passes through every pass untouched. Restored by
+    :func:`_restore_keep_kind_sentinel` on the migrated output.
+    """
+    import re as _re
+    lines = source.splitlines(keepends=True)
+    _dp = _re.compile(r'DOUBLE\s+PRECISION', _re.IGNORECASE)
+    for ln in keep_kind_lines:
+        if 1 <= ln <= len(lines):
+            lines[ln - 1] = _dp.sub(_KK_SENTINEL, lines[ln - 1])
+    return ''.join(lines)
+
+
+def _restore_keep_kind_sentinel(source: str) -> str:
+    return source.replace(_KK_SENTINEL, 'DOUBLE PRECISION')
+
+
+def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None, keep_kind_lines: frozenset[int] | None = None) -> tuple[str, str] | None:
     ext, source = src_path.suffix.lower(), src_path.read_text(errors='replace')
     facts = None
     if parser == 'flang':
@@ -2243,10 +2267,16 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
         cmd = parser_cmd or find_gfortran()
         if cmd: facts = gfortran_scan(src_path, cmd)
 
+    if keep_kind_lines:
+        source = _apply_keep_kind_sentinel(source, keep_kind_lines)
+
     if facts is not None: migrated = _migrate_with_flang(source, ext, rename_map, target_mode, facts)
     elif ext in ('.f', '.for'): migrated = migrate_fixed_form(source, rename_map, target_mode)
     elif ext in ('.f90', '.f95', '.F90'): migrated = migrate_free_form(source, rename_map, target_mode)
     else: return None
+
+    if keep_kind_lines:
+        migrated = _restore_keep_kind_sentinel(migrated)
 
     out_name = target_filename(src_path.name, rename_map)
     if not target_mode.is_kind_based:
@@ -2289,8 +2319,8 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
     return out_name, migrated
 
 
-def migrate_file(src_path: Path, output_dir: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None) -> str | None:
-    result = migrate_file_to_string(src_path, rename_map, target_mode, parser, parser_cmd)
+def migrate_file(src_path: Path, output_dir: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None, keep_kind_lines: frozenset[int] | None = None) -> str | None:
+    result = migrate_file_to_string(src_path, rename_map, target_mode, parser, parser_cmd, keep_kind_lines)
     if result is None: return None
     out_name, migrated = result
     (output_dir / out_name).write_text(migrated)

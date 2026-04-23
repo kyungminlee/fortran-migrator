@@ -311,6 +311,20 @@ Every BLAS/LAPACK routine exists in both single- and double-precision variants.
 When both are migrated to the same target, they should produce identical output.
 This is implemented as the `converge` CLI command (see [USAGE.md](USAGE.md)).
 
+**Definition — divergence.** Take the two precision variants of the same
+routine (the `s`/`c` single-precision source and the `d`/`z` double-precision
+source). Run type migration on both into the same target type (e.g. `q` /
+`KIND=16`). Compare the two resulting files. Any remaining difference — in
+declarations, literals, intrinsics, parameters, or anywhere else — is a
+*divergence*. Zero divergence means the migration is source-agnostic: the
+target code does not carry a memory of which precision it started from.
+
+This matters because (a) a divergence-free migration can be driven from
+either side alone, and (b) divergences usually flag a place where a purely
+syntactic rule is papering over a semantic asymmetry between the sources
+(e.g. `DOUBLE PRECISION` meaning "working precision" in a `d*` file but
+"timing / MPI interface" in an `s*` file — the same token, two intents).
+
 Divergence counts are tracked in `src/DIVERGENCE.md`.
 
 ### 3b. Divergence Patterns by Target

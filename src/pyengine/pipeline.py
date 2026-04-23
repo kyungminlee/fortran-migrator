@@ -668,7 +668,8 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
             ex.submit(migrate_file_to_string, p, rename_map, target_mode,
-                      parser, parser_cmd): p
+                      parser, parser_cmd,
+                      config.keep_kind_lines.get(p.name)): p
             for p in to_migrate
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
@@ -826,7 +827,8 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
             ex.submit(migrate_file_to_string, p, rename_map, target_mode,
-                      parser, parser_cmd): p
+                      parser, parser_cmd,
+                      config.keep_kind_lines.get(p.name)): p
             for p in all_paths
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
@@ -937,7 +939,8 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
             ex.submit(migrate_file_to_string, p, rename_map, target_mode,
-                      parser, parser_cmd): p
+                      parser, parser_cmd,
+                      config.keep_kind_lines.get(p.name)): p
             for p in others_to_migrate
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
