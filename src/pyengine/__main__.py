@@ -519,10 +519,20 @@ def cmd_build(args):
             p for p in src_dir.iterdir()
             if p.is_file() and p.suffix.lower() in allowed
         )
+    # copy_files are routed to the precision library unconditionally:
+    # their stems may collide with module names the symbol scanner has
+    # now classified as ``independent`` (post-MODULE-scanner), but the
+    # bodies often USE precision-specific modules that live in the
+    # precision lib — a common-lib copy would create a forbidden
+    # common -> precision dependency. Keeping copy_files in precision
+    # preserves the one-way precision -> common link direction.
     common_files, precision_files = [], []
     for f in files:
         rel = f.relative_to(output_dir)
-        if f.stem.upper() in independent:
+        stem = f.stem.upper()
+        if stem in config.copy_files:
+            precision_files.append(str(rel))
+        elif stem in independent:
             common_files.append(str(rel))
         else:
             precision_files.append(str(rel))

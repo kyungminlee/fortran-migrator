@@ -686,18 +686,25 @@ external/MUMPS_5.8.2/include/cmumps_struc.h:216
 external/MUMPS_5.8.2/include/cmumps_struc.h:233
 
 # Call-site entries (added by mumps_sweep_keep_kind_calls.py)
+external/MUMPS_5.8.2/src/cana_aux.F:4291
 external/MUMPS_5.8.2/src/cfac_driver.F:1791
 external/MUMPS_5.8.2/src/cfac_driver.F:1792
 external/MUMPS_5.8.2/src/cfac_driver.F:1918
 external/MUMPS_5.8.2/src/cfac_driver.F:3674
+external/MUMPS_5.8.2/src/dana_aux.F:4291
 external/MUMPS_5.8.2/src/dfac_driver.F:1790
 external/MUMPS_5.8.2/src/dfac_driver.F:1791
 external/MUMPS_5.8.2/src/dfac_driver.F:1917
 external/MUMPS_5.8.2/src/mumps_load.F:1745
+external/MUMPS_5.8.2/src/mumps_static_mapping.F:1218
+external/MUMPS_5.8.2/src/mumps_static_mapping.F:5170
+external/MUMPS_5.8.2/src/mumps_static_mapping.F:5204
+external/MUMPS_5.8.2/src/sana_aux.F:4291
 external/MUMPS_5.8.2/src/sfac_driver.F:1790
 external/MUMPS_5.8.2/src/sfac_driver.F:1791
 external/MUMPS_5.8.2/src/sfac_driver.F:1917
 external/MUMPS_5.8.2/src/sfac_driver.F:3673
+external/MUMPS_5.8.2/src/zana_aux.F:4291
 external/MUMPS_5.8.2/src/zfac_driver.F:1791
 external/MUMPS_5.8.2/src/zfac_driver.F:1792
 external/MUMPS_5.8.2/src/zfac_driver.F:1918

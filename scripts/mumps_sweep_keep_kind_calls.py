@@ -39,16 +39,23 @@ MANIFEST = REPO / 'recipes' / 'mumps' / 'keep-kind.manifest'
 # copy_files stems (must match recipes/mumps.yaml). Anything listed
 # here contributes its SUBROUTINE / FUNCTION names to the "DP-stable"
 # set; callers of those names get their lines marked keep-kind.
-COPY_FILES = {
-    'TOOLS_COMMON',
-    'TOOLS_COMMON_M',
-    'ANA_ORDERINGS',
-    'ANA_ORDERINGS_WRAPPERS_M',
-    'MUMPS_MEMORY_MOD',
-    'LR_STATS',
-    'MUMPS_LOAD',
-    'MUMPS_COMM_BUFFER_COMMON',
-}
+def _load_copy_files() -> set[str]:
+    """Read the mumps.yaml recipe and return its copy_files stems."""
+    try:
+        import yaml  # type: ignore
+    except ImportError:
+        yaml = None
+    recipe = REPO / 'recipes' / 'mumps.yaml'
+    if yaml is None or not recipe.exists():
+        # Fallback for environments without PyYAML: return nothing so
+        # the sweep exits cleanly. The main migration is the real source
+        # of truth.
+        return set()
+    data = yaml.safe_load(recipe.read_text())
+    return set(str(s).upper() for s in (data.get('copy_files') or []))
+
+
+COPY_FILES = _load_copy_files()
 
 _SUB_RE = re.compile(
     r'^\s+(?:RECURSIVE\s+|PURE\s+|ELEMENTAL\s+)*'

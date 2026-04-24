@@ -99,6 +99,12 @@ copy_files:
   # from the MUMPS_LOAD counters. Keep verbatim so the DP interface is
   # preserved end-to-end across the broadcast.
   - MUMPS_COMM_BUFFER_COMMON
+  # mumps_static_mapping holds DP tree-distribution state shared across
+  # arithmetics (cv_costw / cv_costm, subtree traversal costs). Integer
+  # mapping tables plus DP accumulators — no working-precision interface.
+  - MUMPS_STATIC_MAPPING
+  # MUMPS_LR_COMMON: integer-only constants / size helpers. No FP.
+  - LR_COMMON
 
 # Redirect ``USE MUMPS_MEMORY_MOD`` in migrated callers to the
 # hand-written EP module that provides Q/X reallocators. The upstream

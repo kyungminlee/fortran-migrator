@@ -8,9 +8,15 @@ import re
 import subprocess
 from pathlib import Path
 
-# Fortran patterns
+# Fortran patterns. ``MODULE`` is included so per-arithmetic module
+# names (e.g. ``DMUMPS_STATIC_PTR_M`` / ``SMUMPS_STATIC_PTR_M``)
+# collapse to their target-prefixed form (``QMUMPS_STATIC_PTR_M``)
+# like subroutines. ``MODULE PROCEDURE`` and ``END MODULE`` are
+# excluded — they reference existing names, not new definitions.
 _FORTRAN_DEF_RE = re.compile(
-    r'(?:SUBROUTINE|FUNCTION)\s+([A-Za-z]\w*)', re.IGNORECASE
+    r'(?<!\w)(?<!END\s)(?<!end\s)'
+    r'(?:SUBROUTINE|FUNCTION|MODULE(?!\s+PROCEDURE\b))\s+([A-Za-z]\w*)',
+    re.IGNORECASE,
 )
 
 # Built-in C return types recognized by the function-definition scanner.
