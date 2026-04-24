@@ -29,6 +29,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SRC = REPO / "external" / "MUMPS_5.8.2" / "src"
+INCLUDE = REPO / "external" / "MUMPS_5.8.2" / "include"
 DEFAULT_MANIFEST = REPO / "recipes" / "mumps" / "keep-kind.manifest"
 DP_RE = re.compile(r"^\s*DOUBLE\s+PRECISION\b", re.IGNORECASE)
 PAIRS = [("s", "d"), ("c", "z")]
@@ -102,6 +103,33 @@ def main():
             paired_files.update({lo_path, hi_path})
             hi_dp = dp_lines(hi_path)
             if not hi_dp:
+                continue
+            keep_hi, keep_lo, promote_hi = classify_pair(lo_path, hi_path)
+            totals["pairs"] += 1
+            totals["keep"] += len(keep_hi) + len(keep_lo)
+            totals["promote"] += len(promote_hi)
+            per_file.append((hi_path.name, lo_path.name,
+                             len(keep_hi) + len(keep_lo), len(promote_hi)))
+            for ln, _ in keep_hi:
+                manifest_lines.append(
+                    f"{hi_path.relative_to(SRC.parents[2])}:{ln}")
+            for ln, _ in keep_lo:
+                manifest_lines.append(
+                    f"{lo_path.relative_to(SRC.parents[2])}:{ln}")
+
+    # Pass 1b: arithmetic-keyed headers under include/ (dmumps_struc.h
+    # and siblings). Same rule — a DP decl in the d/z half is keep-kind
+    # iff the identical decl appears in its s/c partner. Without this
+    # pass, genuinely DP-stable struct fields (MEM_SUBTREE, COST_TRAV,
+    # etc.) would be promoted by the migrator, breaking the interface
+    # to DP-only shared routines in mumps_load.F etc.
+    for lo_pref, hi_pref in PAIRS:
+        for hi_path in sorted(INCLUDE.glob(f"{hi_pref}mumps_struc.h")):
+            lo_path = hi_path.with_name(lo_pref + hi_path.name[1:])
+            if not lo_path.exists():
+                continue
+            paired_files.update({lo_path, hi_path})
+            if not dp_lines(hi_path):
                 continue
             keep_hi, keep_lo, promote_hi = classify_pair(lo_path, hi_path)
             totals["pairs"] += 1
