@@ -53,6 +53,19 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
     line = re.sub(r'COMPLEX\*8', complex_target, line, flags=re.IGNORECASE)
     line = re.sub(r'REAL\*8', real_target, line, flags=re.IGNORECASE)
     line = re.sub(r'REAL\*4', real_target, line, flags=re.IGNORECASE)
+    # ``REAL(kind(0.E0))`` (single) / ``REAL(kind(0.D0))`` (double) — an
+    # older idiom that predates F90's REAL*N form. MUMPS's dmumps_struc.h
+    # uses ``REAL(kind(0.E0))`` for single-precision fields. Must be
+    # handled BEFORE replace_literals rewrites the inner 0.E0 literal to
+    # a multifloats constructor that breaks the KIND intrinsic.
+    line = re.sub(
+        r'REAL\s*\(\s*kind\s*\(\s*0\.[DdEe]0\s*\)\s*\)',
+        real_target, line, flags=re.IGNORECASE,
+    )
+    line = re.sub(
+        r'COMPLEX\s*\(\s*kind\s*\(\s*0\.[DdEe]0\s*\)\s*\)',
+        complex_target, line, flags=re.IGNORECASE,
+    )
     # ``REAL(KIND=WP)`` / ``REAL(WP)`` / ``COMPLEX(KIND=WP)`` etc.
     # appear in newer-style LAPACK files (e.g. DGEDMD, DGEDMDQ). The
     # ``wp`` parameter declaration is independently stripped earlier
@@ -64,6 +77,26 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
     )
     line = re.sub(
         r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?WP\s*\)',
+        complex_target, line, flags=re.IGNORECASE,
+    )
+    # Explicit numeric kinds on working-precision-like types. MUMPS's
+    # z-half uses ``COMPLEX(kind=8) A(LA)`` where its s/c/d siblings
+    # say ``REAL``/``COMPLEX``/``DOUBLE PRECISION``; rewrite all four
+    # spellings so they land on the same target type.
+    #
+    # Restricted to declaration context via the trailing lookahead:
+    # the match must be followed by whitespace+identifier (``REAL(4) X``
+    # / ``COMPLEX(8) A(LA)``), ``::`` (modern decl), or ``,`` (attribute
+    # list). This excludes expression-context ``real(4)`` / ``real(8)``
+    # intrinsic calls (e.g. ``real(4)*real(KMAX)``) which have the same
+    # token shape but take the integer as an argument, not a kind.
+    _decl_tail = r'(?=\s+[A-Za-z_]|\s*::|\s*,)'
+    line = re.sub(
+        r'REAL\s*\(\s*(?:KIND\s*=\s*)?[48]\s*\)' + _decl_tail,
+        real_target, line, flags=re.IGNORECASE,
+    )
+    line = re.sub(
+        r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?[48]\s*\)' + _decl_tail,
         complex_target, line, flags=re.IGNORECASE,
     )
 
@@ -405,8 +438,14 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
             )
 
     parts = re.split(r"('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\")", line)
+    # Allow internal whitespace between the leading/trailing dots and
+    # the operator word (``. AND .`` is a valid fixed-form spelling of
+    # ``.AND.``; MUMPS uses ``KEEP(50).EQ.0. AND. (...)`` with a space
+    # after the trailing dot of ``0.``). Without the ``\s*`` here, the
+    # bare-literal pass below would consume that trailing dot as part
+    # of ``0.`` and leave a dangling ``AND.`` that gfortran rejects.
     _FORTRAN_OP = re.compile(
-        r'\.(EQ|NE|LT|GT|LE|GE|AND|OR|NOT|TRUE|FALSE|EQV|NEQV)\.',
+        r'\.\s*(EQ|NE|LT|GT|LE|GE|AND|OR|NOT|TRUE|FALSE|EQV|NEQV)\s*\.',
         re.IGNORECASE,
     )
     for idx in range(0, len(parts), 2):
@@ -525,8 +564,16 @@ def replace_intrinsic_calls(
                     inner_stripped = inner.strip().upper()
                     old_upper = old_name.upper()
                     is_type_spec_name = old_upper in ('REAL', 'CMPLX', 'COMPLEX')
+                    # Bare integer literals are skipped only for the
+                    # ambiguous names — ``REAL(3)`` might be the type
+                    # spec ``REAL(KIND=3)``, so we leave it alone.
+                    # ``DBLE(3)``/``DCMPLX(3)``/etc. are unambiguously
+                    # conversion-function calls and must be rewritten
+                    # (otherwise an `s*` sibling that wrote ``real(3)``
+                    # diverges post-migration: `real(3)` strips to `3`
+                    # in the light-diff normalizer; `dble(3)` does not).
                     if (re.match(r'KIND\s*=', inner_stripped)
-                            or inner_stripped.isdigit()
+                            or (is_type_spec_name and inner_stripped.isdigit())
                             or (is_type_spec_name and re.match(r'^[A-Z_]\w*$', inner_stripped))):
                         search_start = pos
                         continue
@@ -814,13 +861,50 @@ def replace_routine_names(line: str, rename_map: dict[str, str]) -> str:
 
     return pattern.sub(case_replace, line)
 
-_RENAME_PATTERN_CACHE: dict[frozenset, tuple[re.Pattern, dict[str, str]]] = {}
+
+_INCLUDE_RE = re.compile(
+    r'''^(?P<lead>\s*(?:INCLUDE|include|Include))\s+(?P<q>['"])(?P<name>[^'"]+)(?P=q)(?P<tail>.*)$''',
+)
+
+
+def replace_include_filenames(line: str, rename_map: dict[str, str]) -> str:
+    """Rewrite ``INCLUDE 'xxx.h'`` when ``xxx`` is in the rename_map.
+
+    Needed for precision-prefixed headers (e.g. MUMPS's ``dmumps_struc.h``,
+    which the ``mumps_struc`` recipe migrates to ``ddmumps_struc.h`` in
+    multifloats mode). The including ``.F`` file's literal filename
+    string isn't touched by :func:`replace_routine_names` because it's
+    inside a quoted Fortran string, so it needs a dedicated rewrite.
+    """
+    # Fast reject: ``INCLUDE`` statements are rare (≈1 per file) so we
+    # avoid the per-call rename_map scan until we know the line matches.
+    m = _INCLUDE_RE.match(line)
+    if not m:
+        return line
+    name = m.group('name')
+    stem = Path(name).stem
+    ext = Path(name).suffix
+    upper_stem = stem.upper()
+    # rename_map keys are already uppercase (built by build_rename_map);
+    # fall back to a case-insensitive lookup if not.
+    new_stem = rename_map.get(upper_stem) or rename_map.get(stem)
+    if new_stem is None:
+        return line
+    new_name = (new_stem.upper() if stem.isupper() else
+                (new_stem.lower() if stem.islower() else new_stem)) + ext
+    return f'{m.group("lead")} {m.group("q")}{new_name}{m.group("q")}{m.group("tail")}'
+
+_RENAME_PATTERN_CACHE: dict[int, tuple[re.Pattern, dict[str, str]]] = {}
 
 def _get_rename_pattern(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[str, str]]:
-    upper_map = {k.upper(): v for k, v in rename_map.items()}
-    key = frozenset(upper_map.items())
+    # Cache by id(rename_map) — within a single migration run every
+    # file shares the same dict object, so this skips the O(N) upper()
+    # + frozenset build that dominated the MUMPS-scale (6k renames)
+    # workload.
+    key = id(rename_map)
     cached = _RENAME_PATTERN_CACHE.get(key)
     if cached is not None: return cached
+    upper_map = {k.upper(): v for k, v in rename_map.items()}
     names = sorted(upper_map.keys(), key=len, reverse=True)
     pattern = re.compile(r'\b(' + '|'.join(re.escape(n) for n in names) + r')\b', re.IGNORECASE) if names else re.compile(r'(?!x)x')
     _RENAME_PATTERN_CACHE[key] = (pattern, upper_map)
@@ -1200,13 +1284,28 @@ def _wrap_bare_complex_literals(line: str, target_mode: TargetMode) -> str:
     return line
 
 
+_XERBLA_STR_RE = re.compile(r"'([A-Za-z][A-Za-z0-9_]*)( ?)'")
+
+
 def replace_xerbla_strings(line: str, rename_map: dict[str, str]) -> str:
-    """Replace routine names inside XERBLA string arguments."""
-    for old_name, new_name in rename_map.items():
-        old_upper, new_upper = old_name.upper(), new_name.upper()
-        line = line.replace(f"'{old_upper} '", f"'{new_upper} '")
-        line = line.replace(f"'{old_upper}'", f"'{new_upper}'")
-    return line
+    """Replace routine names inside XERBLA string arguments.
+
+    XERBLA's first argument is a Fortran string literal naming the
+    failing routine — e.g. ``CALL XERBLA('DGEMM ', 1)``. A routine
+    rename must rewrite that literal too. Previously this function
+    looped over the whole rename_map and called ``str.replace`` twice
+    per entry per line, which is O(N * lines) — catastrophic once the
+    map hits MUMPS scale (6k+ entries). The regex version below is
+    O(lines) with a dict lookup per quoted identifier found.
+    """
+    def sub(m):
+        name = m.group(1)
+        upper = name.upper()
+        new = rename_map.get(upper)
+        if new is None:
+            return m.group(0)
+        return f"'{new.upper()}{m.group(2)}'"
+    return _XERBLA_STR_RE.sub(sub, line)
 
 
 _FP_VALUE_RE = re.compile(
@@ -1737,6 +1836,18 @@ def _build_use_only_clause(proc_lines: list[str], target_mode: TargetMode) -> st
     if target_mode.intrinsic_mode != 'wrap_constructor':
         return ''
     referenced = _scan_referenced_identifiers(proc_lines)
+    # If the procedure body pulls in content via ``INCLUDE 'xxx.h'``,
+    # the walker can't see inside the header — but migrated struct
+    # headers (e.g. MUMPS's ddmumps_struc.h) reference the target-mode
+    # type names. Unconditionally surface those type names so the
+    # host module's USE clause imports them. Type names rarely collide
+    # with local variables so the over-inclusion is safe.
+    for raw in proc_lines:
+        if raw[:1] in ('C', 'c', '*', '!'):
+            continue
+        if _INCLUDE_RE.match(raw):
+            referenced |= {n.lower() for n in target_mode.module_type_names}
+            break
     declared = _scan_local_declared_names(proc_lines)
     # Determine constant name prefix for sorting (e.g. 'mf_' for multifloats)
     const_prefixes = set()
@@ -1917,8 +2028,31 @@ def _build_split_mask(body: str) -> list[bool]:
     return mask
 
 def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
+    # Preprocessor directives (``#if``, ``#include``, ``#define`` ...) are
+    # not bound by fixed-form column 72 and must not be split into
+    # continuation lines — doing so produces a truncated directive on
+    # the first line (e.g. ``#if A || B ||`` dangling) and a second line
+    # the preprocessor doesn't understand. Leave them alone regardless
+    # of length.
+    if line.lstrip().startswith('#'):
+        return line
     if len(line) <= 72 or is_comment_line(line) or (len(line) > 6 and line[6:].lstrip().startswith('!')):
         return line
+    # If an inline ``!`` comment sits within the first 72 columns, keep
+    # the whole line intact — fixed-form Fortran ignores columns past
+    # 72, and we must NOT split across the comment (the text after
+    # ``!`` would otherwise land on a continuation line as code).
+    # Scan for the first ``!`` outside a string literal.
+    in_s = in_d = False
+    for i, ch in enumerate(line):
+        if ch == "'" and not in_d:
+            in_s = not in_s
+        elif ch == '"' and not in_s:
+            in_d = not in_d
+        elif ch == '!' and not in_s and not in_d:
+            if i < 72:
+                return line
+            break
     prefix, body = line[:6] if len(line) >= 6 else line.ljust(6), line[6:]
     safe = _build_split_mask(body)
     chunks = []
@@ -1975,6 +2109,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
             stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
+            stripped = replace_include_filenames(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
@@ -2194,6 +2329,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
             stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
+        stripped = replace_include_filenames(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
             stripped = replace_type_decls(stripped, target_mode)
         else:
@@ -2223,15 +2359,122 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
     return source
 
 
-def target_filename(name: str, rename_map: dict[str, str]) -> str:
+def target_filename(name: str, rename_map: dict[str, str],
+                    target_mode: TargetMode | None = None) -> str:
     stem, ext = Path(name).stem, Path(name).suffix
     if stem.upper() in rename_map:
         new = rename_map[stem.upper()]
         return (new.upper() if stem.isupper() else (new.lower() if stem.islower() else new.upper())) + ext
+    # Fallback for libraries whose filenames encode the arithmetic only in
+    # the first character (e.g. MUMPS: ``dana_aux.F``, ``zfac_driver.F``).
+    # When the stem is not a routine name, translate the leading s/d/c/z
+    # into the target's arithmetic letter via the family prefix map.
+    if target_mode is not None and stem and stem[0].upper() in ('S', 'D', 'C', 'Z'):
+        from .prefix_classifier import CHAR_TYPE
+        family = CHAR_TYPE[stem[0].upper()]         # 'R' or 'C'
+        new_char = target_mode.prefix_map.get(family)
+        if new_char:
+            first = new_char if stem[0].isupper() else new_char.lower()
+            return first + stem[1:] + ext
     return name
 
 
-def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None) -> tuple[str, str] | None:
+_KK_SENTINEL = '__KEEPKIND_DP__'
+_KK_DBLE_SENTINEL = '__KEEPKIND_DBLE__'
+_KK_DCMPLX_SENTINEL = '__KEEPKIND_DCMPLX__'
+
+
+def _apply_keep_kind_sentinel(source: str, keep_kind_lines: frozenset[int]) -> str:
+    """Replace DP-defining tokens with non-matching sentinels on each
+    1-based line number in ``keep_kind_lines``. Protects the line from
+    every migrator regex that rewrites those tokens; restored by
+    :func:`_restore_keep_kind_sentinel` on the migrated output.
+
+    Protected tokens: ``DOUBLE PRECISION`` (type declaration),
+    ``dble(`` (convert-to-DP intrinsic), ``dcmplx(`` (convert-to-DC
+    intrinsic). The last two are protected on call-site lines so that
+    callers of verbatim (copy_files) DP-stable routines keep passing
+    DP values instead of being rewritten to ``REAL(x, KIND=16)``.
+    """
+    import re as _re
+    lines = source.splitlines(keepends=True)
+    _dp = _re.compile(r'DOUBLE\s+PRECISION', _re.IGNORECASE)
+    _dble = _re.compile(r'\bdble\s*\(', _re.IGNORECASE)
+    _dcmplx = _re.compile(r'\bdcmplx\s*\(', _re.IGNORECASE)
+    for ln in keep_kind_lines:
+        if 1 <= ln <= len(lines):
+            t = _dp.sub(_KK_SENTINEL, lines[ln - 1])
+            t = _dble.sub(_KK_DBLE_SENTINEL + '(', t)
+            t = _dcmplx.sub(_KK_DCMPLX_SENTINEL + '(', t)
+            lines[ln - 1] = t
+    return ''.join(lines)
+
+
+def _restore_keep_kind_sentinel(source: str) -> str:
+    source = source.replace(_KK_SENTINEL, 'DOUBLE PRECISION')
+    source = source.replace(_KK_DBLE_SENTINEL, 'dble')
+    source = source.replace(_KK_DCMPLX_SENTINEL, 'dcmplx')
+    return source
+
+
+# Fortran-side MPI datatype name rewriter. In an `s*`/`c*` source MUMPS
+# uses ``MPI_REAL`` and ``MPI_COMPLEX``; in `d*`/`z*` it uses
+# ``MPI_DOUBLE_PRECISION`` and ``MPI_DOUBLE_COMPLEX``. After migration
+# both halves must refer to the target's wider datatype (e.g.
+# ``MPI_REAL16``/``MPI_COMPLEX32`` for kind16). Without this pass the two
+# halves' outputs disagree on every MPI call, even though they are
+# semantically identical. Word boundaries keep the rewrite idempotent —
+# ``MPI_REAL16`` already has no ``\b`` after ``REAL`` so it is not
+# rematched.
+_MPI_DOUBLE_COMPLEX_RE = re.compile(r'\bMPI_DOUBLE_COMPLEX\b')
+_MPI_DOUBLE_PRECISION_RE = re.compile(r'\bMPI_DOUBLE_PRECISION\b')
+_MPI_COMPLEX_RE = re.compile(r'\bMPI_COMPLEX\b')
+_MPI_REAL_RE = re.compile(r'\bMPI_REAL\b')
+
+
+# Fortran ``INCLUDE 'foo.h'`` whose filename starts with an arithmetic
+# letter. MUMPS uses this for per-arithmetic C-interop headers
+# (``INCLUDE 'dmumps_struc.h'`` in dmumps_struc_def.F). After migration
+# the file on disk is renamed by target_filename's first-char fallback
+# (dmumps_struc.h → qmumps_struc.h); the INCLUDE string must be
+# rewritten to match, otherwise the compiler can't find it.
+_INCLUDE_PREFIXED_H_RE = re.compile(
+    r"(INCLUDE\s*['\"])([SsDdCcZz])([\w]*\.h)(['\"])",
+    re.IGNORECASE,
+)
+
+
+def _rewrite_prefixed_includes(source: str, target_mode: TargetMode) -> str:
+    from .prefix_classifier import CHAR_TYPE
+    pmap = target_mode.prefix_map
+
+    def sub(m: re.Match) -> str:
+        head, prefix, rest, tail = m.group(1), m.group(2), m.group(3), m.group(4)
+        family = CHAR_TYPE.get(prefix.upper())
+        new = pmap.get(family) if family else None
+        if not new:
+            return m.group(0)
+        first = new if prefix.isupper() else new.lower()
+        return head + first + rest + tail
+
+    return _INCLUDE_PREFIXED_H_RE.sub(sub, source)
+
+
+def _rewrite_mpi_datatypes(source: str, target_mode: TargetMode) -> str:
+    mpi_real = target_mode.c_mpi_real
+    mpi_complex = target_mode.c_mpi_complex
+    if not mpi_real and not mpi_complex:
+        return source
+    if mpi_complex:
+        source = _MPI_DOUBLE_COMPLEX_RE.sub(mpi_complex, source)
+        source = _MPI_COMPLEX_RE.sub(mpi_complex, source)
+    if mpi_real:
+        source = _MPI_DOUBLE_PRECISION_RE.sub(mpi_real, source)
+        source = _MPI_REAL_RE.sub(mpi_real, source)
+    return source
+
+
+def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None, keep_kind_lines: frozenset[int] | None = None) -> tuple[str, str] | None:
     ext, source = src_path.suffix.lower(), src_path.read_text(errors='replace')
     facts = None
     if parser == 'flang':
@@ -2243,12 +2486,21 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
         cmd = parser_cmd or find_gfortran()
         if cmd: facts = gfortran_scan(src_path, cmd)
 
+    if keep_kind_lines:
+        source = _apply_keep_kind_sentinel(source, keep_kind_lines)
+
     if facts is not None: migrated = _migrate_with_flang(source, ext, rename_map, target_mode, facts)
-    elif ext in ('.f', '.for'): migrated = migrate_fixed_form(source, rename_map, target_mode)
+    elif ext in ('.f', '.for', '.h'): migrated = migrate_fixed_form(source, rename_map, target_mode)
     elif ext in ('.f90', '.f95', '.F90'): migrated = migrate_free_form(source, rename_map, target_mode)
     else: return None
 
-    out_name = target_filename(src_path.name, rename_map)
+    if keep_kind_lines:
+        migrated = _restore_keep_kind_sentinel(migrated)
+
+    migrated = _rewrite_mpi_datatypes(migrated, target_mode)
+    migrated = _rewrite_prefixed_includes(migrated, target_mode)
+
+    out_name = target_filename(src_path.name, rename_map, target_mode)
     if not target_mode.is_kind_based:
         import re
         # Names that the multifloats module overloads as generic
@@ -2289,8 +2541,8 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
     return out_name, migrated
 
 
-def migrate_file(src_path: Path, output_dir: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None) -> str | None:
-    result = migrate_file_to_string(src_path, rename_map, target_mode, parser, parser_cmd)
+def migrate_file(src_path: Path, output_dir: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None, keep_kind_lines: frozenset[int] | None = None) -> str | None:
+    result = migrate_file_to_string(src_path, rename_map, target_mode, parser, parser_cmd, keep_kind_lines)
     if result is None: return None
     out_name, migrated = result
     (output_dir / out_name).write_text(migrated)
@@ -2337,6 +2589,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
             stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
             stripped = replace_routine_names(stripped, rename_map)
+            stripped = replace_include_filenames(stripped, rename_map)
             stripped = replace_xerbla_strings(stripped, rename_map)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
@@ -2380,6 +2633,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
             stripped = replace_intrinsic_decls(stripped, target_mode)
             stripped = replace_generic_conversions(stripped, target_mode)
         stripped = replace_routine_names(stripped, rename_map)
+        stripped = replace_include_filenames(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
             stripped = replace_type_decls(stripped, target_mode)
         else:

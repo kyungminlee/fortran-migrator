@@ -8,9 +8,26 @@ import re
 import subprocess
 from pathlib import Path
 
-# Fortran patterns
+# Fortran patterns. ``MODULE`` is included so per-arithmetic module
+# names (e.g. ``DMUMPS_STATIC_PTR_M`` / ``SMUMPS_STATIC_PTR_M``)
+# collapse to their target-prefixed form (``QMUMPS_STATIC_PTR_M``)
+# like subroutines. ``MODULE PROCEDURE`` and ``END MODULE`` are
+# excluded — they reference existing names, not new definitions.
 _FORTRAN_DEF_RE = re.compile(
-    r'(?:SUBROUTINE|FUNCTION)\s+([A-Za-z]\w*)', re.IGNORECASE
+    r'(?<!\w)(?<!END\s)(?<!end\s)'
+    r'(?:SUBROUTINE|FUNCTION|MODULE(?!\s+(?:PROCEDURE|SUBROUTINE|FUNCTION)\b))'
+    r'\s+([A-Za-z]\w*)',
+    re.IGNORECASE,
+)
+
+# Derived-type definitions: ``TYPE FOO``, ``TYPE :: FOO``, ``TYPE,
+# attr :: FOO``. Anchored so ``TYPE(FOO)`` (a type reference, not a
+# definition) is rejected. Needed so precision-prefixed types like
+# MUMPS's ``DMUMPS_STRUC`` — defined in dmumps_struc.h — are picked up
+# and renamed alongside routines in the same family.
+_FORTRAN_TYPE_DEF_RE = re.compile(
+    r'^\s*TYPE\b(?!\s*\()(?:\s*,[^:]*)?(?:\s*::)?\s*([A-Za-z]\w*)\s*(?:!.*)?$',
+    re.IGNORECASE,
 )
 
 # Built-in C return types recognized by the function-definition scanner.
@@ -67,6 +84,10 @@ def scan_fortran_source(src_dir: Path,
             if stripped.startswith('!'):
                 continue
             m = _FORTRAN_DEF_RE.search(line)
+            if m:
+                names.add(m.group(1).upper())
+                continue
+            m = _FORTRAN_TYPE_DEF_RE.match(line)
             if m:
                 names.add(m.group(1).upper())
     return names

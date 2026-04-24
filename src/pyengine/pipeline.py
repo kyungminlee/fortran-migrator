@@ -602,10 +602,25 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     skipped: list[str] = []
     divergences: list[str] = []
 
-    # Collect eligible source files
+    # Collect eligible source files. In addition to files with the
+    # recipe's declared extensions, include any file whose stem is listed
+    # in copy_files (regardless of extension) — this lets libraries
+    # carry shared, type-independent headers (e.g. MUMPS's
+    # mumps_tags.h / mumps_headers.h) through without having to widen
+    # the extensions list and accidentally migrate them.
+    #
+    # extra_fortran_dirs contributes additional directories whose files
+    # are migrated alongside source_dir. MUMPS uses this for
+    # per-arithmetic headers (``dmumps_struc.h`` → ``qmumps_struc.h``)
+    # that live in a parallel ``include/`` directory but are Fortran
+    # content that must go through the full migration pipeline.
+    src_dirs = [config.source_dir] + list(
+        getattr(config, 'extra_fortran_dirs', []) or []
+    )
     src_files = sorted(
-        p for p in config.source_dir.iterdir()
+        p for d in src_dirs for p in d.iterdir()
         if p.suffix.lower() in config.extensions
+        or p.stem.upper() in config.copy_files
     )
 
     # Convergence buffer: first writer of each output name stores its
@@ -634,6 +649,19 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     canonical_normalized: dict[str, str] = {}
     canonical_source: dict[str, str] = {}
 
+    # Build module-rename regex pairs once. Applied post-migration to
+    # every migrated file (copy_files are deliberately untouched so the
+    # verbatim upstream module keeps its original name).
+    module_rename_pairs: list[tuple[re.Pattern[str], str]] = []
+    for old_mod, new_mod in (config.module_renames or {}).items():
+        pat = re.compile(r'(?i)(\bUSE\s+)' + re.escape(old_mod) + r'\b')
+        module_rename_pairs.append((pat, r'\g<1>' + new_mod))
+
+    def _apply_module_renames(text: str) -> str:
+        for pat, repl in module_rename_pairs:
+            text = pat.sub(repl, text)
+        return text
+
     # Partition: copy/skip/dry-run decisions stay in the main process;
     # only the Flang-bound migration is dispatched to workers.
     to_migrate: list[Path] = []
@@ -642,11 +670,15 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
         if stem_upper in config.skip_files:
             skipped.append(src_path.name)
             continue
+        is_copy = stem_upper in config.copy_files or stem_upper in independent
         if dry_run:
-            out_name = target_filename(src_path.name, rename_map)
-            tqdm.write(f'  {src_path.name} → {out_name}')
+            if is_copy:
+                tqdm.write(f'  {src_path.name} (copy)')
+            else:
+                out_name = target_filename(src_path.name, rename_map, target_mode)
+                tqdm.write(f'  {src_path.name} → {out_name}')
             continue
-        if stem_upper in config.copy_files or stem_upper in independent:
+        if is_copy:
             (output_dir / src_path.name).write_text(
                 src_path.read_text(errors='replace'))
             copied_count += 1
@@ -668,7 +700,8 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
             ex.submit(migrate_file_to_string, p, rename_map, target_mode,
-                      parser, parser_cmd): p
+                      parser, parser_cmd,
+                      config.keep_kind_lines.get(p.name)): p
             for p in to_migrate
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
@@ -684,6 +717,7 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
             skipped.append(src_path.name)
             continue
         out_name, migrated = result
+        migrated = _apply_module_renames(migrated)
         normalized = _canonicalize_for_compare(
             _strip_fortran_comments(migrated, src_path.suffix)
         )
@@ -804,7 +838,7 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
             continue
         if stem_u in classification.independent:
             continue
-        by_target.setdefault(target_filename(p.name, rename_map), []).append(p)
+        by_target.setdefault(target_filename(p.name, rename_map, target_mode), []).append(p)
 
     # Migrate every member of every multi-member group in parallel.
     pairs: list[tuple[Path, Path]] = []
@@ -826,7 +860,8 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
             ex.submit(migrate_file_to_string, p, rename_map, target_mode,
-                      parser, parser_cmd): p
+                      parser, parser_cmd,
+                      config.keep_kind_lines.get(p.name)): p
             for p in all_paths
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
@@ -858,7 +893,7 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
             and not line.startswith(('---', '+++'))
         ]
         report.append({
-            'target': target_filename(canonical.name, rename_map),
+            'target': target_filename(canonical.name, rename_map, target_mode),
             'canonical': canonical.name,
             'other': other.name,
             'diff': diff,
@@ -914,7 +949,7 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
             continue
         if stem_u in classification.independent:
             continue
-        by_target.setdefault(target_filename(p.name, rename_map), []).append(p)
+        by_target.setdefault(target_filename(p.name, rename_map, target_mode), []).append(p)
 
     pairs: list[tuple[Path, Path]] = []
     for tn, members in by_target.items():
@@ -937,7 +972,8 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = {
             ex.submit(migrate_file_to_string, p, rename_map, target_mode,
-                      parser, parser_cmd): p
+                      parser, parser_cmd,
+                      config.keep_kind_lines.get(p.name)): p
             for p in others_to_migrate
         }
         for fut in tqdm(as_completed(futures), total=len(futures),
@@ -952,7 +988,7 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
 
     report: list[dict] = []
     for canonical, other in pairs:
-        target_name = target_filename(canonical.name, rename_map)
+        target_name = target_filename(canonical.name, rename_map, target_mode)
         on_disk = output_dir / target_name
         if not on_disk.is_file():
             report.append({
@@ -1133,6 +1169,20 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
     return result
 
 
+def _apply_fortran_overrides(config: RecipeConfig,
+                             target_mode: TargetMode,
+                             output_dir: Path) -> None:
+    """Copy target-gated override files into the Fortran output dir.
+
+    Used for hand-written shared modules that cannot be produced by
+    migration (e.g. MUMPS's extended-precision reallocator module).
+    """
+    overrides = _resolve_overrides(config, target_mode)
+    for src_path, dst_name in overrides:
+        (output_dir / dst_name).write_text(src_path.read_text())
+        print(f'  Override:  {dst_name} (from {src_path.name})')
+
+
 def _resolve_overrides(config: RecipeConfig,
                        target_mode: TargetMode) -> list[tuple[Path, str]]:
     """Select the active target's override entries from the recipe.
@@ -1222,6 +1272,8 @@ def run_migration(recipe_path: Path, output_dir: Path,
             classification=classification,
             parser=parser, parser_cmd=parser_cmd,
         )
+        if not dry_run:
+            _apply_fortran_overrides(config, target_mode, output_dir)
         if not dry_run:
             print(f'\n  Migrated: {result["migrated"]} files')
             print(f'  Copied:   {result["copied"]} files (precision-independent)')
