@@ -76,12 +76,18 @@ find_package(MPI COMPONENTS C CXX Fortran QUIET)
 if(NEEDS_MULTIFLOATS)
     find_program(FYPP_EXECUTABLE fypp REQUIRED)
 
+    # Use the multifloats top-level directory (not src/ and fsrc/
+    # separately): upstream's src/CMakeLists.txt uses CMAKE_SOURCE_DIR
+    # which is only correct when multifloats is the top-level project.
+    # EXCLUDE_FROM_ALL keeps us from building multifloats's install
+    # rules / tests by default.
+    set(BUILD_TESTING OFF CACHE BOOL "Disable tests in fetched multifloats" FORCE)
+    set(MULTIFLOATS_BUILD_BENCH OFF CACHE BOOL "Disable benches in fetched multifloats" FORCE)
     if(DEFINED MULTIFLOATS_DIR)
-        # Use a local directory (for offline builds or development)
         message(STATUS "Using local multifloats: ${MULTIFLOATS_DIR}")
-        add_subdirectory(${MULTIFLOATS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/_multifloats)
+        add_subdirectory(${MULTIFLOATS_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/_mf EXCLUDE_FROM_ALL)
     else()
-        # Fetch from GitHub — only include library targets, not tests
         include(FetchContent)
         set(MULTIFLOATS_GIT_REPO "https://github.com/kyungminlee/multifloats.git"
             CACHE STRING "Git URL for the multifloats library")
@@ -93,12 +99,19 @@ if(NEEDS_MULTIFLOATS)
             GIT_TAG        ${MULTIFLOATS_GIT_TAG}
         )
         FetchContent_Populate(multifloats_fetch)
+        # Upstream src/CMakeLists.txt uses CMAKE_SOURCE_DIR/include which
+        # only resolves correctly when multifloats is the top-level build.
+        # Patch it to PROJECT_SOURCE_DIR (the multifloats sub-project root)
+        # so the add_subdirectory inclusion below can find float64x2.h.
+        file(READ "${multifloats_fetch_SOURCE_DIR}/src/CMakeLists.txt" _mf_src_cmake)
+        string(REPLACE
+            "\${CMAKE_SOURCE_DIR}/include"
+            "\${PROJECT_SOURCE_DIR}/../include"
+            _mf_src_cmake "${_mf_src_cmake}")
+        file(WRITE "${multifloats_fetch_SOURCE_DIR}/src/CMakeLists.txt" "${_mf_src_cmake}")
         add_subdirectory(
-            ${multifloats_fetch_SOURCE_DIR}/src
-            ${CMAKE_CURRENT_BINARY_DIR}/_mf_src)
-        add_subdirectory(
-            ${multifloats_fetch_SOURCE_DIR}/fsrc
-            ${CMAKE_CURRENT_BINARY_DIR}/_mf_fsrc)
+            ${multifloats_fetch_SOURCE_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/_mf EXCLUDE_FROM_ALL)
     endif()
 
     # la_constants_mf helper module (needs Fortran multifloats module)

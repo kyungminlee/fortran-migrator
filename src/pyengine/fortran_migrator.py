@@ -130,7 +130,7 @@ def _warn_on_fp_equivalence(source: str, target_mode: TargetMode) -> None:
     EQUIVALENCE on non-SEQUENCE derived types and ``TYPE(float64x2)``
     used to be a non-SEQUENCE type. The mock multifloats module now
     declares both float64x2 and complex128x2 with the SEQUENCE
-    attribute (see external/multifloats/multifloats.fypp), so LAPACK
+    attribute (see github.com/kyungminlee/multifloats), so LAPACK
     sources such as DLALN2 that EQUIVALENCE 2x2 work arrays compile
     without manual fixups. The diagnostic is no longer needed.
     """
@@ -903,7 +903,17 @@ def _get_rename_pattern(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[st
     # workload.
     key = id(rename_map)
     cached = _RENAME_PATTERN_CACHE.get(key)
-    if cached is not None: return cached
+    # Cache by identity only works if the dict lives for the whole run.
+    # Local const_renames dicts created inside a single function call may
+    # be GC'd and re-used at the same id with different content — so we
+    # also verify the dict's upper()-ed keys match the cache to avoid
+    # stale-pattern poisoning.
+    if cached is not None:
+        pattern, cached_upper = cached
+        # Fast verification: comparing dict is O(N) but keys only — still
+        # cheaper than rebuilding the regex from scratch for large maps.
+        if {k.upper() for k in rename_map.keys()} == set(cached_upper.keys()):
+            return cached
     upper_map = {k.upper(): v for k, v in rename_map.items()}
     names = sorted(upper_map.keys(), key=len, reverse=True)
     pattern = re.compile(r'\b(' + '|'.join(re.escape(n) for n in names) + r')\b', re.IGNORECASE) if names else re.compile(r'(?!x)x')
@@ -1002,7 +1012,7 @@ _COMPLEX_DECL_RE = re.compile(
     r'^\s+(?:DOUBLE\s+COMPLEX|COMPLEX\s*\*\s*(?:8|16)'
     r'|COMPLEX\s*\(\s*(?:KIND\s*=\s*)?\w+\s*\)'
     r'|COMPLEX(?!\s*[*(])'
-    r'|TYPE\s*\(\s*complex128x2\s*\))',
+    r'|TYPE\s*\(\s*complex64x2\s*\))',
     re.IGNORECASE,
 )
 _REAL_DECL_RE = re.compile(
@@ -1126,7 +1136,7 @@ def _rewrite_int_of_complex(line: str, complex_names: set[str]) -> str:
             inner = out[paren_open + 1:paren_close]
             head = re.match(r'\s*([A-Za-z_]\w*)', inner)
             if head and head.group(1).upper() in complex_names:
-                replacement = f'MF_REAL({inner.strip()})'
+                replacement = f'DD_REAL({inner.strip()})'
                 out = out[:paren_open + 1] + replacement + out[paren_close:]
                 pos = paren_open + 1 + len(replacement) + 1
             else:
@@ -1269,8 +1279,8 @@ def _wrap_bare_complex_literals(line: str, target_mode: TargetMode) -> str:
     # ``complex128x2(...)`` call, e.g. one that the migrator already
     # produced from ``DCMPLX(ONE, ZERO)``.
     line = re.sub(
-        r'(?<![A-Za-z0-9_])\(\s*([-+]?\s*MF_[A-Z][A-Z0-9_]*)\s*,\s*'
-        r'([-+]?\s*MF_[A-Z][A-Z0-9_]*)\s*\)',
+        r'(?<![A-Za-z0-9_])\(\s*([-+]?\s*(?:MF|DD)_[A-Z][A-Z0-9_]*)\s*,\s*'
+        r'([-+]?\s*(?:MF|DD)_[A-Z][A-Z0-9_]*)\s*\)',
         rf"{target_mode.complex_constructor}(re=\1, im=\2)",
         line,
     )
@@ -2273,14 +2283,14 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
         # multifloats target names for free-form Pattern A files (those
         # use ``USE multifloats`` directly, not ``USE LA_CONSTANTS_MF``).
         nuke_renames = {
-            'zero': 'MF_ZERO', 'one': 'MF_ONE', 'czero': 'MF_ZERO',
-            'safmin': 'MF_SAFMIN', 'safmax': 'MF_SAFMAX',
-            'tsml': 'MF_TSML', 'tbig': 'MF_TBIG',
-            'ssml': 'MF_SSML', 'sbig': 'MF_SBIG',
+            'zero': 'DD_ZERO', 'one': 'DD_ONE', 'czero': 'DD_ZERO',
+            'safmin': 'DD_SAFMIN', 'safmax': 'DD_SAFMAX',
+            'tsml': 'DD_TSML', 'tbig': 'DD_TBIG',
+            'ssml': 'DD_SSML', 'sbig': 'DD_SBIG',
             # dnrm2.f90's local ``maxN = huge(0.0_wp)`` is equivalent to
-            # MF_SAFMAX (which is itself defined as huge(0.0_dp) packed
+            # DD_SAFMAX (which is itself defined as huge(0.0_dp) packed
             # into float64x2's high limb).
-            'maxn': 'MF_SAFMAX',
+            'maxn': 'DD_SAFMAX',
         }
         nuke_names = set(nuke_renames.keys())
 
@@ -2508,7 +2518,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
         # illegal once ``USE multifloats`` is in scope (gfortran:
         # "Cannot change attributes of USE-associated symbol").
         # Names that the multifloats module overloads as generic
-        # interfaces — see external/multifloats/multifloats.fypp
+        # interfaces — see github.com/kyungminlee/multifloats
         # (UNARY_MF_MF, BINARY_REAL, etc.). INTRINSIC declarations of
         # these names become illegal once ``USE multifloats`` is in
         # scope (gfortran: "Cannot change attributes of USE-associated
@@ -2528,7 +2538,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
             # Type/conversion / complex
             'REAL', 'AIMAG', 'CONJG', 'CMPLX', 'DCMPLX', 'DCONJG',
             'DIMAG', 'DBLE', 'INT', 'NINT', 'CEILING', 'FLOOR',
-            'MF_REAL',
+            'DD_REAL',
         }
         def clean_intrinsic(m):
             indent, sep, funcs_str, newline = m.group(1), m.group(2), m.group(3), m.group(4)

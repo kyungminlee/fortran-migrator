@@ -2,13 +2,13 @@ name: multifloats
 
 types:
   real: "TYPE(float64x2)"
-  complex: "TYPE(complex128x2)"
+  complex: "TYPE(complex64x2)"
 
 literals:
   mode: constructor
   kind_suffix: null
   real_constructor: float64x2
-  complex_constructor: complex128x2
+  complex_constructor: complex64x2
 
 intrinsics:
   mode: wrap_constructor
@@ -22,23 +22,23 @@ prefixes:
 
 module:
   name: multifloats
-  type_names: [float64x2, complex128x2]
+  type_names: [float64x2, complex64x2]
   constant_names:
-    - mf_zero
-    - mf_one
-    - mf_two
-    - mf_half
-    - mf_eight
-    - mf_safmin
-    - mf_safmax
-    - mf_tsml
-    - mf_tbig
-    - mf_ssml
-    - mf_sbig
-    - mf_rtmin
-    - mf_rtmax
-    - mf_to_double
-    - mf_real
+    - dd_zero
+    - dd_one
+    - dd_two
+    - dd_half
+    - dd_eight
+    - dd_safmin
+    - dd_safmax
+    - dd_tsml
+    - dd_tbig
+    - dd_ssml
+    - dd_sbig
+    - dd_rtmin
+    - dd_rtmax
+    - dd_to_double
+    - dd_real
   generic_names:
     - abs
     - sqrt
@@ -130,28 +130,32 @@ module:
     - "assignment(=)"
 
 known_constants:
-  ZERO: MF_ZERO
-  ONE: MF_ONE
-  TWO: MF_TWO
-  HALF: MF_HALF
-  EIGHT: MF_EIGHT
+  ZERO: DD_ZERO
+  ONE: DD_ONE
+  TWO: DD_TWO
+  HALF: DD_HALF
+  EIGHT: DD_EIGHT
 
 la_constants_map:
-  zero: MF_ZERO
-  half: MF_HALF
-  one: MF_ONE
-  two: MF_TWO
-  eight: MF_EIGHT
-  safmin: MF_SAFMIN
-  safmax: MF_SAFMAX
-  tsml: MF_TSML
-  tbig: MF_TBIG
-  ssml: MF_SSML
-  sbig: MF_SBIG
+  zero: DD_ZERO
+  half: DD_HALF
+  one: DD_ONE
+  two: DD_TWO
+  eight: DD_EIGHT
+  safmin: DD_SAFMIN
+  safmax: DD_SAFMAX
+  tsml: DD_TSML
+  tbig: DD_TBIG
+  ssml: DD_SSML
+  sbig: DD_SBIG
 
 la_constants_suffix: _MF
 
 c_interop:
+  # Bridge-provided aliases for ``multifloats::float64x2`` (operator-rich
+  # C++ class) and our own ``{re,im}`` complex struct. Kept distinct
+  # from the upstream C-ABI POD types (``float64x2_t`` / ``complex64x2_t``
+  # in multifloats.h) which are hidden by the bridge via macro redirect.
   real_type: float64x2_t
   complex_type: complex128x2_t
   c_real_type: float64x2_t

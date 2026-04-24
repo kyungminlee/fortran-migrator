@@ -54,7 +54,7 @@ def test_build_sub_vars_kind16_unchanged():
     k16 = load_target('kind16')
     v = _build_sub_vars(k16)
     assert v['REAL_TYPE'] == 'QREAL'
-    assert v['COMPLEX_TYPE'] == 'XCOMPLEX'
+    assert v['COMPLEX_TYPE'] == 'QCOMPLEX'
     assert v['C_REAL_TYPE'] == '__float128'
     assert v['MPI_REAL'] == 'MPI_REAL16'
     assert v['MPI_COMPLEX'] == 'MPI_COMPLEX32'

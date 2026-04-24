@@ -38,9 +38,9 @@ def test_multifloats_target_basic_shape():
     assert mf.name == 'multifloats'
     assert mf.is_kind_based is False
     assert mf.real_type == 'TYPE(float64x2)'
-    assert mf.complex_type == 'TYPE(complex128x2)'
+    assert mf.complex_type == 'TYPE(complex64x2)'
     assert mf.real_constructor == 'float64x2'
-    assert mf.complex_constructor == 'complex128x2'
+    assert mf.complex_constructor == 'complex64x2'
     assert mf.module_name == 'multifloats'
     # DD (real) / ZZ (complex) — double-double prefixes. Single-letter
     # prefixes like W collide with LAPACK's workspace-size idiom (e.g.
@@ -79,8 +79,8 @@ def mf():
 
 @pytest.mark.parametrize('src,expected', [
     ('      DOUBLE PRECISION X', '      TYPE(float64x2) X'),
-    ('      DOUBLE COMPLEX Z', '      TYPE(complex128x2) Z'),
-    ('      COMPLEX*16 Z', '      TYPE(complex128x2) Z'),
+    ('      DOUBLE COMPLEX Z', '      TYPE(complex64x2) Z'),
+    ('      COMPLEX*16 Z', '      TYPE(complex64x2) Z'),
     ('      REAL*8 X', '      TYPE(float64x2) X'),
     ('      REAL*4 X', '      TYPE(float64x2) X'),
 ])
@@ -105,7 +105,7 @@ def test_strip_drops_entire_line_when_all_names_known(mf):
     src = '      DOUBLE PRECISION ZERO,ONE\n'
     new, removed = strip_known_constants_from_decls(src, mf)
     assert new == ''
-    assert removed == {'ZERO': 'MF_ZERO', 'ONE': 'MF_ONE'}
+    assert removed == {'ZERO': 'DD_ZERO', 'ONE': 'DD_ONE'}
 
 
 def test_strip_filters_partial_decl(mf):
@@ -115,7 +115,7 @@ def test_strip_filters_partial_decl(mf):
     assert 'W' in new and 'Z' in new
     assert 'TWO' not in new
     assert 'ZERO' not in new
-    assert removed == {'TWO': 'MF_TWO', 'ZERO': 'MF_ZERO'}
+    assert removed == {'TWO': 'DD_TWO', 'ZERO': 'DD_ZERO'}
 
 
 def test_strip_handles_multiline_continuation(mf):
@@ -131,7 +131,7 @@ def test_strip_handles_multiline_continuation(mf):
     assert 'GAM' in new
     assert 'GAMSQ' in new
     assert 'RGAMSQ' in new
-    assert removed == {'ONE': 'MF_ONE', 'TWO': 'MF_TWO', 'ZERO': 'MF_ZERO'}
+    assert removed == {'ONE': 'DD_ONE', 'TWO': 'DD_TWO', 'ZERO': 'DD_ZERO'}
 
 
 def test_strip_matches_bare_real_keyword(mf):
@@ -139,7 +139,7 @@ def test_strip_matches_bare_real_keyword(mf):
     src = '      REAL ONE,ZERO\n'
     new, removed = strip_known_constants_from_decls(src, mf)
     assert new == ''
-    assert removed == {'ONE': 'MF_ONE', 'ZERO': 'MF_ZERO'}
+    assert removed == {'ONE': 'DD_ONE', 'ZERO': 'DD_ZERO'}
 
 
 def test_strip_does_not_touch_array_specs(mf):
@@ -222,38 +222,38 @@ def test_replace_literals_skips_fortran_operators(mf):
 
 def test_replace_known_constants_uses_per_file_renames(mf):
     src = "      X = ZERO + ONE"
-    out = replace_known_constants(src, mf, renames={'ZERO': 'MF_ZERO', 'ONE': 'MF_ONE'})
-    assert out == "      X = MF_ZERO + MF_ONE"
+    out = replace_known_constants(src, mf, renames={'ZERO': 'DD_ZERO', 'ONE': 'DD_ONE'})
+    assert out == "      X = DD_ZERO + DD_ONE"
 
 
 def test_replace_known_constants_skips_comment_lines(mf):
     src = "*     performs ONE pass through ZERO array"
-    out = replace_known_constants(src, mf, renames={'ZERO': 'MF_ZERO', 'ONE': 'MF_ONE'})
+    out = replace_known_constants(src, mf, renames={'ZERO': 'DD_ZERO', 'ONE': 'DD_ONE'})
     assert out == src
 
 
 def test_replace_known_constants_skips_inline_comment_text(mf):
     src = "      X = ZERO     ! the ZERO constant"
-    out = replace_known_constants(src, mf, renames={'ZERO': 'MF_ZERO'})
+    out = replace_known_constants(src, mf, renames={'ZERO': 'DD_ZERO'})
     # ZERO before the ! gets renamed; ZERO after stays as English.
-    assert out == "      X = MF_ZERO     ! the ZERO constant"
+    assert out == "      X = DD_ZERO     ! the ZERO constant"
 
 
 def test_replace_known_constants_skips_string_literals(mf):
     src = "      CALL XERBLA('ZERO INPUT')"
-    out = replace_known_constants(src, mf, renames={'ZERO': 'MF_ZERO'})
+    out = replace_known_constants(src, mf, renames={'ZERO': 'DD_ZERO'})
     assert out == src
 
 
 def test_replace_known_constants_skips_decl_lines(mf):
     src = "      INTEGER ZERO"
-    out = replace_known_constants(src, mf, renames={'ZERO': 'MF_ZERO'})
+    out = replace_known_constants(src, mf, renames={'ZERO': 'DD_ZERO'})
     assert out == src
 
 
 def test_replace_known_constants_kind_mode_is_noop():
     src = "      X = ZERO"
-    out = replace_known_constants(src, load_target('kind16'), renames={'ZERO': 'MF_ZERO'})
+    out = replace_known_constants(src, load_target('kind16'), renames={'ZERO': 'DD_ZERO'})
     assert out == src
 
 
@@ -265,7 +265,7 @@ def test_replace_known_constants_kind_mode_is_noop():
 def test_intrinsic_dble_uses_universal_constructor(mf):
     """``DBLE(x)`` becomes ``float64x2(x)`` — the universal generic
     constructor in multifloats handles every input type (integer,
-    real(sp/dp), float64x2, complex128x2 → real part)."""
+    real(sp/dp), float64x2, complex64x2 → real part)."""
     src = "      Y = DBLE(ZX(I))"
     out = replace_intrinsic_calls(src, mf)
     assert 'float64x2(ZX(I))' in out
@@ -273,26 +273,26 @@ def test_intrinsic_dble_uses_universal_constructor(mf):
 
 def test_intrinsic_dble_integer_uses_constructor(mf):
     """``DBLE(N)`` for integer N must become ``float64x2(N)``, not
-    ``MF_REAL(N)`` (which only takes float64x2/complex128x2)."""
+    ``DD_REAL(N)`` (which only takes float64x2/complex64x2)."""
     src = "      Y = DBLE(N)"
     out = replace_intrinsic_calls(src, mf)
     assert 'float64x2(N)' in out
 
 
-def test_intrinsic_dcmplx_to_complex128x2(mf):
-    """``DCMPLX(A, B)`` becomes ``complex128x2(float64x2(A), float64x2(B))``
+def test_intrinsic_dcmplx_to_complex64x2(mf):
+    """``DCMPLX(A, B)`` becomes ``complex64x2(float64x2(A), float64x2(B))``
     so the call dispatches to multifloats's cx_from_mf_2 interface.
     Args known to be float64x2 are not double-wrapped (see
     test_intrinsic_dcmplx_skips_known_real)."""
     src = "      Z = DCMPLX(A, B)"
     out = replace_intrinsic_calls(src, mf)
-    assert 'complex128x2(float64x2(A),float64x2(B))' in out
+    assert 'complex64x2(float64x2(A),float64x2(B))' in out
 
 
 def test_intrinsic_dcmplx_skips_known_real(mf):
     src = "      Z = DCMPLX(A, B)"
     out = replace_intrinsic_calls(src, mf, real_names={'A', 'B'})
-    assert 'complex128x2(A, B)' in out
+    assert 'complex64x2(A, B)' in out
 
 
 def test_intrinsic_dimag_to_aimag(mf):
@@ -329,7 +329,7 @@ def test_convert_parameter_drops_known_constant(mf):
     new, assigns, dropped = convert_parameter_stmts(src, mf)
     # Both names are known constants — no assignments emitted, line elided.
     assert assigns == []
-    assert dropped == {'ONE': 'MF_ONE', 'ZERO': 'MF_ZERO'}
+    assert dropped == {'ONE': 'DD_ONE', 'ZERO': 'DD_ZERO'}
     assert 'PARAMETER' not in new or 'Converted' in new
 
 
@@ -354,7 +354,7 @@ def test_convert_data_drops_known_constants(mf):
     src = '      DATA ZERO,TWO/0.D0,2.D0/\n'
     new, assigns, dropped = convert_data_stmts(src, mf)
     assert assigns == []
-    assert dropped == {'ZERO': 'MF_ZERO', 'TWO': 'MF_TWO'}
+    assert dropped == {'ZERO': 'DD_ZERO', 'TWO': 'DD_TWO'}
 
 
 def test_convert_data_keeps_unknown_names(mf):
@@ -521,8 +521,8 @@ def test_end_to_end_fixed_form(mf):
     code = '\n'.join(code_lines)
     assert 'PARAMETER (ONE=' not in code
     # Body references renamed
-    assert 'IF (ALPHA.EQ.MF_ZERO) RETURN' in out
-    assert '+ MF_ONE' in out
+    assert 'IF (ALPHA.EQ.DD_ZERO) RETURN' in out
+    assert '+ DD_ONE' in out
     # No bare ZERO/ONE references in body code
     body_lines = [
         l for l in out.splitlines()
@@ -536,7 +536,7 @@ def test_end_to_end_fixed_form(mf):
 
 def test_equivalence_no_diagnostic_after_sequence(mf, capsys):
     """The mock multifloats module now declares both float64x2 and
-    complex128x2 with the SEQUENCE attribute, so EQUIVALENCE on
+    complex64x2 with the SEQUENCE attribute, so EQUIVALENCE on
     migrated FP variables compiles cleanly. The migrator therefore
     does not emit a warning anymore.
     """

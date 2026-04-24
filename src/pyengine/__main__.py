@@ -303,6 +303,12 @@ def _generate_cmake(output_dir: Path, lib_name: str, target_mode,
     common_list = '\n    '.join(sorted(common_files))
     precision_list = '\n    '.join(sorted(precision_files))
 
+    # Default path to the vendored Intel MPI headers. ``project_root``
+    # is resolved at generation time, so the generated CMakeLists.txt
+    # works when built from a fresh out-of-tree output directory.
+    _impi_default = str(((project_root or Path.cwd())
+                         / 'external' / 'impi-headers').resolve())
+
     if language == 'c':
         cmake = f"""\
 cmake_minimum_required(VERSION 3.20)
@@ -311,11 +317,19 @@ project({precision_lib} C)
 # --- Compiler flags ---
 set(CMAKE_C_FLAGS "${{CMAKE_C_FLAGS}} -w")
 
-# --- MPI (optional, for libraries like BLACS) ---
-find_package(MPI COMPONENTS C QUIET)
-if(MPI_C_FOUND)
-    include_directories(${{MPI_C_INCLUDE_DIRS}})
+# --- MPI: default to vendored Intel MPI headers ---
+# ``external/impi-headers/`` ships mpi.h and mpif.h at the Intel MPI
+# ABI so the build compiles against a stable MPI surface without
+# requiring every contributor to install an MPI runtime. Link-time
+# libraries still come from whichever MPI runtime the user provides
+# (impi-rt / OpenMPI / MPICH — headers are ABI-compatible).
+# Users who want a different MPI's *headers* can override IMPI_HEADERS.
+if(NOT DEFINED IMPI_HEADERS)
+    set(IMPI_HEADERS "{_impi_default}"
+        CACHE PATH "Path to vendored Intel MPI headers")
 endif()
+include_directories(${{IMPI_HEADERS}})
+find_package(MPI COMPONENTS C QUIET)
 
 # --- Common (type-independent) library ---
 set(COMMON_SOURCES
@@ -355,22 +369,35 @@ endif()
             # Resolve absolute paths to external dependencies so the
             # generated CMakeLists.txt works from any output directory.
             _root = project_root or Path.cwd()
-            _mf_default = str((_root / 'external' / 'multifloats').resolve())
             _helpers_default = str((_root / 'external' / 'lapack-3.12.1' / 'SRC').resolve())
             mf_link = f"""
-# Find or link multifloats. The location can be overridden via the
-# MULTIFLOATS_DIR cache variable; otherwise we use the resolved path
-# from the project root at generation time.
-if(NOT DEFINED MULTIFLOATS_DIR)
-    set(MULTIFLOATS_DIR "{_mf_default}"
-        CACHE PATH "Path to the external multifloats source tree")
-endif()
-if(EXISTS "${{MULTIFLOATS_DIR}}/CMakeLists.txt")
-    add_subdirectory(${{MULTIFLOATS_DIR}} multifloats_build)
+# Fetch the multifloats library from GitHub (default) or use a local
+# checkout via -DMULTIFLOATS_DIR=/path/to/multifloats. We add the
+# multifloats *top-level* directory so its CMakeLists.txt runs — the
+# src/CMakeLists.txt references ``CMAKE_SOURCE_DIR/include`` which is
+# wrong outside a top-level build. Tests/benches are suppressed via
+# cache variables set before the subdirectory add.
+set(BUILD_TESTING OFF CACHE BOOL "Disable tests in fetched multifloats" FORCE)
+set(MULTIFLOATS_BUILD_BENCH OFF CACHE BOOL "Disable benches in fetched multifloats" FORCE)
+if(DEFINED MULTIFLOATS_DIR)
+    message(STATUS "Using local multifloats: ${{MULTIFLOATS_DIR}}")
+    add_subdirectory(${{MULTIFLOATS_DIR}}
+        ${{CMAKE_CURRENT_BINARY_DIR}}/_mf EXCLUDE_FROM_ALL)
 else()
-    message(FATAL_ERROR
-        "multifloats library not found at ${{MULTIFLOATS_DIR}}. Set "
-        "-DMULTIFLOATS_DIR=/path/to/multifloats to override.")
+    include(FetchContent)
+    set(MULTIFLOATS_GIT_REPO "https://github.com/kyungminlee/multifloats.git"
+        CACHE STRING "Git URL for the multifloats library")
+    set(MULTIFLOATS_GIT_TAG "main"
+        CACHE STRING "Git tag/branch/commit for multifloats")
+    message(STATUS "Fetching multifloats from ${{MULTIFLOATS_GIT_REPO}} (${{MULTIFLOATS_GIT_TAG}})")
+    FetchContent_Declare(multifloats_fetch
+        GIT_REPOSITORY ${{MULTIFLOATS_GIT_REPO}}
+        GIT_TAG        ${{MULTIFLOATS_GIT_TAG}}
+    )
+    FetchContent_Populate(multifloats_fetch)
+    add_subdirectory(
+        ${{multifloats_fetch_SOURCE_DIR}}
+        ${{CMAKE_CURRENT_BINARY_DIR}}/_mf EXCLUDE_FROM_ALL)
 endif()
 
 # Build the la_constants_mf and la_xisnan_mf helper modules. These
@@ -427,7 +454,16 @@ endif()
 # Enable Fortran preprocessing for .F90 files
 set(CMAKE_Fortran_PREPROCESS ON)
 
-# --- MPI (optional, for libraries like MUMPS that INCLUDE 'mpif.h') ---
+# --- MPI: default to vendored Intel MPI headers ---
+# See note in the C template: headers come from ``external/impi-headers/``
+# unconditionally; the runtime comes from whichever MPI the user links
+# against at final link time. MUMPS uses ``INCLUDE 'mpif.h'`` in 231
+# source files and never ``USE mpi``, so F77 headers are enough.
+if(NOT DEFINED IMPI_HEADERS)
+    set(IMPI_HEADERS "{_impi_default}"
+        CACHE PATH "Path to vendored Intel MPI headers")
+endif()
+include_directories(${{IMPI_HEADERS}})
 find_package(MPI COMPONENTS Fortran QUIET)
 
 # Detect 80-bit extended precision (KIND=10) support
@@ -777,9 +813,9 @@ set({lib_name}_LANGUAGE {config.language})
             if src.exists():
                 shutil.copy2(src, helpers_dst / name)
         # Copy multifloats bridge files (C++ bridge header + MPI registration)
-        mf_local = proj_root / 'external' / 'multifloats'
-        bridge_h = mf_local / 'include' / 'multifloats_bridge.h'
-        mpi_cpp = mf_local / 'src' / 'multifloats_mpi.cpp'
+        mf_local = proj_root / 'external' / 'multifloats-mpi'
+        bridge_h = mf_local / 'multifloats_bridge.h'
+        mpi_cpp = mf_local / 'multifloats_mpi.cpp'
         if bridge_h.exists():
             shutil.copy2(bridge_h, helpers_dst / bridge_h.name)
         if mpi_cpp.exists():
