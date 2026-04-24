@@ -416,7 +416,8 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                         header_patches: list[dict] | None = None,
                         overrides: list[tuple[Path, str]] | None = None,
                         extra_c_dirs: list[Path] | None = None,
-                        skip_files: set[str] | None = None) -> dict:
+                        skip_files: set[str] | None = None,
+                        copy_files: set[str] | None = None) -> dict:
     """Migrate a C source directory by cloning real/complex variants.
 
     Two modes:
@@ -450,6 +451,7 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             header_patches=header_patches,
             extra_c_dirs=extra_c_dirs,
             skip_files=skip_files,
+            copy_files=copy_files,
         )
     else:
         result = _migrate_blacs_c_directory(
@@ -899,7 +901,8 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                                  c_type_aliases: list[dict] | None = None,
                                  header_patches: list[dict] | None = None,
                                  extra_c_dirs: list[Path] | None = None,
-                                 skip_files: set[str] | None = None) -> dict:
+                                 skip_files: set[str] | None = None,
+                                 copy_files: set[str] | None = None) -> dict:
     """Rename-map-driven C migration for ScaLAPACK-style libraries.
 
     A file ``foo_.c`` is cloned iff its routine ``FOO`` is a D- or
@@ -927,23 +930,36 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     # K&R-style function definitions are converted to ANSI so originals
     # compile as C++ (mpicxx).
     _skip = skip_files or set()
+    _copy = copy_files or set()
     if copy_originals:
         for d in all_src_dirs:
             for f in sorted(d.iterdir()):
-                if f.suffix.lower() in ('.c', '.h'):
-                    stem_upper = (f.stem[:-1] if f.stem.endswith('_')
-                                  else f.stem).upper()
-                    if stem_upper in _skip:
-                        continue
-                    text = f.read_text(errors='replace')
-                    if d != src_dir:
-                        text = re.sub(
-                            r'#include\s*"\.\./([^"]+)"',
-                            r'#include "\1"', text)
-                    if f.suffix.lower() == '.c':
-                        text = _resolve_stdc_ifdefs(text)
-                        text = _convert_kr_to_ansi(text)
+                stem_upper = (f.stem[:-1] if f.stem.endswith('_')
+                              else f.stem).upper()
+                is_c_or_h = f.suffix.lower() in ('.c', '.h')
+                # Non-C files are only staged when explicitly listed in
+                # ``copy_files`` — used for precision-independent Fortran
+                # helpers that live alongside C entry points (e.g.
+                # PBLAS/SRC/pilaenv.f called by PB_Cplascal and friends).
+                is_copy = stem_upper in _copy
+                if not (is_c_or_h or is_copy):
+                    continue
+                if stem_upper in _skip:
+                    continue
+                text = f.read_text(errors='replace')
+                if is_copy and not is_c_or_h:
+                    # Fortran copy-files are staged verbatim: no include
+                    # rewrites, no K&R conversion, no stdc-ifdef folding.
                     (output_dir / f.name).write_text(text)
+                    continue
+                if d != src_dir:
+                    text = re.sub(
+                        r'#include\s*"\.\./([^"]+)"',
+                        r'#include "\1"', text)
+                if f.suffix.lower() == '.c':
+                    text = _resolve_stdc_ifdefs(text)
+                    text = _convert_kr_to_ansi(text)
+                (output_dir / f.name).write_text(text)
 
     # Apply recipe-declared header patches to the copied originals so
     # later clones can reference the newly introduced typedefs.
@@ -1069,6 +1085,7 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         text = _rename(text)
         text = _apply_c_type_subs(text, template_vars, c_type_aliases,
                                   target_mode=target_mode)
+
 
         normalized = _normalize_for_compare(text)
         prior = canonical_normalized.get(new_name)

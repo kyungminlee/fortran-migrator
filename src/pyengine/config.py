@@ -46,6 +46,17 @@ class RecipeConfig:
     patches: list[str] = field(default_factory=list)
     depends: list[Path] = field(default_factory=list)  # Dependency recipe paths
     extra_symbol_dirs: list[Path] = field(default_factory=list)  # Extra dirs to scan for symbols
+    # Individual files (outside ``source_dir``) to migrate in the same
+    # pass as ``source_dir``. Each entry is a project-root-relative
+    # path to a single ``.f``/``.f90``/``.F90``/``.c``/``.h`` file.
+    # Used to pull in targeted leaf sources from shared directories
+    # whose other contents belong to a different library — e.g.
+    # LAPACK migrates ``INSTALL/dlamch.f`` and
+    # ``INSTALL/droundup_lwork.f`` without swallowing the timer
+    # variants and test programs that live alongside them; PTZBLAS
+    # pulls in ``TOOLS/zzdotc.f`` and ``TOOLS/zzdotu.f`` without
+    # claiming the rest of ScaLAPACK's TOOLS/.
+    extra_migrate_files: list[Path] = field(default_factory=list)
     # Additional C source directories to *migrate* (not just scan) in
     # the same generic-rename-map pass as ``source_dir``. Used by PBLAS
     # to pull in the PTOOLS/ helper sources alongside the SRC/ entry
@@ -198,6 +209,8 @@ def load_recipe(recipe_path: Path,
         patches=data.get('patches', []),
         depends=depends,
         extra_symbol_dirs=extra_symbol_dirs,
+        extra_migrate_files=[project_root / p
+                             for p in (data.get('extra_migrate_files') or [])],
         c_return_types=list(data.get('c_return_types', [])),
         c_type_aliases=list(data.get('c_type_aliases', [])),
         header_patches=list(data.get('header_patches', [])),

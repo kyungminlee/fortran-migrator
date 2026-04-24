@@ -754,7 +754,17 @@ def cmd_stage(args):
         independent = classification.independent
 
         if config.language == 'c':
-            files = sorted(list(src_dir.glob('*.c')))
+            # Pick up precision-independent Fortran helpers staged via
+            # ``copy_files`` (e.g. PBLAS/SRC/pilaenv.f). CMake's
+            # ``add_library(… STATIC …)`` handles mixed C + Fortran
+            # sources because both languages are enabled at the top
+            # project(). Copy-files are precision-independent by
+            # contract, so they land in COMMON_SOURCES below.
+            files = sorted(
+                list(src_dir.glob('*.c'))
+                + list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
+                + list(src_dir.glob('*.F90'))
+            )
         else:
             files = sorted(
                 list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
@@ -774,14 +784,48 @@ def cmd_stage(args):
             if f.stem in _mf_helpers:
                 continue
             rel = f'src/{f.name}'
-            if f.stem.upper() in independent:
+            # ``copy_files`` entries are precision-independent by
+            # contract (the file is staged verbatim, no prefix rename).
+            # The symbol scanner may never have visited them — e.g. a
+            # Fortran ``copy_files`` entry in a C recipe — so they
+            # won't appear in ``independent``. Treat them as common
+            # explicitly.
+            if (f.stem.upper() in independent
+                    or f.stem.upper() in config.copy_files):
                 common_files.append(rel)
             else:
                 precision_files.append(rel)
 
+        # Identify C sources that gate their entry-point signature on
+        # the ``INTFACE == C_CALL`` macro (upstream BLACS pattern). Each
+        # such file exposes a Fortran-callable symbol (e.g.
+        # ``blacs_gridinfo_``) in the default build and a C-callable
+        # symbol (``Cblacs_gridinfo``) when compiled with
+        # ``-DCallFromC``. The CMake helper compiles these sources
+        # twice so the final static library ships both entry points.
+        # Detection is a cheap regex scan of the staged source; any
+        # library that does not use the pattern emits an empty list.
+        dual_re = re.compile(
+            r'#\s*if\s*\(?\s*INTFACE\s*==\s*C_CALL\b'
+            r'|#\s*ifdef\s+CallFromC\b'
+            r'|#\s*if\s+defined\s*\(\s*CallFromC\s*\)',
+        )
+        dual_files = []
+        if config.language == 'c':
+            for f in files:
+                if f.suffix.lower() != '.c':
+                    continue
+                try:
+                    text = f.read_text(errors='replace')
+                except OSError:
+                    continue
+                if dual_re.search(text):
+                    dual_files.append(f'src/{f.name}')
+
         # Write manifest.cmake
         common_list = '\n    '.join(common_files) if common_files else ''
         precision_list = '\n    '.join(precision_files) if precision_files else ''
+        dual_list = '\n    '.join(dual_files) if dual_files else ''
         manifest = f"""\
 set({lib_name}_COMMON_SOURCES
     {common_list}
@@ -789,6 +833,10 @@ set({lib_name}_COMMON_SOURCES
 
 set({lib_name}_PRECISION_SOURCES
     {precision_list}
+)
+
+set({lib_name}_DUAL_INTERFACE_SOURCES
+    {dual_list}
 )
 
 set({lib_name}_LANGUAGE {config.language})
@@ -860,6 +908,25 @@ set(STAGED_LIBRARIES {staged_list})
         if refblas_dst.exists():
             shutil.rmtree(refblas_dst)
         shutil.copytree(netlib_blas_src, refblas_dst)
+
+    # Same recipe for LAPACK: vendored Netlib SRC/ promoted to quad
+    # precision gives tests/lapack/reflapack/ a KIND=16 reference to
+    # compare the migrated qlapack/elapack/ddlapack against. The
+    # INSTALL/ directory provides dlamch.f / droundup_lwork.f, which
+    # LAPACK SRC routines call but which aren't in SRC/ itself — copy
+    # them into _reflapack_src/ alongside the SRC contents so a single
+    # glob compiles the full reference.
+    netlib_lapack_src = proj_root / 'external' / 'lapack-3.12.1' / 'SRC'
+    if netlib_lapack_src.is_dir():
+        reflapack_dst = staging_dir / '_reflapack_src'
+        if reflapack_dst.exists():
+            shutil.rmtree(reflapack_dst)
+        shutil.copytree(netlib_lapack_src, reflapack_dst)
+        install_src = proj_root / 'external' / 'lapack-3.12.1' / 'INSTALL'
+        for fname in ('dlamch.f', 'droundup_lwork.f'):
+            src = install_src / fname
+            if src.is_file():
+                shutil.copy2(src, reflapack_dst / fname)
 
     print(f'\n{"=" * 60}')
     print(f'  Staging complete: {len(staged)} libraries')

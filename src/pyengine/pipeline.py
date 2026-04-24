@@ -622,6 +622,17 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
         if p.suffix.lower() in config.extensions
         or p.stem.upper() in config.copy_files
     )
+    # extra_migrate_files pulls in specific leaf files from outside
+    # source_dir / extra_fortran_dirs — used to target individual
+    # helpers that live in a shared directory whose other contents
+    # belong to a different library (LAPACK's INSTALL/dlamch.f,
+    # PTZBLAS's TOOLS/zzdotc.f). The symbol scanner already sees these
+    # via extra_symbol_dirs, so the rename map covers the referenced
+    # names; this line only widens the emit loop to include them.
+    extra_migrate = list(getattr(config, 'extra_migrate_files', []) or [])
+    src_files = sorted(set(src_files).union(
+        p for p in extra_migrate if p.is_file()
+    ))
 
     # Convergence buffer: first writer of each output name stores its
     # text; subsequent writers must agree or we record a divergence.
@@ -1165,6 +1176,7 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         overrides=overrides,
         extra_c_dirs=config.extra_c_dirs,
         skip_files=config.skip_files,
+        copy_files=config.copy_files,
     )
     return result
 
