@@ -672,3 +672,20 @@ external/MUMPS_5.8.2/src/ctools.F:254
 external/MUMPS_5.8.2/src/ctools.F:2412
 external/MUMPS_5.8.2/src/ztype3_root.F:131
 external/MUMPS_5.8.2/src/ctype3_root.F:131
+
+# Call-site entries (added by mumps_sweep_keep_kind_calls.py)
+external/MUMPS_5.8.2/src/cfac_driver.F:1791
+external/MUMPS_5.8.2/src/cfac_driver.F:1792
+external/MUMPS_5.8.2/src/cfac_driver.F:1918
+external/MUMPS_5.8.2/src/cfac_driver.F:3674
+external/MUMPS_5.8.2/src/dfac_driver.F:1790
+external/MUMPS_5.8.2/src/dfac_driver.F:1791
+external/MUMPS_5.8.2/src/dfac_driver.F:1917
+external/MUMPS_5.8.2/src/mumps_load.F:1745
+external/MUMPS_5.8.2/src/sfac_driver.F:1790
+external/MUMPS_5.8.2/src/sfac_driver.F:1791
+external/MUMPS_5.8.2/src/sfac_driver.F:1917
+external/MUMPS_5.8.2/src/sfac_driver.F:3673
+external/MUMPS_5.8.2/src/zfac_driver.F:1791
+external/MUMPS_5.8.2/src/zfac_driver.F:1792
+external/MUMPS_5.8.2/src/zfac_driver.F:1918

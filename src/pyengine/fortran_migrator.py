@@ -70,12 +70,20 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
     # z-half uses ``COMPLEX(kind=8) A(LA)`` where its s/c/d siblings
     # say ``REAL``/``COMPLEX``/``DOUBLE PRECISION``; rewrite all four
     # spellings so they land on the same target type.
+    #
+    # Restricted to declaration context via the trailing lookahead:
+    # the match must be followed by whitespace+identifier (``REAL(4) X``
+    # / ``COMPLEX(8) A(LA)``), ``::`` (modern decl), or ``,`` (attribute
+    # list). This excludes expression-context ``real(4)`` / ``real(8)``
+    # intrinsic calls (e.g. ``real(4)*real(KMAX)``) which have the same
+    # token shape but take the integer as an argument, not a kind.
+    _decl_tail = r'(?=\s+[A-Za-z_]|\s*::|\s*,)'
     line = re.sub(
-        r'REAL\s*\(\s*(?:KIND\s*=\s*)?[48]\s*\)',
+        r'REAL\s*\(\s*(?:KIND\s*=\s*)?[48]\s*\)' + _decl_tail,
         real_target, line, flags=re.IGNORECASE,
     )
     line = re.sub(
-        r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?[48]\s*\)',
+        r'COMPLEX\s*\(\s*(?:KIND\s*=\s*)?[48]\s*\)' + _decl_tail,
         complex_target, line, flags=re.IGNORECASE,
     )
 
@@ -2293,27 +2301,41 @@ def target_filename(name: str, rename_map: dict[str, str],
 
 
 _KK_SENTINEL = '__KEEPKIND_DP__'
+_KK_DBLE_SENTINEL = '__KEEPKIND_DBLE__'
+_KK_DCMPLX_SENTINEL = '__KEEPKIND_DCMPLX__'
 
 
 def _apply_keep_kind_sentinel(source: str, keep_kind_lines: frozenset[int]) -> str:
-    """Replace ``DOUBLE PRECISION`` with a non-matching sentinel on each
-    1-based line number in ``keep_kind_lines``. Every migrator regex
-    that rewrites DP looks for ``DOUBLE`` + whitespace + ``PRECISION``;
-    the sentinel has neither the keyword split nor whitespace, so it
-    passes through every pass untouched. Restored by
+    """Replace DP-defining tokens with non-matching sentinels on each
+    1-based line number in ``keep_kind_lines``. Protects the line from
+    every migrator regex that rewrites those tokens; restored by
     :func:`_restore_keep_kind_sentinel` on the migrated output.
+
+    Protected tokens: ``DOUBLE PRECISION`` (type declaration),
+    ``dble(`` (convert-to-DP intrinsic), ``dcmplx(`` (convert-to-DC
+    intrinsic). The last two are protected on call-site lines so that
+    callers of verbatim (copy_files) DP-stable routines keep passing
+    DP values instead of being rewritten to ``REAL(x, KIND=16)``.
     """
     import re as _re
     lines = source.splitlines(keepends=True)
     _dp = _re.compile(r'DOUBLE\s+PRECISION', _re.IGNORECASE)
+    _dble = _re.compile(r'\bdble\s*\(', _re.IGNORECASE)
+    _dcmplx = _re.compile(r'\bdcmplx\s*\(', _re.IGNORECASE)
     for ln in keep_kind_lines:
         if 1 <= ln <= len(lines):
-            lines[ln - 1] = _dp.sub(_KK_SENTINEL, lines[ln - 1])
+            t = _dp.sub(_KK_SENTINEL, lines[ln - 1])
+            t = _dble.sub(_KK_DBLE_SENTINEL + '(', t)
+            t = _dcmplx.sub(_KK_DCMPLX_SENTINEL + '(', t)
+            lines[ln - 1] = t
     return ''.join(lines)
 
 
 def _restore_keep_kind_sentinel(source: str) -> str:
-    return source.replace(_KK_SENTINEL, 'DOUBLE PRECISION')
+    source = source.replace(_KK_SENTINEL, 'DOUBLE PRECISION')
+    source = source.replace(_KK_DBLE_SENTINEL, 'dble')
+    source = source.replace(_KK_DCMPLX_SENTINEL, 'dcmplx')
+    return source
 
 
 # Fortran-side MPI datatype name rewriter. In an `s*`/`c*` source MUMPS

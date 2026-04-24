@@ -649,6 +649,19 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     canonical_normalized: dict[str, str] = {}
     canonical_source: dict[str, str] = {}
 
+    # Build module-rename regex pairs once. Applied post-migration to
+    # every migrated file (copy_files are deliberately untouched so the
+    # verbatim upstream module keeps its original name).
+    module_rename_pairs: list[tuple[re.Pattern[str], str]] = []
+    for old_mod, new_mod in (config.module_renames or {}).items():
+        pat = re.compile(r'(?i)(\bUSE\s+)' + re.escape(old_mod) + r'\b')
+        module_rename_pairs.append((pat, r'\g<1>' + new_mod))
+
+    def _apply_module_renames(text: str) -> str:
+        for pat, repl in module_rename_pairs:
+            text = pat.sub(repl, text)
+        return text
+
     # Partition: copy/skip/dry-run decisions stay in the main process;
     # only the Flang-bound migration is dispatched to workers.
     to_migrate: list[Path] = []
@@ -704,6 +717,7 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
             skipped.append(src_path.name)
             continue
         out_name, migrated = result
+        migrated = _apply_module_renames(migrated)
         normalized = _canonicalize_for_compare(
             _strip_fortran_comments(migrated, src_path.suffix)
         )
@@ -1155,6 +1169,20 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
     return result
 
 
+def _apply_fortran_overrides(config: RecipeConfig,
+                             target_mode: TargetMode,
+                             output_dir: Path) -> None:
+    """Copy target-gated override files into the Fortran output dir.
+
+    Used for hand-written shared modules that cannot be produced by
+    migration (e.g. MUMPS's extended-precision reallocator module).
+    """
+    overrides = _resolve_overrides(config, target_mode)
+    for src_path, dst_name in overrides:
+        (output_dir / dst_name).write_text(src_path.read_text())
+        print(f'  Override:  {dst_name} (from {src_path.name})')
+
+
 def _resolve_overrides(config: RecipeConfig,
                        target_mode: TargetMode) -> list[tuple[Path, str]]:
     """Select the active target's override entries from the recipe.
@@ -1244,6 +1272,8 @@ def run_migration(recipe_path: Path, output_dir: Path,
             classification=classification,
             parser=parser, parser_cmd=parser_cmd,
         )
+        if not dry_run:
+            _apply_fortran_overrides(config, target_mode, output_dir)
         if not dry_run:
             print(f'\n  Migrated: {result["migrated"]} files')
             print(f'  Copied:   {result["copied"]} files (precision-independent)')
