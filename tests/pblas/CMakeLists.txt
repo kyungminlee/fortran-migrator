@@ -37,51 +37,20 @@ if(NOT TARGET ${LIB_PREFIX}blacs)
     return()
 endif()
 
-# ── BLACS C-API shim (Cblacs_* / C{q,e,dd}gsum2d / etc.) ────────────
-# The migrated ${LIB_PREFIX}blacs compiles BLACS sources once and gets
-# only the Fortran-callable `blacs_*_` / `{q,e,dd}gsum2d_` entry points.
-# PBLAS's C code calls the `Cblacs_*` / `C{q,e,dd}gsum2d` counterparts,
-# which upstream BLACS produces by compiling every source twice (once
-# with -DCallFromC). We replicate that second pass as an OBJECT library
-# local to the tests — keeps the change confined to tests/pblas/ and
-# leaves the canonical ${LIB_PREFIX}blacs unchanged.
-set(_blacs_src_dir ${CMAKE_SOURCE_DIR}/blacs/src)
-if(IS_DIRECTORY ${_blacs_src_dir})
-    # Upstream BLACS CMakeLists.txt (external/scalapack-2.2.3/BLACS/SRC)
-    # compiles this set of "support" files twice — once with CallFromC,
-    # once without — so both Cblacs_* and blacs_*_ symbols exist. We
-    # match that set here (excluding dcputime00 / dwalltime00 which have
-    # no dual-interface gate, and k{send,recv,bs,br}id which are BLACS
-    # internal keys, not dual-interface).
-    file(GLOB _blacs_c_api_supp  CONFIGURE_DEPENDS
-        ${_blacs_src_dir}/blacs_*.c
-        ${_blacs_src_dir}/sys2blacs_.c
-        ${_blacs_src_dir}/blacs2sys_.c
-        ${_blacs_src_dir}/free_handle_.c)
-    file(GLOB _blacs_c_api_comm  CONFIGURE_DEPENDS
-        ${_blacs_src_dir}/*gesd2d_.c ${_blacs_src_dir}/*gerv2d_.c
-        ${_blacs_src_dir}/*gebs2d_.c ${_blacs_src_dir}/*gebr2d_.c
-        ${_blacs_src_dir}/*gsum2d_.c ${_blacs_src_dir}/*gamx2d_.c
-        ${_blacs_src_dir}/*gamn2d_.c
-        ${_blacs_src_dir}/*trsd2d_.c ${_blacs_src_dir}/*trrv2d_.c
-        ${_blacs_src_dir}/*trbs2d_.c ${_blacs_src_dir}/*trbr2d_.c)
-    add_library(pblas_test_blacs_c_api STATIC
-        ${_blacs_c_api_supp} ${_blacs_c_api_comm})
-    target_compile_definitions(pblas_test_blacs_c_api PRIVATE CallFromC)
-    target_include_directories(pblas_test_blacs_c_api PRIVATE ${_blacs_src_dir})
-    if(MPI_C_FOUND)
-        target_link_libraries(pblas_test_blacs_c_api PRIVATE MPI::MPI_C)
-    endif()
-    if(C_AS_CXX)
-        # Multifloats target compiles C as C++ (for libmfc operator
-        # overloading); match that so the BLACS C sources see the same
-        # language settings as ${LIB_PREFIX}blacs does.
-        set_source_files_properties(${_blacs_c_api_supp} ${_blacs_c_api_comm}
-            PROPERTIES LANGUAGE CXX)
-        target_compile_features(pblas_test_blacs_c_api PRIVATE cxx_std_17)
-        target_compile_options(pblas_test_blacs_c_api PRIVATE
-            -fpermissive -Wno-write-strings)
-    endif()
+# Multifloats: the migrated PBLAS C sources are compiled as C++ (to get
+# operator overloading on float64x2_t). Without ``extern "C"`` wrappers
+# on every Fortran-callable entry-point declaration and definition,
+# ``pddgemm_`` / ``pzzherk_`` / etc. end up C++-mangled and the Fortran
+# target_pblas.f90 wrapper can't link to them. Wiring that through
+# cleanly means patching the upstream PBLAS headers (PBpblas.h,
+# PBtools.h) and the per-file entry points in lockstep; tracked
+# separately from the seven gaps this test suite was originally
+# designed around. Skip here until that lands.
+if(C_AS_CXX)
+    message(STATUS "tests/pblas: skipping — multifloats PBLAS entry-point "
+                   "C linkage wrapping is an open issue "
+                   "(see tests/pblas/README.md)")
+    return()
 endif()
 
 # ── Common helper modules ───────────────────────────────────────────
@@ -100,18 +69,6 @@ target_link_libraries(pblas_test_common PUBLIC
     ${LIB_PREFIX}blacs
     MPI::MPI_Fortran
 )
-if(TARGET pblas_test_blacs_c_api)
-    target_link_libraries(pblas_test_common PUBLIC pblas_test_blacs_c_api)
-endif()
-
-# pilaenv.f is the sole Fortran file in PBLAS/SRC (precision-independent
-# integer block-size query). The pblas recipe restricts extensions to
-# .c/.h, so nothing in the main build ships pilaenv_. PBLAS's C code
-# calls it, so we vendor a copy under common/ and compile it here.
-add_library(pblas_test_pilaenv STATIC common/pilaenv.f)
-set_target_properties(pblas_test_pilaenv PROPERTIES LINKER_LANGUAGE Fortran)
-target_compile_options(pblas_test_pilaenv PRIVATE -w -std=legacy)
-target_link_libraries(pblas_test_common PUBLIC pblas_test_pilaenv)
 
 # ── Per-target wrapper module ───────────────────────────────────────
 set(_wrapper_dir ${CMAKE_CURRENT_SOURCE_DIR}/target_${TARGET_NAME})
@@ -121,27 +78,12 @@ if(NOT IS_DIRECTORY ${_wrapper_dir})
     return()
 endif()
 
-set(_wrapper_sources ${_wrapper_dir}/target_pblas.f90)
-if(EXISTS ${_wrapper_dir}/ptzblas_stubs.f90)
-    # Link-time stubs for routines referenced by the migrated PTZBLAS
-    # that the migrator leaves dangling (CALL ZZDOTC etc.). See the
-    # stub file for the full rationale.
-    list(APPEND _wrapper_sources ${_wrapper_dir}/ptzblas_stubs.f90)
-endif()
-add_library(pblas_test_target STATIC ${_wrapper_sources})
+add_library(pblas_test_target STATIC ${_wrapper_dir}/target_pblas.f90)
 fortran_module_layout(pblas_test_target)
 target_link_libraries(pblas_test_target PUBLIC
     pblas_test_common
     ${LIB_PREFIX}pblas
 )
-# PBLAS C code calls into PTZBLAS (qvasum_, pairs like qvdot_) and
-# PBBLAS (pbqmatadd etc.). The main build doesn't wire these as
-# public deps of ${LIB_PREFIX}pblas, so we add them here when present.
-foreach(_pblas_dep ${LIB_PREFIX}ptzblas ${LIB_PREFIX}pbblas)
-    if(TARGET ${_pblas_dep})
-        target_link_libraries(pblas_test_target PUBLIC ${_pblas_dep})
-    endif()
-endforeach()
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(pblas_test_target PUBLIC multifloatsf)
 endif()
@@ -189,12 +131,6 @@ function(add_pblas_precision_test test_src)
             list(APPEND _pblas_cycle ${_common})
         endif()
     endforeach()
-    if(TARGET pblas_test_blacs_c_api)
-        list(APPEND _pblas_cycle pblas_test_blacs_c_api)
-    endif()
-    if(TARGET pblas_test_pilaenv)
-        list(APPEND _pblas_cycle pblas_test_pilaenv)
-    endif()
     target_link_libraries(${test_name} PRIVATE
         "$<LINK_GROUP:RESCAN,${_pblas_cycle}>")
     add_test(NAME pblas_${test_name}

@@ -90,30 +90,6 @@ if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(lapack_test_target PUBLIC multifloatsf)
 endif()
 
-# ── LAMCH shim (linked AFTER ${LIB_PREFIX}lapack) ───────────────────
-# target_<target>/lamch_shim.f90 reconstructs {q,e,dd}lamch /
-# {q,e,dd}roundup_lwork. The migrator (recipe/lapack.yaml) declares
-# external/lapack-3.12.1/INSTALL as an `extra_symbol_dirs` entry, but
-# `cmd_stage` does not actually stage those sources — so the machine
-# parameter queries are missing from the migrated library. Without
-# the shim, qlapack has unresolved references (from qlascl, qsyev,
-# qgesvd, qgetrf2, …) and no LAPACK test links. Remove once staging
-# is extended to cover INSTALL/.
-#
-# Must be a separate library placed *after* ${LIB_PREFIX}lapack in
-# the link line so the single-pass linker demands the symbols from
-# the main library before scanning the shim.
-if(EXISTS ${_wrapper_dir}/lamch_shim.f90)
-    add_library(lapack_test_shim STATIC ${_wrapper_dir}/lamch_shim.f90)
-    set_target_properties(lapack_test_shim PROPERTIES
-        Fortran_MODULE_DIRECTORY "${_lp_moddir}"
-    )
-    if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
-        target_link_libraries(lapack_test_shim PUBLIC multifloatsf)
-    endif()
-    target_link_libraries(lapack_test_target PUBLIC lapack_test_shim)
-endif()
-
 # ── Test executables ────────────────────────────────────────────────
 # Reports land in <build>/precision_reports/<test>.<target>.json,
 # co-mingling with the BLAS reports for the Python aggregator.

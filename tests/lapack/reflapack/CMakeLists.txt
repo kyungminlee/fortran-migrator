@@ -11,12 +11,6 @@
 # Selection (from parent tests/lapack/CMakeLists.txt):
 #   -DLAPACK_REF=netlib  (default) → build from vendored sources
 #   -DLAPACK_REF=system            → link system -llapack (double, capped)
-#
-# NOTE: `pyengine stage` does not yet copy LAPACK sources into
-# _reflapack_src/. Until that is added, the fallback path below links
-# system -llapack, which caps precision at double (~1e-16) regardless
-# of target. Extend cmd_stage to stage external/lapack-3.12.1/SRC/ as
-# _reflapack_src/ to enable full quad-precision comparison.
 
 if(LAPACK_REF STREQUAL "system")
     add_library(reflapack_quad INTERFACE)
