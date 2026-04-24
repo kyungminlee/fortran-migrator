@@ -122,4 +122,4 @@ The migrator normalizes all precision-dependent constructs (type declarations, l
 *   **Hardcoded constants**: Precision-dependent tolerances (e.g., `1.0E-6` vs `1.0D-12`).
 *   **Missing conversions**: A residual `DBLE()` or unrenamed routine name reveals a migrator bug.
 
-The `converge` command automates this for all co-family pairs and generates a summary report. Detailed divergence analysis is in `src/DIVERGENCE.md`.
+The `converge` command automates this for all co-family pairs and generates a summary report. Detailed divergence analysis is in `doc/DIVERGENCE.md`.

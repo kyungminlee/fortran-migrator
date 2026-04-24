@@ -5,8 +5,9 @@
 *   [Usage Guide](USAGE.md) — How to run the `pyengine` CLI.
 *   [Migration Recipes](RECIPES.md) — How to write library recipes.
 *   [Architecture](ARCHITECTURE.md) — Technical overview and component details.
-*   [Intrinsics Reference](INTRINSICS.md) — Fortran generic intrinsics for KIND=16/128.
-*   [Multifloats Specification](MULTIFLOATS.md) — Design plan for the `multifloats` target.
+*   [Intrinsics Reference](INTRINSICS.md) — Fortran generic intrinsics for KIND=16.
+*   [Divergence Report](DIVERGENCE.md) — end-to-end migration/convergence results.
+*   [KIND=16 Divergence Notes](NOTE.md) — per-routine analysis for the kind16 target.
 
 ## Project Goal
 
@@ -93,7 +94,7 @@ or double-precision (`DOUBLE PRECISION`, `DOUBLE COMPLEX`, `REAL*8`,
 All floating-point types get mapped to the target kind.
 
 For the multifloats target, `REAL` → `TYPE(float64x2)` and
-`COMPLEX` → `TYPE(complex128x2)`, with constructor wrapping instead of
+`COMPLEX` → `TYPE(complex64x2)`, with constructor wrapping instead of
 KIND suffixes.
 
 ### 2. Subroutine/Function Name Prefixes
@@ -281,7 +282,7 @@ When a replacement makes a line exceed column 72, the tool must:
 8. **`PARAMETER` constants**: e.g., `PARAMETER (ONE=1.0D+0, ZERO=0.0D+0)` —
    both the literal format and the variable type must be consistent. For
    multifloats, these can be replaced with module-provided constants
-   (`MF_ONE`, `MF_ZERO`) via the `known_constants` recipe mechanism.
+   (`DD_ONE`, `DD_ZERO`) via the `known_constants` recipe mechanism.
 
 9. **C source files (BLACS, PBLAS)**: Migration via template-clone with
    mechanical text substitution on C types (`double`→`__float128` or
@@ -325,7 +326,7 @@ syntactic rule is papering over a semantic asymmetry between the sources
 (e.g. `DOUBLE PRECISION` meaning "working precision" in a `d*` file but
 "timing / MPI interface" in an `s*` file — the same token, two intents).
 
-Divergence counts are tracked in `src/DIVERGENCE.md`.
+Divergence counts are tracked in `doc/DIVERGENCE.md`.
 
 ### 3b. Divergence Patterns by Target
 
@@ -344,17 +345,17 @@ preserve.  Two mechanisms drive this:
 
 1. **Named-constant replacement.**  The `known_constants` map in the target
    YAML replaces local `PARAMETER` constants (`ONE`, `ZERO`, `HALF`, etc.)
-   with module-provided values (`MF_ONE`, `MF_ZERO`, `MF_HALF`).  Many
+   with module-provided values (`DD_ONE`, `DD_ZERO`, `DD_HALF`).  Many
    LAPACK D/Z routines define these constants locally while their S/C
    counterparts do not.  In KIND mode the D-half's `PARAMETER (ONE=1.0E0_16)`
    declaration survives into the output, creating a divergence.  In
-   multifloats mode both halves use `MF_ONE` from `USE MULTIFLOATS`, so
+   multifloats mode both halves use `DD_ONE` from `USE MULTIFLOATS`, so
    the local declaration is removed and the pair converges.
 
    *Example:* `dgehd2.f` defines `DOUBLE PRECISION ONE; PARAMETER(ONE=1.0D+0)`.
    `sgehd2.f` has no such constant.
    - KIND=16: D-half output has `REAL(KIND=16) ONE; PARAMETER(ONE=1.0E0_16)` → diverges (+2).
-   - Multifloats: `ONE` is replaced by `MF_ONE` in both halves → converges.
+   - Multifloats: `ONE` is replaced by `DD_ONE` in both halves → converges.
 
 2. **Constructor wrapping normalizes type conversions.**  In KIND mode,
    `REAL(x, KIND=16)` preserves the original intrinsic call structure, so

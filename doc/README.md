@@ -32,9 +32,7 @@ Uses `float64x2` (double-double) arithmetic via an external module:
 | Data Type | Target Type | New Prefix | Example Conversion |
 | :--- | :--- | :--- | :--- |
 | `REAL` | `TYPE(float64x2)` | `DD` | `dgemm` → `ddgemm` |
-| `COMPLEX` | `TYPE(complex128x2)` | `ZZ` | `zgemm` → `zzgemm` |
-
-See [MULTIFLOATS.md](MULTIFLOATS.md) for the full design specification.
+| `COMPLEX` | `TYPE(complex64x2)` | `ZZ` | `zgemm` → `zzgemm` |
 
 ## Implementation Details
 
