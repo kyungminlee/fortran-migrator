@@ -13,6 +13,15 @@ depends:
 extra_symbol_dirs:
   - external/lapack-3.12.1/INSTALL
 
+# dlamch / droundup_lwork are called from dozens of LAPACK SRC routines
+# (dlascl, dsyev, dgesvd, dgetrf2, …). The files themselves live in
+# INSTALL/ alongside test programs, timer-routine variants, and an
+# already-in-BLAS copy of lsame.f — so we pull just these two into the
+# migrated library instead of sweeping the whole directory.
+extra_migrate_files:
+  - external/lapack-3.12.1/INSTALL/dlamch.f
+  - external/lapack-3.12.1/INSTALL/droundup_lwork.f
+
 prefix:
   style: direct
 

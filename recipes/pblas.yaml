@@ -172,6 +172,14 @@ header_patches:
 # library still exposes the standard S/D/C/Z names.
 copy_all_originals: true
 
+# pilaenv.f is the only Fortran file in PBLAS/SRC/ — a precision-independent
+# block-size query called by PB_Cplascal / PB_Cpsymm* / PB_Cptrmm* /
+# PB_Cptrsm* etc. ``extensions: [.c, .h]`` above filters it out of the
+# scan, but copy_files bypasses the extension filter so the file is staged
+# verbatim (and because it's precision-independent, no rename is needed).
+copy_files:
+  - PILAENV
+
 skip_files: []
 
 # Hand-written replacements for the PB_C[dz]typeset typeset functions.
