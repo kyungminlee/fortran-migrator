@@ -15,7 +15,8 @@ from pathlib import Path
 # excluded — they reference existing names, not new definitions.
 _FORTRAN_DEF_RE = re.compile(
     r'(?<!\w)(?<!END\s)(?<!end\s)'
-    r'(?:SUBROUTINE|FUNCTION|MODULE(?!\s+PROCEDURE\b))\s+([A-Za-z]\w*)',
+    r'(?:SUBROUTINE|FUNCTION|MODULE(?!\s+(?:PROCEDURE|SUBROUTINE|FUNCTION)\b))'
+    r'\s+([A-Za-z]\w*)',
     re.IGNORECASE,
 )
 
