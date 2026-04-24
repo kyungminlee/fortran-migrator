@@ -114,6 +114,21 @@ if(NEEDS_MULTIFLOATS)
             "\${PROJECT_SOURCE_DIR}/../include"
             _mf_src_cmake "${_mf_src_cmake}")
         file(WRITE "${multifloats_fetch_SOURCE_DIR}/src/CMakeLists.txt" "${_mf_src_cmake}")
+        # Same symptom in fsrc/CMakeLists.txt: ``${CMAKE_SOURCE_DIR}/cmake/
+        # multifloatsfConfig.cmake.in`` resolves against our staging dir,
+        # not the fetched multifloats source root. Redirect to the
+        # multifloats sub-project root so configure_package_config_file
+        # finds the template where FetchContent put it.
+        if(EXISTS "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt")
+            file(READ "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt"
+                 _mf_fsrc_cmake)
+            string(REPLACE
+                "\${CMAKE_SOURCE_DIR}/cmake/"
+                "\${PROJECT_SOURCE_DIR}/../cmake/"
+                _mf_fsrc_cmake "${_mf_fsrc_cmake}")
+            file(WRITE "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt"
+                 "${_mf_fsrc_cmake}")
+        endif()
         add_subdirectory(
             ${multifloats_fetch_SOURCE_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}/_mf EXCLUDE_FROM_ALL)
@@ -123,14 +138,14 @@ if(NEEDS_MULTIFLOATS)
     if(EXISTS "${MF_HELPERS_DIR}/la_constants_mf.f90")
         add_library(la_constants_mf STATIC "${MF_HELPERS_DIR}/la_constants_mf.f90")
         fortran_module_layout(la_constants_mf)
-        target_link_libraries(la_constants_mf PUBLIC multifloatsf)
+        target_link_libraries(la_constants_mf PUBLIC $<BUILD_INTERFACE:multifloatsf>)
     endif()
 
     # la_xisnan_mf helper module (needs Fortran multifloats module)
     if(EXISTS "${MF_HELPERS_DIR}/la_xisnan_mf.f90")
         add_library(la_xisnan_mf STATIC "${MF_HELPERS_DIR}/la_xisnan_mf.f90")
         fortran_module_layout(la_xisnan_mf)
-        target_link_libraries(la_xisnan_mf PUBLIC multifloatsf)
+        target_link_libraries(la_xisnan_mf PUBLIC $<BUILD_INTERFACE:multifloatsf>)
     endif()
 
     # multifloats_mpi — C++ MPI handle registration + bridge header
@@ -181,9 +196,16 @@ function(add_migrated_fortran_library lib_name)
         target_link_libraries(${_precision_target} PUBLIC ${_common_target})
     endif()
 
-    # Link multifloats helpers for Fortran libraries
+    # Link multifloats helpers for Fortran libraries. multifloatsf
+    # comes from a fetched sub-project that owns its own install/export
+    # set; wrap the link in ``$<BUILD_INTERFACE:>`` so the dependency
+    # is visible during the build (tests, locally-built downstreams)
+    # but isn't propagated into our install(EXPORT) — otherwise CMake
+    # rejects the generate step because multifloatsf is "not in any
+    # export set" known to us.
     if(NEEDS_MULTIFLOATS)
-        target_link_libraries(${_precision_target} PUBLIC multifloatsf)
+        target_link_libraries(${_precision_target} PUBLIC
+            $<BUILD_INTERFACE:multifloatsf>)
         if(TARGET la_constants_mf)
             target_link_libraries(${_precision_target} PUBLIC la_constants_mf)
         endif()
@@ -209,6 +231,10 @@ function(add_migrated_c_library lib_name)
     set(_precision "")
     foreach(f ${${lib_name}_PRECISION_SOURCES})
         list(APPEND _precision "${_dir}/${f}")
+    endforeach()
+    set(_dual "")
+    foreach(f ${${lib_name}_DUAL_INTERFACE_SOURCES})
+        list(APPEND _dual "${_dir}/${f}")
     endforeach()
 
     set(_common_target "${lib_name}_common")
@@ -238,9 +264,54 @@ function(add_migrated_c_library lib_name)
         target_link_libraries(${_precision_target} INTERFACE $<LINK_ONLY:MPI::MPI_C>)
     endif()
 
-    # Multifloats: compile C as C++ for operator overloading support
+    # Dual-interface compile: files listed in
+    # ``${lib_name}_DUAL_INTERFACE_SOURCES`` are already compiled once
+    # above (they live in _precision / _common, since every such file
+    # is also one of BLACS's regular sources) and expose the
+    # Fortran-callable entry points by default. Compile them a second
+    # time as an OBJECT library with ``-DCallFromC`` so the C-callable
+    # entry points (``Cblacs_*``, ``Cdgesd2d`` etc.) are also present
+    # in the final static archive. Empty ``_dual`` list is a no-op.
+    if(_dual)
+        set(_dual_target "${_precision_target}_c_api")
+        add_library(${_dual_target} OBJECT ${_dual})
+        target_compile_definitions(${_dual_target} PRIVATE CallFromC)
+        target_include_directories(${_dual_target} PRIVATE $<BUILD_INTERFACE:${_dir}/src>)
+        if(MPI_C_FOUND)
+            target_link_libraries(${_dual_target} PRIVATE MPI::MPI_C)
+        endif()
+        if(C_AS_CXX)
+            set_source_files_properties(${_dual} PROPERTIES LANGUAGE CXX)
+            target_compile_features(${_dual_target} PRIVATE cxx_std_17)
+            target_compile_options(${_dual_target} PRIVATE -fpermissive -Wno-write-strings)
+            # Multifloats: ``Bdef.h`` pulls in ``multifloats_bridge.h`` under
+            # multifloats mode. That header is exposed through the
+            # ``multifloats_mpi`` target (INTERFACE or STATIC depending on
+            # MPI availability); propagate its include directories so the
+            # dual-interface compile finds it just like the main target.
+            if(TARGET multifloats_mpi)
+                target_link_libraries(${_dual_target} PRIVATE multifloats_mpi)
+            endif()
+        endif()
+        target_sources(${_precision_target}
+                       PRIVATE $<TARGET_OBJECTS:${_dual_target}>)
+    endif()
+
+    # Multifloats: compile C as C++ for operator overloading support.
+    # ``copy_files``-staged Fortran helpers (e.g. pblas/pilaenv.f) ride in
+    # COMMON_SOURCES but must retain their native language; filter them
+    # out of the language override.
     if(C_AS_CXX)
-        set(_all_sources ${_common} ${_precision})
+        set(_all_sources "")
+        foreach(_s ${_common} ${_precision})
+            get_filename_component(_ext "${_s}" EXT)
+            string(TOLOWER "${_ext}" _ext)
+            if(NOT _ext STREQUAL ".f" AND NOT _ext STREQUAL ".f90"
+                AND NOT _ext STREQUAL ".f90" AND NOT _ext STREQUAL ".f03"
+                AND NOT _ext STREQUAL ".for")
+                list(APPEND _all_sources "${_s}")
+            endif()
+        endforeach()
         set_source_files_properties(${_all_sources} PROPERTIES LANGUAGE CXX)
         if(TARGET ${_common_target})
             target_compile_features(${_common_target} PRIVATE cxx_std_17)
@@ -294,10 +365,14 @@ if(TARGET ${LIB_PREFIX}pbblas)
     endforeach()
 endif()
 
-# 6. PBLAS (depends on BLAS, BLACS; C library)
+# 6. PBLAS (depends on BLAS, BLACS, PTZBLAS, PBBLAS; C library)
+# PBLAS C entry points call into PTZBLAS kernels (e.g. qvasum_, qvvdotc_)
+# and PBBLAS kernels (pbqmatadd_, pbqtran_) at runtime, so both must be
+# in the link graph alongside BLAS and BLACS.
 add_migrated_c_library(pblas)
 if(TARGET ${LIB_PREFIX}pblas)
-    foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs)
+    foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs
+                 ${LIB_PREFIX}ptzblas ${LIB_PREFIX}pbblas)
         if(TARGET ${_dep})
             target_link_libraries(${LIB_PREFIX}pblas PUBLIC ${_dep})
         endif()
