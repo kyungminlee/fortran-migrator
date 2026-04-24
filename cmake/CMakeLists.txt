@@ -81,8 +81,13 @@ if(NEEDS_MULTIFLOATS)
     # which is only correct when multifloats is the top-level project.
     # EXCLUDE_FROM_ALL keeps us from building multifloats's install
     # rules / tests by default.
-    set(BUILD_TESTING OFF CACHE BOOL "Disable tests in fetched multifloats" FORCE)
-    set(MULTIFLOATS_BUILD_BENCH OFF CACHE BOOL "Disable benches in fetched multifloats" FORCE)
+    #
+    # BUILD_TESTING/MULTIFLOATS_BUILD_BENCH are set as plain (non-cache)
+    # variables so they only suppress tests *inside* the multifloats
+    # sub-build. A `CACHE … FORCE` here would also disable our own
+    # `tests/` directory at the end of this file.
+    set(BUILD_TESTING OFF)
+    set(MULTIFLOATS_BUILD_BENCH OFF)
     if(DEFINED MULTIFLOATS_DIR)
         message(STATUS "Using local multifloats: ${MULTIFLOATS_DIR}")
         add_subdirectory(${MULTIFLOATS_DIR}
@@ -365,4 +370,20 @@ if(NEEDS_MULTIFLOATS)
             endif()
         endif()
     endforeach()
+endif()
+
+# ── Tests ────────────────────────────────────────────────────────────
+# Differential precision test suite. Each library has its own subdir
+# under tests/ which is added when its tests/<lib>/CMakeLists.txt is
+# present in the staging copy.
+#
+# We deliberately do NOT gate on BUILD_TESTING: the multifloats
+# sub-build sets it locally to OFF to suppress its own tests, and
+# that local value shadows the cache value from include(CTest) at
+# the parent scope. Always-on with a directory check gives us the
+# single signal "is the staging dir self-contained?" — drop tests/
+# from staging to skip them.
+if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    enable_testing()
+    add_subdirectory(tests)
 endif()

@@ -841,6 +841,26 @@ set(STAGED_LIBRARIES {staged_list})
         else:
             print(f'Warning: {src} not found')
 
+    # Copy tests/ subtree so the unified CMakeLists.txt can pick it up
+    # via add_subdirectory(tests) when BUILD_TESTING=ON.
+    tests_src = proj_root / 'tests'
+    if tests_src.is_dir():
+        tests_dst = staging_dir / 'tests'
+        if tests_dst.exists():
+            shutil.rmtree(tests_dst)
+        shutil.copytree(tests_src, tests_dst)
+
+    # Copy vendored Netlib BLAS source for the differential precision
+    # tests' refblas_quad reference library (compiled with gfortran's
+    # -freal-8-real-16 to promote KIND=8 entities to KIND=16 in-place).
+    # Tests fall back to system -lblas if this directory is absent.
+    netlib_blas_src = proj_root / 'external' / 'lapack-3.12.1' / 'BLAS' / 'SRC'
+    if netlib_blas_src.is_dir():
+        refblas_dst = staging_dir / '_refblas_src'
+        if refblas_dst.exists():
+            shutil.rmtree(refblas_dst)
+        shutil.copytree(netlib_blas_src, refblas_dst)
+
     print(f'\n{"=" * 60}')
     print(f'  Staging complete: {len(staged)} libraries')
     print(f'{"=" * 60}')
