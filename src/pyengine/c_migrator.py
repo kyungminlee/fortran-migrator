@@ -493,7 +493,47 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
     if overrides:
         applied = _apply_overrides(output_dir, overrides)
         result['overrides'] = applied
+    # Multifloats: ``.c`` sources are compiled as C++ for operator
+    # overloading on float64x2_t. Wrap each file body in ``extern "C"``
+    # *after* the last ``#include`` so the Fortran-callable /
+    # C-callable entry points (blacs_*_, Cblacs_*, BI_*, pddgemm_,
+    # pzzherk_, …) keep C linkage. Bridge headers'
+    # C++ templates and mpicxx.h declarations stay in C++ scope above
+    # the wrap. Bdef.h gets the same after-includes wrap so its
+    # forward declarations agree with the wrapped definitions. Run
+    # this *after* ``_apply_overrides`` so hand-written replacements
+    # are wrapped too.
+    if target_mode is not None and not target_mode.is_kind_based:
+        _wrap_extern_c_after_last_include(output_dir)
     return result
+
+
+def _wrap_extern_c_after_last_include(output_dir: Path) -> None:
+    """Inject ``extern "C" { ... }`` after the last ``#include`` in every
+    .c and Bdef.h file under output_dir. Idempotent (skips files that
+    already contain ``extern "C"``).
+    """
+    targets = list(output_dir.glob('*.c'))
+    bdef = output_dir / 'Bdef.h'
+    if bdef.exists():
+        targets.append(bdef)
+    for f in sorted(targets):
+        text = f.read_text(errors='replace')
+        if 'extern "C"' in text:
+            continue
+        last_inc = None
+        for m in re.finditer(r'(?m)^\s*#\s*include\b[^\n]*\n', text):
+            last_inc = m
+        if last_inc is None:
+            continue
+        cut = last_inc.end()
+        text = (
+            text[:cut]
+            + '\n#ifdef __cplusplus\nextern "C" {\n#endif\n'
+            + text[cut:]
+            + '\n#ifdef __cplusplus\n} /* extern "C" */\n#endif\n'
+        )
+        f.write_text(text)
 
 
 def _apply_overrides(output_dir: Path,
@@ -913,18 +953,29 @@ def _apply_header_patches(output_dir: Path,
         target = output_dir / patch['file']
         if not target.exists():
             continue
-        before = patch.get('before')
-        anchor = before or patch.get('after')
-        if anchor is None:
-            continue
         insert = _expand_template(patch['insert'], template_vars).rstrip('\n')
         text = target.read_text(errors='replace')
-        if anchor not in text or insert in text:
-            continue  # missing anchor, or already patched (idempotent)
-        if before is not None:
-            text = text.replace(anchor, insert + '\n' + anchor, 1)
+        if insert in text:
+            continue  # already patched (idempotent)
+        # Insertion modes:
+        #  - ``at_bof: true`` — prepend at file start
+        #  - ``at_eof: true`` — append at file end
+        #  - ``before: <anchor>`` — insert on the line before the anchor
+        #  - ``after: <anchor>`` — insert on the line after the anchor
+        if patch.get('at_bof'):
+            text = insert + '\n' + text
+        elif patch.get('at_eof'):
+            sep = '' if text.endswith('\n') else '\n'
+            text = text + sep + insert + '\n'
         else:
-            text = text.replace(anchor, anchor + '\n' + insert, 1)
+            before = patch.get('before')
+            anchor = before or patch.get('after')
+            if anchor is None or anchor not in text:
+                continue
+            if before is not None:
+                text = text.replace(anchor, insert + '\n' + anchor, 1)
+            else:
+                text = text.replace(anchor, anchor + '\n' + insert, 1)
         target.write_text(text)
 
 
@@ -1127,7 +1178,6 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         text = _apply_c_type_subs(text, template_vars, c_type_aliases,
                                   target_mode=target_mode)
 
-
         normalized = _normalize_for_compare(text)
         prior = canonical_normalized.get(new_name)
         if prior is None:
@@ -1206,6 +1256,7 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
     bdef_path = output_dir / 'Bdef.h'
     if bdef_path.exists():
         _patch_bdef_header(bdef_path, target_mode, template_vars)
+
 
     # Generate MPI datatype availability check when the target requires
     # stock MPI datatypes that may not be universally available (e.g.

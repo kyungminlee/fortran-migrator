@@ -48,6 +48,75 @@ c_type_aliases:
     to: 'cmplx{RPU}'
 
 header_patches:
+  # Multifloats: PBLAS .c sources are compiled as C++ (for operator
+  # overloading on float64x2_t). Without ``extern "C"`` wrappers, the
+  # Fortran-callable entry points get C++ name-mangled — the matching
+  # declarations in PBpblas.h need to agree. Wrap the entire header
+  # body in extern "C" via the at_bof / at_eof patches; c_migrator
+  # adds the matching wrap to each ``<name>_.c`` definition body
+  # (after the last include, so the bridge templates stay C++).
+  - file: PBpblas.h
+    when: multifloats
+    at_bof: true
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: PBpblas.h
+    when: multifloats
+    at_eof: true
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  # Same wrapping for the other PBLAS headers that declare
+  # Fortran-callable / C-callable entry points the migrated PBLAS
+  # entry points and the test harness need to resolve at link time:
+  # PBblacs.h declares ``Cblacs_*`` and the gather/sum/cast helpers,
+  # PBtools.h declares the PTZBLAS Fortran kernels (``qvasum_``,
+  # ``ddvasum_``, …), PBblas.h declares the serial BLAS forwards.
+  - file: PBblacs.h
+    when: multifloats
+    at_bof: true
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: PBblacs.h
+    when: multifloats
+    at_eof: true
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  - file: PBtools.h
+    when: multifloats
+    at_bof: true
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: PBtools.h
+    when: multifloats
+    at_eof: true
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  - file: PBblas.h
+    when: multifloats
+    at_bof: true
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: PBblas.h
+    when: multifloats
+    at_eof: true
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
   # KIND targets: introduce primitive QREAL/EREAL typedef plus the
   # cmplxQ/cmplxE array form.
   - file: pblas.h

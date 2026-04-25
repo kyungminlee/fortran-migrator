@@ -8,22 +8,23 @@ reports via `scripts/precision_report.py`.
 
 | target       | tests run | tests passed | wall-clock |
 |--------------|----------:|-------------:|-----------:|
-| **kind16**       |        86 |       **86** |    143 sec |
-| **kind10**       |        75 |       **75** |     90 sec |
-| **multifloats**  |        55 |       **55** |    1.2 sec |
-| **total**        |       216 |      **216** |          — |
+| **kind16**       |        86 |       **86** |    144 sec |
+| **kind10**       |        75 |       **75** |     89 sec |
+| **multifloats**  |        75 |       **75** |     92 sec |
+| **total**        |       236 |      **236** |          — |
 
-Coverage: **86 unique routines** × **863 individual problem cases**
+Coverage: **86 unique routines** × **876 individual problem cases**
 across the three targets.
 
-`kind10` runs 75 of the 86 because `tests/scalapack/` ships no
-`target_kind10` wrapper today (kind10 has no PBLAS-style ScaLAPACK
-test driver). `multifloats` is even narrower — its 55 entries are the
-serial BLAS + LAPACK suites only; the PBLAS suite returns early under
-`C_AS_CXX` (entry-point C linkage requires `extern "C"` wrappers that
-haven't been wired through to the multifloats target yet — see
-[`tests/pblas/README.md`](pblas/README.md)), and ScaLAPACK is gated
-off there for the same reason plus the K&R holdouts in REDIST/SRC
+`kind10` and `multifloats` each run 75 of the 86 because
+`tests/scalapack/` ships no `target_kind10` / `target_multifloats`
+wrapper today (only kind16 has a ScaLAPACK test driver yet). The 75
+matching entries are the BLAS + LAPACK + PBLAS suites in full —
+multifloats now includes the PBLAS suite after the recent
+``extern "C"`` wrap got wired through (`recipes/pblas.yaml`'s
+``header_patches`` plus the ``_wrap_extern_c_after_last_include``
+post-pass in ``c_migrator.py``). ScaLAPACK on multifloats is still
+gated off pending the same treatment for ScaLAPACK / scalapack_c
 (see [`tests/scalapack/README.md`](scalapack/README.md)).
 
 
@@ -159,30 +160,30 @@ no test driver / wrapper for that target.
 | zgeqrf   | 18.76  | exact  | 31.41  |
 | zheev    | 17.79  | 32.27  | 30.09  |
 
-### PBLAS (kind10 + kind16 only)
+### PBLAS
 
-| routine | kind10 | kind16 |
-|---------|--------|--------|
-| pdasum  | exact  | exact  |
-| pdaxpy  | exact  | exact  |
-| pdcopy  | exact  | exact  |
-| pddot   | 17.74  | exact  |
-| pdgemm  | 18.56  | exact  |
-| pdgemv  | 18.55  | exact  |
-| pdger   | 19.23  | exact  |
-| pdnrm2  | 18.88  | 31.57  |
-| pdscal  | exact  | exact  |
-| pdsymm  | 18.36  | 33.40  |
-| pdsymv  | 18.44  | 33.38  |
-| pdsyrk  | 18.40  | exact  |
-| pdtrmm  | 18.46  | exact  |
-| pdtrsm  | 18.13  | 33.05  |
-| pdtrsv  | 18.47  | 33.03  |
-| pzaxpy  | 19.32  | exact  |
-| pzdotc  | 17.82  | exact  |
-| pzgemm  | 18.56  | exact  |
-| pzgemv  | 18.76  | exact  |
-| pzherk  | 18.59  | exact  |
+| routine | kind10 | kind16 | multifloats |
+|---------|--------|--------|-------------|
+| pdasum  | exact  | exact  | exact  |
+| pdaxpy  | exact  | exact  | exact  |
+| pdcopy  | exact  | exact  | exact  |
+| pddot   | 17.74  | exact  | 30.78  |
+| pdgemm  | 18.56  | exact  | 31.34  |
+| pdgemv  | 18.55  | exact  | 31.44  |
+| pdger   | 19.23  | exact  | 31.83  |
+| pdnrm2  | 18.88  | 31.57  | 30.98  |
+| pdscal  | exact  | exact  | exact  |
+| pdsymm  | 18.36  | 33.40  | 31.23  |
+| pdsymv  | 18.44  | 33.38  | 31.28  |
+| pdsyrk  | 18.40  | exact  | 31.07  |
+| pdtrmm  | 18.46  | exact  | 31.33  |
+| pdtrsm  | 18.13  | 33.05  | 30.99  |
+| pdtrsv  | 18.47  | 33.03  | 31.16  |
+| pzaxpy  | 19.32  | exact  | 31.96  |
+| pzdotc  | 17.82  | exact  | 30.69  |
+| pzgemm  | 18.56  | exact  | 31.41  |
+| pzgemv  | 18.76  | exact  | 31.38  |
+| pzherk  | 18.59  | exact  | 31.19  |
 
 ### ScaLAPACK (kind16 only)
 

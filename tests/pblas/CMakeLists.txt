@@ -37,22 +37,6 @@ if(NOT TARGET ${LIB_PREFIX}blacs)
     return()
 endif()
 
-# Multifloats: the migrated PBLAS C sources are compiled as C++ (to get
-# operator overloading on float64x2_t). Without ``extern "C"`` wrappers
-# on every Fortran-callable entry-point declaration and definition,
-# ``pddgemm_`` / ``pzzherk_`` / etc. end up C++-mangled and the Fortran
-# target_pblas.f90 wrapper can't link to them. Wiring that through
-# cleanly means patching the upstream PBLAS headers (PBpblas.h,
-# PBtools.h) and the per-file entry points in lockstep; tracked
-# separately from the seven gaps this test suite was originally
-# designed around. Skip here until that lands.
-if(C_AS_CXX)
-    message(STATUS "tests/pblas: skipping — multifloats PBLAS entry-point "
-                   "C linkage wrapping is an open issue "
-                   "(see tests/pblas/README.md)")
-    return()
-endif()
-
 # ── Common helper modules ───────────────────────────────────────────
 add_library(pblas_test_common STATIC
     common/prec_kinds.f90
