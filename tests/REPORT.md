@@ -267,6 +267,27 @@ but are exercised every time the driver runs. A regression in any
 helper surfaces through whichever solver / factorisation /
 eigenvalue driver depends on it.
 
+### Per-target × per-library coverage
+
+A given test driver runs against any target whose
+``target_<TARGET>/target_<library>.f90`` wrapper exists. Today's
+matrix:
+
+| Library     | kind10 | kind16 | multifloats |
+|-------------|--------|--------|-------------|
+| BLAS        | ✓ 40   | ✓ 40   | ✓ 40        |
+| LAPACK      | ✓ 15   | ✓ 15   | ✓ 15        |
+| PBLAS       | ✓ 20   | ✓ 20   | ✓ 20        |
+| ScaLAPACK   | —      | ✓ 11   | —           |
+| **per-target total** | **75** | **86** | **75** |
+
+`✓ N` means N test drivers run on that target; `—` means no
+``target_<TARGET>/target_scalapack.f90`` wrapper has been written
+yet (only ``target_kind16/`` is populated for tests/scalapack).
+Adding kind10 / multifloats ScaLAPACK target wrappers — and the
+matching ``extern "C"`` wraps for ``scalapack_c`` — would close the
+last two ✗ cells.
+
 ### BLAS (real, q-prefix)
 
 | migrated entry | tested via | | migrated entry | tested via |
