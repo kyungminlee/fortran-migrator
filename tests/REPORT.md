@@ -239,6 +239,164 @@ single-corner-of-the-flag-space bugs are caught by the cycling
 above.
 
 
+## Coverage by entry point
+
+The migrator emits one Fortran-callable entry point per upstream
+routine, broken into a real-precision family (q-prefix at kind16,
+e at kind10, dd at multifloats) and a complex family (x / y / zz).
+The tables below count migrated entries (extracted from the staged
+`libqblas-*.a`, `libqlapack-*.a`, `libqpblas-*.a`,
+`libqscalapack-*.a` archives at kind16) and mark which have a
+dedicated test driver (`✓`) versus those exercised only transitively
+through a higher-level test (`—`).
+
+| Library     | Real (q) | Complex (x) | Total entries | Direct tests | Coverage |
+|-------------|---------:|------------:|--------------:|-------------:|---------:|
+| BLAS        |       37 |          36 |          75 † |           40 |     53 % |
+| LAPACK      |      508 |         506 |        1 014 |           15 |    1.5 % |
+| PBLAS       |       29 |          32 |           61 |           20 |     33 % |
+| ScaLAPACK   |      173 |         152 |          325 |           11 |    3.4 % |
+
+† BLAS total includes 2 integer-result entries (`iqamax`, `ixamax`).
+
+The LAPACK / ScaLAPACK direct-coverage numbers look low because each
+high-level driver pulls in dozens of internal helpers (`xLAR*`,
+`xLAS*`, `xLAB*`, `PB_*`, …) that have no dedicated test of their own
+but are exercised every time the driver runs. A regression in any
+helper surfaces through whichever solver / factorisation /
+eigenvalue driver depends on it.
+
+### BLAS (real, q-prefix)
+
+| migrated entry | tested via | | migrated entry | tested via |
+|----------------|------------|---|----------------|------------|
+| qasum          | `test_dasum`   | | qspr           | —              |
+| qaxpy          | `test_daxpy`   | | qspr2          | —              |
+| qcabs1         | —              | | qswap          | `test_dswap`   |
+| qcopy          | `test_dcopy`   | | qsymm          | `test_dsymm`   |
+| qdot           | `test_ddot`    | | qsymv          | `test_dsymv`   |
+| qgbmv          | `test_dgbmv`   | | qsyr           | —              |
+| qgemm          | `test_dgemm`   | | qsyr2          | —              |
+| qgemmtr        | —              | | qsyr2k         | `test_dsyr2k`  |
+| qgemv          | `test_dgemv`   | | qsyrk          | `test_dsyrk`   |
+| qger           | `test_dger`    | | qtbmv          | `test_dtbmv`   |
+| qnrm2          | `test_dnrm2`   | | qtbsv          | —              |
+| qrot           | `test_drot`    | | qtpmv          | `test_dtpmv`   |
+| qrotg          | `test_drotg`   | | qtpsv          | —              |
+| qrotm          | `test_drotm`   | | qtrmm          | `test_dtrmm`   |
+| qrotmg         | `test_drotmg`  | | qtrmv          | `test_dtrmv`   |
+| qsbmv          | `test_dsbmv`   | | qtrsm          | `test_dtrsm`   |
+| qscal          | `test_dscal`   | | qtrsv          | `test_dtrsv`   |
+| qspmv          | `test_dspmv`   | | qxasum         | `test_dzasum`  |
+|                |                | | qxnrm2         | —              |
+
+Untested real-side BLAS (9 / 37): `qcabs1`, `qgemmtr`, `qspr`, `qspr2`, `qsyr`, `qsyr2`, `qtbsv`, `qtpsv`, `qxnrm2`.
+
+### BLAS (complex, x-prefix)
+
+| migrated entry | tested via   | | migrated entry | tested via |
+|----------------|--------------|---|----------------|------------|
+| xaxpy          | `test_zaxpy` | | xhpr           | —          |
+| xcopy          | —            | | xhpr2          | —          |
+| xdotc          | `test_zdotc` | | xqrot          | —          |
+| xdotu          | `test_zdotu` | | xqscal         | —          |
+| xgbmv          | —            | | xrotg          | —          |
+| xgemm          | `test_zgemm` | | xscal          | `test_zscal` |
+| xgemmtr        | —            | | xswap          | —          |
+| xgemv          | `test_zgemv` | | xsymm          | —          |
+| xgerc          | `test_zgerc` | | xsyr2k         | —          |
+| xgeru          | —            | | xsyrk          | —          |
+| xhbmv          | —            | | xtbmv          | —          |
+| xhemm          | `test_zhemm` | | xtbsv          | —          |
+| xhemv          | `test_zhemv` | | xtpmv          | —          |
+| xher           | —            | | xtpsv          | —          |
+| xher2          | —            | | xtrmm          | —          |
+| xher2k         | —            | | xtrmv          | —          |
+| xherk          | `test_zherk` | | xtrsm          | `test_ztrsm` |
+| xhpmv          | —            | | xtrsv          | —          |
+
+Untested complex-side BLAS (25 / 36): `xcopy`, `xgbmv`, `xgemmtr`, `xgeru`, `xhbmv`, `xher`, `xher2`, `xher2k`, `xhpmv`, `xhpr`, `xhpr2`, `xqrot`, `xqscal`, `xrotg`, `xswap`, `xsymm`, `xsyr2k`, `xsyrk`, `xtbmv`, `xtbsv`, `xtpmv`, `xtpsv`, `xtrmm`, `xtrmv`, `xtrsv`. The complex-only herk / hemm / hemv core paths are tested; the primarily-untested cluster is the symmetric-complex (zsymm, zsyrk, zsyr2k) and packed/banded (xhbmv, xhpmv, xhpr, xtbmv, xtpmv) routines, which a Fortran/C numerical-physics consumer rarely calls. Add tests if/when a dependent code path needs them.
+
+### LAPACK
+
+15 of 1 014 migrated entries have a dedicated test driver:
+
+| Group         | Tested entries                                              |
+|---------------|-------------------------------------------------------------|
+| linear_solve  | `dgesv`, `dgetrf`, `dgetrs`, `dpotrf`, `dpotrs`, `zgesv`    |
+| factorization | `dgeqrf`, `dorgqr`, `zgeqrf`                                |
+| eigenvalue    | `dsyev`, `zheev`                                            |
+| svd           | `dgesvd`                                                    |
+| auxiliary     | `dlange`, `dlacpy`, `dlaset`                                |
+
+The remaining ~1 000 routines are LAPACK auxiliaries (`xLAR*`,
+`xLAS*`, `xLAB*`, blocked-panel helpers like `dgetrf2`, the
+tri-diagonal solvers, the Bunch–Kaufman family, etc.) that are
+called exclusively from inside the tested drivers. A migration bug
+in any of them surfaces transitively as soon as the driver test
+runs. Direct tests for individual auxiliaries would mostly be
+duplicative with the higher-level tests but could be added if a
+specific helper proves to be a regression target.
+
+### PBLAS
+
+PBLAS real-precision (pq-prefix, 29 entries):
+
+| entry  | tested via      | entry  | tested via      | entry  | tested via      |
+|--------|-----------------|--------|-----------------|--------|-----------------|
+| agemv  | —               | gemm   | `test_pdgemm`   | syr    | —               |
+| amax   | —               | gemv   | `test_pdgemv`   | syr2   | —               |
+| asum   | `test_pdasum`   | ger    | `test_pdger`    | syr2k  | —               |
+| asymv  | —               | nrm2   | `test_pdnrm2`   | syrk   | `test_pdsyrk`   |
+| atrmv  | —               | scal   | `test_pdscal`   | tradd  | —               |
+| axpy   | `test_pdaxpy`   | swap   | —               | tran   | —               |
+| copy   | `test_pdcopy`   | symm   | `test_pdsymm`   | trmm   | `test_pdtrmm`   |
+| dot    | `test_pddot`    | symv   | `test_pdsymv`   | trmv   | —               |
+| geadd  | —               |        |                 | trsm   | `test_pdtrsm`   |
+|        |                 |        |                 | trsv   | `test_pdtrsv`   |
+| xasum  | —               | xnrm2  | —               |        |                 |
+
+PBLAS complex-precision (px-prefix, 32 entries):
+
+| entry  | tested via      | entry  | tested via      | entry  | tested via      |
+|--------|-----------------|--------|-----------------|--------|-----------------|
+| agemv  | —               | gemv   | `test_pzgemv`   | scal   | —               |
+| ahemv  | —               | gerc   | —               | swap   | —               |
+| amax   | —               | geru   | —               | symm   | —               |
+| atrmv  | —               | hemm   | —               | syr2k  | —               |
+| axpy   | `test_pzaxpy`   | hemv   | —               | syrk   | —               |
+| copy   | —               | her    | —               | tradd  | —               |
+| dotc   | `test_pzdotc`   | her2   | —               | tranc  | —               |
+| dotu   | —               | her2k  | —               | tranu  | —               |
+| geadd  | —               | herk   | `test_pzherk`   | trmm   | —               |
+| gemm   | `test_pzgemm`   | qscal  | —               | trmv   | —               |
+|        |                 |        |                 | trsm   | —               |
+|        |                 |        |                 | trsv   | —               |
+
+Direct PBLAS coverage: 15 / 29 real (52 %), 5 / 32 complex (16 %), 20 / 61 overall.
+
+### ScaLAPACK
+
+11 of 325 migrated entries have a dedicated test driver. The
+following table groups the tested entries; the same scaling argument
+as LAPACK applies to the remaining ~314 helpers, which are pulled
+in transitively through the drivers below.
+
+| Group         | Tested entries                                                   |
+|---------------|------------------------------------------------------------------|
+| linear_solve  | `pdgesv`, `pdgetrf`, `pdgetrs`, `pdpotrf`, `pdpotrs`             |
+| factorization | `pdgeqrf`                                                        |
+| eigenvalue    | `pdsyev`                                                         |
+| svd           | `pdgesvd`                                                        |
+| auxiliary     | `pdlange`, `pdlacpy`, `pdlaset`                                  |
+
+No complex (`pz*`/`px*`) ScaLAPACK driver is tested today —
+`target_scalapack.f90` exposes complex wrappers (`pxgesv`,
+`pxgeqrf`, `pxheev`) but no test exercises them. Adding a complex
+ScaLAPACK test driver and the missing kind10 / multifloats
+target wrappers would close the largest remaining holes.
+
+
 ## Reproducing this report
 
 ```bash
