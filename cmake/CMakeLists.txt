@@ -389,14 +389,40 @@ if(TARGET ${LIB_PREFIX}scalapack)
     endforeach()
 endif()
 
-# 8. ScaLAPACK C (depends on LAPACK, BLACS, PBLAS, ScaLAPACK)
-add_migrated_c_library(scalapack_c)
+# 8. ScaLAPACK C (depends on LAPACK, BLACS, PBLAS, ScaLAPACK).
+# Skip for multifloats: scalapack_c includes REDIST/SRC sources whose
+# K&R-style function definitions don't survive C-as-C++ compilation.
+# Patching every K&R def in those files is the proper fix (project
+# policy: assume ANSI C); until that lands, the multifloats target
+# simply does not build scalapack_c. tests/scalapack ships no
+# target_multifloats wrapper today, so nothing depends on the
+# resulting symbols on this target.
+if(NOT C_AS_CXX)
+    add_migrated_c_library(scalapack_c)
+endif()
 if(TARGET ${LIB_PREFIX}scalapack_c)
+    # REDIST/SRC sources select their Fortran-call entry-point naming
+    # convention (trailing underscore vs UpCase vs no-change) at compile
+    # time via ``Add_`` / ``UpCase`` / ``NoChange``. Upstream's
+    # SLmake.inc.example sets ``-DAdd_`` to get the lowercase + trailing
+    # underscore convention that gfortran emits, so we match.
+    target_compile_definitions(${LIB_PREFIX}scalapack_c PRIVATE Add_)
+    if(TARGET scalapack_c_common)
+        target_compile_definitions(scalapack_c_common PRIVATE Add_)
+    endif()
     foreach(_dep ${LIB_PREFIX}lapack ${LIB_PREFIX}blacs ${LIB_PREFIX}pblas ${LIB_PREFIX}scalapack)
         if(TARGET ${_dep})
             target_link_libraries(${LIB_PREFIX}scalapack_c PUBLIC ${_dep})
         endif()
     endforeach()
+    # Reverse dep: ScaLAPACK's Fortran routines call qlamov_/xlamov_
+    # (and the redistribution entry points pqgemr2d_/pxgemr2d_) which
+    # live in ${LIB_PREFIX}scalapack_c. Downstream test link cycles
+    # then need only to name ${LIB_PREFIX}scalapack to pick both up.
+    if(TARGET ${LIB_PREFIX}scalapack)
+        target_link_libraries(${LIB_PREFIX}scalapack PUBLIC
+            ${LIB_PREFIX}scalapack_c)
+    endif()
 endif()
 
 # ── Install ──────────────────────────────────────────────────────────
