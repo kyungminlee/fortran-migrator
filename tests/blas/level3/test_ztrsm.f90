@@ -7,9 +7,16 @@ program test_ztrsm
     use ref_quad_blas, only: ztrsm
     implicit none
 
-    integer, parameter :: ms(*) = [4, 32, 80]
-    integer, parameter :: ns(*) = [5, 40, 60]
-    integer :: i, m, n, j
+    integer, parameter :: ms(*) = [4, 32, 80, 48]
+    integer, parameter :: ns(*) = [5, 40, 60, 32]
+    ! Cycle (SIDE, UPLO, TRANS, DIAG) so each shape hits an independent
+    ! path. TRANS='C' (conjugate-transpose) is its own complex-only
+    ! code path that never ran before.
+    character(len=1), parameter :: sides(*)   = ['L', 'R', 'L', 'L']
+    character(len=1), parameter :: uplos(*)   = ['U', 'U', 'L', 'U']
+    character(len=1), parameter :: transes(*) = ['N', 'N', 'N', 'C']
+    character(len=1), parameter :: diags(*)   = ['N', 'N', 'N', 'U']
+    integer :: i, m, n, na, j, lda
     complex(ep), allocatable :: A(:,:), B0(:,:), B_ref(:,:), B_got(:,:)
     complex(ep) :: alpha
     real(ep) :: err, tol
@@ -18,23 +25,29 @@ program test_ztrsm
     call report_init('ztrsm', target_name)
     do i = 1, size(ms)
         m = ms(i); n = ns(i)
-        call gen_matrix_complex(m, m, A,  seed = 1081 + 29 * i)
+        na = merge(m, n, sides(i) == 'L')
+        call gen_matrix_complex(na, na, A, seed = 1081 + 29 * i)
         ! Beef up diagonal so the triangle is well-conditioned.
-        do j = 1, m
-            A(j, j) = A(j, j) + cmplx(real(m + 2, ep), 0.0_ep, ep)
+        do j = 1, na
+            A(j, j) = A(j, j) + cmplx(real(na + 2, ep), 0.0_ep, ep)
         end do
         call gen_matrix_complex(m, n, B0, seed = 1091 + 29 * i)
         alpha = cmplx(0.7_ep, 0.2_ep, ep)
         allocate(B_ref(m, n), B_got(m, n))
         B_ref = B0
         B_got = B0
-        call ztrsm('L', 'U', 'N', 'N', m, n, alpha, A, m, B_ref, m)
-        call target_ztrsm('L', 'U', 'N', 'N', m, n, alpha, A, m, B_got, m)
+        lda = na
+        call ztrsm(sides(i), uplos(i), transes(i), diags(i), m, n, alpha, &
+                   A, lda, B_ref, m)
+        call target_ztrsm(sides(i), uplos(i), transes(i), diags(i), m, n, &
+                          alpha, A, lda, B_got, m)
         err = max_rel_err_mat_z(B_got, B_ref)
-        tol = 32.0_ep * 8.0_ep * real(m, ep) * target_eps
-        write(label, '(a,i0,a,i0)') 'm=', m, ',n=', n
+        tol = 32.0_ep * 8.0_ep * real(na, ep) * target_eps
+        write(label, '(a,a,a,a,a,a,a,a,a,i0,a,i0)') &
+            'side=', sides(i), ',uplo=', uplos(i), ',trans=', transes(i), &
+            ',diag=', diags(i), ',m=', m, ',n=', n
         call report_case(trim(label), err, tol)
-        deallocate(B_ref, B_got)
+        deallocate(A, B0, B_ref, B_got)
     end do
     call report_finalize()
 end program test_ztrsm

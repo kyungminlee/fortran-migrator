@@ -8,11 +8,12 @@ program test_zhemv
     implicit none
 
     integer, parameter :: cases(*) = [10, 50, 100]
+    character(len=1), parameter :: uplos(*) = ['U', 'L', 'U']
     integer :: i, n
     complex(ep), allocatable :: A(:,:), x(:), y0(:), y_ref(:), y_got(:)
     complex(ep) :: alpha, beta
     real(ep) :: err, tol
-    character(len=32) :: label
+    character(len=48) :: label
 
     call report_init('zhemv', target_name)
     do i = 1, size(cases)
@@ -25,11 +26,11 @@ program test_zhemv
         allocate(y_ref(n), y_got(n))
         y_ref = y0
         y_got = y0
-        call zhemv('U', n, alpha, A, n, x, 1, beta, y_ref, 1)
-        call target_zhemv('U', n, alpha, A, n, x, 1, beta, y_got, 1)
+        call zhemv(uplos(i), n, alpha, A, n, x, 1, beta, y_ref, 1)
+        call target_zhemv(uplos(i), n, alpha, A, n, x, 1, beta, y_got, 1)
         err = max_rel_err_vec_z(y_got, y_ref)
         tol = 32.0_ep * 4.0_ep * real(n, ep) * target_eps
-        write(label, '(a,i0)') 'n=', n
+        write(label, '(a,a,a,i0)') 'uplo=', uplos(i), ',n=', n
         call report_case(trim(label), err, tol)
         deallocate(y_ref, y_got)
     end do
