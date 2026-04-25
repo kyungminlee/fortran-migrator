@@ -14,9 +14,17 @@ program test_pdgemm
     ! multiple of mb=nb=8 — the partial-block edge is the most likely
     ! place for a numroc/g2l off-by-one to surface, and every
     ! aligned-only shape would miss it.
-    integer, parameter :: ms(*) = [32, 80, 160, 70]
-    integer, parameter :: ns(*) = [40, 60, 120, 55]
-    integer, parameter :: ks(*) = [24, 48, 100, 43]
+    integer, parameter :: ms(*) = [32, 80, 160, 70, 32, 32]
+    integer, parameter :: ns(*) = [40, 60, 120, 55, 40, 40]
+    integer, parameter :: ks(*) = [24, 48, 100, 43, 24, 24]
+    ! Per-shape (alpha, beta). The last two cases hit the BLAS / PBLAS
+    ! quick-return paths inside SUMMA: alpha=0 (skip the matmul, just
+    ! scale C by beta) and beta=0 (overwrite C without reading initial
+    ! contents — distinct kernel branch in PB_Cpgemm).
+    real(ep), parameter :: alphas(*) = [0.7_ep, 0.7_ep, 0.7_ep, 0.7_ep, &
+                                         0.0_ep, 0.5_ep]
+    real(ep), parameter :: betas(*)  = [0.3_ep, 0.3_ep, 0.3_ep, 0.3_ep, &
+                                         0.4_ep, 0.0_ep]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, m, n, k, info
     integer :: locm_a, locn_a, locm_b, locn_b, locm_c, locn_c
@@ -30,9 +38,9 @@ program test_pdgemm
     call grid_init()
     call report_init('pdgemm', target_name, my_rank)
 
-    alpha = 0.7_ep; beta = 0.3_ep
     do i = 1, size(ms)
         m = ms(i); n = ns(i); k = ks(i)
+        alpha = alphas(i); beta = betas(i)
         call gen_distrib_matrix(m, k, mb, nb, A_loc, A_glob, seed = 7801 + 23 * i)
         call gen_distrib_matrix(k, n, mb, nb, B_loc, B_glob, seed = 7811 + 23 * i)
         call gen_distrib_matrix(m, n, mb, nb, C_loc, C0,     seed = 7821 + 23 * i)
@@ -60,7 +68,8 @@ program test_pdgemm
                        beta, C_ref, m)
             err = max_rel_err_mat(C_got, C_ref)
             tol = 32.0_ep * 2.0_ep * real(k, ep) * target_eps
-            write(label, '(a,i0,a,i0,a,i0)') 'm=', m, ',n=', n, ',k=', k
+            write(label, '(a,f3.1,a,f3.1,a,i0,a,i0,a,i0)') &
+                'a=', alpha, ',b=', beta, ',m=', m, ',n=', n, ',k=', k
             call report_case(trim(label), err, tol)
             deallocate(C_ref, C_got)
         end if
