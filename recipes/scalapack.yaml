@@ -19,6 +19,107 @@ extra_symbol_dirs:
   - external/scalapack-2.2.3/SRC        # re-scan for C symbols (slamov, etc.)
   - external/scalapack-2.2.3/REDIST/SRC # pigemr2d, etc.
 
+# TOOLS/ houses ScaLAPACK's descriptor/grid/communication helpers —
+# numroc_, iceil_, ilcm_, descinit_, pchk1mat_, the pd*/pz* element
+# accessors, pdtreecomb_ (with its embedded DCOMBSSQ), SL_init
+# (sl_gridreshape_), the {s,c,d,z}{matadd,latcpy} families, and the
+# integer-family piXXX helpers. Every symbol a ScaLAPACK routine calls
+# into from TOOLS is sourced from here. The zzdotc.f/zzdotu.f pair is
+# owned by PTZBLAS (migrated via ptzblas.yaml) and is deliberately
+# excluded so the final link isn't ambushed by duplicate xxdotc_/
+# xxdotu_ symbols across two archives.
+extra_migrate_files:
+  - external/scalapack-2.2.3/TOOLS/ccdotc.f
+  - external/scalapack-2.2.3/TOOLS/ccdotu.f
+  - external/scalapack-2.2.3/TOOLS/chk1mat.f
+  - external/scalapack-2.2.3/TOOLS/clatcpy.f
+  - external/scalapack-2.2.3/TOOLS/cmatadd.f
+  - external/scalapack-2.2.3/TOOLS/dddot.f
+  - external/scalapack-2.2.3/TOOLS/desc_convert.f
+  - external/scalapack-2.2.3/TOOLS/descinit.f
+  - external/scalapack-2.2.3/TOOLS/descset.f
+  - external/scalapack-2.2.3/TOOLS/dlatcpy.f
+  - external/scalapack-2.2.3/TOOLS/dmatadd.f
+  - external/scalapack-2.2.3/TOOLS/dsasum.f
+  - external/scalapack-2.2.3/TOOLS/dscasum.f
+  - external/scalapack-2.2.3/TOOLS/dscnrm2.f
+  - external/scalapack-2.2.3/TOOLS/dsnrm2.f
+  - external/scalapack-2.2.3/TOOLS/iceil.f
+  - external/scalapack-2.2.3/TOOLS/ilacpy.f
+  - external/scalapack-2.2.3/TOOLS/ilcm.f
+  - external/scalapack-2.2.3/TOOLS/indxg2l.f
+  - external/scalapack-2.2.3/TOOLS/indxg2p.f
+  - external/scalapack-2.2.3/TOOLS/indxl2g.f
+  - external/scalapack-2.2.3/TOOLS/infog1l.f
+  - external/scalapack-2.2.3/TOOLS/infog2l.f
+  - external/scalapack-2.2.3/TOOLS/npreroc.f
+  - external/scalapack-2.2.3/TOOLS/numroc.f
+  - external/scalapack-2.2.3/TOOLS/pcchekpad.f
+  - external/scalapack-2.2.3/TOOLS/pccol2row.f
+  - external/scalapack-2.2.3/TOOLS/pcelget.f
+  - external/scalapack-2.2.3/TOOLS/pcelset2.f
+  - external/scalapack-2.2.3/TOOLS/pcelset.f
+  - external/scalapack-2.2.3/TOOLS/pcfillpad.f
+  - external/scalapack-2.2.3/TOOLS/pchkxmat.f
+  - external/scalapack-2.2.3/TOOLS/pclaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pclaread.f
+  - external/scalapack-2.2.3/TOOLS/pclawrite.f
+  - external/scalapack-2.2.3/TOOLS/pcmatadd.f
+  - external/scalapack-2.2.3/TOOLS/pcrow2col.f
+  - external/scalapack-2.2.3/TOOLS/pctreecomb.f
+  - external/scalapack-2.2.3/TOOLS/pdchekpad.f
+  - external/scalapack-2.2.3/TOOLS/pdcol2row.f
+  - external/scalapack-2.2.3/TOOLS/pdelget.f
+  - external/scalapack-2.2.3/TOOLS/pdelset2.f
+  - external/scalapack-2.2.3/TOOLS/pdelset.f
+  - external/scalapack-2.2.3/TOOLS/pdfillpad.f
+  - external/scalapack-2.2.3/TOOLS/pdlaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pdlaread.f
+  - external/scalapack-2.2.3/TOOLS/pdlawrite.f
+  - external/scalapack-2.2.3/TOOLS/pdmatadd.f
+  - external/scalapack-2.2.3/TOOLS/pdrow2col.f
+  - external/scalapack-2.2.3/TOOLS/pdtreecomb.f
+  - external/scalapack-2.2.3/TOOLS/pichekpad.f
+  - external/scalapack-2.2.3/TOOLS/picol2row.f
+  - external/scalapack-2.2.3/TOOLS/pielget.f
+  - external/scalapack-2.2.3/TOOLS/pielset2.f
+  - external/scalapack-2.2.3/TOOLS/pielset.f
+  - external/scalapack-2.2.3/TOOLS/pifillpad.f
+  - external/scalapack-2.2.3/TOOLS/pilaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pirow2col.f
+  - external/scalapack-2.2.3/TOOLS/pitreecomb.f
+  - external/scalapack-2.2.3/TOOLS/pschekpad.f
+  - external/scalapack-2.2.3/TOOLS/pscol2row.f
+  - external/scalapack-2.2.3/TOOLS/pselget.f
+  - external/scalapack-2.2.3/TOOLS/pselset2.f
+  - external/scalapack-2.2.3/TOOLS/pselset.f
+  - external/scalapack-2.2.3/TOOLS/psfillpad.f
+  - external/scalapack-2.2.3/TOOLS/pslaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pslaread.f
+  - external/scalapack-2.2.3/TOOLS/pslawrite.f
+  - external/scalapack-2.2.3/TOOLS/psmatadd.f
+  - external/scalapack-2.2.3/TOOLS/psrow2col.f
+  - external/scalapack-2.2.3/TOOLS/pstreecomb.f
+  - external/scalapack-2.2.3/TOOLS/pzchekpad.f
+  - external/scalapack-2.2.3/TOOLS/pzcol2row.f
+  - external/scalapack-2.2.3/TOOLS/pzelget.f
+  - external/scalapack-2.2.3/TOOLS/pzelset2.f
+  - external/scalapack-2.2.3/TOOLS/pzelset.f
+  - external/scalapack-2.2.3/TOOLS/pzfillpad.f
+  - external/scalapack-2.2.3/TOOLS/pzlaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pzlaread.f
+  - external/scalapack-2.2.3/TOOLS/pzlawrite.f
+  - external/scalapack-2.2.3/TOOLS/pzmatadd.f
+  - external/scalapack-2.2.3/TOOLS/pzrow2col.f
+  - external/scalapack-2.2.3/TOOLS/pztreecomb.f
+  - external/scalapack-2.2.3/TOOLS/SL_init.f
+  - external/scalapack-2.2.3/TOOLS/slatcpy.f
+  - external/scalapack-2.2.3/TOOLS/sltimer.f
+  - external/scalapack-2.2.3/TOOLS/smatadd.f
+  - external/scalapack-2.2.3/TOOLS/ssdot.f
+  - external/scalapack-2.2.3/TOOLS/zlatcpy.f
+  - external/scalapack-2.2.3/TOOLS/zmatadd.f
+
 prefix:
   style: scalapack  # P + S/D/C/Z
 
