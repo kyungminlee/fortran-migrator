@@ -23,7 +23,9 @@ and compares against serial `reflapack_quad` applied to the global
 matrix.
 
 Problems chosen to exercise block-cyclic edge cases at small sizes
-(`n ∈ {32, 64, 96}`, `mb = nb = 8`) without blowing out runtime.
+without blowing out runtime — most drivers iterate
+`n ∈ {32, 64, 96}` (or rectangular variants) with `mb = nb = 8`.
+Per-driver shapes vary; see each ``test_*.f90`` for specifics.
 
 
 ## Routines covered

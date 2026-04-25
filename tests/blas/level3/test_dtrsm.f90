@@ -7,9 +7,17 @@ program test_dtrsm
     use ref_quad_blas, only: dtrsm
     implicit none
 
-    integer, parameter :: ms(*) = [4, 32, 100]
-    integer, parameter :: ns(*) = [5, 40, 80]
-    integer :: i, m, n, j
+    integer, parameter :: ms(*) = [4, 32, 100, 64]
+    integer, parameter :: ns(*) = [5, 40,  80, 48]
+    ! Cycle SIDE / UPLO / TRANS / DIAG so the four shapes touch each
+    ! independent code path: left-upper-N-N (default), right-upper-N-N,
+    ! left-lower-N-N, left-upper-T-U. Right-side and lower-triangle
+    ! solves share zero code with the left-upper variant.
+    character(len=1), parameter :: sides(*)   = ['L', 'R', 'L', 'L']
+    character(len=1), parameter :: uplos(*)   = ['U', 'U', 'L', 'U']
+    character(len=1), parameter :: transes(*) = ['N', 'N', 'N', 'T']
+    character(len=1), parameter :: diags(*)   = ['N', 'N', 'N', 'U']
+    integer :: i, m, n, j, na, lda, ldb
     real(ep), allocatable :: A(:,:), B0(:,:), B_ref(:,:), B_got(:,:)
     real(ep) :: alpha, err, tol
     character(len=48) :: label
@@ -17,23 +25,31 @@ program test_dtrsm
     call report_init('dtrsm', target_name)
     do i = 1, size(ms)
         m = ms(i); n = ns(i)
-        call gen_matrix_quad(m, m, A,  seed = 931 + 23 * i)
-        ! Beef up the diagonal so the upper triangle is well-conditioned.
-        do j = 1, m
-            A(j, j) = A(j, j) + real(m + 2, ep)
+        ! For SIDE='R' the triangular factor is n×n, not m×m.
+        na = merge(m, n, sides(i) == 'L')
+        call gen_matrix_quad(na, na, A, seed = 931 + 23 * i)
+        ! Beef up the diagonal so the triangle is well-conditioned.
+        do j = 1, na
+            A(j, j) = A(j, j) + real(na + 2, ep)
         end do
         call gen_matrix_quad(m, n, B0, seed = 941 + 23 * i)
         alpha = real(0.7_ep, ep)
         allocate(B_ref(m, n), B_got(m, n))
         B_ref = B0
         B_got = B0
-        call dtrsm('L', 'U', 'N', 'N', m, n, alpha, A, m, B_ref, m)
-        call target_dtrsm('L', 'U', 'N', 'N', m, n, alpha, A, m, B_got, m)
+        lda = na
+        ldb = m
+        call dtrsm(sides(i), uplos(i), transes(i), diags(i), m, n, alpha, &
+                   A, lda, B_ref, ldb)
+        call target_dtrsm(sides(i), uplos(i), transes(i), diags(i), m, n, &
+                          alpha, A, lda, B_got, ldb)
         err = max_rel_err_mat(B_got, B_ref)
-        tol = 16.0_ep * 4.0_ep * real(m, ep) * target_eps
-        write(label, '(a,i0,a,i0)') 'm=', m, ',n=', n
+        tol = 16.0_ep * 4.0_ep * real(na, ep) * target_eps
+        write(label, '(a,a,a,a,a,a,a,a,a,i0,a,i0)') &
+            'side=', sides(i), ',uplo=', uplos(i), ',trans=', transes(i), &
+            ',diag=', diags(i), ',m=', m, ',n=', n
         call report_case(trim(label), err, tol)
-        deallocate(B_ref, B_got)
+        deallocate(A, B_ref, B_got)
     end do
     call report_finalize()
 end program test_dtrsm

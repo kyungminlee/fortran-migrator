@@ -8,6 +8,11 @@ module prec_report
     integer :: case_count = 0
     character(len=:), allocatable :: routine_save
     logical :: any_failure = .false.
+    ! Bit-exact mode for kind16: the migrated routine and the
+    ! quad-promoted Netlib reference compute the same serial algorithm
+    ! at REAL(KIND=16) — any non-zero divergence is a real migration
+    ! bug, even one that lands inside the per-case rounding budget.
+    logical :: strict_exact = .false.
 
 contains
 
@@ -19,6 +24,7 @@ contains
         routine_save = trim(routine)
         any_failure = .false.
         case_count = 0
+        strict_exact = (trim(target_name) == 'kind16')
         filename = trim(routine) // '.' // trim(target_name) // '.json'
 
         open(newunit=unit_save, file=filename, status='replace', &
@@ -47,7 +53,18 @@ contains
         else
             digits = 99.0_ep
         end if
-        passed = (max_rel <= tol)
+        if (strict_exact) then
+            ! kind16 strict floor: ≥ 28 decimal digits of agreement
+            ! against the quad reference. Quad arithmetic gives ~33
+            ! significant digits, so 28 leaves ~5-ULP headroom for
+            ! intrinsic-call differences (sqrt, divisions) and the
+            ! ULPs accumulated by self-residual computations in the
+            ! eigenvalue/SVD drivers — without ever accepting the
+            ! kind of 1–5 % bug a precision-cast slip-up produces.
+            passed = (max_rel == 0.0_ep) .or. (digits >= 28.0_ep)
+        else
+            passed = (max_rel <= tol)
+        end if
         if (.not. passed) any_failure = .true.
 
         write(relbuf, '(es15.6e3)') max_rel

@@ -34,7 +34,11 @@ program test_pdgesvd
         locn_a  = numroc_local(n, nb, my_col, 0, my_npcol); lld_a  = max(1, locm_a)
         locm_u  = numroc_local(m,     mb, my_row, 0, my_nprow); lld_u  = max(1, locm_u)
         locn_vt = numroc_local(n,     nb, my_col, 0, my_npcol)
-        lld_vt  = max(1, numroc_local(n, mb, my_row, 0, my_nprow))
+        ! VT is a minmn × n descriptor; its LLD is row-block-cyclic
+        ! over minmn, not n. The two coincide when m ≥ n (current test
+        ! shapes), but the wider m < n case would silently corrupt the
+        ! VT layout if this used n.
+        lld_vt  = max(1, numroc_local(minmn, mb, my_row, 0, my_nprow))
         call descinit_local(desca,  m, n, mb, nb, 0, 0, my_context, lld_a,  info)
         call descinit_local(descu,  m, minmn, mb, nb, 0, 0, my_context, lld_u,  info)
         call descinit_local(descvt, minmn, n, mb, nb, 0, 0, my_context, lld_vt, info)

@@ -32,8 +32,15 @@ program test_pdgeqrf
         locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
         call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
 
-        lwork = max(1, nb * (locm_a + locn_a + nb))
-        allocate(tau_got(max(1, locn_a)), work(lwork))
+        ! Workspace query — same approach as pdsyev / pdgesvd: PDGEQRF's
+        ! exact LWORK (NB*(MpA0 + NqA0 + NB) with MpA0/NqA0 derived
+        ! through INDXG2P/NUMROC of IA-1+M / JA-1+N) depends on grid
+        ! shape and offset, so let the routine itself report it.
+        allocate(tau_got(max(1, locn_a)), work(1))
+        call target_pdgeqrf(m, n, A_loc, 1, 1, desca, tau_got, work, -1, info)
+        lwork = max(1, int(work(1)))
+        deallocate(work)
+        allocate(work(lwork))
         call target_pdgeqrf(m, n, A_loc, 1, 1, desca, tau_got, work, lwork, info)
         call gather_matrix(m, n, mb, nb, A_loc, A_got)
 
