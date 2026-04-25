@@ -866,6 +866,27 @@ set({lib_name}_LANGUAGE {config.language})
         mpi_cpp = mf_local / 'multifloats_mpi.cpp'
         if bridge_h.exists():
             shutil.copy2(bridge_h, helpers_dst / bridge_h.name)
+            # Skip the C++ MPI bindings (mpicxx.h). Without this guard,
+            # any migrated source compiled as C++ that transitively
+            # pulls in <mpi.h> through the bridge gets thousands of
+            # template declarations from mpicxx.h. Those templates
+            # cannot live inside the ``extern "C" { … }`` wrap that
+            # the c_migrator post-pass injects around .c bodies, so
+            # link of scalapack_c (whose REDIST sources include
+            # redist.h → multifloats_bridge.h → mpi.h) fails. Setting
+            # MPICH_SKIP_MPICXX / OMPI_SKIP_MPICXX before the include
+            # is the documented way to compile MPI clients without
+            # the C++ bindings.
+            staged_bridge = helpers_dst / bridge_h.name
+            text = staged_bridge.read_text()
+            text = text.replace(
+                '#include <mpi.h>',
+                '#define MPICH_SKIP_MPICXX 1\n'
+                '#define OMPI_SKIP_MPICXX 1\n'
+                '#include <mpi.h>',
+                1,
+            )
+            staged_bridge.write_text(text)
         if mpi_cpp.exists():
             shutil.copy2(mpi_cpp, helpers_dst / mpi_cpp.name)
 

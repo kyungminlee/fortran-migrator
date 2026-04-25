@@ -247,6 +247,21 @@ def _convert_kr_to_ansi(text: str) -> str:
     Only rewrites definitions where *all* parameter names can be
     resolved to a type declaration. Leaves everything else untouched.
     """
+    # Pre-pass A: join split return-type-only lines with the following
+    # ``name(...)`` line. REDIST/SRC sources (pctrmr2.c, …) wrap the
+    # return type onto its own line:
+    #     static2 Int
+    #     insidemat(uplo, diag, i, j, m, n, offset)
+    # which the per-line K&R detector below would otherwise miss.
+    text = re.sub(
+        r'(?m)^([A-Za-z_][\w\s\*]*?[A-Za-z_]\w*)[ \t]*\n'
+        r'([ \t]*[A-Za-z_]\w*[ \t]*\()',
+        lambda m: m.group(1) + ' ' + m.group(2)
+        if not any(kw == w for w in m.group(1).split() for kw in
+                   ('return', 'if', 'else', 'while', 'for', 'do', 'switch',
+                    'case', 'goto', 'break', 'continue', 'sizeof', 'typedef'))
+        else m.group(0),
+        text)
     lines = text.split('\n')
     result: list[str] = []
     i = 0
@@ -291,61 +306,64 @@ def _convert_kr_to_ansi(text: str) -> str:
                          'float64x2_t', 'complex128x2_t',
                          'F_CHAR', 'F_VOID_FCT', 'F_INTG_FCT', 'F_DBLE_FCT',
                          'SCOMPLEX', 'DCOMPLEX'}
-        if any(any(kw in name for kw in type_keywords) for name in param_names):
+        # Use whole-word matching (``\b``) — substring checks would mis-flag
+        # K&R param names that happen to contain a type keyword as a
+        # substring (e.g. ``v_inter`` / ``vinter_nb`` contain ``int``,
+        # which would otherwise short-circuit the converter on every
+        # K&R definition that uses those parameter names).
+        kw_re = re.compile(r'\b(?:' + '|'.join(re.escape(k) for k in type_keywords) + r')\b')
+        if any(kw_re.search(name) for name in param_names):
             # Already ANSI style
             result.extend(sig_lines)
             i = j + 1
             continue
 
         # Collect lines between ')' and '{', parsing declarations
-        j += 1
-        param_type_map: dict[str, str] = {}  # name → "Type *name" or "Type name[]"
-        comment_lines: list[str] = []
+        # Find the matching ``{`` that opens the function body, then
+        # take the entire region between ``)`` and ``{`` as the K&R
+        # parameter-declaration block. This collapses multi-line
+        # declarations and multi-line embedded ``/* … */`` comments
+        # into one piece of text the per-statement parser can handle.
+        param_type_map: dict[str, str] = {}
         decl_region_end = j
-        in_comment = False
-
-        while j < len(lines):
-            line = lines[j]
-            stripped = line.strip()
-
-            # Track block comments
-            if in_comment:
-                comment_lines.append(line)
-                if '*/' in stripped:
-                    in_comment = False
-                j += 1
-                continue
-
-            if stripped.startswith('/*'):
-                comment_lines.append(line)
-                if '*/' not in stripped:
-                    in_comment = True
-                j += 1
-                continue
-
-            if stripped == '{':
-                decl_region_end = j
+        body_start = -1
+        # Start one line past the signature line(s) — the signature
+        # itself ends with ``)`` (already captured in ``sig_lines``)
+        # and isn't part of the declaration region.
+        j += 1
+        for k in range(j, len(lines)):
+            if lines[k].lstrip().startswith('{'):
+                body_start = k
                 break
-
-            if stripped == '':
-                j += 1
+        if body_start < 0:
+            # No opening brace found within file — bail out.
+            result.extend(sig_lines)
+            i = j + 1
+            continue
+        decl_region_end = body_start
+        decl_blob = '\n'.join(lines[j:body_start])
+        # Drop block comments from the decl blob (they may straddle
+        # lines and contain stray ``;`` / quotes that confuse the
+        # statement splitter below).
+        decl_blob = re.sub(r'/\*.*?\*/', '', decl_blob, flags=re.DOTALL)
+        for stmt in decl_blob.split(';'):
+            stmt = stmt.strip()
+            if not stmt:
                 continue
-
-            # Try to parse as a type declaration
-            dm = _KR_DECL_RE.match(line)
-            if dm:
-                base_type = dm.group(1).strip()
-                declarators = dm.group(2)
-                for decl in declarators.split(','):
-                    decl = decl.strip()
-                    # Extract the name from the declarator
-                    # Forms: "*name", "name[]", "* name", "name"
-                    name_m = re.search(r'(\w+)', decl)
-                    if name_m:
-                        name = name_m.group(1)
-                        if name in param_names:
-                            param_type_map[name] = f'{base_type} {decl}'
-            j += 1
+            dm = _KR_DECL_RE.match(stmt + ';')
+            if not dm:
+                continue
+            base_type = dm.group(1).strip()
+            declarators = dm.group(2)
+            for decl in declarators.split(','):
+                decl = decl.strip()
+                name_m = re.search(r'(\w+)', decl)
+                if name_m:
+                    name = name_m.group(1)
+                    if name in param_names:
+                        param_type_map[name] = f'{base_type} {decl}'
+        j = body_start
+        comment_lines: list[str] = []
 
         # Check if all parameter names were resolved
         if len(param_type_map) == len(param_names) and param_names:
@@ -356,7 +374,10 @@ def _convert_kr_to_ansi(text: str) -> str:
             ansi_params = ', '.join(param_type_map[n] for n in param_names)
             result.append(f'{prefix} {ansi_params} )')
             result.extend(comment_lines)
-            result.append('{')
+            # Preserve the body-opening line verbatim — it may carry
+            # trailing content (a comment that opens on the same line
+            # as ``{``, like ``{/* Rmk: ... */``) that the body needs.
+            result.append(lines[decl_region_end])
             i = decl_region_end + 1
         else:
             # Could not resolve — keep original lines
@@ -509,30 +530,65 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
 
 
 def _wrap_extern_c_after_last_include(output_dir: Path) -> None:
-    """Inject ``extern "C" { ... }`` after the last ``#include`` in every
-    .c and Bdef.h file under output_dir. Idempotent (skips files that
-    already contain ``extern "C"``).
+    """Give every Fortran-callable function definition C linkage when
+    the source is compiled as C++.
+
+    Two passes per file:
+
+    1. **Wrap the body after the last #include** with
+       ``#ifdef __cplusplus extern "C" { #endif`` … closing brace at
+       EOF. This covers function definitions while keeping the
+       includes themselves outside the wrap — necessary because some
+       headers (Bdef.h, multifloats_bridge.h, redist.h via the bridge)
+       transitively pull in C++ stdlib templates that cannot live
+       inside ``extern "C"``.
+
+    2. **Wrap each contiguous block of forward ``extern <type> Foo(…);``
+       declarations** in its own ``extern "C"`` block. These appear
+       between #include groups in scalapack_c REDIST sources
+       (pcgemr.c, pctrmr.c, …) and would otherwise mismatch the C
+       linkage of the matching definitions below the cut.
+
+    Idempotent.
     """
     targets = list(output_dir.glob('*.c'))
-    bdef = output_dir / 'Bdef.h'
-    if bdef.exists():
-        targets.append(bdef)
+    # Header files that contain function *definitions* (not just
+    # declarations) need the wrap too, otherwise the migrated entry
+    # point inherits C++ name-mangling. Currently:
+    #   - Bdef.h (BLACS — kept for historical compatibility)
+    #   - lamov.h (scalapack_c — defines the LAMOV/LACPY templates
+    #     instantiated by ddlamov.c, dlamov.c, …)
+    for hdr_name in ('Bdef.h', 'lamov.h'):
+        hdr = output_dir / hdr_name
+        if hdr.exists():
+            targets.append(hdr)
+    open_block = '#ifdef __cplusplus\nextern "C" {\n#endif\n'
+    close_block = '#ifdef __cplusplus\n} /* extern "C" */\n#endif\n'
     for f in sorted(targets):
         text = f.read_text(errors='replace')
         if 'extern "C"' in text:
             continue
-        last_inc = None
-        for m in re.finditer(r'(?m)^\s*#\s*include\b[^\n]*\n', text):
-            last_inc = m
-        if last_inc is None:
+        includes = list(re.finditer(r'(?m)^\s*#\s*include\b[^\n]*\n', text))
+        if not includes:
             continue
-        cut = last_inc.end()
-        text = (
-            text[:cut]
-            + '\n#ifdef __cplusplus\nextern "C" {\n#endif\n'
-            + text[cut:]
-            + '\n#ifdef __cplusplus\n} /* extern "C" */\n#endif\n'
-        )
+        cut = includes[-1].end()
+        body = text[cut:]
+        prefix = text[:cut]
+        # Pass 2: wrap contiguous forward extern declaration blocks in
+        # the prefix region so they share C linkage with definitions.
+        # Match either ``extern <type> Name(...);`` or a bare
+        # ``<type> Name(...);`` single-line forward declaration. Group
+        # consecutive such lines into a single wrap. ``[^;{}\n]*``
+        # forbids the parameter list from spanning lines so the regex
+        # cannot accidentally swallow Fortran-style ``SUBROUTINE Foo(`
+        # text living inside a multi-line C comment.
+        decl_one = (r'^[ \t]*(?:extern[ \t]+)?'
+                    r'[A-Za-z_][\w\s\*]*?'
+                    r'[A-Za-z_]\w*\s*\([^;{}\n]*\)\s*;[ \t]*\n')
+        ext_re = re.compile(r'(?m)(' + decl_one + r'(?:' + decl_one + r')*)')
+        prefix = ext_re.sub(lambda m: open_block + m.group(1) + close_block,
+                            prefix)
+        text = prefix + '\n' + open_block + body + '\n' + close_block
         f.write_text(text)
 
 

@@ -284,6 +284,12 @@ function(add_migrated_c_library lib_name)
             set_source_files_properties(${_dual} PROPERTIES LANGUAGE CXX)
             target_compile_features(${_dual_target} PRIVATE cxx_std_17)
             target_compile_options(${_dual_target} PRIVATE -fpermissive -Wno-write-strings)
+            # Skip the C++ MPI bindings (mpicxx.h). They define template
+            # classes that conflict with the ``extern "C"`` wrap the
+            # c_migrator post-pass injects around .c bodies. The C
+            # bindings (defined in mpi.h itself) are all we need.
+            target_compile_definitions(${_dual_target} PRIVATE
+                MPICH_SKIP_MPICXX OMPI_SKIP_MPICXX)
             # Multifloats: ``Bdef.h`` pulls in ``multifloats_bridge.h`` under
             # multifloats mode. That header is exposed through the
             # ``multifloats_mpi`` target (INTERFACE or STATIC depending on
@@ -301,6 +307,14 @@ function(add_migrated_c_library lib_name)
     # ``copy_files``-staged Fortran helpers (e.g. pblas/pilaenv.f) ride in
     # COMMON_SOURCES but must retain their native language; filter them
     # out of the language override.
+    #
+    # ScaLAPACK_C is exempt: REDIST/SRC sources (pctrmr2.c, pddgemr2.c,
+    # …) use multi-line K&R-style function definitions with embedded
+    # block comments inside the parameter declaration list — patterns
+    # the migrator's K&R-to-ANSI converter doesn't unwind. Plain C is
+    # legal here: REDIST routines only do block-cyclic copies and
+    # ``sizeof``-based pointer arithmetic, never per-element math on
+    # multifloats values, so they don't need operator overloading.
     if(C_AS_CXX)
         set(_all_sources "")
         foreach(_s ${_common} ${_precision})
@@ -316,9 +330,13 @@ function(add_migrated_c_library lib_name)
         if(TARGET ${_common_target})
             target_compile_features(${_common_target} PRIVATE cxx_std_17)
             target_compile_options(${_common_target} PRIVATE -fpermissive -Wno-write-strings)
+            target_compile_definitions(${_common_target} PRIVATE
+                MPICH_SKIP_MPICXX OMPI_SKIP_MPICXX)
         endif()
         target_compile_features(${_precision_target} PRIVATE cxx_std_17)
         target_compile_options(${_precision_target} PRIVATE -fpermissive -Wno-write-strings)
+        target_compile_definitions(${_precision_target} PRIVATE
+            MPICH_SKIP_MPICXX OMPI_SKIP_MPICXX)
         # Link multifloats + bridge for C libraries in multifloats mode
         if(TARGET multifloats)
             target_link_libraries(${_precision_target} PUBLIC multifloats)
@@ -390,16 +408,7 @@ if(TARGET ${LIB_PREFIX}scalapack)
 endif()
 
 # 8. ScaLAPACK C (depends on LAPACK, BLACS, PBLAS, ScaLAPACK).
-# Skip for multifloats: scalapack_c includes REDIST/SRC sources whose
-# K&R-style function definitions don't survive C-as-C++ compilation.
-# Patching every K&R def in those files is the proper fix (project
-# policy: assume ANSI C); until that lands, the multifloats target
-# simply does not build scalapack_c. tests/scalapack ships no
-# target_multifloats wrapper today, so nothing depends on the
-# resulting symbols on this target.
-if(NOT C_AS_CXX)
-    add_migrated_c_library(scalapack_c)
-endif()
+add_migrated_c_library(scalapack_c)
 if(TARGET ${LIB_PREFIX}scalapack_c)
     # REDIST/SRC sources select their Fortran-call entry-point naming
     # convention (trailing underscore vs UpCase vs no-change) at compile
