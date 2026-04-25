@@ -44,8 +44,16 @@ program test_pdgesvd
         U_loc  = 0.0_ep
         VT_loc = 0.0_ep
 
-        lwork = max(1, 2 * (m + n) * nb + 64 * max(m, n))
-        allocate(s_got(minmn), work(lwork))
+        ! Workspace query — same approach as pdsyev: PDGESVD's exact
+        ! requirement depends on minmn, block-cyclic locals, and the
+        ! BLACS grid shape, so let the routine itself report it.
+        allocate(s_got(minmn), work(1))
+        call target_pdgesvd('V', 'V', m, n, A_loc, 1, 1, desca, s_got, &
+                            U_loc, 1, 1, descu, VT_loc, 1, 1, descvt, &
+                            work, -1, info)
+        lwork = max(1, int(work(1)))
+        deallocate(work)
+        allocate(work(lwork))
         call target_pdgesvd('V', 'V', m, n, A_loc, 1, 1, desca, s_got, &
                             U_loc, 1, 1, descu, VT_loc, 1, 1, descvt, &
                             work, lwork, info)

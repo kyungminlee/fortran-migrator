@@ -49,8 +49,15 @@ program test_pdsyev
 
         allocate(Z_loc(max(1, locm_a), max(1, locn_a)))
         Z_loc = 0.0_ep
-        lwork = max(1, 8 * n + 2 * max(locm_a, locn_a))
-        allocate(w_got(n), work(lwork))
+        ! Workspace query: PDSYEV's exact LWORK requirement depends on
+        ! several block-cyclic locals; ask the routine itself rather than
+        ! guessing. work(1) on return holds the optimal value.
+        allocate(w_got(n), work(1))
+        call target_pdsyev('N', 'U', n, A_loc, 1, 1, desca, w_got, &
+                           Z_loc, 1, 1, descz, work, -1, info)
+        lwork = max(1, int(work(1)))
+        deallocate(work)
+        allocate(work(lwork))
         call target_pdsyev('N', 'U', n, A_loc, 1, 1, desca, w_got, &
                            Z_loc, 1, 1, descz, work, lwork, info)
 
