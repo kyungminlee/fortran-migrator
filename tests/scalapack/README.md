@@ -82,12 +82,9 @@ tests/scalapack/
 │   ├── ref_quad_blas.f90
 │   ├── ref_quad_lapack.f90           # copied from tests/lapack/common
 │   ├── pblas_grid.f90                # BLACS init + numroc + descinit
-│   ├── pblas_distrib.f90             # block-cyclic scatter/gather
-│   └── pilaenv.f                     # vendored PBLAS integer helper
+│   └── pblas_distrib.f90             # block-cyclic scatter/gather
 ├── target_kind16/
-│   ├── target_scalapack.f90          # passthrough to pq*/px* routines
-│   ├── ptzblas_stubs.f90             # ZZDOTC/ZZDOTU stubs (PTZBLAS gap)
-│   └── lamch_shim.f90                # qlamch/qroundup_lwork (INSTALL gap)
+│   └── target_scalapack.f90          # passthrough to pq*/px* routines
 ├── linear_solve/  test_pdgesv.f90, test_pdgetrf.f90, test_pdgetrs.f90,
 │                  test_pdpotrf.f90, test_pdpotrs.f90
 ├── factorization/ test_pdgeqrf.f90
@@ -103,28 +100,69 @@ reuse the same names (`pblas_grid`, `pblas_distrib`, `compare`, …)
 because renaming them would defeat the point of reusing the sources.
 
 
-## Known upstream gaps affecting link
+## Caveats and bring-up notes
 
-The ScaLAPACK test objects all compile cleanly, but linking the
-executables depends on the migrated ScaLAPACK + PBLAS + PBBLAS
-archives, which currently have two upstream staging gaps:
+The original draft of this suite shipped with three local workarounds
+(`scalapack_test_blacs_c_api`, `scalapack_test_pilaenv`,
+`scalapack_test_shim`, plus `target_kind16/{lamch_shim,ptzblas_stubs}.f90`
+and `common/pilaenv.f`). All have been retired; the migrated stack now
+provides the underlying symbols directly. A few non-obvious things
+surfaced during that work and are worth keeping written down:
 
-1. **`numroc_` / `iceil_` / `ilcm_` missing from PBBLAS closure.**
-   These are ScaLAPACK TOOLS integer helpers (precision-independent,
-   no renaming needed). `pbxtran*` / `pbxtrnv*` in `libqpbblas` call
-   them, but the migrator's recipe does not currently stage the TOOLS
-   sources into a linkable archive, so tests whose call graph reaches
-   `pbxtran*` fail to link. `test_pdgesv` and `test_pdgetrf` hit this;
-   the other 9 drivers happen to avoid those transitive dependencies
-   and link cleanly.
+1. **REDIST/SRC needs file-stem-based clone naming.** Files like
+   `pdgemr.c` / `pdgemr2.c` / `pdtrmr2.c` expose their Fortran-callable
+   entry points only behind ``#define fortran_mr2dnew pdgemr2d_``
+   macros, so the symbol scanner never sees `pdgemr2d_` and
+   `c_migrator` can't find a rename-map entry for the file stem. The
+   migrator now falls back to `_redist_clone_stem`, which substitutes
+   the precision letter at position 1 of the stem (`pdgemr2` →
+   `pqgemr2` at kind16) using `target_mode.prefix_map`. Without this,
+   only `pdgemr.c` clones (matching the first `#define`'s `pdgemr2do_`
+   target) and the actual `Cpdgemr2d` implementation in `pdgemr2.c` is
+   silently dropped — pdgesvd then heap-corrupts because the migrated
+   call ends up freeing kind16 buffers through the original
+   double-precision allocator.
 
-2. **`{q,e,dd}lamch` / `roundup_lwork` missing from LAPACK.**
-   Same root cause as `tests/lapack`: `external/lapack-3.12.1/INSTALL`
-   is declared in the recipe's `extra_symbol_dirs` but not copied by
-   `cmd_stage`. Worked around locally by
-   `target_${TARGET_NAME}/lamch_shim.f90`, which reconstructs the
-   machine-parameter queries from Fortran intrinsics at the target
-   precision. Remove the shim once staging covers `INSTALL/`.
+2. **`dge*` helper renames are recipe-driven.** The same `#define`
+   pattern (`#define freememory dgefreememory`) hides
+   `dgescanD0` / `dgedispmat` / `dgesetmemory` / `dgefreememory` /
+   `dgescan_intervals` / `Cdgelacpy` from the symbol scanner.
+   `recipes/scalapack_c.yaml`'s `c_type_aliases` block spells out the
+   per-family substitution; do not rely on the rename map alone.
+
+3. **BLACS `BUFFALIGN=8` must become 16 for kind16 / multifloats.**
+   `BI_qvmcopy` segfaults on the first reduction-buffer write (any
+   `qgsum2d_` path — `pdlange`, `pdsyev`, `pdgesvd`, `pdgeqrf` all
+   trip it) because `__float128` requires 16-byte alignment. Patched
+   directly in `external/scalapack-2.2.3/BLACS/SRC/Bdef.h`; no-op for
+   double callers.
+
+4. **`pdsyev` / `pdgesvd` need a workspace query.** The naive heuristics
+   the test draft used (`8*N + 2*max(locm,locn)` and friends)
+   undersize `LWORK` and trigger ``parameter number 14 had an illegal
+   value`` / heap corruption respectively. Both drivers now do an
+   `LWORK = -1` query, read `WORK(1)`, allocate, then call again.
+
+5. **`-DAdd_` is mandatory for REDIST.** The Fortran-callable entry
+   points in REDIST/SRC use the upstream `Add_` / `UpCase` /
+   `NoChange` switch to pick a name-mangling convention; without an
+   explicit `target_compile_definitions(... PRIVATE Add_)` the symbols
+   come out as `pqgemr2d` (no trailing underscore) and gfortran can't
+   resolve them. Wired in `cmake/CMakeLists.txt` for the
+   `${LIB_PREFIX}scalapack_c` target.
+
+6. **Multifloats: `scalapack_c` is gated off.** REDIST/SRC contained
+   K&R-style function definitions that don't survive C-as-C++
+   compilation. The bulk has been converted to ANSI in place
+   (`external/scalapack-2.2.3/REDIST/SRC/p*gemr*.c`,
+   `p*trmr*.c`); a few stragglers remain, and `tests/scalapack` ships
+   no `target_multifloats` wrapper today, so the library is excluded
+   from the multifloats build behind `if(NOT C_AS_CXX)`.
+
+7. **kind10 / multifloats wrappers don't exist yet.** Only
+   `target_kind16/target_scalapack.f90` is populated. ctest on the
+   other two targets returns early with a `STATUS` message — that's
+   expected, not a failure.
 
 
 ## Running
