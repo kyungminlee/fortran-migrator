@@ -72,7 +72,15 @@ typedef void (*SDRVPTR)(BLACSCONTEXT *, Int, Int, BLACBUFF *);
 #define BI_DistType                  unsigned short
 #define BI_MpiDistType               MPI_UNSIGNED_SHORT
 
-#define BUFFALIGN    8      /* force all buffers to 8 byte alignment */
+/* BUFFALIGN raised from 8 to 16 by fortran-migrator: the migrated
+ * KIND=10 / KIND=16 / multifloats targets store 16-byte scalars
+ * (__float128, float64x2_t) in the BLACS reduction buffers, which
+ * BI_*vmcopy then dereferences as the wider type. An 8-byte-aligned
+ * heap region segfaults on the first such write under qgsum2d_,
+ * which is easy to hit through ScaLAPACK's pdlange/pdsyev/pdgesvd/
+ * pdgeqrf code paths. 16-byte alignment is a strict superset of 8
+ * for the original double/int callers, so it's a no-op for them. */
+#define BUFFALIGN    16     /* widened from upstream 8 — see comment above */
 #define BANYNODE     MPI_ANY_SOURCE
 #define PT2PTID      9976   /* TAG used for point to point */
 #define NOTINCONTEXT -1  /* Indicates node called gridmap, but not in grid */
