@@ -38,20 +38,16 @@ skip_files:
   - PZDOTC
   - PZDOTU
 
-# ScaLAPACK SRC uses complex16 (from pblas.h) for double-complex.
-# Map it to complex128x2_t for multifloats. Also rename the REDIST
-# helper-function aliases (dgescanD0, dgedispmat, dgesetmemory,
-# dgefreememory, dgescan_intervals; matching c-prefix family for
-# pcgemr.c) to the per-target precision letter — these come from
-# ``#define`` macros inside the source so the symbol scanner never
-# adds them to the rename map automatically.
+# ScaLAPACK SRC uses complex16 (from pblas.h) for double-complex; map
+# it to {COMPLEX_TYPE}. The REDIST helpers (dgescanD0, dgedispmat,
+# dgesetmemory, dgefreememory, dgescan_intervals, Cdgelacpy and the
+# matching z-prefix complex variants) live behind ``#define X dgeY``
+# macros inside the source, so the symbol scanner never adds them to
+# the rename map; spell out the per-family substitution here using
+# {RP} (real prefix: q/e/dd) and {CP} (complex prefix: x/y/zz).
 c_type_aliases:
   - from: [complex16]
     to: '{COMPLEX_TYPE}'
-  # REDIST helper-function aliases come from in-file ``#define X dgeY``
-  # macros, so the symbol scanner doesn't add them to the rename map.
-  # Map them per precision family explicitly — d/z are real/complex
-  # at kind16 (→ q/x), at multifloats (→ dd/zz), etc.
   - from: [dgescanD0]
     to: '{RP}gescanD0'
   - from: [zgescanD0]

@@ -158,6 +158,30 @@ _KR_DECL_RE = re.compile(
 )
 
 
+def _redist_clone_stem(routine: str,
+                       target_mode: TargetMode | None) -> str | None:
+    """Clone-stem fallback for REDIST/SRC-style C files whose stems are
+    ``p<sdcz><root>`` but whose Fortran-callable exports live behind
+    ``#define`` macros (so the symbol scanner never registers them).
+
+    Returns the precision-substituted lowercase stem (``pdgemr2`` →
+    ``pqgemr2`` for kind16, ``pcgemr`` → ``pxgemr``), or ``None`` if
+    the routine doesn't match the expected ``p<precision-letter>...``
+    shape — which signals to skip the file.
+    """
+    if target_mode is None or len(routine) < 2:
+        return None
+    upper = routine.upper()
+    if upper[0] != 'P' or upper[1] not in ('S', 'D', 'C', 'Z'):
+        return None
+    from .prefix_classifier import CHAR_TYPE
+    family = CHAR_TYPE[upper[1]]
+    new_char = target_mode.prefix_map.get(family)
+    if new_char is None:
+        return None
+    return 'p' + new_char.lower() + routine[2:].lower()
+
+
 def _resolve_stdc_ifdefs(text: str) -> str:
     """Resolve ``#ifdef __STDC__`` / ``#else`` / ``#endif`` blocks.
 
@@ -245,24 +269,18 @@ def _convert_kr_to_ansi(text: str) -> str:
             sig_lines.append(lines[j])
             sig_text += ' ' + lines[j]
 
-        # If the signature is followed by ';' (anywhere on the line that
-        # contains the closing ')' or the next non-comment text), this
-        # is a forward declaration / extern, not a function definition.
-        # Leave it alone — otherwise the K&R fallback below walks until
-        # the *next* ``{`` and accidentally consumes any lines between.
-        # This matters for REDIST/SRC headers which interleave dozens of
-        # ``extern void Cblacs_*`` and ``extern Int memoryblocksize(MDESC *a);``
-        # declarations whose parameter types aren't in the keyword set.
-        paren_close_idx_global = sig_text.index(')')
-        rest_after_paren = sig_text[paren_close_idx_global + 1:].strip()
-        if rest_after_paren.startswith(';'):
-            result.extend(sig_lines)
-            i = j + 1
-            continue
-
         # Extract parameter names from between ( and )
         paren_open = sig_text.index('(')
         paren_close = sig_text.index(')')
+        # Forward declaration / extern (closing ``)`` followed by ``;``) —
+        # bail before the K&R fallback below walks until the *next* ``{``
+        # and consumes the intervening extern block. REDIST/SRC sources
+        # interleave dozens of these whose parameter types aren't in
+        # ``type_keywords`` (``MDESC *a``, ``IDESC *result``, …).
+        if sig_text[paren_close + 1:].lstrip().startswith(';'):
+            result.extend(sig_lines)
+            i = j + 1
+            continue
         params_str = sig_text[paren_open + 1:paren_close]
         param_names = [p.strip() for p in params_str.split(',') if p.strip()]
 
@@ -895,23 +913,18 @@ def _apply_header_patches(output_dir: Path,
         target = output_dir / patch['file']
         if not target.exists():
             continue
-        anchor = patch.get('after') or patch.get('before')
+        before = patch.get('before')
+        anchor = before or patch.get('after')
         if anchor is None:
             continue
-        insert = _expand_template(patch['insert'], template_vars)
-        if not insert.endswith('\n'):
-            insert = insert + '\n'
+        insert = _expand_template(patch['insert'], template_vars).rstrip('\n')
         text = target.read_text(errors='replace')
-        if anchor not in text:
-            continue
-        if insert in text:
-            continue  # already patched (idempotent)
-        if 'before' in patch:
-            # Insert on the line before the anchor.
-            text = text.replace(anchor, insert.rstrip('\n') + '\n' + anchor, 1)
+        if anchor not in text or insert in text:
+            continue  # missing anchor, or already patched (idempotent)
+        if before is not None:
+            text = text.replace(anchor, insert + '\n' + anchor, 1)
         else:
-            # Insert on the line after the anchor.
-            text = text.replace(anchor, anchor + '\n' + insert.rstrip('\n'), 1)
+            text = text.replace(anchor, anchor + '\n' + insert, 1)
         target.write_text(text)
 
 
@@ -1078,65 +1091,22 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
 
         if upper_routine in _skip:
             continue
-        # REDIST-style files like ``pdgemr.c`` / ``pdgemr2.c`` /
-        # ``pdtrmr2.c`` expose Fortran-callable entry points
-        # (``pdgemr2d_``, ``pdtrmr2d_``) only behind
-        # ``#define fortran_mr2dnew pdgemr2d_`` macros — the file stem
-        # doesn't match an exported symbol, so ``upper_routine in
-        # rename_map`` misses. When that happens, fall back to deriving
-        # the clone stem by precision-prefix substitution on the file
-        # stem itself: ``pdgemr2`` → ``pqgemr2`` at kind16, ``pcgemr``
-        # → ``pxgemr``, etc. We use rename_map's first matching entry
-        # to find the substitution: e.g. PDGEMR.lower() isn't a key but
-        # we know d→q from the family rename of any pdXXX symbol the
-        # file defines via #define.
-        force_target_stem: str | None = None
-        if (upper_routine not in rename_map
-                or classification.get_family(upper_routine) is None):
-            try:
-                probe_text = f.read_text(errors='replace')
-            except OSError:
-                continue
-            sub_letter: str | None = None
-            for sym_match in re.finditer(
-                    r'#\s*define\s+\w+\s+(p[sdczSDCZ][A-Za-z0-9]+)_?\b',
-                    probe_text):
-                cand = sym_match.group(1).upper()
-                if cand in rename_map:
-                    target = rename_map[cand]
-                    # cand starts with 'P', then a precision letter.
-                    # Find what target uses in the same slot.
-                    if len(cand) > 1 and len(target) > 1:
-                        # The rename may insert one letter (D→Q) or two
-                        # (D→DD, Z→ZZ). Compare lengths to detect.
-                        if len(target) == len(cand):
-                            sub_letter = target[1]
-                            sub_count = 1
-                        elif len(target) == len(cand) + 1:
-                            sub_letter = target[1:3]
-                            sub_count = 2
-                        else:
-                            continue
-                        upper_routine = cand
-                        break
-            if sub_letter is None:
-                continue
-            # Substitute the precision slot in the file stem itself.
-            stem_upper = (f.stem[:-1] if has_underscore else f.stem).upper()
-            # stem looks like ``Pdgemr`` or ``pdgemr2`` etc. The
-            # precision letter is at index 1 (after the leading 'P').
-            if len(stem_upper) > 1 and stem_upper[0] == 'P':
-                force_target_stem = (
-                    'p' + sub_letter.lower() + stem_upper[2:].lower()
-                )
 
-        if force_target_stem is not None:
-            new_stem = force_target_stem + ('_' if has_underscore else '')
+        # REDIST-style files like ``pdgemr.c`` / ``pdgemr2.c`` /
+        # ``pdtrmr2.c`` expose Fortran-callable entry points only behind
+        # ``#define fortran_mr2dnew pdgemr2d_`` macros, so the file
+        # stem doesn't match an exported symbol and the symbol scanner
+        # never adds it to rename_map. The stem itself is still
+        # ``p<precision-letter><root>``, so derive the clone stem
+        # directly via the target's precision-family map.
+        if (upper_routine in rename_map
+                and classification.get_family(upper_routine) is not None):
+            new_stem = rename_map[upper_routine].lower()
         else:
-            target_upper = rename_map[upper_routine]
-            target_lower = target_upper.lower()
-            new_stem = target_lower + ('_' if has_underscore else '')
-        new_name = new_stem + f.suffix
+            new_stem = _redist_clone_stem(routine, target_mode)
+            if new_stem is None:
+                continue
+        new_name = new_stem + ('_' if has_underscore else '') + f.suffix
         new_path = output_dir / new_name
 
         text = f.read_text(errors='replace')
