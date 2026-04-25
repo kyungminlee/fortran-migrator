@@ -7,18 +7,26 @@ program test_dtrsv
     use ref_quad_blas, only: dtrsv
     implicit none
 
-    integer, parameter :: cases(*) = [10, 50, 200]
+    integer, parameter :: cases(*) = [10, 50, 200, 64]
+    ! Cycle UPLO/TRANS/DIAG so the four shapes touch each independent
+    ! code path: upper-N-N (default forward solve), lower-N-N (forward
+    ! substitution), upper-T-N (transposed forward), upper-N-U (unit
+    ! diagonal — skips the diagonal divide).
+    character(len=1), parameter :: uplos(*)   = ['U', 'L', 'U', 'U']
+    character(len=1), parameter :: transes(*) = ['N', 'N', 'T', 'N']
+    character(len=1), parameter :: diags(*)   = ['N', 'N', 'N', 'U']
     integer :: i, n, j
     real(ep), allocatable :: A(:,:), x0(:), x_ref(:), x_got(:)
     real(ep) :: err, tol
-    character(len=32) :: label
+    character(len=48) :: label
 
     call report_init('dtrsv', target_name)
     do i = 1, size(cases)
         n = cases(i)
         call gen_matrix_quad(n, n, A, seed = 641 + 17 * i)
-        ! Beef up the diagonal so the upper triangle is well-conditioned
-        ! for back-substitution.
+        ! Beef up the diagonal so the triangle is well-conditioned for
+        ! back- / forward-substitution. (For DIAG='U' the routine
+        ! ignores diagonal entries, but we set them anyway for safety.)
         do j = 1, n
             A(j, j) = A(j, j) + real(n + 2, ep)
         end do
@@ -26,11 +34,12 @@ program test_dtrsv
         allocate(x_ref(n), x_got(n))
         x_ref = x0
         x_got = x0
-        call dtrsv('U', 'N', 'N', n, A, n, x_ref, 1)
-        call target_dtrsv('U', 'N', 'N', n, A, n, x_got, 1)
+        call dtrsv(uplos(i), transes(i), diags(i), n, A, n, x_ref, 1)
+        call target_dtrsv(uplos(i), transes(i), diags(i), n, A, n, x_got, 1)
         err = max_rel_err_vec(x_got, x_ref)
         tol = 16.0_ep * 4.0_ep * real(n, ep) * target_eps
-        write(label, '(a,i0)') 'n=', n
+        write(label, '(a,a,a,a,a,a,a,i0)') 'uplo=', uplos(i), &
+            ',trans=', transes(i), ',diag=', diags(i), ',n=', n
         call report_case(trim(label), err, tol)
         deallocate(x_ref, x_got)
     end do

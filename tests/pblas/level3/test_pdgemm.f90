@@ -10,9 +10,13 @@ program test_pdgemm
     use target_pblas,  only: target_name, target_eps, target_pdgemm
     implicit none
 
-    integer, parameter :: ms(*) = [32, 80, 160]
-    integer, parameter :: ns(*) = [40, 60, 120]
-    integer, parameter :: ks(*) = [24, 48, 100]
+    ! ms/ns/ks include one shape (m=70, n=55, k=43) that is *not* a
+    ! multiple of mb=nb=8 — the partial-block edge is the most likely
+    ! place for a numroc/g2l off-by-one to surface, and every
+    ! aligned-only shape would miss it.
+    integer, parameter :: ms(*) = [32, 80, 160, 70]
+    integer, parameter :: ns(*) = [40, 60, 120, 55]
+    integer, parameter :: ks(*) = [24, 48, 100, 43]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, m, n, k, info
     integer :: locm_a, locn_a, locm_b, locn_b, locm_c, locn_c

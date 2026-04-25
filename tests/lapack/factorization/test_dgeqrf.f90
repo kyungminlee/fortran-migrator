@@ -7,8 +7,11 @@ program test_dgeqrf
     use ref_quad_lapack, only: dgeqrf
     implicit none
 
-    integer, parameter :: ms(*) = [16, 48, 96]
-    integer, parameter :: ns(*) = [8,  24, 64]
+    ! Square (16,16), tall-skinny (48,24), tall (96,64), wide (32,48):
+    ! the wide case (m < n) takes a different path through DLARFB
+    ! because the trailing matrix is rectangular in the other dimension.
+    integer, parameter :: ms(*) = [16, 48, 96, 32]
+    integer, parameter :: ns(*) = [16, 24, 64, 48]
     integer :: i, m, n, info, lwork
     real(ep), allocatable :: A0(:,:), A_ref(:,:), A_got(:,:)
     real(ep), allocatable :: tau_ref(:), tau_got(:), work_ref(:)
