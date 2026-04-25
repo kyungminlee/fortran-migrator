@@ -262,15 +262,7 @@ static2 Int block2buff( IDESC *vi, Int vinb, IDESC *hi, Int hinb, Int *ptra, MDE
 static2 void buff2block( IDESC *vi, Int vinb, IDESC *hi, Int hinb, Int *buff, Int *ptrb, MDESC *mb );
 static2 void gridreshape( Int *ctxtp );
 void
-Cpigemr2do(m, n,
-	   ptrmyblock, ia, ja, ma,
-	   ptrmynewblock, ib, jb, mb)
-  Int  *ptrmyblock, *ptrmynewblock;
-/* pointers to the memory location of the matrix and the redistributed matrix */
-  MDESC *ma;
-  MDESC *mb;
-  Int   ia, ja, ib, jb, m, n;
-{
+Cpigemr2do(Int m, Int n, Int *ptrmyblock, Int ia, Int ja, MDESC *ma, Int *ptrmynewblock, Int ib, Int jb, MDESC *mb){
   Int   dummy, nprocs;
   Int   gcontext;
   /* first we initialize a global grid which serve as a reference to
@@ -286,15 +278,7 @@ Cpigemr2do(m, n,
 			 * idem B puis ia,ja puis ib,jb */
 #define MAGIC_MAX 100000000
 void
-Cpigemr2d(m, n,
-	  ptrmyblock, ia, ja, ma,
-	  ptrmynewblock, ib, jb, mb, globcontext)
-  Int  *ptrmyblock, *ptrmynewblock;
-/* pointers to the memory location of the matrix and the redistributed matrix */
-  MDESC *ma;
-  MDESC *mb;
-  Int   ia, ja, ib, jb, m, n, globcontext;
-{
+Cpigemr2d(Int m, Int n, Int *ptrmyblock, Int ia, Int ja, MDESC *ma, Int *ptrmynewblock, Int ib, Int jb, MDESC *mb, Int globcontext){
   Int  *ptrsendbuff, *ptrrecvbuff, *ptrNULL = 0;
   Int  *recvptr;
   MDESC newa, newb;

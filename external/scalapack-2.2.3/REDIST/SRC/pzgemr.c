@@ -267,15 +267,9 @@ static2 Int block2buff( IDESC *vi, Int vinb, IDESC *hi, Int hinb, dcomplex *ptra
 static2 void buff2block( IDESC *vi, Int vinb, IDESC *hi, Int hinb, dcomplex *buff, dcomplex *ptrb, MDESC *mb );
 static2 void gridreshape( Int *ctxtp );
 void
-Cpzgemr2do(m, n,
-	   ptrmyblock, ia, ja, ma,
-	   ptrmynewblock, ib, jb, mb)
-  dcomplex *ptrmyblock, *ptrmynewblock;
-/* pointers to the memory location of the matrix and the redistributed matrix */
-  MDESC *ma;
-  MDESC *mb;
-  Int   ia, ja, ib, jb, m, n;
-{
+Cpzgemr2do(Int m, Int n, dcomplex *ptrmyblock, Int ia,
+           Int ja, MDESC *ma, dcomplex *ptrmynewblock, Int ib,
+           Int jb, MDESC *mb){
   Int   dummy, nprocs;
   Int   gcontext;
   /* first we initialize a global grid which serve as a reference to
@@ -291,15 +285,9 @@ Cpzgemr2do(m, n,
 			 * idem B puis ia,ja puis ib,jb */
 #define MAGIC_MAX 100000000
 void
-Cpzgemr2d(m, n,
-	  ptrmyblock, ia, ja, ma,
-	  ptrmynewblock, ib, jb, mb, globcontext)
-  dcomplex *ptrmyblock, *ptrmynewblock;
-/* pointers to the memory location of the matrix and the redistributed matrix */
-  MDESC *ma;
-  MDESC *mb;
-  Int   ia, ja, ib, jb, m, n, globcontext;
-{
+Cpzgemr2d(Int m, Int n, dcomplex *ptrmyblock, Int ia,
+           Int ja, MDESC *ma, dcomplex *ptrmynewblock, Int ib,
+           Int jb, MDESC *mb, Int globcontext){
   dcomplex *ptrsendbuff, *ptrrecvbuff, *ptrNULL = 0;
   dcomplex *recvptr;
   MDESC newa, newb;

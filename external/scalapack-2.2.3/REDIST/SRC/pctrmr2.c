@@ -174,26 +174,12 @@ insidemat(uplo, diag, i, j, m, n, offset)
  * action can be the filling of the memory buffer, the count of the memory
  * buffer size or the setting of the memory with the element received) */
 static2 void
-intersect(uplo, diag,
-	  j, start, end,
-	  action,
-	  ptrsizebuff, pptrbuff, ptrblock,
-	  m, n,
-	  ma, ia, ja, templateheight0, templatewidth0,
-	  mb, ib, jb, templateheight1, templatewidth1)
-  Int   action, *ptrsizebuff;
-  Int   j, start, end;
-  complex **pptrbuff, *ptrblock;
-  Int   templateheight0, templatewidth0;
-  Int   templateheight1, templatewidth1;
-  MDESC *ma, *mb;
-  Int   ia, ja, ib, jb, m, n;
-  char *uplo, *diag;
-/* Execute the action on the local memory for the current interval and
- * increment pptrbuff and ptrsizebuff of the intervalsize */
-/* Notice that if the interval is contigous in the virtual matrice, it is
- * also contigous in the real one ! */
-{
+intersect(char *uplo, char *diag, Int j, Int start,
+           Int end, Int action, Int *ptrsizebuff, complex **pptrbuff,
+           complex *ptrblock, Int m, Int n, MDESC *ma,
+           Int ia, Int ja, Int templateheight0, Int templatewidth0,
+           MDESC *mb, Int ib, Int jb, Int templateheight1,
+           Int templatewidth1){
   /* Int       un = 1; only when we use dcopy instead of memcpy */
   complex *ptrstart;
   Int   offset, nbline;
@@ -240,14 +226,8 @@ intersect(uplo, diag,
  * intersections on the local processor. result must be long enough to
  * contains the result that are stocked in IDESC structure, the function
  * returns the number of intersections found */
-Int 
-scan_intervals(type, ja, jb, n, ma, mb, q0, q1, col0, col1,
-	       result)
-  char  type;
-  Int   ja, jb, n, q0, q1, col0, col1;
-  MDESC *ma, *mb;
-  IDESC *result;
-{
+Int
+scan_intervals(char type, Int ja, Int jb, Int n, MDESC *ma, MDESC *mb, Int q0, Int q1, Int col0, Int col1, IDESC *result){
   Int   offset, j0, j1, templatewidth0, templatewidth1, nbcol0, nbcol1;
   Int   l;	/* local indice on the beginning of the interval */
   assert(type == 'c' || type == 'r');

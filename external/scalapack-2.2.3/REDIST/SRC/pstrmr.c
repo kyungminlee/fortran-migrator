@@ -279,16 +279,9 @@ static2 Int block2buff();
 static2 void buff2block();
 static2 void gridreshape( Int *ctxtp );
 void
-Cpstrmr2do(uplo, diag, m, n,
-	   ptrmyblock, ia, ja, ma,
-	   ptrmynewblock, ib, jb, mb)
-  char *uplo, *diag;
-  float *ptrmyblock, *ptrmynewblock;
-/* pointers to the memory location of the matrix and the redistributed matrix */
-  MDESC *ma;
-  MDESC *mb;
-  Int   ia, ja, ib, jb, m, n;
-{
+Cpstrmr2do(char *uplo, char *diag, Int m, Int n,
+           float *ptrmyblock, Int ia, Int ja, MDESC *ma,
+           float *ptrmynewblock, Int ib, Int jb, MDESC *mb){
   Int   dummy, nprocs;
   Int   gcontext;
   /* first we initialize a global grid which serve as a reference to
