@@ -17,7 +17,7 @@ skip_files: []
 # so the custom MPI datatypes and ops are registered before any BLACS
 # communication.  The BI_*vv* reduction kernels no longer need overrides:
 # Bdef.h is patched to redefine Rabs/Cabs as mf_abs/mf_cabs1, and
-# complex128x2_t uses .r/.i members matching the BLACS convention.
+# complex64x2 uses .r/.i members matching the BLACS convention.
 #
 # The BI_*Buff*.c / BI_Pack.c overrides add explicit ``(char *)`` casts
 # to their ``malloc`` calls. In multifloats mode the BLACS C sources

@@ -49,7 +49,7 @@ c_type_aliases:
 
 header_patches:
   # Multifloats: PBLAS .c sources are compiled as C++ (for operator
-  # overloading on float64x2_t). Without ``extern "C"`` wrappers, the
+  # overloading on float64x2). Without ``extern "C"`` wrappers, the
   # Fortran-callable entry points get C++ name-mangled — the matching
   # declarations in PBpblas.h need to agree. Wrap the entire header
   # body in extern "C" via the at_bof / at_eof patches; c_migrator
@@ -125,7 +125,7 @@ header_patches:
     insert: |
       typedef    {C_REAL_TYPE}          cmplx{RPU}[2];
       typedef    {C_REAL_TYPE}          {REAL_TYPE};
-  # Multifloats target: float64x2_t comes from the C++ bridge header.
+  # Multifloats target: float64x2 comes from the C++ bridge header.
   # cmplxDD is already defined there, so only the include is needed.
   - file: pblas.h
     when: multifloats
@@ -253,7 +253,7 @@ skip_files: []
 
 # Hand-written replacements for the PB_C[dz]typeset typeset functions.
 # The migrated-by-regex versions try to assign the macro ZERO (= 0.0)
-# directly to a float64x2_t local, which the C type system rejects.
+# directly to a float64x2 local, which the C type system rejects.
 # These overrides use libmfc's struct constructors instead and refer
 # to the migrated BLACS / BLAS / PBBLAS / PTZBLAS routine names by
 # the renamed dd / zz prefixes.

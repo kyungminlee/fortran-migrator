@@ -1,7 +1,7 @@
 /* pb_cddtypeset.c -- multifloats replacement for PB_Cdtypeset.
  *
  * The migrated-by-regex version cannot initialize the static
- * zero/one/negone constants with C operators on the float64x2_t
+ * zero/one/negone constants with C operators on the float64x2
  * struct (e.g. ``zero = ZERO`` where ZERO is the macro 0.0). This
  * hand-written version uses compound literals from libmfc to set
  * the constants and points the function pointers at the migrated
@@ -19,14 +19,14 @@ PBTYP_T * PB_Cddtypeset(void)
 {
    static Int     setup = 0;
    static PBTYP_T TypeStruct;
-   static float64x2_t zero, one, negone;
+   static float64x2 zero, one, negone;
 
    if( setup ) return( &TypeStruct );
    setup = 1;
 
    TypeStruct.type = DREAL;
-   TypeStruct.usiz = sizeof(float64x2_t);
-   TypeStruct.size = sizeof(float64x2_t);
+   TypeStruct.usiz = sizeof(float64x2);
+   TypeStruct.size = sizeof(float64x2);
 
    zero   = 0.0;
    one    = 1.0;

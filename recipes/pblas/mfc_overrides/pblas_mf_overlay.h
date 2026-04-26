@@ -4,7 +4,7 @@
  * PBLAS C entry points share the macros ZERO, ONE, ABS defined in
  * PBtools.h. Their definitions assume primitive double scalars and
  * therefore stop working once the migrated file's data types become
- * the float64x2_t struct (where ``=`` and ``< 0`` and unary ``-``
+ * the float64x2 struct (where ``=`` and ``< 0`` and unary ``-``
  * are not defined).
  *
  * Files that DO use the cost model (Level-3 BLAS like pdgemm, pdsymm)
@@ -15,7 +15,7 @@
  *
  * Files that do NOT use the cost model (vector reductions: amax,
  * asum, dot, nrm2, her, her2, herk) need the macros to operate on
- * float64x2_t directly. Including this overlay rewrites the macros
+ * float64x2 directly. Including this overlay rewrites the macros
  * to use libmfc primitives.
  */
 #ifndef PBLAS_MF_OVERLAY_H
@@ -33,8 +33,8 @@
 #  undef ABS
 #endif
 
-#define ZERO   ((float64x2_t){{0.0, 0.0}})
-#define ONE    ((float64x2_t){{1.0, 0.0}})
+#define ZERO   ((float64x2){{0.0, 0.0}})
+#define ONE    ((float64x2){{1.0, 0.0}})
 #define ABS(x) (mf_abs(x))
 
 #endif /* PBLAS_MF_OVERLAY_H */

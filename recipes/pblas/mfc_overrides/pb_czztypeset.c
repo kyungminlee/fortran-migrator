@@ -2,7 +2,7 @@
  *
  * Mirror of pb_cddtypeset.c for the complex double-double variant.
  * Initializes the static zero/one/negone constants in array form
- * (cmplxDD = float64x2_t[2]) and points the function pointers at
+ * (cmplxDD = float64x2[2]) and points the function pointers at
  * the migrated complex BLACS / BLAS / PBBLAS / PTZBLAS routines.
  */
 #include "pblas.h"
@@ -22,7 +22,7 @@ PBTYP_T * PB_Czztypeset(void)
    setup = 1;
 
    TypeStruct.type = DCPLX;
-   TypeStruct.usiz = sizeof(float64x2_t);
+   TypeStruct.usiz = sizeof(float64x2);
    TypeStruct.size = sizeof(cmplxDD);
 
    zero[REAL_PART]   = 0.0;

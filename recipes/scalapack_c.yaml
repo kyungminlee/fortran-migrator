@@ -82,7 +82,7 @@ header_patches:
     insert: |
       #include "multifloats_bridge.h"
   # REDIST/SRC sources include only ``redist.h`` and ``<stddef.h>`` —
-  # neither carries the ``QREAL``/``EREAL``/``float64x2_t`` typedefs the
+  # neither carries the ``QREAL``/``EREAL``/``float64x2`` typedefs the
   # migrated bodies reference. Including pblas.h would conflict with
   # the local ``typedef struct { float r, i; } complex;`` (different
   # field names from pblas.h's ``re, im``), so just inject the primitive
