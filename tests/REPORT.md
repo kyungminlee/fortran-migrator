@@ -8,18 +8,15 @@ reports via `scripts/precision_report.py`.
 
 | target       | tests run | tests passed | wall-clock |
 |--------------|----------:|-------------:|-----------:|
-| **kind10**       |       120 |      **120** |    145 sec |
-| **kind16**       |       120 |      **120** |    146 sec |
-| **multifloats**  |       120 |      **120** |    145 sec |
-| **total**        |       360 |      **360** |          — |
+| **kind10**       |       121 |      **121** |    145 sec |
+| **kind16**       |       121 |      **121** |    146 sec |
+| **multifloats**  |       121 |      **121** |    145 sec |
+| **total**        |       363 |      **363** |          — |
 
-Coverage: **120 unique routines** across all three targets, all
+Coverage: **121 unique routines** across all three targets, all
 green end-to-end (BLAS + LAPACK + PBLAS + ScaLAPACK). The BLAS
-suite now exercises every migrated entry point directly (74 / 75 †),
+suite now exercises every migrated entry point directly (75 / 75),
 up from 40 / 75 before this round of test additions.
-
-† The lone remainder is `ixamax` (the i-prefix complex-input
-integer-result variant, exercised transitively via `target_idamax`).
 
 ScaLAPACK on multifloats was the last hold-out; it landed once the
 T/V single-letter prefix switch resolved a `DDDOT` symbol-collision
@@ -44,13 +41,13 @@ otherwise breaks ASan link-time symbol resolution).
 
 | Suite                  | Routines | Test files |
 |------------------------|---------:|-----------:|
-| BLAS Level 1           |       24 | `tests/blas/level1/test_*.f90`       |
+| BLAS Level 1           |       25 | `tests/blas/level1/test_*.f90`       |
 | BLAS Level 2           |       27 | `tests/blas/level2/test_*.f90`       |
 | BLAS Level 3           |       17 | `tests/blas/level3/test_*.f90`       |
 | LAPACK                 |       15 | `tests/lapack/{linear_solve,factorization,eigenvalue,svd,auxiliary}/test_*.f90` |
 | PBLAS Level 1 / 2 / 3  |    8 / 5 / 7 | `tests/pblas/level{1,2,3}/test_*.f90` |
 | ScaLAPACK              |       11 | `tests/scalapack/{linear_solve,factorization,eigenvalue,svd,auxiliary}/test_*.f90` |
-| **Total**              |  **120** |                                       |
+| **Total**              |  **121** |                                       |
 
 The MUMPS suite (`tests/mumps/`) is a placeholder.
 
@@ -78,7 +75,7 @@ Pass criterion:
 
 ## Headline observations
 
-Across every passing case (360 reports, 1 371 cases), here's where
+Across every passing case (363 reports, 1 386 cases), here's where
 each target lands:
 
 | Target       | Theoretical max digits | Median observed digits |
@@ -141,6 +138,7 @@ no test driver / wrapper for that target.
 | dtrsv   | 18.30  | exact  | 31.05  |
 | dzasum  | 19.18  | exact  | exact  |
 | idamax  | exact  | exact  | exact  |
+| izamax  | exact  | exact  | exact  |
 | zaxpy   | 19.18  | exact  | 31.83  |
 | zdotc   | 18.15  | exact  | 30.66  |
 | zdotu   | 17.75  | exact  | 30.58  |
@@ -266,14 +264,13 @@ through a higher-level test (`—`).
 
 | Library     | Real (q) | Complex (x) | Total entries | Direct tests | Coverage |
 |-------------|---------:|------------:|--------------:|-------------:|---------:|
-| BLAS        |       37 |          36 |          75 † |           74 |     99 % |
+| BLAS        |       37 |          36 |          75 † |           75 |    100 % |
 | LAPACK      |      508 |         506 |        1 014 |           15 |    1.5 % |
 | PBLAS       |       29 |          32 |           61 |           20 |     33 % |
 | ScaLAPACK   |      173 |         152 |          325 |           11 |    3.4 % |
 
-† BLAS total includes 2 integer-result entries (`iqamax`, `ixamax`); the
-remaining 1 entry without a direct test is `ixamax` (the i-prefix
-complex-input variant — covered transitively via `test_idamax`).
+† BLAS total includes 2 integer-result entries (`iqamax`, `ixamax`),
+both directly tested.
 
 The LAPACK / ScaLAPACK direct-coverage numbers look low because each
 high-level driver pulls in dozens of internal helpers (`xLAR*`,
@@ -290,11 +287,11 @@ matrix:
 
 | Library     | kind10 | kind16 | multifloats |
 |-------------|--------|--------|-------------|
-| BLAS        | ✓ 74   | ✓ 74   | ✓ 74        |
+| BLAS        | ✓ 75   | ✓ 75   | ✓ 75        |
 | LAPACK      | ✓ 15   | ✓ 15   | ✓ 15        |
 | PBLAS       | ✓ 20   | ✓ 20   | ✓ 20        |
 | ScaLAPACK   | ✓ 11   | ✓ 11   | ✓ 11        |
-| **per-target total** | **120** | **120** | **120** |
+| **per-target total** | **121** | **121** | **121** |
 
 `✓ N` means N test drivers run on that target. All three targets
 now have full BLAS / LAPACK / PBLAS / ScaLAPACK coverage; the only
@@ -339,7 +336,8 @@ All 37 real-side BLAS entries have a dedicated test driver:
 
 ### BLAS (complex, x-prefix)
 
-All 36 complex-side BLAS entries have a dedicated test driver:
+All 36 complex-side BLAS entries have a dedicated test driver
+(plus the integer-result `ixamax` listed at the bottom):
 
 | migrated entry | tested via     | | migrated entry | tested via     |
 |----------------|----------------|---|----------------|----------------|
@@ -361,6 +359,7 @@ All 36 complex-side BLAS entries have a dedicated test driver:
 | xher2k         | `test_zher2k`  | | xtrmv          | `test_ztrmv`   |
 | xherk          | `test_zherk`   | | xtrsm          | `test_ztrsm`   |
 | xhpmv          | `test_zhpmv`   | | xtrsv          | `test_ztrsv`   |
+|                |                | | ixamax         | `test_izamax`  |
 
 ### LAPACK
 
