@@ -5,7 +5,7 @@ module test_data
     public :: gen_vector_quad, gen_matrix_quad
     public :: gen_vector_complex, gen_matrix_complex
     public :: gen_spd_matrix_quad, gen_hermitian_matrix_quad
-    public :: gen_symmetric_matrix_quad
+    public :: gen_symmetric_matrix_quad, gen_hpd_matrix_quad
 
 contains
 
@@ -110,5 +110,20 @@ contains
         allocate(A(n, n))
         A = 0.5_ep * (X + transpose(conjg(X)))
     end subroutine gen_hermitian_matrix_quad
+
+    ! Hermitian positive-definite: A = X*X^H + n*I.
+    subroutine gen_hpd_matrix_quad(n, A, seed)
+        integer,     intent(in)  :: n, seed
+        complex(ep), intent(out), allocatable :: A(:,:)
+        complex(ep), allocatable :: X(:,:)
+        integer :: i
+
+        call gen_matrix_complex(n, n, X, seed)
+        allocate(A(n, n))
+        A = matmul(X, transpose(conjg(X)))
+        do i = 1, n
+            A(i, i) = cmplx(real(A(i, i), ep) + real(n, ep), 0.0_ep, ep)
+        end do
+    end subroutine gen_hpd_matrix_quad
 
 end module test_data

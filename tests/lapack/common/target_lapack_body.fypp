@@ -48,11 +48,13 @@ module target_lapack
     public :: target_name, target_eps
     public :: target_dgesv, target_dgetrf, target_dgetrs
     public :: target_dpotrf, target_dpotrs
-    public :: target_zgesv
-    public :: target_dgeqrf, target_dorgqr, target_zgeqrf
+    public :: target_zgesv, target_zgetrf, target_zgetrs
+    public :: target_zpotrf, target_zpotrs
+    public :: target_dgeqrf, target_dorgqr, target_zgeqrf, target_zungqr
     public :: target_dsyev, target_zheev
-    public :: target_dgesvd
+    public :: target_dgesvd, target_zgesvd
     public :: target_dlange, target_dlacpy, target_dlaset
+    public :: target_zlange, target_zlanhe, target_zlacpy, target_zlaset
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -104,6 +106,94 @@ $:IMPORT_C()
             integer, intent(in) :: n, nrhs, lda, ldb
             ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
             integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${C}$getrf(m, n, A, lda, ipiv, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, lda
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${C}$getrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: trans
+            integer,   intent(in) :: n, nrhs, lda, ldb
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            integer,   intent(in)             :: ipiv(*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$potrf(uplo, n, A, lda, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$potrs(uplo, n, nrhs, A, lda, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, lda, ldb
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ungqr(m, n, k, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, k, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(in)    :: tau(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                              work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: jobu, jobvt
+            integer,   intent(in) :: m, n, lda, ldu, ldvt, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_real}$,    intent(out)   :: s(*), rwork(*)
+            ${target_complex}$, intent(out)   :: U(ldu,*), VT(ldvt,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        function ${C}$lange(norm, m, n, A, lda, work) result(r)
+$:IMPORT_RC()
+            character, intent(in) :: norm
+            integer,   intent(in) :: m, n, lda
+            ${target_complex}$, intent(in) :: A(lda,*)
+            ${target_real}$ :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhe(norm, uplo, n, A, lda, work) result(r)
+$:IMPORT_RC()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(in) :: A(lda,*)
+            ${target_real}$ :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        subroutine ${C}$lacpy(uplo, m, n, A, lda, B, ldb)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: m, n, lda, ldb
+            ${target_complex}$, intent(in)  :: A(lda,*)
+            ${target_complex}$, intent(out) :: B(ldb,*)
+        end subroutine
+
+        subroutine ${C}$laset(uplo, m, n, alpha, beta, A, lda)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: m, n, lda
+            ${target_complex}$, intent(in)    :: alpha, beta
+            ${target_complex}$, intent(inout) :: A(lda,*)
         end subroutine
 
         subroutine ${R}$geqrf(m, n, A, lda, tau, work, lwork, info)
@@ -267,6 +357,58 @@ contains
         B(1:ldb, 1:nrhs) = t2q_c(Bt)
     end subroutine
 
+    subroutine target_zgetrf(m, n, A, lda, ipiv, info)
+        integer,     intent(in)    :: m, n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$getrf(m, n, At, lda, ipiv, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zgetrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(in)    :: A(lda,*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n))
+        Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$getrs(trans, n, nrhs, At, lda, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zpotrf(uplo, n, A, lda, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$potrf(uplo, n, At, lda, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zpotrs(uplo, n, nrhs, A, lda, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n))
+        Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$potrs(uplo, n, nrhs, At, lda, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
     ! ── QR factorization (workspace queried internally) ──────────────
     subroutine target_dgeqrf(m, n, A, lda, tau, info)
         integer,  intent(in)    :: m, n, lda
@@ -322,6 +464,51 @@ contains
         call ${C}$geqrf(m, n, At, lda, taut, work, lwork, info)
         A(1:lda, 1:n) = t2q_c(At)
         tau(1:kmn)    = t2q_c(taut)
+    end subroutine
+
+    subroutine target_zungqr(m, n, k, A, lda, tau, info)
+        integer,     intent(in)    :: m, n, k, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(k))
+        At = q2t_c(A(1:lda, 1:n))
+        taut = q2t_c(tau(1:k))
+        call ${C}$ungqr(m, n, k, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$ungqr(m, n, k, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, info)
+        character,   intent(in)    :: jobu, jobvt
+        integer,     intent(in)    :: m, n, lda, ldu, ldvt
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: s(*)
+        complex(ep), intent(out)   :: U(ldu,*), VT(ldvt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Ut(:,:), VTt(:,:), work(:)
+        ${target_real}$,    allocatable :: st(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, kmn, lrwork
+        kmn = min(m, n)
+        lrwork = max(1, 5*kmn)
+        allocate(At(lda, n), Ut(ldu, m), VTt(ldvt, n), st(kmn), rwork(lrwork))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gesvd(jobu, jobvt, m, n, At, lda, st, Ut, ldu, VTt, ldvt, &
+                        wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$gesvd(jobu, jobvt, m, n, At, lda, st, Ut, ldu, VTt, ldvt, &
+                        work, lwork, rwork, info)
+        A(1:lda, 1:n)    = t2q_c(At)
+        s(1:kmn)         = t2q_r(st)
+        U(1:ldu, 1:m)    = t2q_c(Ut)
+        VT(1:ldvt, 1:n)  = t2q_c(VTt)
     end subroutine
 
     ! ── Eigenvalue (workspace queried internally) ────────────────────
@@ -425,6 +612,55 @@ contains
         At = q2t_r(A(1:lda, 1:n))
         call ${R}$laset(uplo, m, n, q2t_r(alpha), q2t_r(beta), At, lda)
         A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    function target_zlange(norm, m, n, A, lda) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: m, n, lda
+        complex(ep), intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: work(:)
+        allocate(At(lda, n), work(max(1, m)))
+        At = q2t_c(A(1:lda, 1:n))
+        r = t2q_r(${C}$lange(norm, m, n, At, lda, work))
+    end function
+
+    function target_zlanhe(norm, uplo, n, A, lda) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n, lda
+        complex(ep), intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: work(:)
+        allocate(At(lda, n), work(max(1, n)))
+        At = q2t_c(A(1:lda, 1:n))
+        r = t2q_r(${C}$lanhe(norm, uplo, n, At, lda, work))
+    end function
+
+    subroutine target_zlacpy(uplo, m, n, A, lda, B, ldb)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: m, n, lda, ldb
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_c(A(1:lda, 1:n))
+        Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$lacpy(uplo, m, n, At, lda, Bt, ldb)
+        B(1:ldb, 1:n) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zlaset(uplo, m, n, alpha, beta, A, lda)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: m, n, lda
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(inout) :: A(lda,*)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$laset(uplo, m, n, q2t_c(alpha), q2t_c(beta), At, lda)
+        A(1:lda, 1:n) = t2q_c(At)
     end subroutine
 
 end module target_lapack
