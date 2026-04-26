@@ -236,6 +236,98 @@ module ref_quad_lapack
             real(ep),  intent(in)    :: alpha, beta
             real(ep),  intent(inout) :: A(lda,*)
         end subroutine dlaset
+
+        ! ── Phase 2 — real user-facing drivers ───────────────────────
+        subroutine dposv(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dposv
+
+        subroutine dsysv(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsysv
+
+        subroutine dsytrf(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsytrf
+
+        subroutine dsytrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs
+
+        subroutine dgels(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgels
+
+        subroutine dsyevd(jobz, uplo, n, A, lda, w, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyevd
+
+        subroutine dgeev(jobvl, jobvr, n, A, lda, wr, wi, &
+                         vl, ldvl, vr, ldvr, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobvl, jobvr
+            integer,   intent(in)    :: n, lda, ldvl, ldvr, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: wr(*), wi(*), vl(ldvl,*), vr(ldvr,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgeev
+
+        subroutine dgesdd(jobz, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                          work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: jobz
+            integer,   intent(in)    :: m, n, lda, ldu, ldvt, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: s(*), U(ldu,*), VT(ldvt,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgesdd
+
+        subroutine dpotri(uplo, n, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dpotri
+
+        subroutine dgetri(n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgetri
     end interface
 
 end module ref_quad_lapack
