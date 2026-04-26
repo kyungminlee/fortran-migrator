@@ -765,8 +765,12 @@ def _apply_c_type_subs(text: str, template_vars: dict[str, str],
     cast_marker = '\x00MF_DOUBLE_CAST\x00'
     decl_marker = '\x00MF_DOUBLE_KW\x00'
     if is_multifloats:
-        # (double) cast expressions
-        text = re.sub(r'\(\s*double\s*\)', cast_marker, text)
+        # (double) cast expressions. Negative lookbehind excludes
+        # sizeof(double) / alignof(double), where the parens form a
+        # sizeof argument rather than a cast — those must promote to
+        # sizeof(float64x2_t) so heap allocations get the right size.
+        text = re.sub(r'(?<!sizeof)(?<!alignof)\(\s*double\s*\)',
+                      cast_marker, text)
         # Local declaration lines for cost-estimate locals. Match the
         # leading 'double' keyword on a line that mentions one of the
         # known cost-estimate names somewhere on the same line.
