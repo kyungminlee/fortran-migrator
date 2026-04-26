@@ -328,6 +328,100 @@ module ref_quad_lapack
             real(ep),  intent(out)   :: work(*)
             integer,   intent(out)   :: info
         end subroutine dgetri
+
+        ! ── Phase 3 — triangular + complex driver mirrors ────────────
+        subroutine dtrtri(uplo, diag, n, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo, diag
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dtrtri
+
+        subroutine dtrtrs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dtrtrs
+
+        subroutine ztrtri(uplo, diag, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo, diag
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine ztrtri
+
+        subroutine ztrtrs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine ztrtrs
+
+        subroutine zposv(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zposv
+
+        subroutine zhesv(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhesv
+
+        subroutine zheevd(jobz, uplo, n, A, lda, w, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, lda, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zheevd
+
+        subroutine zgeev(jobvl, jobvr, n, A, lda, w, vl, ldvl, vr, ldvr, &
+                         work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvl, jobvr
+            integer,     intent(in)    :: n, lda, ldvl, ldvr, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: w(*), vl(ldvl,*), vr(ldvr,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeev
+
+        subroutine zgesdd(jobz, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                          work, lwork, rwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz
+            integer,     intent(in)    :: m, n, lda, ldu, ldvt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: s(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), VT(ldvt,*), work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zgesdd
+
+        subroutine zgels(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgels
     end interface
 
 end module ref_quad_lapack
