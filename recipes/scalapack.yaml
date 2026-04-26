@@ -138,3 +138,19 @@ prefer_source:
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix
 # drift is now auto-filtered at diff time — see _filter_precision_drift.)
+
+# Hand-patched Fortran overrides (multifloats only). The V-prefix (Z→V)
+# rename of BLAS ZCOPY collides with a local DIMENSION array VCOPY( 3 )
+# in pXlahqr.f / pXlaqr1.f. Overrides rename the local array to VCSAVE;
+# EXTERNAL / CALL sites keep VCOPY (the renamed routine).
+overrides:
+  multifloats:
+    src_dir: scalapack/mf_overrides
+    files:
+      - ptlahqr.f
+      - ptlaqr1.f
+      - pvlahqr.f
+      # pvlattrs.f also has a local DOUBLE PRECISION TSCAL (mirrors
+      # LAPACK's *latbs/latps/latrs); same TSCAL→TSCFAC fix.
+      - pvlattrs.f
+

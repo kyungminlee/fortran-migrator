@@ -49,3 +49,21 @@ copy_files:
   - LA_XISNAN
   - LA_XISNAN_EP
   - LA_XISNAN_MF
+
+# Hand-patched overrides. The multifloats T-prefix renames DSCAL → TSCAL,
+# which collides with a local variable also named TSCAL in the source
+# of dlatbs.f / dlatps.f / dlatrs.f. The overrides rename the local
+# variable to TSCFAC; the EXTERNAL/CALL sites keep TSCAL (the renamed
+# routine). This is the only LAPACK-internal local-name clash with the
+# T-prefixed BLAS namespace (verified by intersecting BLAS T-routines
+# with all T<UPPER>-prefixed local variable declarations in LAPACK).
+overrides:
+  multifloats:
+    src_dir: lapack/mf_overrides
+    files:
+      - tlatbs.f
+      - tlatps.f
+      - tlatrs.f
+      - vlatbs.f
+      - vlatps.f
+      - vlatrs.f
