@@ -67,6 +67,9 @@ module target_lapack
     public :: target_zgetri, target_zpotri, target_zhetrf, target_zhetrs
     public :: target_zgehrd, target_zunghr
     public :: target_dgeqp3, target_zgeqp3, target_dormqr, target_zunmqr
+    public :: target_dgbtrf, target_dgbtrs, target_dgbsv
+    public :: target_dpbtrf, target_dpbtrs, target_dpbsv
+    public :: target_dgttrf, target_dgttrs, target_dpttrf, target_dpttrs
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -584,6 +587,89 @@ $:IMPORT_C()
             ${target_complex}$, intent(in)    :: A(lda,*), tau(*)
             ${target_complex}$, intent(inout) :: C(ldc,*)
             ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 6 — banded + tridiagonal ───────────────────────────
+        subroutine ${R}$gbtrf(m, n, kl, ku, AB, ldab, ipiv, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, kl, ku, ldab
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${R}$gbtrs(trans, n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: trans
+            integer,   intent(in) :: n, kl, ku, nrhs, ldab, ldb
+            ${target_real}$, intent(in)    :: AB(ldab,*)
+            integer,   intent(in)          :: ipiv(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gbsv(n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+$:IMPORT_R()
+            integer, intent(in) :: n, kl, ku, nrhs, ldab, ldb
+            ${target_real}$, intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${R}$pbtrf(uplo, n, kd, AB, ldab, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, kd, ldab
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pbtrs(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, kd, nrhs, ldab, ldb
+            ${target_real}$, intent(in)    :: AB(ldab,*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pbsv(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, kd, nrhs, ldab, ldb
+            ${target_real}$, intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gttrf(n, dl, d, du, du2, ipiv, info)
+$:IMPORT_R()
+            integer, intent(in) :: n
+            ${target_real}$, intent(inout) :: dl(*), d(*), du(*)
+            ${target_real}$, intent(out)   :: du2(*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${R}$gttrs(trans, n, nrhs, dl, d, du, du2, ipiv, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: trans
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_real}$, intent(in)    :: dl(*), d(*), du(*), du2(*)
+            integer,   intent(in)          :: ipiv(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pttrf(n, d, e, info)
+$:IMPORT_R()
+            integer, intent(in) :: n
+            ${target_real}$, intent(inout) :: d(*), e(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pttrs(n, nrhs, d, e, B, ldb, info)
+$:IMPORT_R()
+            integer, intent(in) :: n, nrhs, ldb
+            ${target_real}$, intent(in)    :: d(*), e(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
             integer, intent(out) :: info
         end subroutine
 
@@ -1821,6 +1907,138 @@ contains
         allocate(work(lwork))
         call ${C}$unmqr(side, trans, m, n, k, At, lda, taut, Ct, ldc, work, lwork, info)
         C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    ! ── Phase 6 wrappers ─────────────────────────────────────────────
+    subroutine target_dgbtrf(m, n, kl, ku, AB, ldab, ipiv, info)
+        integer,  intent(in)    :: m, n, kl, ku, ldab
+        real(ep), intent(inout) :: AB(ldab,*)
+        integer,  intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: ABt(:,:)
+        allocate(ABt(ldab, n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$gbtrf(m, n, kl, ku, ABt, ldab, ipiv, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+    end subroutine
+
+    subroutine target_dgbtrs(trans, n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+        real(ep),  intent(in)    :: AB(ldab,*)
+        integer,   intent(in)    :: ipiv(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        Bt  = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$gbtrs(trans, n, kl, ku, nrhs, ABt, ldab, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dgbsv(n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+        integer,  intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+        real(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+        integer,  intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        Bt  = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$gbsv(n, kl, ku, nrhs, ABt, ldab, ipiv, Bt, ldb, info)
+        AB(1:ldab, 1:n)  = t2q_r(ABt)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dpbtrf(uplo, n, kd, AB, ldab, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, kd, ldab
+        real(ep),  intent(inout) :: AB(ldab,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:)
+        allocate(ABt(ldab, n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$pbtrf(uplo, n, kd, ABt, ldab, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+    end subroutine
+
+    subroutine target_dpbtrs(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+        real(ep),  intent(in)    :: AB(ldab,*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        Bt  = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$pbtrs(uplo, n, kd, nrhs, ABt, ldab, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dpbsv(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+        real(ep),  intent(inout) :: AB(ldab,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        Bt  = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$pbsv(uplo, n, kd, nrhs, ABt, ldab, Bt, ldb, info)
+        AB(1:ldab, 1:n)  = t2q_r(ABt)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dgttrf(n, dl, d, du, du2, ipiv, info)
+        integer,  intent(in)    :: n
+        real(ep), intent(inout) :: dl(*), d(*), du(*)
+        real(ep), intent(out)   :: du2(*)
+        integer,  intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: dlt(:), dt(:), dut(:), du2t(:)
+        allocate(dlt(n-1), dt(n), dut(n-1), du2t(n-2))
+        dlt = q2t_r(dl(1:n-1)); dt = q2t_r(d(1:n)); dut = q2t_r(du(1:n-1))
+        call ${R}$gttrf(n, dlt, dt, dut, du2t, ipiv, info)
+        dl(1:n-1) = t2q_r(dlt); d(1:n) = t2q_r(dt); du(1:n-1) = t2q_r(dut)
+        du2(1:n-2) = t2q_r(du2t)
+    end subroutine
+
+    subroutine target_dgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, B, ldb, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: n, nrhs, ldb
+        real(ep),  intent(in)    :: dl(*), d(*), du(*), du2(*)
+        integer,   intent(in)    :: ipiv(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: dlt(:), dt(:), dut(:), du2t(:), Bt(:,:)
+        allocate(dlt(n-1), dt(n), dut(n-1), du2t(n-2), Bt(ldb, nrhs))
+        dlt = q2t_r(dl(1:n-1)); dt = q2t_r(d(1:n)); dut = q2t_r(du(1:n-1))
+        du2t = q2t_r(du2(1:n-2)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$gttrs(trans, n, nrhs, dlt, dt, dut, du2t, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dpttrf(n, d, e, info)
+        integer,  intent(in)    :: n
+        real(ep), intent(inout) :: d(*), e(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: dt(:), et(:)
+        allocate(dt(n), et(n-1))
+        dt = q2t_r(d(1:n)); et = q2t_r(e(1:n-1))
+        call ${R}$pttrf(n, dt, et, info)
+        d(1:n)   = t2q_r(dt)
+        e(1:n-1) = t2q_r(et)
+    end subroutine
+
+    subroutine target_dpttrs(n, nrhs, d, e, B, ldb, info)
+        integer,  intent(in)    :: n, nrhs, ldb
+        real(ep), intent(in)    :: d(*), e(*)
+        real(ep), intent(inout) :: B(ldb,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: dt(:), et(:), Bt(:,:)
+        allocate(dt(n), et(n-1), Bt(ldb, nrhs))
+        dt = q2t_r(d(1:n)); et = q2t_r(e(1:n-1)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$pttrs(n, nrhs, dt, et, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
     end subroutine
 
 end module target_lapack

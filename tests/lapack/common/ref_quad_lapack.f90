@@ -615,6 +615,89 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zunmqr
+
+        ! ── Phase 6 — banded + tridiagonal ───────────────────────────
+        subroutine dgbtrf(m, n, kl, ku, AB, ldab, ipiv, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, kl, ku, ldab
+            real(ep), intent(inout) :: AB(ldab,*)
+            integer,  intent(out)   :: ipiv(*), info
+        end subroutine dgbtrf
+
+        subroutine dgbtrs(trans, n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+            real(ep),  intent(in)    :: AB(ldab,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dgbtrs
+
+        subroutine dgbsv(n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+            real(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer,  intent(out)   :: ipiv(*), info
+        end subroutine dgbsv
+
+        subroutine dpbtrf(uplo, n, kd, AB, ldab, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, ldab
+            real(ep),  intent(inout) :: AB(ldab,*)
+            integer,   intent(out)   :: info
+        end subroutine dpbtrf
+
+        subroutine dpbtrs(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+            real(ep),  intent(in)    :: AB(ldab,*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpbtrs
+
+        subroutine dpbsv(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+            real(ep),  intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpbsv
+
+        subroutine dgttrf(n, dl, d, du, du2, ipiv, info)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(inout) :: dl(*), d(*), du(*)
+            real(ep), intent(out)   :: du2(*)
+            integer,  intent(out)   :: ipiv(*), info
+        end subroutine dgttrf
+
+        subroutine dgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: dl(*), d(*), du(*), du2(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dgttrs
+
+        subroutine dpttrf(n, d, e, info)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(inout) :: d(*), e(*)
+            integer,  intent(out)   :: info
+        end subroutine dpttrf
+
+        subroutine dpttrs(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb
+            real(ep), intent(in)    :: d(*), e(*)
+            real(ep), intent(inout) :: B(ldb,*)
+            integer,  intent(out)   :: info
+        end subroutine dpttrs
     end interface
 
 end module ref_quad_lapack
