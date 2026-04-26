@@ -65,6 +65,94 @@ module ref_quad_lapack
             integer,     intent(out)   :: ipiv(*), info
         end subroutine zgesv
 
+        subroutine zgetrf(m, n, A, lda, ipiv, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgetrf
+
+        subroutine zgetrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgetrs
+
+        subroutine zpotrf(uplo, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotrf
+
+        subroutine zpotrs(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotrs
+
+        subroutine zungqr(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungqr
+
+        subroutine zgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                          work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobvt
+            integer,     intent(in)    :: m, n, lda, ldu, ldvt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: s(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), VT(ldvt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvd
+
+        function zlange(norm, m, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm
+            integer,     intent(in) :: m, n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlange
+
+        function zlanhe(norm, uplo, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlanhe
+
+        subroutine zlacpy(uplo, m, n, A, lda, B, ldb)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: m, n, lda, ldb
+            complex(ep), intent(in)  :: A(lda,*)
+            complex(ep), intent(out) :: B(ldb,*)
+        end subroutine zlacpy
+
+        subroutine zlaset(uplo, m, n, alpha, beta, A, lda)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: m, n, lda
+            complex(ep), intent(in)    :: alpha, beta
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zlaset
+
         ! ── QR factorization — real ──────────────────────────────────
         subroutine dgeqrf(m, n, A, lda, tau, work, lwork, info)
             import :: ep
