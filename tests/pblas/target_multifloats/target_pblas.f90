@@ -2,7 +2,7 @@
 !
 ! Test code works in REAL(KIND=ep)=KIND=16. The wrappers split each
 ! quad value into the high (double approx) + low (double remainder)
-! representation that TYPE(float64x2) expects, call the migrated
+! representation that TYPE(real64x2) expects, call the migrated
 ! dd*/zz*-prefix PBLAS routine, then recombine the two limbs back to
 ! quad for the gather/compare step. Distribution descriptors pass
 ! through unchanged — precision conversion is purely elementwise.
@@ -12,7 +12,7 @@
 
 module target_pblas
     use prec_kinds,  only: ep, dp
-    use multifloats, only: float64x2, complex64x2
+    use multifloats, only: real64x2, cmplx64x2
     implicit none
     private
 
@@ -33,178 +33,178 @@ module target_pblas
     interface
         ! ── Level 1 — real (DD) ──────────────────────────────────────
         subroutine pdddot(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
-            type(float64x2), intent(in)  :: x(*), y(*)
-            type(float64x2), intent(out) :: dot
+            type(real64x2), intent(in)  :: x(*), y(*)
+            type(real64x2), intent(out) :: dot
         end subroutine
         subroutine pddnrm2(n, norm2, x, ix, jx, descx, incx)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: n, ix, jx, incx
             integer, intent(in) :: descx(9)
-            type(float64x2), intent(in)  :: x(*)
-            type(float64x2), intent(out) :: norm2
+            type(real64x2), intent(in)  :: x(*)
+            type(real64x2), intent(out) :: norm2
         end subroutine
         subroutine pddasum(n, asum, x, ix, jx, descx, incx)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: n, ix, jx, incx
             integer, intent(in) :: descx(9)
-            type(float64x2), intent(in)  :: x(*)
-            type(float64x2), intent(out) :: asum
+            type(real64x2), intent(in)  :: x(*)
+            type(real64x2), intent(out) :: asum
         end subroutine
         subroutine pddscal(n, alpha, x, ix, jx, descx, incx)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: n, ix, jx, incx
             integer, intent(in) :: descx(9)
-            type(float64x2), intent(in)    :: alpha
-            type(float64x2), intent(inout) :: x(*)
+            type(real64x2), intent(in)    :: alpha
+            type(real64x2), intent(inout) :: x(*)
         end subroutine
         subroutine pddaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
-            type(float64x2), intent(in)    :: alpha, x(*)
-            type(float64x2), intent(inout) :: y(*)
+            type(real64x2), intent(in)    :: alpha, x(*)
+            type(real64x2), intent(inout) :: y(*)
         end subroutine
         subroutine pddcopy(n, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
-            type(float64x2), intent(in)  :: x(*)
-            type(float64x2), intent(out) :: y(*)
+            type(real64x2), intent(in)  :: x(*)
+            type(real64x2), intent(out) :: y(*)
         end subroutine
 
         ! ── Level 1 — complex (ZZ) ───────────────────────────────────
         subroutine pzzdotc(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: complex64x2
+            import :: cmplx64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
-            type(complex64x2), intent(in)  :: x(*), y(*)
-            type(complex64x2), intent(out) :: dot
+            type(cmplx64x2), intent(in)  :: x(*), y(*)
+            type(cmplx64x2), intent(out) :: dot
         end subroutine
         subroutine pzzaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: complex64x2
+            import :: cmplx64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
-            type(complex64x2), intent(in)    :: alpha, x(*)
-            type(complex64x2), intent(inout) :: y(*)
+            type(cmplx64x2), intent(in)    :: alpha, x(*)
+            type(cmplx64x2), intent(inout) :: y(*)
         end subroutine
 
         ! ── Level 2 — real (DD) ──────────────────────────────────────
         subroutine pddgemv(trans, m, n, alpha, A, ia, ja, desca, &
                            x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: trans
             integer,   intent(in) :: m, n, ia, ja, ix, jx, incx, iy, jy, incy
             integer,   intent(in) :: desca(9), descx(9), descy(9)
-            type(float64x2), intent(in)    :: alpha, beta, A(*), x(*)
-            type(float64x2), intent(inout) :: y(*)
+            type(real64x2), intent(in)    :: alpha, beta, A(*), x(*)
+            type(real64x2), intent(inout) :: y(*)
         end subroutine
         subroutine pddger(m, n, alpha, x, ix, jx, descx, incx, &
                           y, iy, jy, descy, incy, A, ia, ja, desca)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: m, n, ix, jx, incx, iy, jy, incy, ia, ja
             integer, intent(in) :: desca(9), descx(9), descy(9)
-            type(float64x2), intent(in)    :: alpha, x(*), y(*)
-            type(float64x2), intent(inout) :: A(*)
+            type(real64x2), intent(in)    :: alpha, x(*), y(*)
+            type(real64x2), intent(inout) :: A(*)
         end subroutine
         subroutine pddsymv(uplo, n, alpha, A, ia, ja, desca, &
                            x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: n, ia, ja, ix, jx, incx, iy, jy, incy
             integer,   intent(in) :: desca(9), descx(9), descy(9)
-            type(float64x2), intent(in)    :: alpha, beta, A(*), x(*)
-            type(float64x2), intent(inout) :: y(*)
+            type(real64x2), intent(in)    :: alpha, beta, A(*), x(*)
+            type(real64x2), intent(inout) :: y(*)
         end subroutine
         subroutine pddtrsv(uplo, trans, diag, n, A, ia, ja, desca, &
                            x, ix, jx, descx, incx)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: uplo, trans, diag
             integer,   intent(in) :: n, ia, ja, ix, jx, incx
             integer,   intent(in) :: desca(9), descx(9)
-            type(float64x2), intent(in)    :: A(*)
-            type(float64x2), intent(inout) :: x(*)
+            type(real64x2), intent(in)    :: A(*)
+            type(real64x2), intent(inout) :: x(*)
         end subroutine
 
         ! ── Level 2 — complex (ZZ) ───────────────────────────────────
         subroutine pzzgemv(trans, m, n, alpha, A, ia, ja, desca, &
                            x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
-            import :: complex64x2
+            import :: cmplx64x2
             character, intent(in) :: trans
             integer,   intent(in) :: m, n, ia, ja, ix, jx, incx, iy, jy, incy
             integer,   intent(in) :: desca(9), descx(9), descy(9)
-            type(complex64x2), intent(in)    :: alpha, beta, A(*), x(*)
-            type(complex64x2), intent(inout) :: y(*)
+            type(cmplx64x2), intent(in)    :: alpha, beta, A(*), x(*)
+            type(cmplx64x2), intent(inout) :: y(*)
         end subroutine
 
         ! ── Level 3 — real (DD) ──────────────────────────────────────
         subroutine pddgemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
                            B, ib, jb, descb, beta, C, ic, jc, descc)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: transa, transb
             integer,   intent(in) :: m, n, k, ia, ja, ib, jb, ic, jc
             integer,   intent(in) :: desca(9), descb(9), descc(9)
-            type(float64x2), intent(in)    :: alpha, beta, A(*), B(*)
-            type(float64x2), intent(inout) :: C(*)
+            type(real64x2), intent(in)    :: alpha, beta, A(*), B(*)
+            type(real64x2), intent(inout) :: C(*)
         end subroutine
         subroutine pddsymm(side, uplo, m, n, alpha, A, ia, ja, desca, &
                            B, ib, jb, descb, beta, C, ic, jc, descc)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: side, uplo
             integer,   intent(in) :: m, n, ia, ja, ib, jb, ic, jc
             integer,   intent(in) :: desca(9), descb(9), descc(9)
-            type(float64x2), intent(in)    :: alpha, beta, A(*), B(*)
-            type(float64x2), intent(inout) :: C(*)
+            type(real64x2), intent(in)    :: alpha, beta, A(*), B(*)
+            type(real64x2), intent(inout) :: C(*)
         end subroutine
         subroutine pddsyrk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
                            beta, C, ic, jc, descc)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: uplo, trans
             integer,   intent(in) :: n, k, ia, ja, ic, jc
             integer,   intent(in) :: desca(9), descc(9)
-            type(float64x2), intent(in)    :: alpha, beta, A(*)
-            type(float64x2), intent(inout) :: C(*)
+            type(real64x2), intent(in)    :: alpha, beta, A(*)
+            type(real64x2), intent(inout) :: C(*)
         end subroutine
         subroutine pddtrmm(side, uplo, trans, diag, m, n, alpha, &
                            A, ia, ja, desca, B, ib, jb, descb)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: side, uplo, trans, diag
             integer,   intent(in) :: m, n, ia, ja, ib, jb
             integer,   intent(in) :: desca(9), descb(9)
-            type(float64x2), intent(in)    :: alpha, A(*)
-            type(float64x2), intent(inout) :: B(*)
+            type(real64x2), intent(in)    :: alpha, A(*)
+            type(real64x2), intent(inout) :: B(*)
         end subroutine
         subroutine pddtrsm(side, uplo, trans, diag, m, n, alpha, &
                            A, ia, ja, desca, B, ib, jb, descb)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: side, uplo, trans, diag
             integer,   intent(in) :: m, n, ia, ja, ib, jb
             integer,   intent(in) :: desca(9), descb(9)
-            type(float64x2), intent(in)    :: alpha, A(*)
-            type(float64x2), intent(inout) :: B(*)
+            type(real64x2), intent(in)    :: alpha, A(*)
+            type(real64x2), intent(inout) :: B(*)
         end subroutine
 
         ! ── Level 3 — complex (ZZ) ───────────────────────────────────
         subroutine pzzgemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
                            B, ib, jb, descb, beta, C, ic, jc, descc)
-            import :: complex64x2
+            import :: cmplx64x2
             character, intent(in) :: transa, transb
             integer,   intent(in) :: m, n, k, ia, ja, ib, jb, ic, jc
             integer,   intent(in) :: desca(9), descb(9), descc(9)
-            type(complex64x2), intent(in)    :: alpha, beta, A(*), B(*)
-            type(complex64x2), intent(inout) :: C(*)
+            type(cmplx64x2), intent(in)    :: alpha, beta, A(*), B(*)
+            type(cmplx64x2), intent(inout) :: C(*)
         end subroutine
         subroutine pzzherk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
                            beta, C, ic, jc, descc)
-            import :: float64x2, complex64x2
+            import :: real64x2, cmplx64x2
             character, intent(in) :: uplo, trans
             integer,   intent(in) :: n, k, ia, ja, ic, jc
             integer,   intent(in) :: desca(9), descc(9)
-            type(float64x2),   intent(in)    :: alpha, beta
-            type(complex64x2), intent(in)    :: A(*)
-            type(complex64x2), intent(inout) :: C(*)
+            type(real64x2),   intent(in)    :: alpha, beta
+            type(cmplx64x2), intent(in)    :: A(*)
+            type(cmplx64x2), intent(inout) :: C(*)
         end subroutine
     end interface
 
@@ -213,7 +213,7 @@ contains
     ! ── Quad ↔ double-double splitting (same pattern as tests/blas) ──
     elemental function q2dd(x) result(r)
         real(ep), intent(in) :: x
-        type(float64x2) :: r
+        type(real64x2) :: r
         real(dp) :: hi
         hi = real(x, dp)
         r%limbs(1) = hi
@@ -221,20 +221,20 @@ contains
     end function
 
     elemental function dd2q(x) result(r)
-        type(float64x2), intent(in) :: x
+        type(real64x2), intent(in) :: x
         real(ep) :: r
         r = real(x%limbs(1), ep) + real(x%limbs(2), ep)
     end function
 
     elemental function q2zz(z) result(r)
         complex(ep), intent(in) :: z
-        type(complex64x2) :: r
+        type(cmplx64x2) :: r
         r%re = q2dd(real(z, ep))
         r%im = q2dd(aimag(z))
     end function
 
     elemental function zz2q(z) result(r)
-        type(complex64x2), intent(in) :: z
+        type(cmplx64x2), intent(in) :: z
         complex(ep) :: r
         r = cmplx(dd2q(z%re), dd2q(z%im), ep)
     end function
@@ -246,8 +246,8 @@ contains
         real(ep), intent(in)  :: x(*), y(*)
         real(ep), intent(out) :: dot
         integer :: nx, ny
-        type(float64x2), allocatable :: xt(:), yt(:)
-        type(float64x2) :: dot_t
+        type(real64x2), allocatable :: xt(:), yt(:)
+        type(real64x2) :: dot_t
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
@@ -261,8 +261,8 @@ contains
         real(ep), intent(in)  :: x(*)
         real(ep), intent(out) :: norm2
         integer :: nx
-        type(float64x2), allocatable :: xt(:)
-        type(float64x2) :: norm_t
+        type(real64x2), allocatable :: xt(:)
+        type(real64x2) :: norm_t
         nx = descx(9) * descx(4)
         allocate(xt(nx))
         xt = q2dd(x(1:nx))
@@ -276,8 +276,8 @@ contains
         real(ep), intent(in)  :: x(*)
         real(ep), intent(out) :: asum
         integer :: nx
-        type(float64x2), allocatable :: xt(:)
-        type(float64x2) :: asum_t
+        type(real64x2), allocatable :: xt(:)
+        type(real64x2) :: asum_t
         nx = descx(9) * descx(4)
         allocate(xt(nx))
         xt = q2dd(x(1:nx))
@@ -291,7 +291,7 @@ contains
         real(ep), intent(in)    :: alpha
         real(ep), intent(inout) :: x(*)
         integer :: nx
-        type(float64x2), allocatable :: xt(:)
+        type(real64x2), allocatable :: xt(:)
         nx = descx(9) * descx(4)
         allocate(xt(nx))
         xt = q2dd(x(1:nx))
@@ -305,7 +305,7 @@ contains
         real(ep), intent(in)    :: alpha, x(*)
         real(ep), intent(inout) :: y(*)
         integer :: nx, ny
-        type(float64x2), allocatable :: xt(:), yt(:)
+        type(real64x2), allocatable :: xt(:), yt(:)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
@@ -320,7 +320,7 @@ contains
         real(ep), intent(in)  :: x(*)
         real(ep), intent(out) :: y(*)
         integer :: nx, ny
-        type(float64x2), allocatable :: xt(:), yt(:)
+        type(real64x2), allocatable :: xt(:), yt(:)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2dd(x(1:nx))
@@ -335,8 +335,8 @@ contains
         complex(ep), intent(in)  :: x(*), y(*)
         complex(ep), intent(out) :: dot
         integer :: nx, ny
-        type(complex64x2), allocatable :: xt(:), yt(:)
-        type(complex64x2) :: dot_t
+        type(cmplx64x2), allocatable :: xt(:), yt(:)
+        type(cmplx64x2) :: dot_t
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2zz(x(1:nx)); yt = q2zz(y(1:ny))
@@ -350,7 +350,7 @@ contains
         complex(ep), intent(in)    :: alpha, x(*)
         complex(ep), intent(inout) :: y(*)
         integer :: nx, ny
-        type(complex64x2), allocatable :: xt(:), yt(:)
+        type(cmplx64x2), allocatable :: xt(:), yt(:)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2zz(x(1:nx)); yt = q2zz(y(1:ny))
@@ -368,7 +368,7 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*), x(*)
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
-        type(float64x2), allocatable :: At(:), xt(:), yt(:)
+        type(real64x2), allocatable :: At(:), xt(:), yt(:)
         na = desca(9) * desca(4)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(At(na), xt(nx), yt(ny))
@@ -387,7 +387,7 @@ contains
         real(ep), intent(in)    :: alpha, x(*), y(*)
         real(ep), intent(inout) :: A(*)
         integer :: na, nx, ny
-        type(float64x2), allocatable :: At(:), xt(:), yt(:)
+        type(real64x2), allocatable :: At(:), xt(:), yt(:)
         na = desca(9) * desca(4)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(At(na), xt(nx), yt(ny))
@@ -406,7 +406,7 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*), x(*)
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
-        type(float64x2), allocatable :: At(:), xt(:), yt(:)
+        type(real64x2), allocatable :: At(:), xt(:), yt(:)
         na = desca(9) * desca(4)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(At(na), xt(nx), yt(ny))
@@ -426,7 +426,7 @@ contains
         real(ep),  intent(in)    :: A(*)
         real(ep),  intent(inout) :: x(*)
         integer :: na, nx
-        type(float64x2), allocatable :: At(:), xt(:)
+        type(real64x2), allocatable :: At(:), xt(:)
         na = desca(9) * desca(4); nx = descx(9) * descx(4)
         allocate(At(na), xt(nx))
         At = q2dd(A(1:na)); xt = q2dd(x(1:nx))
@@ -444,7 +444,7 @@ contains
         complex(ep), intent(in)    :: alpha, beta, A(*), x(*)
         complex(ep), intent(inout) :: y(*)
         integer :: na, nx, ny
-        type(complex64x2), allocatable :: At(:), xt(:), yt(:)
+        type(cmplx64x2), allocatable :: At(:), xt(:), yt(:)
         na = desca(9) * desca(4)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(At(na), xt(nx), yt(ny))
@@ -465,7 +465,7 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*), B(*)
         real(ep),  intent(inout) :: C(*)
         integer :: na, nb, nc
-        type(float64x2), allocatable :: At(:), Bt(:), Ct(:)
+        type(real64x2), allocatable :: At(:), Bt(:), Ct(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb)); Ct = q2dd(C(1:nc))
@@ -483,7 +483,7 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*), B(*)
         real(ep),  intent(inout) :: C(*)
         integer :: na, nb, nc
-        type(float64x2), allocatable :: At(:), Bt(:), Ct(:)
+        type(real64x2), allocatable :: At(:), Bt(:), Ct(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb)); Ct = q2dd(C(1:nc))
@@ -501,7 +501,7 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*)
         real(ep),  intent(inout) :: C(*)
         integer :: na, nc
-        type(float64x2), allocatable :: At(:), Ct(:)
+        type(real64x2), allocatable :: At(:), Ct(:)
         na = desca(9) * desca(4); nc = descc(9) * descc(4)
         allocate(At(na), Ct(nc))
         At = q2dd(A(1:na)); Ct = q2dd(C(1:nc))
@@ -518,7 +518,7 @@ contains
         real(ep),  intent(in)    :: alpha, A(*)
         real(ep),  intent(inout) :: B(*)
         integer :: na, nb
-        type(float64x2), allocatable :: At(:), Bt(:)
+        type(real64x2), allocatable :: At(:), Bt(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4)
         allocate(At(na), Bt(nb))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
@@ -535,7 +535,7 @@ contains
         real(ep),  intent(in)    :: alpha, A(*)
         real(ep),  intent(inout) :: B(*)
         integer :: na, nb
-        type(float64x2), allocatable :: At(:), Bt(:)
+        type(real64x2), allocatable :: At(:), Bt(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4)
         allocate(At(na), Bt(nb))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
@@ -553,7 +553,7 @@ contains
         complex(ep), intent(in)    :: alpha, beta, A(*), B(*)
         complex(ep), intent(inout) :: C(*)
         integer :: na, nb, nc
-        type(complex64x2), allocatable :: At(:), Bt(:), Ct(:)
+        type(cmplx64x2), allocatable :: At(:), Bt(:), Ct(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2zz(A(1:na)); Bt = q2zz(B(1:nb)); Ct = q2zz(C(1:nc))
@@ -572,7 +572,7 @@ contains
         complex(ep), intent(in)    :: A(*)
         complex(ep), intent(inout) :: C(*)
         integer :: na, nc
-        type(complex64x2), allocatable :: At(:), Ct(:)
+        type(cmplx64x2), allocatable :: At(:), Ct(:)
         na = desca(9) * desca(4); nc = descc(9) * descc(4)
         allocate(At(na), Ct(nc))
         At = q2zz(A(1:na)); Ct = q2zz(C(1:nc))

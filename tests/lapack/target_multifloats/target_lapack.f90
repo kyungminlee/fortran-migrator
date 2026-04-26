@@ -2,7 +2,7 @@
 !
 ! Test code works in REAL(KIND=ep)=KIND=16. The wrappers split each
 ! quad value into the high (double approx) + low (double remainder)
-! representation that TYPE(float64x2) expects, call the migrated
+! representation that TYPE(real64x2) expects, call the migrated
 ! dd*/zz* LAPACK routine, then recombine the two limbs back into quad
 ! for the comparison. This preserves multifloats' full ~32-decimal-digit
 ! precision through the wrapper boundary.
@@ -13,7 +13,7 @@
 
 module target_lapack
     use prec_kinds, only: ep, dp
-    use multifloats, only: float64x2, complex64x2
+    use multifloats, only: real64x2, cmplx64x2
     implicit none
     private
 
@@ -31,116 +31,116 @@ module target_lapack
 
     interface
         subroutine ddgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: n, nrhs, lda, ldb
-            type(float64x2), intent(inout) :: A(lda,*), B(ldb,*)
+            type(real64x2), intent(inout) :: A(lda,*), B(ldb,*)
             integer, intent(out) :: ipiv(*), info
         end subroutine
         subroutine ddgetrf(m, n, A, lda, ipiv, info)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: m, n, lda
-            type(float64x2), intent(inout) :: A(lda,*)
+            type(real64x2), intent(inout) :: A(lda,*)
             integer, intent(out) :: ipiv(*), info
         end subroutine
         subroutine ddgetrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: trans
             integer, intent(in) :: n, nrhs, lda, ldb
-            type(float64x2), intent(in)    :: A(lda,*)
+            type(real64x2), intent(in)    :: A(lda,*)
             integer,         intent(in)    :: ipiv(*)
-            type(float64x2), intent(inout) :: B(ldb,*)
+            type(real64x2), intent(inout) :: B(ldb,*)
             integer, intent(out) :: info
         end subroutine
         subroutine ddpotrf(uplo, n, A, lda, info)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: n, lda
-            type(float64x2), intent(inout) :: A(lda,*)
+            type(real64x2), intent(inout) :: A(lda,*)
             integer, intent(out) :: info
         end subroutine
         subroutine ddpotrs(uplo, n, nrhs, A, lda, B, ldb, info)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: n, nrhs, lda, ldb
-            type(float64x2), intent(in)    :: A(lda,*)
-            type(float64x2), intent(inout) :: B(ldb,*)
+            type(real64x2), intent(in)    :: A(lda,*)
+            type(real64x2), intent(inout) :: B(ldb,*)
             integer, intent(out) :: info
         end subroutine
         subroutine zzgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
-            import :: complex64x2
+            import :: cmplx64x2
             integer, intent(in) :: n, nrhs, lda, ldb
-            type(complex64x2), intent(inout) :: A(lda,*), B(ldb,*)
+            type(cmplx64x2), intent(inout) :: A(lda,*), B(ldb,*)
             integer, intent(out) :: ipiv(*), info
         end subroutine
         subroutine ddgeqrf(m, n, A, lda, tau, work, lwork, info)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: m, n, lda, lwork
-            type(float64x2), intent(inout) :: A(lda,*)
-            type(float64x2), intent(out)   :: tau(*), work(*)
+            type(real64x2), intent(inout) :: A(lda,*)
+            type(real64x2), intent(out)   :: tau(*), work(*)
             integer, intent(out) :: info
         end subroutine
         subroutine ddorgqr(m, n, k, A, lda, tau, work, lwork, info)
-            import :: float64x2
+            import :: real64x2
             integer, intent(in) :: m, n, k, lda, lwork
-            type(float64x2), intent(inout) :: A(lda,*)
-            type(float64x2), intent(in)    :: tau(*)
-            type(float64x2), intent(out)   :: work(*)
+            type(real64x2), intent(inout) :: A(lda,*)
+            type(real64x2), intent(in)    :: tau(*)
+            type(real64x2), intent(out)   :: work(*)
             integer, intent(out) :: info
         end subroutine
         subroutine zzgeqrf(m, n, A, lda, tau, work, lwork, info)
-            import :: complex64x2
+            import :: cmplx64x2
             integer, intent(in) :: m, n, lda, lwork
-            type(complex64x2), intent(inout) :: A(lda,*)
-            type(complex64x2), intent(out)   :: tau(*), work(*)
+            type(cmplx64x2), intent(inout) :: A(lda,*)
+            type(cmplx64x2), intent(out)   :: tau(*), work(*)
             integer, intent(out) :: info
         end subroutine
         subroutine ddsyev(jobz, uplo, n, A, lda, w, work, lwork, info)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: jobz, uplo
             integer,   intent(in) :: n, lda, lwork
-            type(float64x2), intent(inout) :: A(lda,*)
-            type(float64x2), intent(out)   :: w(*), work(*)
+            type(real64x2), intent(inout) :: A(lda,*)
+            type(real64x2), intent(out)   :: w(*), work(*)
             integer, intent(out) :: info
         end subroutine
         subroutine zzheev(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
-            import :: float64x2, complex64x2
+            import :: real64x2, cmplx64x2
             character, intent(in) :: jobz, uplo
             integer,   intent(in) :: n, lda, lwork
-            type(complex64x2), intent(inout) :: A(lda,*)
-            type(float64x2),   intent(out)   :: w(*), rwork(*)
-            type(complex64x2), intent(out)   :: work(*)
+            type(cmplx64x2), intent(inout) :: A(lda,*)
+            type(real64x2),   intent(out)   :: w(*), rwork(*)
+            type(cmplx64x2), intent(out)   :: work(*)
             integer, intent(out) :: info
         end subroutine
         subroutine ddgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
                            work, lwork, info)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: jobu, jobvt
             integer,   intent(in) :: m, n, lda, ldu, ldvt, lwork
-            type(float64x2), intent(inout) :: A(lda,*)
-            type(float64x2), intent(out)   :: s(*), U(ldu,*), VT(ldvt,*), work(*)
+            type(real64x2), intent(inout) :: A(lda,*)
+            type(real64x2), intent(out)   :: s(*), U(ldu,*), VT(ldvt,*), work(*)
             integer, intent(out) :: info
         end subroutine
         function ddlange(norm, m, n, A, lda, work) result(r)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: norm
             integer,   intent(in) :: m, n, lda
-            type(float64x2), intent(in) :: A(lda,*)
-            type(float64x2) :: work(*)
-            type(float64x2) :: r
+            type(real64x2), intent(in) :: A(lda,*)
+            type(real64x2) :: work(*)
+            type(real64x2) :: r
         end function
         subroutine ddlacpy(uplo, m, n, A, lda, B, ldb)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: m, n, lda, ldb
-            type(float64x2), intent(in)  :: A(lda,*)
-            type(float64x2), intent(out) :: B(ldb,*)
+            type(real64x2), intent(in)  :: A(lda,*)
+            type(real64x2), intent(out) :: B(ldb,*)
         end subroutine
         subroutine ddlaset(uplo, m, n, alpha, beta, A, lda)
-            import :: float64x2
+            import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: m, n, lda
-            type(float64x2), intent(in)    :: alpha, beta
-            type(float64x2), intent(inout) :: A(lda,*)
+            type(real64x2), intent(in)    :: alpha, beta
+            type(real64x2), intent(inout) :: A(lda,*)
         end subroutine
     end interface
 
@@ -149,7 +149,7 @@ contains
     ! ── Conversion helpers ──────────────────────────────────────────
     elemental function q2dd(x) result(r)
         real(ep), intent(in) :: x
-        type(float64x2) :: r
+        type(real64x2) :: r
         real(dp) :: hi
         hi = real(x, dp)
         r%limbs(1) = hi
@@ -157,20 +157,20 @@ contains
     end function
 
     elemental function dd2q(x) result(r)
-        type(float64x2), intent(in) :: x
+        type(real64x2), intent(in) :: x
         real(ep) :: r
         r = real(x%limbs(1), ep) + real(x%limbs(2), ep)
     end function
 
     elemental function q2zz(z) result(r)
         complex(ep), intent(in) :: z
-        type(complex64x2) :: r
+        type(cmplx64x2) :: r
         r%re = q2dd(real(z, ep))
         r%im = q2dd(aimag(z))
     end function
 
     elemental function zz2q(z) result(r)
-        type(complex64x2), intent(in) :: z
+        type(cmplx64x2), intent(in) :: z
         complex(ep) :: r
         r = cmplx(dd2q(z%re), dd2q(z%im), ep)
     end function
@@ -180,7 +180,7 @@ contains
         integer,  intent(in)    :: n, nrhs, lda, ldb
         real(ep), intent(inout) :: A(lda,*), B(ldb,*)
         integer,  intent(out)   :: ipiv(*), info
-        type(float64x2), allocatable :: At(:,:), Bt(:,:)
+        type(real64x2), allocatable :: At(:,:), Bt(:,:)
         allocate(At(lda, n), Bt(ldb, nrhs))
         At = q2dd(A(1:lda, 1:n))
         Bt = q2dd(B(1:ldb, 1:nrhs))
@@ -193,7 +193,7 @@ contains
         integer,  intent(in)    :: m, n, lda
         real(ep), intent(inout) :: A(lda,*)
         integer,  intent(out)   :: ipiv(*), info
-        type(float64x2), allocatable :: At(:,:)
+        type(real64x2), allocatable :: At(:,:)
         allocate(At(lda, n))
         At = q2dd(A(1:lda, 1:n))
         call ddgetrf(m, n, At, lda, ipiv, info)
@@ -207,7 +207,7 @@ contains
         integer,   intent(in)    :: ipiv(*)
         real(ep),  intent(inout) :: B(ldb,*)
         integer,   intent(out)   :: info
-        type(float64x2), allocatable :: At(:,:), Bt(:,:)
+        type(real64x2), allocatable :: At(:,:), Bt(:,:)
         allocate(At(lda, n), Bt(ldb, nrhs))
         At = q2dd(A(1:lda, 1:n))
         Bt = q2dd(B(1:ldb, 1:nrhs))
@@ -220,7 +220,7 @@ contains
         integer,   intent(in)    :: n, lda
         real(ep),  intent(inout) :: A(lda,*)
         integer,   intent(out)   :: info
-        type(float64x2), allocatable :: At(:,:)
+        type(real64x2), allocatable :: At(:,:)
         allocate(At(lda, n))
         At = q2dd(A(1:lda, 1:n))
         call ddpotrf(uplo, n, At, lda, info)
@@ -233,7 +233,7 @@ contains
         real(ep),  intent(in)    :: A(lda,*)
         real(ep),  intent(inout) :: B(ldb,*)
         integer,   intent(out)   :: info
-        type(float64x2), allocatable :: At(:,:), Bt(:,:)
+        type(real64x2), allocatable :: At(:,:), Bt(:,:)
         allocate(At(lda, n), Bt(ldb, nrhs))
         At = q2dd(A(1:lda, 1:n))
         Bt = q2dd(B(1:ldb, 1:nrhs))
@@ -245,7 +245,7 @@ contains
         integer,     intent(in)    :: n, nrhs, lda, ldb
         complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
         integer,     intent(out)   :: ipiv(*), info
-        type(complex64x2), allocatable :: At(:,:), Bt(:,:)
+        type(cmplx64x2), allocatable :: At(:,:), Bt(:,:)
         allocate(At(lda, n), Bt(ldb, nrhs))
         At = q2zz(A(1:lda, 1:n))
         Bt = q2zz(B(1:ldb, 1:nrhs))
@@ -260,8 +260,8 @@ contains
         real(ep), intent(inout) :: A(lda,*)
         real(ep), intent(out)   :: tau(*)
         integer,  intent(out)   :: info
-        type(float64x2), allocatable :: At(:,:), taut(:), work(:)
-        type(float64x2) :: wopt(1)
+        type(real64x2), allocatable :: At(:,:), taut(:), work(:)
+        type(real64x2) :: wopt(1)
         integer :: lwork, kmn
         kmn = min(m, n)
         allocate(At(lda, n), taut(kmn))
@@ -279,8 +279,8 @@ contains
         real(ep), intent(inout) :: A(lda,*)
         real(ep), intent(in)    :: tau(*)
         integer,  intent(out)   :: info
-        type(float64x2), allocatable :: At(:,:), taut(:), work(:)
-        type(float64x2) :: wopt(1)
+        type(real64x2), allocatable :: At(:,:), taut(:), work(:)
+        type(real64x2) :: wopt(1)
         integer :: lwork
         allocate(At(lda, n), taut(k))
         At = q2dd(A(1:lda, 1:n))
@@ -297,8 +297,8 @@ contains
         complex(ep), intent(inout) :: A(lda,*)
         complex(ep), intent(out)   :: tau(*)
         integer,     intent(out)   :: info
-        type(complex64x2), allocatable :: At(:,:), taut(:), work(:)
-        type(complex64x2) :: wopt(1)
+        type(cmplx64x2), allocatable :: At(:,:), taut(:), work(:)
+        type(cmplx64x2) :: wopt(1)
         integer :: lwork, kmn
         kmn = min(m, n)
         allocate(At(lda, n), taut(kmn))
@@ -318,8 +318,8 @@ contains
         real(ep),  intent(inout) :: A(lda,*)
         real(ep),  intent(out)   :: w(*)
         integer,   intent(out)   :: info
-        type(float64x2), allocatable :: At(:,:), wt(:), work(:)
-        type(float64x2) :: wopt(1)
+        type(real64x2), allocatable :: At(:,:), wt(:), work(:)
+        type(real64x2) :: wopt(1)
         integer :: lwork
         allocate(At(lda, n), wt(n))
         At = q2dd(A(1:lda, 1:n))
@@ -337,9 +337,9 @@ contains
         complex(ep), intent(inout) :: A(lda,*)
         real(ep),    intent(out)   :: w(*)
         integer,     intent(out)   :: info
-        type(complex64x2), allocatable :: At(:,:), work(:)
-        type(float64x2),   allocatable :: wt(:), rwork(:)
-        type(complex64x2) :: wopt(1)
+        type(cmplx64x2), allocatable :: At(:,:), work(:)
+        type(real64x2),   allocatable :: wt(:), rwork(:)
+        type(cmplx64x2) :: wopt(1)
         integer :: lwork, lrwork
         lrwork = max(1, 3*n - 2)
         allocate(At(lda, n), wt(n), rwork(lrwork))
@@ -359,8 +359,8 @@ contains
         real(ep),  intent(inout) :: A(lda,*)
         real(ep),  intent(out)   :: s(*), U(ldu,*), VT(ldvt,*)
         integer,   intent(out)   :: info
-        type(float64x2), allocatable :: At(:,:), Ut(:,:), VTt(:,:), st(:), work(:)
-        type(float64x2) :: wopt(1)
+        type(real64x2), allocatable :: At(:,:), Ut(:,:), VTt(:,:), st(:), work(:)
+        type(real64x2) :: wopt(1)
         integer :: lwork, kmn
         kmn = min(m, n)
         allocate(At(lda, n), Ut(ldu, m), VTt(ldvt, n), st(kmn))
@@ -383,7 +383,7 @@ contains
         integer,   intent(in) :: m, n, lda
         real(ep),  intent(in) :: A(lda,*)
         real(ep) :: r
-        type(float64x2), allocatable :: At(:,:), work(:)
+        type(real64x2), allocatable :: At(:,:), work(:)
         allocate(At(lda, n), work(max(1, m)))
         At = q2dd(A(1:lda, 1:n))
         r = dd2q(ddlange(norm, m, n, At, lda, work))
@@ -394,7 +394,7 @@ contains
         integer,   intent(in)    :: m, n, lda, ldb
         real(ep),  intent(in)    :: A(lda,*)
         real(ep),  intent(inout) :: B(ldb,*)
-        type(float64x2), allocatable :: At(:,:), Bt(:,:)
+        type(real64x2), allocatable :: At(:,:), Bt(:,:)
         allocate(At(lda, n), Bt(ldb, n))
         At = q2dd(A(1:lda, 1:n))
         Bt = q2dd(B(1:ldb, 1:n))
@@ -407,7 +407,7 @@ contains
         integer,   intent(in)    :: m, n, lda
         real(ep),  intent(in)    :: alpha, beta
         real(ep),  intent(inout) :: A(lda,*)
-        type(float64x2), allocatable :: At(:,:)
+        type(real64x2), allocatable :: At(:,:)
         allocate(At(lda, n))
         At = q2dd(A(1:lda, 1:n))
         call ddlaset(uplo, m, n, q2dd(alpha), q2dd(beta), At, lda)

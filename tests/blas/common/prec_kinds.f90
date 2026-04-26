@@ -9,6 +9,6 @@ module prec_kinds
     integer, parameter :: ep = 16
 
     ! Double precision — used inside multifloats wrappers to bridge
-    ! REAL(KIND=8) and TYPE(float64x2).
+    ! REAL(KIND=8) and TYPE(real64x2).
     integer, parameter :: dp = 8
 end module prec_kinds

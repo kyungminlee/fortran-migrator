@@ -211,7 +211,7 @@ For a routine **not** yet declared:
 ### Multifloats PBLAS C linkage
 
 The multifloats target compiles migrated C sources as C++ (to pick up
-`float64x2_t` operator overloading). PBLAS's Fortran-callable entry
+`float64x2` operator overloading). PBLAS's Fortran-callable entry
 points (`pddgemm_`, `pzzherk_`, …) are defined without explicit
 `extern "C"`, so under C++ compilation every entry point is
 name-mangled and `target_pblas.f90` can't resolve them at link time.
