@@ -26,14 +26,14 @@ MPI_Op MPI_ZZ_AMN = MPI_OP_NULL;
 /* ---- User-op callbacks ------------------------------------------ */
 
 static void dd_sum_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<float64x2_t *>(in);
-    auto *b = static_cast<float64x2_t *>(inout);
+    auto *a = static_cast<float64x2 *>(in);
+    auto *b = static_cast<float64x2 *>(inout);
     for (int i = 0; i < *len; ++i) b[i] = b[i] + a[i];
 }
 
 static void zz_sum_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<complex128x2_t *>(in);
-    auto *b = static_cast<complex128x2_t *>(inout);
+    auto *a = static_cast<complex64x2 *>(in);
+    auto *b = static_cast<complex64x2 *>(inout);
     for (int i = 0; i < *len; ++i) {
         b[i].re = b[i].re + a[i].re;
         b[i].im = b[i].im + a[i].im;
@@ -41,29 +41,29 @@ static void zz_sum_fn(void *in, void *inout, int *len, MPI_Datatype *) {
 }
 
 static void dd_amx_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<float64x2_t *>(in);
-    auto *b = static_cast<float64x2_t *>(inout);
+    auto *a = static_cast<float64x2 *>(in);
+    auto *b = static_cast<float64x2 *>(inout);
     for (int i = 0; i < *len; ++i)
         if (mf_abs(a[i]) > mf_abs(b[i])) b[i] = a[i];
 }
 
 static void dd_amn_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<float64x2_t *>(in);
-    auto *b = static_cast<float64x2_t *>(inout);
+    auto *a = static_cast<float64x2 *>(in);
+    auto *b = static_cast<float64x2 *>(inout);
     for (int i = 0; i < *len; ++i)
         if (mf_abs(a[i]) < mf_abs(b[i])) b[i] = a[i];
 }
 
 static void zz_amx_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<complex128x2_t *>(in);
-    auto *b = static_cast<complex128x2_t *>(inout);
+    auto *a = static_cast<complex64x2 *>(in);
+    auto *b = static_cast<complex64x2 *>(inout);
     for (int i = 0; i < *len; ++i)
         if (mf_cabs1(a[i]) > mf_cabs1(b[i])) b[i] = a[i];
 }
 
 static void zz_amn_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<complex128x2_t *>(in);
-    auto *b = static_cast<complex128x2_t *>(inout);
+    auto *a = static_cast<complex64x2 *>(in);
+    auto *b = static_cast<complex64x2 *>(inout);
     for (int i = 0; i < *len; ++i)
         if (mf_cabs1(a[i]) < mf_cabs1(b[i])) b[i] = a[i];
 }
