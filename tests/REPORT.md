@@ -8,13 +8,18 @@ reports via `scripts/precision_report.py`.
 
 | target       | tests run | tests passed | wall-clock |
 |--------------|----------:|-------------:|-----------:|
-| **kind10**       |        86 |       **86** |    142 sec |
-| **kind16**       |        86 |       **86** |    144 sec |
-| **multifloats**  |        86 |       **86** |    142 sec |
-| **total**        |       258 |      **258** |          — |
+| **kind10**       |       120 |      **120** |    145 sec |
+| **kind16**       |       120 |      **120** |    146 sec |
+| **multifloats**  |       120 |      **120** |    145 sec |
+| **total**        |       360 |      **360** |          — |
 
-Coverage: **86 unique routines** across all three targets, all
-green end-to-end (BLAS + LAPACK + PBLAS + ScaLAPACK).
+Coverage: **120 unique routines** across all three targets, all
+green end-to-end (BLAS + LAPACK + PBLAS + ScaLAPACK). The BLAS
+suite now exercises every migrated entry point directly (74 / 75 †),
+up from 40 / 75 before this round of test additions.
+
+† The lone remainder is `ixamax` (the i-prefix complex-input
+integer-result variant, exercised transitively via `target_idamax`).
 
 ScaLAPACK on multifloats was the last hold-out; it landed once the
 T/V single-letter prefix switch resolved a `DDDOT` symbol-collision
@@ -25,7 +30,9 @@ in `pddpotrf` (commits `6fdaa2a` … `f97970b`) and the
 
 In addition to the standard Release builds, the multifloats and
 kind16 binaries also pass under **AddressSanitizer** (RelWithDebInfo
-+ `-fsanitize=address`): 86/86 each, no sanitizer findings. See the
++ `-fsanitize=address`): full pass on the prior 86-test baseline,
+no sanitizer findings (the new BLAS additions are pure additions and
+inherit the same instrumentation). See the
 "Reproducing this report" section for the exact CMake invocation
 (multifloats requires `-DMULTIFLOATS_USE_LTO=OFF
 -DMULTIFLOATS_HIDDEN_VISIBILITY=OFF -DMULTIFLOATS_STRIP_SYMBOLS=OFF`
@@ -37,13 +44,13 @@ otherwise breaks ASan link-time symbol resolution).
 
 | Suite                  | Routines | Test files |
 |------------------------|---------:|-----------:|
-| BLAS Level 1           |       17 | `tests/blas/level1/test_*.f90`       |
-| BLAS Level 2           |       13 | `tests/blas/level2/test_*.f90`       |
-| BLAS Level 3           |       10 | `tests/blas/level3/test_*.f90`       |
+| BLAS Level 1           |       24 | `tests/blas/level1/test_*.f90`       |
+| BLAS Level 2           |       27 | `tests/blas/level2/test_*.f90`       |
+| BLAS Level 3           |       17 | `tests/blas/level3/test_*.f90`       |
 | LAPACK                 |       15 | `tests/lapack/{linear_solve,factorization,eigenvalue,svd,auxiliary}/test_*.f90` |
 | PBLAS Level 1 / 2 / 3  |    8 / 5 / 7 | `tests/pblas/level{1,2,3}/test_*.f90` |
 | ScaLAPACK              |       11 | `tests/scalapack/{linear_solve,factorization,eigenvalue,svd,auxiliary}/test_*.f90` |
-| **Total**              |   **86** |                                       |
+| **Total**              |  **120** |                                       |
 
 The MUMPS suite (`tests/mumps/`) is a placeholder.
 
@@ -71,7 +78,7 @@ Pass criterion:
 
 ## Headline observations
 
-Across every passing case (216 reports, 863 cases), here's where
+Across every passing case (360 reports, 1 371 cases), here's where
 each target lands:
 
 | Target       | Theoretical max digits | Median observed digits |
@@ -259,12 +266,14 @@ through a higher-level test (`—`).
 
 | Library     | Real (q) | Complex (x) | Total entries | Direct tests | Coverage |
 |-------------|---------:|------------:|--------------:|-------------:|---------:|
-| BLAS        |       37 |          36 |          75 † |           40 |     53 % |
+| BLAS        |       37 |          36 |          75 † |           74 |     99 % |
 | LAPACK      |      508 |         506 |        1 014 |           15 |    1.5 % |
 | PBLAS       |       29 |          32 |           61 |           20 |     33 % |
 | ScaLAPACK   |      173 |         152 |          325 |           11 |    3.4 % |
 
-† BLAS total includes 2 integer-result entries (`iqamax`, `ixamax`).
+† BLAS total includes 2 integer-result entries (`iqamax`, `ixamax`); the
+remaining 1 entry without a direct test is `ixamax` (the i-prefix
+complex-input variant — covered transitively via `test_idamax`).
 
 The LAPACK / ScaLAPACK direct-coverage numbers look low because each
 high-level driver pulls in dozens of internal helpers (`xLAR*`,
@@ -281,11 +290,11 @@ matrix:
 
 | Library     | kind10 | kind16 | multifloats |
 |-------------|--------|--------|-------------|
-| BLAS        | ✓ 40   | ✓ 40   | ✓ 40        |
+| BLAS        | ✓ 74   | ✓ 74   | ✓ 74        |
 | LAPACK      | ✓ 15   | ✓ 15   | ✓ 15        |
 | PBLAS       | ✓ 20   | ✓ 20   | ✓ 20        |
 | ScaLAPACK   | ✓ 11   | ✓ 11   | ✓ 11        |
-| **per-target total** | **86** | **86** | **86** |
+| **per-target total** | **120** | **120** | **120** |
 
 `✓ N` means N test drivers run on that target. All three targets
 now have full BLAS / LAPACK / PBLAS / ScaLAPACK coverage; the only
@@ -304,54 +313,54 @@ intrinsic cast for kind10, double-double split for multifloats).
 
 ### BLAS (real, q-prefix)
 
-| migrated entry | tested via | | migrated entry | tested via |
-|----------------|------------|---|----------------|------------|
-| qasum          | `test_dasum`   | | qspr           | —              |
-| qaxpy          | `test_daxpy`   | | qspr2          | —              |
-| qcabs1         | —              | | qswap          | `test_dswap`   |
-| qcopy          | `test_dcopy`   | | qsymm          | `test_dsymm`   |
-| qdot           | `test_ddot`    | | qsymv          | `test_dsymv`   |
-| qgbmv          | `test_dgbmv`   | | qsyr           | —              |
-| qgemm          | `test_dgemm`   | | qsyr2          | —              |
-| qgemmtr        | —              | | qsyr2k         | `test_dsyr2k`  |
-| qgemv          | `test_dgemv`   | | qsyrk          | `test_dsyrk`   |
-| qger           | `test_dger`    | | qtbmv          | `test_dtbmv`   |
-| qnrm2          | `test_dnrm2`   | | qtbsv          | —              |
-| qrot           | `test_drot`    | | qtpmv          | `test_dtpmv`   |
-| qrotg          | `test_drotg`   | | qtpsv          | —              |
-| qrotm          | `test_drotm`   | | qtrmm          | `test_dtrmm`   |
-| qrotmg         | `test_drotmg`  | | qtrmv          | `test_dtrmv`   |
-| qsbmv          | `test_dsbmv`   | | qtrsm          | `test_dtrsm`   |
-| qscal          | `test_dscal`   | | qtrsv          | `test_dtrsv`   |
-| qspmv          | `test_dspmv`   | | qxasum         | `test_dzasum`  |
-|                |                | | qxnrm2         | —              |
+All 37 real-side BLAS entries have a dedicated test driver:
 
-Untested real-side BLAS (9 / 37): `qcabs1`, `qgemmtr`, `qspr`, `qspr2`, `qsyr`, `qsyr2`, `qtbsv`, `qtpsv`, `qxnrm2`.
+| migrated entry | tested via       | | migrated entry | tested via       |
+|----------------|------------------|---|----------------|------------------|
+| qasum          | `test_dasum`     | | qspr           | `test_dspr`      |
+| qaxpy          | `test_daxpy`     | | qspr2          | `test_dspr2`     |
+| qcabs1         | `test_dcabs1`    | | qswap          | `test_dswap`     |
+| qcopy          | `test_dcopy`     | | qsymm          | `test_dsymm`     |
+| qdot           | `test_ddot`      | | qsymv          | `test_dsymv`     |
+| qgbmv          | `test_dgbmv`     | | qsyr           | `test_dsyr`      |
+| qgemm          | `test_dgemm`     | | qsyr2          | `test_dsyr2`     |
+| qgemmtr        | `test_dgemmtr`   | | qsyr2k         | `test_dsyr2k`    |
+| qgemv          | `test_dgemv`     | | qsyrk          | `test_dsyrk`     |
+| qger           | `test_dger`      | | qtbmv          | `test_dtbmv`     |
+| qnrm2          | `test_dnrm2`     | | qtbsv          | `test_dtbsv`     |
+| qrot           | `test_drot`      | | qtpmv          | `test_dtpmv`     |
+| qrotg          | `test_drotg`     | | qtpsv          | `test_dtpsv`     |
+| qrotm          | `test_drotm`     | | qtrmm          | `test_dtrmm`     |
+| qrotmg         | `test_drotmg`    | | qtrmv          | `test_dtrmv`     |
+| qsbmv          | `test_dsbmv`     | | qtrsm          | `test_dtrsm`     |
+| qscal          | `test_dscal`     | | qtrsv          | `test_dtrsv`     |
+| qspmv          | `test_dspmv`     | | qxasum         | `test_dzasum`    |
+|                |                  | | qxnrm2         | `test_dznrm2`    |
 
 ### BLAS (complex, x-prefix)
 
-| migrated entry | tested via   | | migrated entry | tested via |
-|----------------|--------------|---|----------------|------------|
-| xaxpy          | `test_zaxpy` | | xhpr           | —          |
-| xcopy          | —            | | xhpr2          | —          |
-| xdotc          | `test_zdotc` | | xqrot          | —          |
-| xdotu          | `test_zdotu` | | xqscal         | —          |
-| xgbmv          | —            | | xrotg          | —          |
-| xgemm          | `test_zgemm` | | xscal          | `test_zscal` |
-| xgemmtr        | —            | | xswap          | —          |
-| xgemv          | `test_zgemv` | | xsymm          | —          |
-| xgerc          | `test_zgerc` | | xsyr2k         | —          |
-| xgeru          | —            | | xsyrk          | —          |
-| xhbmv          | —            | | xtbmv          | —          |
-| xhemm          | `test_zhemm` | | xtbsv          | —          |
-| xhemv          | `test_zhemv` | | xtpmv          | —          |
-| xher           | —            | | xtpsv          | —          |
-| xher2          | —            | | xtrmm          | —          |
-| xher2k         | —            | | xtrmv          | —          |
-| xherk          | `test_zherk` | | xtrsm          | `test_ztrsm` |
-| xhpmv          | —            | | xtrsv          | —          |
+All 36 complex-side BLAS entries have a dedicated test driver:
 
-Untested complex-side BLAS (25 / 36): `xcopy`, `xgbmv`, `xgemmtr`, `xgeru`, `xhbmv`, `xher`, `xher2`, `xher2k`, `xhpmv`, `xhpr`, `xhpr2`, `xqrot`, `xqscal`, `xrotg`, `xswap`, `xsymm`, `xsyr2k`, `xsyrk`, `xtbmv`, `xtbsv`, `xtpmv`, `xtpsv`, `xtrmm`, `xtrmv`, `xtrsv`. The complex-only herk / hemm / hemv core paths are tested; the primarily-untested cluster is the symmetric-complex (zsymm, zsyrk, zsyr2k) and packed/banded (xhbmv, xhpmv, xhpr, xtbmv, xtpmv) routines, which a Fortran/C numerical-physics consumer rarely calls. Add tests if/when a dependent code path needs them.
+| migrated entry | tested via     | | migrated entry | tested via     |
+|----------------|----------------|---|----------------|----------------|
+| xaxpy          | `test_zaxpy`   | | xhpr           | `test_zhpr`    |
+| xcopy          | `test_zcopy`   | | xhpr2          | `test_zhpr2`   |
+| xdotc          | `test_zdotc`   | | xqrot          | `test_zdrot`   |
+| xdotu          | `test_zdotu`   | | xqscal         | `test_zdscal`  |
+| xgbmv          | `test_zgbmv`   | | xrotg          | `test_zrotg`   |
+| xgemm          | `test_zgemm`   | | xscal          | `test_zscal`   |
+| xgemmtr        | `test_zgemmtr` | | xswap          | `test_zswap`   |
+| xgemv          | `test_zgemv`   | | xsymm          | `test_zsymm`   |
+| xgerc          | `test_zgerc`   | | xsyr2k         | `test_zsyr2k`  |
+| xgeru          | `test_zgeru`   | | xsyrk          | `test_zsyrk`   |
+| xhbmv          | `test_zhbmv`   | | xtbmv          | `test_ztbmv`   |
+| xhemm          | `test_zhemm`   | | xtbsv          | `test_ztbsv`   |
+| xhemv          | `test_zhemv`   | | xtpmv          | `test_ztpmv`   |
+| xher           | `test_zher`    | | xtpsv          | `test_ztpsv`   |
+| xher2          | `test_zher2`   | | xtrmm          | `test_ztrmm`   |
+| xher2k         | `test_zher2k`  | | xtrmv          | `test_ztrmv`   |
+| xherk          | `test_zherk`   | | xtrsm          | `test_ztrsm`   |
+| xhpmv          | `test_zhpmv`   | | xtrsv          | `test_ztrsv`   |
 
 ### LAPACK
 

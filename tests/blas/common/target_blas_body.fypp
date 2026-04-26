@@ -57,15 +57,24 @@ module target_blas
     public :: target_dasum, target_daxpy, target_dcopy, target_ddot
     public :: target_dnrm2, target_drot, target_drotg, target_drotm
     public :: target_drotmg, target_dscal, target_dswap, target_idamax
-    public :: target_zaxpy, target_zdotc, target_zdotu, target_zscal
-    public :: target_dzasum
+    public :: target_zaxpy, target_zcopy, target_zswap, target_zscal
+    public :: target_zdotc, target_zdotu
+    public :: target_dcabs1, target_dzasum, target_dznrm2
+    public :: target_zdscal, target_zdrot, target_zrotg
     public :: target_dgemv, target_dgbmv, target_dger, target_dsymv
     public :: target_dspmv, target_dsbmv, target_dtrmv, target_dtbmv
-    public :: target_dtpmv, target_dtrsv
-    public :: target_zgemv, target_zhemv, target_zgerc
+    public :: target_dtpmv, target_dtrsv, target_dtbsv, target_dtpsv
+    public :: target_dspr, target_dspr2, target_dsyr, target_dsyr2
+    public :: target_zgemv, target_zhemv, target_zgerc, target_zgeru
+    public :: target_zgbmv, target_zhbmv, target_ztbmv, target_ztbsv
+    public :: target_zhpmv, target_zhpr, target_zhpr2
+    public :: target_ztpmv, target_ztpsv, target_ztrmv, target_ztrsv
+    public :: target_zher, target_zher2
     public :: target_dgemm, target_dsymm, target_dsyrk, target_dsyr2k
-    public :: target_dtrmm, target_dtrsm
+    public :: target_dtrmm, target_dtrsm, target_dgemmtr
     public :: target_zgemm, target_zhemm, target_zherk, target_ztrsm
+    public :: target_zsymm, target_zsyrk, target_zsyr2k, target_zher2k
+    public :: target_ztrmm, target_zgemmtr
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -191,6 +200,54 @@ $:IMPORT_C()
             ${target_complex}$, intent(inout) :: x(*)
         end subroutine
 
+        function ${R}$cabs1(z) result(r)
+$:IMPORT_RC()
+            ${target_complex}$, intent(in) :: z
+            ${target_real}$ :: r
+        end function
+
+        function ${DZ}$nrm2(n, x, incx) result(r)
+$:IMPORT_RC()
+            integer, intent(in) :: n, incx
+            ${target_complex}$, intent(in) :: x(*)
+            ${target_real}$ :: r
+        end function
+
+        subroutine ${C}$copy(n, x, incx, y, incy)
+$:IMPORT_C()
+            integer, intent(in) :: n, incx, incy
+            ${target_complex}$, intent(in)  :: x(*)
+            ${target_complex}$, intent(out) :: y(*)
+        end subroutine
+
+        subroutine ${C}$swap(n, x, incx, y, incy)
+$:IMPORT_C()
+            integer, intent(in) :: n, incx, incy
+            ${target_complex}$, intent(inout) :: x(*), y(*)
+        end subroutine
+
+        subroutine ${C + R}$scal(n, alpha, x, incx)
+$:IMPORT_RC()
+            integer, intent(in) :: n, incx
+            ${target_real}$,    intent(in)    :: alpha
+            ${target_complex}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${C + R}$rot(n, x, incx, y, incy, c, s)
+$:IMPORT_RC()
+            integer, intent(in) :: n, incx, incy
+            ${target_complex}$, intent(inout) :: x(*), y(*)
+            ${target_real}$,    intent(in)    :: c, s
+        end subroutine
+
+        subroutine ${C}$rotg(a, b, c, s)
+$:IMPORT_RC()
+            ${target_complex}$, intent(inout) :: a
+            ${target_complex}$, intent(in)    :: b
+            ${target_real}$,    intent(out)   :: c
+            ${target_complex}$, intent(out)   :: s
+        end subroutine
+
         ! ── Level 2 — real ───────────────────────────────────────────
         subroutine ${R}$gemv(trans, m, n, alpha, A, lda, x, incx, beta, y, incy)
 $:IMPORT_R()
@@ -275,6 +332,54 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: x(*)
         end subroutine
 
+        subroutine ${R}$tbsv(uplo, trans, diag, n, k, A, lda, x, incx)
+$:IMPORT_R()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, k, lda, incx
+            ${target_real}$, intent(in)    :: A(lda,*)
+            ${target_real}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${R}$tpsv(uplo, trans, diag, n, ap, x, incx)
+$:IMPORT_R()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, incx
+            ${target_real}$, intent(in)    :: ap(*)
+            ${target_real}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${R}$spr(uplo, n, alpha, x, incx, ap)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx
+            ${target_real}$, intent(in)    :: alpha, x(*)
+            ${target_real}$, intent(inout) :: ap(*)
+        end subroutine
+
+        subroutine ${R}$spr2(uplo, n, alpha, x, incx, y, incy, ap)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx, incy
+            ${target_real}$, intent(in)    :: alpha, x(*), y(*)
+            ${target_real}$, intent(inout) :: ap(*)
+        end subroutine
+
+        subroutine ${R}$syr(uplo, n, alpha, x, incx, A, lda)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx, lda
+            ${target_real}$, intent(in)    :: alpha, x(*)
+            ${target_real}$, intent(inout) :: A(lda,*)
+        end subroutine
+
+        subroutine ${R}$syr2(uplo, n, alpha, x, incx, y, incy, A, lda)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx, incy, lda
+            ${target_real}$, intent(in)    :: alpha, x(*), y(*)
+            ${target_real}$, intent(inout) :: A(lda,*)
+        end subroutine
+
         ! ── Level 2 — complex ────────────────────────────────────────
         subroutine ${C}$gemv(trans, m, n, alpha, A, lda, x, incx, beta, y, incy)
 $:IMPORT_C()
@@ -299,6 +404,121 @@ $:IMPORT_C()
             integer, intent(in) :: m, n, incx, incy, lda
             ${target_complex}$, intent(in)    :: alpha, x(*), y(*)
             ${target_complex}$, intent(inout) :: A(lda,*)
+        end subroutine
+
+        subroutine ${C}$geru(m, n, alpha, x, incx, y, incy, A, lda)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, incx, incy, lda
+            ${target_complex}$, intent(in)    :: alpha, x(*), y(*)
+            ${target_complex}$, intent(inout) :: A(lda,*)
+        end subroutine
+
+        subroutine ${C}$gbmv(trans, m, n, kl, ku, alpha, A, lda, x, incx, beta, y, incy)
+$:IMPORT_C()
+            character, intent(in) :: trans
+            integer,   intent(in) :: m, n, kl, ku, lda, incx, incy
+            ${target_complex}$, intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(lda,*), x(*)
+            ${target_complex}$, intent(inout) :: y(*)
+        end subroutine
+
+        subroutine ${C}$hbmv(uplo, n, k, alpha, A, lda, x, incx, beta, y, incy)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, k, lda, incx, incy
+            ${target_complex}$, intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(lda,*), x(*)
+            ${target_complex}$, intent(inout) :: y(*)
+        end subroutine
+
+        subroutine ${C}$hpmv(uplo, n, alpha, ap, x, incx, beta, y, incy)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx, incy
+            ${target_complex}$, intent(in)    :: alpha, beta, ap(*), x(*)
+            ${target_complex}$, intent(inout) :: y(*)
+        end subroutine
+
+        subroutine ${C}$her(uplo, n, alpha, x, incx, A, lda)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx, lda
+            ${target_real}$,    intent(in)    :: alpha
+            ${target_complex}$, intent(in)    :: x(*)
+            ${target_complex}$, intent(inout) :: A(lda,*)
+        end subroutine
+
+        subroutine ${C}$her2(uplo, n, alpha, x, incx, y, incy, A, lda)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx, incy, lda
+            ${target_complex}$, intent(in)    :: alpha, x(*), y(*)
+            ${target_complex}$, intent(inout) :: A(lda,*)
+        end subroutine
+
+        subroutine ${C}$hpr(uplo, n, alpha, x, incx, ap)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx
+            ${target_real}$,    intent(in)    :: alpha
+            ${target_complex}$, intent(in)    :: x(*)
+            ${target_complex}$, intent(inout) :: ap(*)
+        end subroutine
+
+        subroutine ${C}$hpr2(uplo, n, alpha, x, incx, y, incy, ap)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, incx, incy
+            ${target_complex}$, intent(in)    :: alpha, x(*), y(*)
+            ${target_complex}$, intent(inout) :: ap(*)
+        end subroutine
+
+        subroutine ${C}$tbmv(uplo, trans, diag, n, k, A, lda, x, incx)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, k, lda, incx
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            ${target_complex}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${C}$tbsv(uplo, trans, diag, n, k, A, lda, x, incx)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, k, lda, incx
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            ${target_complex}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${C}$tpmv(uplo, trans, diag, n, ap, x, incx)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, incx
+            ${target_complex}$, intent(in)    :: ap(*)
+            ${target_complex}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${C}$tpsv(uplo, trans, diag, n, ap, x, incx)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, incx
+            ${target_complex}$, intent(in)    :: ap(*)
+            ${target_complex}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${C}$trmv(uplo, trans, diag, n, A, lda, x, incx)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, lda, incx
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            ${target_complex}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${C}$trsv(uplo, trans, diag, n, A, lda, x, incx)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, lda, incx
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            ${target_complex}$, intent(inout) :: x(*)
         end subroutine
 
         ! ── Level 3 — real ───────────────────────────────────────────
@@ -356,6 +576,15 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: B(ldb,*)
         end subroutine
 
+        subroutine ${R}$gemmtr(uplo, transa, transb, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+$:IMPORT_R()
+            character, intent(in) :: uplo, transa, transb
+            integer,   intent(in) :: n, k, lda, ldb, ldc
+            ${target_real}$, intent(in)    :: alpha, beta
+            ${target_real}$, intent(in)    :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+        end subroutine
+
         ! ── Level 3 — complex ────────────────────────────────────────
         subroutine ${C}$gemm(transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
 $:IMPORT_C()
@@ -391,6 +620,61 @@ $:IMPORT_C()
             ${target_complex}$, intent(in)    :: alpha
             ${target_complex}$, intent(in)    :: A(lda,*)
             ${target_complex}$, intent(inout) :: B(ldb,*)
+        end subroutine
+
+        subroutine ${C}$symm(side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc)
+$:IMPORT_C()
+            character, intent(in) :: side, uplo
+            integer,   intent(in) :: m, n, lda, ldb, ldc
+            ${target_complex}$, intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+        end subroutine
+
+        subroutine ${C}$syrk(uplo, trans, n, k, alpha, A, lda, beta, C, ldc)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans
+            integer,   intent(in) :: n, k, lda, ldc
+            ${target_complex}$, intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+        end subroutine
+
+        subroutine ${C}$syr2k(uplo, trans, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans
+            integer,   intent(in) :: n, k, lda, ldb, ldc
+            ${target_complex}$, intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+        end subroutine
+
+        subroutine ${C}$her2k(uplo, trans, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+$:IMPORT_RC()
+            character, intent(in) :: uplo, trans
+            integer,   intent(in) :: n, k, lda, ldb, ldc
+            ${target_complex}$, intent(in)    :: alpha
+            ${target_real}$,    intent(in)    :: beta
+            ${target_complex}$, intent(in)    :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+        end subroutine
+
+        subroutine ${C}$trmm(side, uplo, transa, diag, m, n, alpha, A, lda, B, ldb)
+$:IMPORT_C()
+            character, intent(in) :: side, uplo, transa, diag
+            integer,   intent(in) :: m, n, lda, ldb
+            ${target_complex}$, intent(in)    :: alpha
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+        end subroutine
+
+        subroutine ${C}$gemmtr(uplo, transa, transb, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+$:IMPORT_C()
+            character, intent(in) :: uplo, transa, transb
+            integer,   intent(in) :: n, k, lda, ldb, ldc
+            ${target_complex}$, intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
         end subroutine
 
     end interface
@@ -634,6 +918,94 @@ contains
         x(1:nx) = t2q_c(xt)
     end subroutine
 
+    function target_dcabs1(z) result(r)
+        complex(ep), intent(in) :: z
+        real(ep) :: r
+        r = t2q_r(${R}$cabs1(q2t_c(z)))
+    end function
+
+    function target_dznrm2(n, x, incx) result(r)
+        integer,     intent(in) :: n, incx
+        complex(ep), intent(in) :: x(*)
+        real(ep) :: r
+        integer :: nx
+        ${target_complex}$, allocatable :: xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(xt(nx))
+        xt = q2t_c(x(1:nx))
+        r = t2q_r(${DZ}$nrm2(n, xt, incx))
+    end function
+
+    subroutine target_zcopy(n, x, incx, y, incy)
+        integer,     intent(in)  :: n, incx, incy
+        complex(ep), intent(in)  :: x(*)
+        complex(ep), intent(out) :: y(*)
+        integer :: nx, ny
+        ${target_complex}$, allocatable :: xt(:), yt(:)
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(xt(nx), yt(ny))
+        xt = q2t_c(x(1:nx))
+        call ${C}$copy(n, xt, incx, yt, incy)
+        y(1:ny) = t2q_c(yt)
+    end subroutine
+
+    subroutine target_zswap(n, x, incx, y, incy)
+        integer,     intent(in)    :: n, incx, incy
+        complex(ep), intent(inout) :: x(*), y(*)
+        integer :: nx, ny
+        ${target_complex}$, allocatable :: xt(:), yt(:)
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(xt(nx), yt(ny))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$swap(n, xt, incx, yt, incy)
+        x(1:nx) = t2q_c(xt)
+        y(1:ny) = t2q_c(yt)
+    end subroutine
+
+    subroutine target_zdscal(n, alpha, x, incx)
+        integer,     intent(in)    :: n, incx
+        real(ep),    intent(in)    :: alpha
+        complex(ep), intent(inout) :: x(*)
+        integer :: nx
+        ${target_complex}$, allocatable :: xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(xt(nx))
+        xt = q2t_c(x(1:nx))
+        call ${C + R}$scal(n, q2t_r(alpha), xt, incx)
+        x(1:nx) = t2q_c(xt)
+    end subroutine
+
+    subroutine target_zdrot(n, x, incx, y, incy, c, s)
+        integer,     intent(in)    :: n, incx, incy
+        complex(ep), intent(inout) :: x(*), y(*)
+        real(ep),    intent(in)    :: c, s
+        integer :: nx, ny
+        ${target_complex}$, allocatable :: xt(:), yt(:)
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(xt(nx), yt(ny))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C + R}$rot(n, xt, incx, yt, incy, q2t_r(c), q2t_r(s))
+        x(1:nx) = t2q_c(xt)
+        y(1:ny) = t2q_c(yt)
+    end subroutine
+
+    subroutine target_zrotg(a, b, c, s)
+        complex(ep), intent(inout) :: a
+        complex(ep), intent(in)    :: b
+        real(ep),    intent(out)   :: c
+        complex(ep), intent(out)   :: s
+        ${target_complex}$ :: at, bt, st
+        ${target_real}$    :: ct
+        at = q2t_c(a); bt = q2t_c(b)
+        call ${C}$rotg(at, bt, ct, st)
+        a = t2q_c(at)
+        c = t2q_r(ct)
+        s = t2q_c(st)
+    end subroutine
+
     ! ── Level 2 — real ───────────────────────────────────────────────
     subroutine target_dgemv(trans, m, n, alpha, A, lda, x, incx, beta, y, incy)
         character, intent(in)    :: trans
@@ -811,6 +1183,103 @@ contains
         x(1:nx) = t2q_r(xt)
     end subroutine
 
+    subroutine target_dtbsv(uplo, trans, diag, n, k, A, lda, x, incx)
+        character, intent(in)    :: uplo, trans, diag
+        integer,   intent(in)    :: n, k, lda, incx
+        real(ep),  intent(in)    :: A(lda,*)
+        real(ep),  intent(inout) :: x(*)
+        integer :: nx
+        ${target_real}$, allocatable :: At(:,:), xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(At(lda, n), xt(nx))
+        At = q2t_r(A(1:lda, 1:n))
+        xt = q2t_r(x(1:nx))
+        call ${R}$tbsv(uplo, trans, diag, n, k, At, lda, xt, incx)
+        x(1:nx) = t2q_r(xt)
+    end subroutine
+
+    subroutine target_dtpsv(uplo, trans, diag, n, ap, x, incx)
+        character, intent(in)    :: uplo, trans, diag
+        integer,   intent(in)    :: n, incx
+        real(ep),  intent(in)    :: ap(*)
+        real(ep),  intent(inout) :: x(*)
+        integer :: aps, nx
+        ${target_real}$, allocatable :: apt(:), xt(:)
+        aps = n * (n + 1) / 2
+        nx = (n - 1) * abs(incx) + 1
+        allocate(apt(aps), xt(nx))
+        apt = q2t_r(ap(1:aps))
+        xt = q2t_r(x(1:nx))
+        call ${R}$tpsv(uplo, trans, diag, n, apt, xt, incx)
+        x(1:nx) = t2q_r(xt)
+    end subroutine
+
+    subroutine target_dspr(uplo, n, alpha, x, incx, ap)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, incx
+        real(ep),  intent(in)    :: alpha, x(*)
+        real(ep),  intent(inout) :: ap(*)
+        integer :: aps, nx
+        ${target_real}$, allocatable :: apt(:), xt(:)
+        aps = n * (n + 1) / 2
+        nx = (n - 1) * abs(incx) + 1
+        allocate(apt(aps), xt(nx))
+        apt = q2t_r(ap(1:aps))
+        xt  = q2t_r(x(1:nx))
+        call ${R}$spr(uplo, n, q2t_r(alpha), xt, incx, apt)
+        ap(1:aps) = t2q_r(apt)
+    end subroutine
+
+    subroutine target_dspr2(uplo, n, alpha, x, incx, y, incy, ap)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, incx, incy
+        real(ep),  intent(in)    :: alpha, x(*), y(*)
+        real(ep),  intent(inout) :: ap(*)
+        integer :: aps, nx, ny
+        ${target_real}$, allocatable :: apt(:), xt(:), yt(:)
+        aps = n * (n + 1) / 2
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(apt(aps), xt(nx), yt(ny))
+        apt = q2t_r(ap(1:aps))
+        xt  = q2t_r(x(1:nx))
+        yt  = q2t_r(y(1:ny))
+        call ${R}$spr2(uplo, n, q2t_r(alpha), xt, incx, yt, incy, apt)
+        ap(1:aps) = t2q_r(apt)
+    end subroutine
+
+    subroutine target_dsyr(uplo, n, alpha, x, incx, A, lda)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, incx, lda
+        real(ep),  intent(in)    :: alpha, x(*)
+        real(ep),  intent(inout) :: A(lda,*)
+        integer :: nx
+        ${target_real}$, allocatable :: At(:,:), xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(At(lda, n), xt(nx))
+        At = q2t_r(A(1:lda, 1:n))
+        xt = q2t_r(x(1:nx))
+        call ${R}$syr(uplo, n, q2t_r(alpha), xt, incx, At, lda)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_dsyr2(uplo, n, alpha, x, incx, y, incy, A, lda)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, incx, incy, lda
+        real(ep),  intent(in)    :: alpha, x(*), y(*)
+        real(ep),  intent(inout) :: A(lda,*)
+        integer :: nx, ny
+        ${target_real}$, allocatable :: At(:,:), xt(:), yt(:)
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(At(lda, n), xt(nx), yt(ny))
+        At = q2t_r(A(1:lda, 1:n))
+        xt = q2t_r(x(1:nx))
+        yt = q2t_r(y(1:ny))
+        call ${R}$syr2(uplo, n, q2t_r(alpha), xt, incx, yt, incy, At, lda)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
     ! ── Level 2 — complex ────────────────────────────────────────────
     subroutine target_zgemv(trans, m, n, alpha, A, lda, x, incx, beta, y, incy)
         character,   intent(in)    :: trans
@@ -866,6 +1335,239 @@ contains
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
         call ${C}$gerc(m, n, q2t_c(alpha), xt, incx, yt, incy, At, lda)
         A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zgeru(m, n, alpha, x, incx, y, incy, A, lda)
+        integer,     intent(in)    :: m, n, incx, incy, lda
+        complex(ep), intent(in)    :: alpha, x(*), y(*)
+        complex(ep), intent(inout) :: A(lda,*)
+        integer :: nx, ny
+        ${target_complex}$, allocatable :: At(:,:), xt(:), yt(:)
+        nx = (m - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(At(lda, n), xt(nx), yt(ny))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$geru(m, n, q2t_c(alpha), xt, incx, yt, incy, At, lda)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zgbmv(trans, m, n, kl, ku, alpha, A, lda, x, incx, beta, y, incy)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: m, n, kl, ku, lda, incx, incy
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(lda,*), x(*)
+        complex(ep), intent(inout) :: y(*)
+        integer :: nx, ny
+        ${target_complex}$, allocatable :: At(:,:), xt(:), yt(:)
+        if (trans == 'N' .or. trans == 'n') then
+            nx = (n - 1) * abs(incx) + 1
+            ny = (m - 1) * abs(incy) + 1
+        else
+            nx = (m - 1) * abs(incx) + 1
+            ny = (n - 1) * abs(incy) + 1
+        end if
+        allocate(At(lda, n), xt(nx), yt(ny))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$gbmv(trans, m, n, kl, ku, q2t_c(alpha), At, lda, &
+                       xt, incx, q2t_c(beta), yt, incy)
+        y(1:ny) = t2q_c(yt)
+    end subroutine
+
+    subroutine target_zhbmv(uplo, n, k, alpha, A, lda, x, incx, beta, y, incy)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, k, lda, incx, incy
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(lda,*), x(*)
+        complex(ep), intent(inout) :: y(*)
+        integer :: nx, ny
+        ${target_complex}$, allocatable :: At(:,:), xt(:), yt(:)
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(At(lda, n), xt(nx), yt(ny))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$hbmv(uplo, n, k, q2t_c(alpha), At, lda, xt, incx, &
+                       q2t_c(beta), yt, incy)
+        y(1:ny) = t2q_c(yt)
+    end subroutine
+
+    subroutine target_zhpmv(uplo, n, alpha, ap, x, incx, beta, y, incy)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, incx, incy
+        complex(ep), intent(in)    :: alpha, beta, ap(*), x(*)
+        complex(ep), intent(inout) :: y(*)
+        integer :: aps, nx, ny
+        ${target_complex}$, allocatable :: apt(:), xt(:), yt(:)
+        aps = n * (n + 1) / 2
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(apt(aps), xt(nx), yt(ny))
+        apt = q2t_c(ap(1:aps))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$hpmv(uplo, n, q2t_c(alpha), apt, xt, incx, &
+                       q2t_c(beta), yt, incy)
+        y(1:ny) = t2q_c(yt)
+    end subroutine
+
+    subroutine target_zher(uplo, n, alpha, x, incx, A, lda)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, incx, lda
+        real(ep),    intent(in)    :: alpha
+        complex(ep), intent(in)    :: x(*)
+        complex(ep), intent(inout) :: A(lda,*)
+        integer :: nx
+        ${target_complex}$, allocatable :: At(:,:), xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(At(lda, n), xt(nx))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx))
+        call ${C}$her(uplo, n, q2t_r(alpha), xt, incx, At, lda)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zher2(uplo, n, alpha, x, incx, y, incy, A, lda)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, incx, incy, lda
+        complex(ep), intent(in)    :: alpha, x(*), y(*)
+        complex(ep), intent(inout) :: A(lda,*)
+        integer :: nx, ny
+        ${target_complex}$, allocatable :: At(:,:), xt(:), yt(:)
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(At(lda, n), xt(nx), yt(ny))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$her2(uplo, n, q2t_c(alpha), xt, incx, yt, incy, At, lda)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zhpr(uplo, n, alpha, x, incx, ap)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, incx
+        real(ep),    intent(in)    :: alpha
+        complex(ep), intent(in)    :: x(*)
+        complex(ep), intent(inout) :: ap(*)
+        integer :: aps, nx
+        ${target_complex}$, allocatable :: apt(:), xt(:)
+        aps = n * (n + 1) / 2
+        nx = (n - 1) * abs(incx) + 1
+        allocate(apt(aps), xt(nx))
+        apt = q2t_c(ap(1:aps))
+        xt  = q2t_c(x(1:nx))
+        call ${C}$hpr(uplo, n, q2t_r(alpha), xt, incx, apt)
+        ap(1:aps) = t2q_c(apt)
+    end subroutine
+
+    subroutine target_zhpr2(uplo, n, alpha, x, incx, y, incy, ap)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, incx, incy
+        complex(ep), intent(in)    :: alpha, x(*), y(*)
+        complex(ep), intent(inout) :: ap(*)
+        integer :: aps, nx, ny
+        ${target_complex}$, allocatable :: apt(:), xt(:), yt(:)
+        aps = n * (n + 1) / 2
+        nx = (n - 1) * abs(incx) + 1
+        ny = (n - 1) * abs(incy) + 1
+        allocate(apt(aps), xt(nx), yt(ny))
+        apt = q2t_c(ap(1:aps))
+        xt  = q2t_c(x(1:nx))
+        yt  = q2t_c(y(1:ny))
+        call ${C}$hpr2(uplo, n, q2t_c(alpha), xt, incx, yt, incy, apt)
+        ap(1:aps) = t2q_c(apt)
+    end subroutine
+
+    subroutine target_ztbmv(uplo, trans, diag, n, k, A, lda, x, incx)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, k, lda, incx
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: x(*)
+        integer :: nx
+        ${target_complex}$, allocatable :: At(:,:), xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(At(lda, n), xt(nx))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx))
+        call ${C}$tbmv(uplo, trans, diag, n, k, At, lda, xt, incx)
+        x(1:nx) = t2q_c(xt)
+    end subroutine
+
+    subroutine target_ztbsv(uplo, trans, diag, n, k, A, lda, x, incx)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, k, lda, incx
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: x(*)
+        integer :: nx
+        ${target_complex}$, allocatable :: At(:,:), xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(At(lda, n), xt(nx))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx))
+        call ${C}$tbsv(uplo, trans, diag, n, k, At, lda, xt, incx)
+        x(1:nx) = t2q_c(xt)
+    end subroutine
+
+    subroutine target_ztpmv(uplo, trans, diag, n, ap, x, incx)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, incx
+        complex(ep), intent(in)    :: ap(*)
+        complex(ep), intent(inout) :: x(*)
+        integer :: aps, nx
+        ${target_complex}$, allocatable :: apt(:), xt(:)
+        aps = n * (n + 1) / 2
+        nx = (n - 1) * abs(incx) + 1
+        allocate(apt(aps), xt(nx))
+        apt = q2t_c(ap(1:aps))
+        xt  = q2t_c(x(1:nx))
+        call ${C}$tpmv(uplo, trans, diag, n, apt, xt, incx)
+        x(1:nx) = t2q_c(xt)
+    end subroutine
+
+    subroutine target_ztpsv(uplo, trans, diag, n, ap, x, incx)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, incx
+        complex(ep), intent(in)    :: ap(*)
+        complex(ep), intent(inout) :: x(*)
+        integer :: aps, nx
+        ${target_complex}$, allocatable :: apt(:), xt(:)
+        aps = n * (n + 1) / 2
+        nx = (n - 1) * abs(incx) + 1
+        allocate(apt(aps), xt(nx))
+        apt = q2t_c(ap(1:aps))
+        xt  = q2t_c(x(1:nx))
+        call ${C}$tpsv(uplo, trans, diag, n, apt, xt, incx)
+        x(1:nx) = t2q_c(xt)
+    end subroutine
+
+    subroutine target_ztrmv(uplo, trans, diag, n, A, lda, x, incx)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, lda, incx
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: x(*)
+        integer :: nx
+        ${target_complex}$, allocatable :: At(:,:), xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(At(lda, n), xt(nx))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx))
+        call ${C}$trmv(uplo, trans, diag, n, At, lda, xt, incx)
+        x(1:nx) = t2q_c(xt)
+    end subroutine
+
+    subroutine target_ztrsv(uplo, trans, diag, n, A, lda, x, incx)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, lda, incx
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: x(*)
+        integer :: nx
+        ${target_complex}$, allocatable :: At(:,:), xt(:)
+        nx = (n - 1) * abs(incx) + 1
+        allocate(At(lda, n), xt(nx))
+        At = q2t_c(A(1:lda, 1:n))
+        xt = q2t_c(x(1:nx))
+        call ${C}$trsv(uplo, trans, diag, n, At, lda, xt, incx)
+        x(1:nx) = t2q_c(xt)
     end subroutine
 
     ! ── Level 3 — real ───────────────────────────────────────────────
@@ -975,6 +1677,25 @@ contains
         B(1:ldb, 1:n) = t2q_r(Bt)
     end subroutine
 
+    subroutine target_dgemmtr(uplo, transa, transb, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+        character, intent(in)    :: uplo, transa, transb
+        integer,   intent(in)    :: n, k, lda, ldb, ldc
+        real(ep),  intent(in)    :: alpha, beta
+        real(ep),  intent(in)    :: A(lda,*), B(ldb,*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer :: an, bn
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:)
+        if (transa == 'N' .or. transa == 'n') then; an = k; else; an = n; end if
+        if (transb == 'N' .or. transb == 'n') then; bn = n; else; bn = k; end if
+        allocate(At(lda, an), Bt(ldb, bn), Ct(ldc, n))
+        At = q2t_r(A(1:lda, 1:an))
+        Bt = q2t_r(B(1:ldb, 1:bn))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$gemmtr(uplo, transa, transb, n, k, q2t_r(alpha), At, lda, &
+                         Bt, ldb, q2t_r(beta), Ct, ldc)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
     ! ── Level 3 — complex ────────────────────────────────────────────
     subroutine target_zgemm(transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
         character,   intent(in)    :: transa, transb
@@ -1045,6 +1766,114 @@ contains
         call ${C}$trsm(side, uplo, transa, diag, m, n, q2t_c(alpha), &
                        At, lda, Bt, ldb)
         B(1:ldb, 1:n) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zsymm(side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc)
+        character,   intent(in)    :: side, uplo
+        integer,     intent(in)    :: m, n, lda, ldb, ldc
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer :: an
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:)
+        if (side == 'L' .or. side == 'l') then; an = m; else; an = n; end if
+        allocate(At(lda, an), Bt(ldb, n), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:an))
+        Bt = q2t_c(B(1:ldb, 1:n))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$symm(side, uplo, m, n, q2t_c(alpha), At, lda, &
+                       Bt, ldb, q2t_c(beta), Ct, ldc)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_zsyrk(uplo, trans, n, k, alpha, A, lda, beta, C, ldc)
+        character,   intent(in)    :: uplo, trans
+        integer,     intent(in)    :: n, k, lda, ldc
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer :: an
+        ${target_complex}$, allocatable :: At(:,:), Ct(:,:)
+        if (trans == 'N' .or. trans == 'n') then; an = k; else; an = n; end if
+        allocate(At(lda, an), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:an))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$syrk(uplo, trans, n, k, q2t_c(alpha), At, lda, &
+                       q2t_c(beta), Ct, ldc)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_zsyr2k(uplo, trans, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+        character,   intent(in)    :: uplo, trans
+        integer,     intent(in)    :: n, k, lda, ldb, ldc
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer :: an
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:)
+        if (trans == 'N' .or. trans == 'n') then; an = k; else; an = n; end if
+        allocate(At(lda, an), Bt(ldb, an), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:an))
+        Bt = q2t_c(B(1:ldb, 1:an))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$syr2k(uplo, trans, n, k, q2t_c(alpha), At, lda, &
+                        Bt, ldb, q2t_c(beta), Ct, ldc)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_zher2k(uplo, trans, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+        character,   intent(in)    :: uplo, trans
+        integer,     intent(in)    :: n, k, lda, ldb, ldc
+        complex(ep), intent(in)    :: alpha
+        real(ep),    intent(in)    :: beta
+        complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer :: an
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:)
+        if (trans == 'N' .or. trans == 'n') then; an = k; else; an = n; end if
+        allocate(At(lda, an), Bt(ldb, an), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:an))
+        Bt = q2t_c(B(1:ldb, 1:an))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$her2k(uplo, trans, n, k, q2t_c(alpha), At, lda, &
+                        Bt, ldb, q2t_r(beta), Ct, ldc)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_ztrmm(side, uplo, transa, diag, m, n, alpha, A, lda, B, ldb)
+        character,   intent(in)    :: side, uplo, transa, diag
+        integer,     intent(in)    :: m, n, lda, ldb
+        complex(ep), intent(in)    :: alpha
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer :: an
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        if (side == 'L' .or. side == 'l') then; an = m; else; an = n; end if
+        allocate(At(lda, an), Bt(ldb, n))
+        At = q2t_c(A(1:lda, 1:an))
+        Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$trmm(side, uplo, transa, diag, m, n, q2t_c(alpha), &
+                       At, lda, Bt, ldb)
+        B(1:ldb, 1:n) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zgemmtr(uplo, transa, transb, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+        character,   intent(in)    :: uplo, transa, transb
+        integer,     intent(in)    :: n, k, lda, ldb, ldc
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer :: an, bn
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:)
+        if (transa == 'N' .or. transa == 'n') then; an = k; else; an = n; end if
+        if (transb == 'N' .or. transb == 'n') then; bn = n; else; bn = k; end if
+        allocate(At(lda, an), Bt(ldb, bn), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:an))
+        Bt = q2t_c(B(1:ldb, 1:bn))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$gemmtr(uplo, transa, transb, n, k, q2t_c(alpha), At, lda, &
+                         Bt, ldb, q2t_c(beta), Ct, ldc)
+        C(1:ldc, 1:n) = t2q_c(Ct)
     end subroutine
 
 end module target_blas
