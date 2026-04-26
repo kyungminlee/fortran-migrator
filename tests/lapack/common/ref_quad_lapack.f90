@@ -520,6 +520,101 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zunglq
+
+        ! ── Phase 5 — complex mirrors + QR helpers ───────────────────
+        subroutine zgetri(n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgetri
+
+        subroutine zpotri(uplo, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotri
+
+        subroutine zhetrf(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhetrf
+
+        subroutine zhetrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrs
+
+        subroutine zgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, ilo, ihi, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgehrd
+
+        subroutine zunghr(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, ilo, ihi, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunghr
+
+        subroutine dgeqp3(m, n, A, lda, jpvt, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            integer,  intent(inout) :: jpvt(*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqp3
+
+        subroutine zgeqp3(m, n, A, lda, jpvt, tau, work, lwork, rwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(inout) :: jpvt(*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqp3
+
+        subroutine dormqr(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormqr
+
+        subroutine zunmqr(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmqr
     end interface
 
 end module ref_quad_lapack

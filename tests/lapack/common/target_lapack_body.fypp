@@ -64,6 +64,9 @@ module target_lapack
     public :: target_dsyevr, target_zheevr, target_dsygv, target_zhegv
     public :: target_dgehrd, target_dorghr
     public :: target_dgelqf, target_dorglq, target_zgelqf, target_zunglq
+    public :: target_zgetri, target_zpotri, target_zhetrf, target_zhetrs
+    public :: target_zgehrd, target_zunghr
+    public :: target_dgeqp3, target_zgeqp3, target_dormqr, target_zunmqr
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -485,6 +488,101 @@ $:IMPORT_C()
             integer, intent(in) :: m, n, k, lda, lwork
             ${target_complex}$, intent(inout) :: A(lda,*)
             ${target_complex}$, intent(in)    :: tau(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 5 — complex mirrors + QR helpers ───────────────────
+        subroutine ${C}$getri(n, A, lda, ipiv, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer, intent(in) :: ipiv(*)
+            ${target_complex}$, intent(out) :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$potri(uplo, n, A, lda, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hetrf(uplo, n, A, lda, ipiv, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer, intent(out) :: ipiv(*), info
+            ${target_complex}$, intent(out) :: work(*)
+        end subroutine
+
+        subroutine ${C}$hetrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, lda, ldb
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            integer,   intent(in)             :: ipiv(*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: n, ilo, ihi, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$unghr(n, ilo, ihi, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: n, ilo, ihi, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(in)    :: tau(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$geqp3(m, n, A, lda, jpvt, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer, intent(inout) :: jpvt(*)
+            ${target_real}$, intent(out)   :: tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$geqp3(m, n, A, lda, jpvt, tau, work, lwork, rwork, info)
+$:IMPORT_RC()
+            integer, intent(in)    :: m, n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer, intent(inout) :: jpvt(*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+            ${target_real}$,    intent(out)   :: rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$ormqr(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                              work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, lda, ldc, lwork
+            ${target_real}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$unmqr(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                              work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, lda, ldc, lwork
+            ${target_complex}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
             ${target_complex}$, intent(out)   :: work(*)
             integer, intent(out) :: info
         end subroutine
@@ -1541,6 +1639,188 @@ contains
         allocate(work(lwork))
         call ${C}$unglq(m, n, k, At, lda, taut, work, lwork, info)
         A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    ! ── Phase 5 wrappers ─────────────────────────────────────────────
+    subroutine target_zgetri(n, A, lda, ipiv, info)
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(in)    :: ipiv(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$getri(n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$getri(n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zpotri(uplo, n, A, lda, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$potri(uplo, n, At, lda, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zhetrf(uplo, n, A, lda, ipiv, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$hetrf(uplo, n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hetrf(uplo, n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zhetrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(in)    :: A(lda,*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n))
+        Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$hetrs(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zgehrd(n, ilo, ihi, A, lda, tau, info)
+        integer,     intent(in)    :: n, ilo, ihi, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, ntau
+        ntau = max(1, n - 1)
+        allocate(At(lda, n), taut(ntau))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gehrd(n, ilo, ihi, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$gehrd(n, ilo, ihi, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        tau(1:ntau)   = t2q_c(taut)
+    end subroutine
+
+    subroutine target_zunghr(n, ilo, ihi, A, lda, tau, info)
+        integer,     intent(in)    :: n, ilo, ihi, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, ntau
+        ntau = max(1, n - 1)
+        allocate(At(lda, n), taut(ntau))
+        At = q2t_c(A(1:lda, 1:n))
+        taut = q2t_c(tau(1:ntau))
+        call ${C}$unghr(n, ilo, ihi, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$unghr(n, ilo, ihi, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_dgeqp3(m, n, A, lda, jpvt, tau, info)
+        integer,  intent(in)    :: m, n, lda
+        real(ep), intent(inout) :: A(lda,*)
+        integer,  intent(inout) :: jpvt(*)
+        real(ep), intent(out)   :: tau(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, kmn
+        kmn = min(m, n)
+        allocate(At(lda, n), taut(kmn))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geqp3(m, n, At, lda, jpvt, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$geqp3(m, n, At, lda, jpvt, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        tau(1:kmn)    = t2q_r(taut)
+    end subroutine
+
+    subroutine target_zgeqp3(m, n, A, lda, jpvt, tau, info)
+        integer,     intent(in)    :: m, n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(inout) :: jpvt(*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, kmn
+        kmn = min(m, n)
+        allocate(At(lda, n), taut(kmn), rwork(max(1, 2*n)))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$geqp3(m, n, At, lda, jpvt, taut, wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$geqp3(m, n, At, lda, jpvt, taut, work, lwork, rwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        tau(1:kmn)    = t2q_c(taut)
+    end subroutine
+
+    subroutine target_dormqr(side, trans, m, n, k, A, lda, tau, C, ldc, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, k, lda, ldc
+        real(ep),  intent(in)    :: A(lda,*), tau(*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, ar
+        ar = merge(m, n, side == 'L' .or. side == 'l')
+        allocate(At(lda, k), taut(k), Ct(ldc, n))
+        At = q2t_r(A(1:lda, 1:k))
+        taut = q2t_r(tau(1:k))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$ormqr(side, trans, m, n, k, At, lda, taut, Ct, ldc, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$ormqr(side, trans, m, n, k, At, lda, taut, Ct, ldc, work, lwork, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zunmqr(side, trans, m, n, k, A, lda, tau, C, ldc, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, k, lda, ldc
+        complex(ep), intent(in)    :: A(lda,*), tau(*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, k), taut(k), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:k))
+        taut = q2t_c(tau(1:k))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$unmqr(side, trans, m, n, k, At, lda, taut, Ct, ldc, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$unmqr(side, trans, m, n, k, At, lda, taut, Ct, ldc, work, lwork, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
     end subroutine
 
 end module target_lapack
