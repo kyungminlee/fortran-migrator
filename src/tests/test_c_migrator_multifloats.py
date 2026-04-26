@@ -35,9 +35,9 @@ from pyengine.c_migrator import (
 def test_build_sub_vars_multifloats_struct_types():
     mf = load_target('multifloats')
     v = _build_sub_vars(mf)
-    assert v['REAL_TYPE'] == 'float64x2_t'
-    assert v['COMPLEX_TYPE'] == 'complex128x2_t'
-    assert v['C_REAL_TYPE'] == 'float64x2_t'
+    assert v['REAL_TYPE'] == 'float64x2'
+    assert v['COMPLEX_TYPE'] == 'complex64x2'
+    assert v['C_REAL_TYPE'] == 'float64x2'
     assert v['MPI_REAL'] == 'MPI_FLOAT64X2'
     assert v['MPI_COMPLEX'] == 'MPI_COMPLEX128X2'
     assert v['MPI_SUM_REAL'] == 'MPI_DD_SUM'
@@ -101,8 +101,8 @@ def test_blacs_real_clone_multifloats(tmp_path):
     assert result is not None
     new_name, text = result
     assert new_name == 'BI_ddvvsum.c'
-    assert 'float64x2_t *v1' in text
-    assert 'float64x2_t *v2' in text
+    assert 'float64x2 *v1' in text
+    assert 'float64x2 *v2' in text
     assert 'MPI_FLOAT64X2' in text
     assert 'MPI_DOUBLE' not in text
     # MPI_SUM must be rewritten to the user-defined op
@@ -159,8 +159,8 @@ def test_blacs_complex_clone_multifloats(tmp_path):
     assert result is not None
     new_name, text = result
     assert new_name == 'BI_zzvvsum.c'
-    assert 'complex128x2_t *v1' in text
-    assert 'float64x2_t *r1' in text
+    assert 'complex64x2 *v1' in text
+    assert 'float64x2 *r1' in text
     assert 'MPI_COMPLEX128X2' in text
     # Complex files use the zz reduction op
     assert 'MPI_ZZ_SUM' in text

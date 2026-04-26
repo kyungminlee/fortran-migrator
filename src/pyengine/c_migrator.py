@@ -303,7 +303,7 @@ def _convert_kr_to_ansi(text: str) -> str:
         type_keywords = {'int', 'char', 'float', 'double', 'void', 'long',
                          'short', 'unsigned', 'signed', 'struct', 'enum',
                          'const', 'Int', 'complex', 'complex16',
-                         'float64x2_t', 'complex128x2_t',
+                         'float64x2', 'complex64x2',
                          'F_CHAR', 'F_VOID_FCT', 'F_INTG_FCT', 'F_DBLE_FCT',
                          'SCOMPLEX', 'DCOMPLEX'}
         # Use whole-word matching (``\b``) — substring checks would mis-flag

@@ -466,9 +466,9 @@ def _canonicalize_for_compare(text: str) -> str:
     """Normalize text to ignore cosmetic precision-specific differences
     that remain after migration.
     """
-    # 0. Strip module-based type constructors: e.g. float64x2('1.0D0') -> '1.0D0'
-    # Matches identifiers containing a digit (type names like float64x2,
-    # complex128x2, real256, etc.) followed by a single-argument call.
+    # 0. Strip module-based type constructors: e.g. real64x2('1.0D0') -> '1.0D0'
+    # Matches identifiers containing a digit (type names like real64x2,
+    # cmplx64x2, real256, etc.) followed by a single-argument call.
     # This avoids matching Fortran keywords or subroutine calls.
     text = re.sub(r"\b(\w*\d\w*)\s*\(\s*'([^']+)'\s*\)", r"\2", text, flags=re.IGNORECASE)
     text = re.sub(r"\b(\w*\d\w*)\s*\(([^)]+)\)", r"\2", text, flags=re.IGNORECASE)
@@ -494,7 +494,7 @@ def _canonicalize_for_compare(text: str) -> str:
         r'COMPLEX', text, flags=re.IGNORECASE)
     # Canonicalize TYPE(...) declarations to REAL/COMPLEX.
     # Any TYPE(...) that remains after KIND canonicalization is a module-
-    # based type (e.g. TYPE(float64x2), TYPE(real256)) — normalize to
+    # based type (e.g. TYPE(real64x2), TYPE(real256)) — normalize to
     # base precision for comparison purposes.
     text = re.sub(
         r'\bTYPE\s*\(\s*\w+\s*\)',

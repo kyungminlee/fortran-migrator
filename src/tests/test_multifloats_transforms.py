@@ -37,10 +37,10 @@ def test_multifloats_target_basic_shape():
     mf = load_target('multifloats')
     assert mf.name == 'multifloats'
     assert mf.is_kind_based is False
-    assert mf.real_type == 'TYPE(float64x2)'
-    assert mf.complex_type == 'TYPE(complex64x2)'
-    assert mf.real_constructor == 'float64x2'
-    assert mf.complex_constructor == 'complex64x2'
+    assert mf.real_type == 'TYPE(real64x2)'
+    assert mf.complex_type == 'TYPE(cmplx64x2)'
+    assert mf.real_constructor == 'real64x2'
+    assert mf.complex_constructor == 'cmplx64x2'
     assert mf.module_name == 'multifloats'
     # DD (real) / ZZ (complex) — double-double prefixes. Single-letter
     # prefixes like W collide with LAPACK's workspace-size idiom (e.g.
@@ -78,11 +78,11 @@ def mf():
 
 
 @pytest.mark.parametrize('src,expected', [
-    ('      DOUBLE PRECISION X', '      TYPE(float64x2) X'),
-    ('      DOUBLE COMPLEX Z', '      TYPE(complex64x2) Z'),
-    ('      COMPLEX*16 Z', '      TYPE(complex64x2) Z'),
-    ('      REAL*8 X', '      TYPE(float64x2) X'),
-    ('      REAL*4 X', '      TYPE(float64x2) X'),
+    ('      DOUBLE PRECISION X', '      TYPE(real64x2) X'),
+    ('      DOUBLE COMPLEX Z', '      TYPE(cmplx64x2) Z'),
+    ('      COMPLEX*16 Z', '      TYPE(cmplx64x2) Z'),
+    ('      REAL*8 X', '      TYPE(real64x2) X'),
+    ('      REAL*4 X', '      TYPE(real64x2) X'),
 ])
 def test_replace_type_decls_keywords(mf, src, expected):
     assert replace_type_decls(src, mf) == expected
@@ -91,7 +91,7 @@ def test_replace_type_decls_keywords(mf, src, expected):
 def test_replace_type_decls_preserves_attrs(mf):
     src = '      DOUBLE PRECISION, INTENT(IN) :: A(LDA,*)'
     out = replace_type_decls(src, mf)
-    assert 'TYPE(float64x2)' in out
+    assert 'TYPE(real64x2)' in out
     assert 'INTENT(IN)' in out
     assert 'A(LDA,*)' in out
 
@@ -172,31 +172,31 @@ def test_strip_kind_target_is_noop():
 def test_replace_literals_d_exponent(mf):
     src = "      X = 1.0D+0 + 2.5D-3"
     out = replace_literals(src, mf)
-    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
-    assert "float64x2(limbs=[2.5D-3, 0.0_8])" in out
+    assert "real64x2(limbs=[1.0D0, 0.0_8])" in out
+    assert "real64x2(limbs=[2.5D-3, 0.0_8])" in out
 
 
 def test_replace_literals_bare_float(mf):
     src = "      X = 0.5"
     out = replace_literals(src, mf)
-    assert "float64x2(limbs=[0.5D0, 0.0_8])" in out
+    assert "real64x2(limbs=[0.5D0, 0.0_8])" in out
 
 
 def test_replace_literals_wp_suffix(mf):
     src = "   x = 0.5_wp + 1.0_wp"
     out = replace_literals(src, mf)
-    assert "float64x2(limbs=[0.5D0, 0.0_8])" in out
-    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
+    assert "real64x2(limbs=[0.5D0, 0.0_8])" in out
+    assert "real64x2(limbs=[1.0D0, 0.0_8])" in out
 
 
 def test_replace_literals_does_not_double_wrap(mf):
     """Idempotence: re-running on already-wrapped output is a no-op."""
-    src = "      X = float64x2(limbs=[1.0D0, 0.0_8])"
+    src = "      X = real64x2(limbs=[1.0D0, 0.0_8])"
     out1 = replace_literals(src, mf)
     out2 = replace_literals(out1, mf)
     # Second pass mustn't add another constructor layer.
-    assert out1.count('float64x2(') == 1
-    assert out2.count('float64x2(') == 1
+    assert out1.count('real64x2(') == 1
+    assert out2.count('real64x2(') == 1
 
 
 def test_replace_literals_preserves_strings(mf):
@@ -204,7 +204,7 @@ def test_replace_literals_preserves_strings(mf):
     src = "      WRITE(*,*) '1.0D+0 in a string'"
     out = replace_literals(src, mf)
     assert "'1.0D+0 in a string'" in out
-    assert 'float64x2(' not in out
+    assert 'real64x2(' not in out
 
 
 def test_replace_literals_skips_fortran_operators(mf):
@@ -212,7 +212,7 @@ def test_replace_literals_skips_fortran_operators(mf):
     src = "      IF (X.EQ.1.0D+0) GO TO 10"
     out = replace_literals(src, mf)
     assert '.EQ.' in out
-    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
+    assert "real64x2(limbs=[1.0D0, 0.0_8])" in out
 
 
 # ---------------------------------------------------------------------------
@@ -263,36 +263,36 @@ def test_replace_known_constants_kind_mode_is_noop():
 
 
 def test_intrinsic_dble_uses_universal_constructor(mf):
-    """``DBLE(x)`` becomes ``float64x2(x)`` — the universal generic
+    """``DBLE(x)`` becomes ``real64x2(x)`` — the universal generic
     constructor in multifloats handles every input type (integer,
-    real(sp/dp), float64x2, complex64x2 → real part)."""
+    real(sp/dp), real64x2, cmplx64x2 → real part)."""
     src = "      Y = DBLE(ZX(I))"
     out = replace_intrinsic_calls(src, mf)
-    assert 'float64x2(ZX(I))' in out
+    assert 'real64x2(ZX(I))' in out
 
 
 def test_intrinsic_dble_integer_uses_constructor(mf):
-    """``DBLE(N)`` for integer N must become ``float64x2(N)``, not
+    """``DBLE(N)`` for integer N must become ``real64x2(N)``, not
     ``DD_REAL(N)`` (which only takes float64x2/complex64x2)."""
     src = "      Y = DBLE(N)"
     out = replace_intrinsic_calls(src, mf)
-    assert 'float64x2(N)' in out
+    assert 'real64x2(N)' in out
 
 
-def test_intrinsic_dcmplx_to_complex64x2(mf):
-    """``DCMPLX(A, B)`` becomes ``complex64x2(float64x2(A), float64x2(B))``
+def test_intrinsic_dcmplx_to_cmplx64x2(mf):
+    """``DCMPLX(A, B)`` becomes ``cmplx64x2(real64x2(A), real64x2(B))``
     so the call dispatches to multifloats's cx_from_mf_2 interface.
-    Args known to be float64x2 are not double-wrapped (see
+    Args known to be real64x2 are not double-wrapped (see
     test_intrinsic_dcmplx_skips_known_real)."""
     src = "      Z = DCMPLX(A, B)"
     out = replace_intrinsic_calls(src, mf)
-    assert 'complex64x2(float64x2(A),float64x2(B))' in out
+    assert 'cmplx64x2(real64x2(A),real64x2(B))' in out
 
 
 def test_intrinsic_dcmplx_skips_known_real(mf):
     src = "      Z = DCMPLX(A, B)"
     out = replace_intrinsic_calls(src, mf, real_names={'A', 'B'})
-    assert 'complex64x2(A, B)' in out
+    assert 'cmplx64x2(A, B)' in out
 
 
 def test_intrinsic_dimag_to_aimag(mf):
@@ -410,10 +410,10 @@ def test_insert_use_multifloats_placement_after_decls(mf):
               A = 1.0D0
               END
         ''')
-    out = insert_use_multifloats(src, mf, extra_lines=['      X = float64x2(\'1.0D0\')\n'])
+    out = insert_use_multifloats(src, mf, extra_lines=['      X = real64x2(\'1.0D0\')\n'])
     lines = out.splitlines()
     use_idx = next(i for i, l in enumerate(lines) if 'USE multifloats' in l)
-    assign_idx = next(i for i, l in enumerate(lines) if 'X = float64x2' in l)
+    assign_idx = next(i for i, l in enumerate(lines) if 'X = real64x2' in l)
     int_idx = next(i for i, l in enumerate(lines) if 'INTEGER N' in l)
     real_idx = next(i for i, l in enumerate(lines) if 'DOUBLE PRECISION A' in l)
     # USE comes right after the header, before any declaration
@@ -509,8 +509,8 @@ def test_end_to_end_fixed_form(mf):
     # USE multifloats inserted right after the header
     assert 'USE multifloats' in out
     # Type decls converted
-    assert 'TYPE(float64x2) ALPHA' in out
-    assert 'TYPE(float64x2) X(*)' in out
+    assert 'TYPE(real64x2) ALPHA' in out
+    assert 'TYPE(real64x2) X(*)' in out
     # PARAMETER block + decl for ONE/ZERO are gone (the PARAMETER line
     # may survive as a `! Converted to assignments: ...` comment).
     assert 'DOUBLE PRECISION ONE,ZERO' not in out
@@ -535,8 +535,8 @@ def test_end_to_end_fixed_form(mf):
 
 
 def test_equivalence_no_diagnostic_after_sequence(mf, capsys):
-    """The mock multifloats module now declares both float64x2 and
-    complex64x2 with the SEQUENCE attribute, so EQUIVALENCE on
+    """The mock multifloats module now declares both real64x2 and
+    cmplx64x2 with the SEQUENCE attribute, so EQUIVALENCE on
     migrated FP variables compiles cleanly. The migrator therefore
     does not emit a warning anymore.
     """
@@ -578,25 +578,25 @@ end subroutine
 
 
 def test_canonicalize_for_compare_strips_multifloats(mf):
-    """The convergence canonicalizer must strip float64x2(...) wrappers
-    and TYPE(float64x2) so S/D pairs migrated to multifloats canonicalize
+    """The convergence canonicalizer must strip real64x2(...) wrappers
+    and TYPE(real64x2) so S/D pairs migrated to multifloats canonicalize
     to the same text as the kind-based canonicalization would."""
     from pyengine.pipeline import _canonicalize_for_compare
-    a = "      X = float64x2('1.0D+0') + float64x2('2.0D+0')"
+    a = "      X = real64x2('1.0D+0') + real64x2('2.0D+0')"
     b = "      X = 1.0D+0 + 2.0D+0"
     assert _canonicalize_for_compare(a) == _canonicalize_for_compare(b)
 
 
 def test_canonicalize_for_compare_normalizes_type_decl():
     from pyengine.pipeline import _canonicalize_for_compare
-    a = "      TYPE(float64x2) X"
+    a = "      TYPE(real64x2) X"
     b = "      DOUBLE PRECISION X"
     # Both should canonicalize to the same form (REAL X after both
     # type-name normalizations)
     ca = _canonicalize_for_compare(a)
     cb = _canonicalize_for_compare(b)
-    # The migrator only ever produces TYPE(float64x2) for multifloats,
-    # so we just need to confirm `TYPE(float64x2)` doesn't survive
+    # The migrator only ever produces TYPE(real64x2) for multifloats,
+    # so we just need to confirm `TYPE(real64x2)` doesn't survive
     # canonicalization.
     assert 'FLOAT64X2' not in ca
     assert 'TYPE(' not in ca
@@ -609,8 +609,8 @@ def test_end_to_end_free_form_pattern_b(mf):
     # Local aliases preserved (lowercase) with DD-prefixed RHS
     assert 'zero=>ddzero' in out
     assert 'safmin=>ddsafmin' in out
-    # real(wp) → TYPE(float64x2)
-    assert 'TYPE(float64x2)' in out
+    # real(wp) → TYPE(real64x2)
+    assert 'TYPE(real64x2)' in out
     # Body references stay as the local alias names
     assert 'x == zero' in out
     assert 'one / safmin' in out

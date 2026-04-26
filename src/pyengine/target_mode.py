@@ -19,8 +19,8 @@ class TargetMode:
     # Literal replacement strategy
     literal_mode: str                  # 'kind_suffix' or 'constructor'
     kind_suffix: Optional[int]         # 10 or 16 for KIND, None for module-based
-    real_constructor: Optional[str]    # None for KIND, 'float64x2' for MF
-    complex_constructor: Optional[str] # None for KIND, 'complex128x2' for MF
+    real_constructor: Optional[str]    # None for KIND, 'real64x2' for MF
+    complex_constructor: Optional[str] # None for KIND, 'cmplx64x2' for MF
 
     # Intrinsic call transformation
     intrinsic_mode: str                # 'add_kind' or 'wrap_constructor'
@@ -43,9 +43,9 @@ class TargetMode:
     # C-interop fields.  Used by c_migrator to substitute types / MPI
     # handles / reduction ops in cloned BLACS and PBLAS C sources.
     # All targets (KIND and module-based) populate these via YAML.
-    c_real_type: Optional[str] = None         # 'QREAL' / 'float64x2_t'
-    c_complex_type: Optional[str] = None      # 'XCOMPLEX' / 'complex128x2_t'
-    c_c_real_type: Optional[str] = None       # '__float128' / 'float64x2_t'
+    c_real_type: Optional[str] = None         # 'QREAL' / 'float64x2'
+    c_complex_type: Optional[str] = None      # 'XCOMPLEX' / 'complex64x2'
+    c_c_real_type: Optional[str] = None       # '__float128' / 'float64x2'
     c_mpi_real: Optional[str] = None          # 'MPI_REAL16' / 'MPI_FLOAT64X2'
     c_mpi_complex: Optional[str] = None       # 'MPI_COMPLEX32' / 'MPI_COMPLEX128X2'
     c_mpi_sum_real: Optional[str] = None      # 'MPI_SUM' / 'MPI_DD_SUM'

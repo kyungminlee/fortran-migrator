@@ -1,14 +1,14 @@
 name: multifloats
 
 types:
-  real: "TYPE(float64x2)"
-  complex: "TYPE(complex64x2)"
+  real: "TYPE(real64x2)"
+  complex: "TYPE(cmplx64x2)"
 
 literals:
   mode: constructor
   kind_suffix: null
-  real_constructor: float64x2
-  complex_constructor: complex64x2
+  real_constructor: real64x2
+  complex_constructor: cmplx64x2
 
 intrinsics:
   mode: wrap_constructor
@@ -22,7 +22,7 @@ prefixes:
 
 module:
   name: multifloats
-  type_names: [float64x2, complex64x2]
+  type_names: [real64x2, cmplx64x2]
   constant_names:
     - dd_zero
     - dd_one
@@ -152,13 +152,12 @@ la_constants_map:
 la_constants_suffix: _MF
 
 c_interop:
-  # Bridge-provided aliases for ``multifloats::float64x2`` (operator-rich
-  # C++ class) and our own ``{re,im}`` complex struct. Kept distinct
-  # from the upstream C-ABI POD types (``float64x2_t`` / ``complex64x2_t``
-  # in multifloats.h) which are hidden by the bridge via macro redirect.
-  real_type: float64x2_t
-  complex_type: complex128x2_t
-  c_real_type: float64x2_t
+  # Upstream multifloats v0.4.0 C names (no _t suffix; complex POD with
+  # .re/.im members of float64x2). The C++ bridge re-exports these as
+  # operator-rich aliases of multifloats::float64x2 / complex64x2.
+  real_type: float64x2
+  complex_type: complex64x2
+  c_real_type: float64x2
   mpi_real: MPI_FLOAT64X2
   mpi_complex: MPI_COMPLEX128X2
   mpi_sum_real: MPI_DD_SUM

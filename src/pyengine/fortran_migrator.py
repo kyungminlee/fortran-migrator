@@ -1012,14 +1012,14 @@ _COMPLEX_DECL_RE = re.compile(
     r'^\s+(?:DOUBLE\s+COMPLEX|COMPLEX\s*\*\s*(?:8|16)'
     r'|COMPLEX\s*\(\s*(?:KIND\s*=\s*)?\w+\s*\)'
     r'|COMPLEX(?!\s*[*(])'
-    r'|TYPE\s*\(\s*complex64x2\s*\))',
+    r'|TYPE\s*\(\s*cmplx64x2\s*\))',
     re.IGNORECASE,
 )
 _REAL_DECL_RE = re.compile(
     r'^\s+(?:DOUBLE\s+PRECISION|REAL\s*\*\s*(?:4|8)'
     r'|REAL\s*\(\s*(?:KIND\s*=\s*)?\w+\s*\)'
     r'|REAL(?!\s*[*(])'
-    r'|TYPE\s*\(\s*float64x2\s*\))',
+    r'|TYPE\s*\(\s*real64x2\s*\))',
     re.IGNORECASE,
 )
 _INTEGER_DECL_RE = re.compile(
