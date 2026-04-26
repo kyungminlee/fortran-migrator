@@ -18,14 +18,14 @@
 extern "C" {
 #endif
 
-void pddlasnbt_(Int *ieflag)
+void ptlasnbt_(Int *ieflag)
 {
     /* For float64x2, sign detection uses C++ comparison operators.
      * Return nonzero to signal that sign detection is available. */
     *ieflag = 1;
 }
 
-void pddlaiectb_(float64x2 *sigma, Int *n, float64x2 *d, Int *count)
+void ptlaiectb_(float64x2 *sigma, Int *n, float64x2 *d, Int *count)
 {
     float64x2 lsigma = *sigma;
     float64x2 *pd = d;
@@ -41,12 +41,12 @@ void pddlaiectb_(float64x2 *sigma, Int *n, float64x2 *d, Int *count)
     }
 }
 
-void pddlaiectl_(float64x2 *sigma, Int *n, float64x2 *d, Int *count)
+void ptlaiectl_(float64x2 *sigma, Int *n, float64x2 *d, Int *count)
 {
     /* The big-endian / little-endian distinction for sign-bit extraction
      * does not apply to float64x2 comparison-based sign detection.
      * Both functions are identical. */
-    pddlaiectb_(sigma, n, d, count);
+    ptlaiectb_(sigma, n, d, count);
 }
 
 void pddlachkieee_(Int *isieee, float64x2 *rmax, float64x2 *rmin)

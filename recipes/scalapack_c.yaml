@@ -102,4 +102,4 @@ overrides:
   multifloats:
     src_dir: scalapack/mfc_overrides
     files:
-      - pddlaiect.c
+      - ptlaiect.c
