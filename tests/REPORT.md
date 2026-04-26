@@ -8,15 +8,17 @@ reports via `scripts/precision_report.py`.
 
 | target       | tests run | tests passed | wall-clock |
 |--------------|----------:|-------------:|-----------:|
-| **kind10**       |       121 |      **121** |    145 sec |
-| **kind16**       |       121 |      **121** |    146 sec |
-| **multifloats**  |       121 |      **121** |    145 sec |
-| **total**        |       363 |      **363** |          — |
+| **kind10**       |       181 |      **181** |    145 sec |
+| **kind16**       |       181 |      **181** |    146 sec |
+| **multifloats**  |       181 |      **181** |    145 sec |
+| **total**        |       543 |      **543** |          — |
 
-Coverage: **121 unique routines** across all three targets, all
+Coverage: **181 unique routines** across all three targets, all
 green end-to-end (BLAS + LAPACK + PBLAS + ScaLAPACK). The BLAS
-suite now exercises every migrated entry point directly (75 / 75),
-up from 40 / 75 before this round of test additions.
+suite exercises every migrated entry point directly (75 / 75); the
+LAPACK suite now covers 75 user-facing drivers (factorizations,
+solvers, eigenvalue/SVD, banded + tridiagonal + triangular variants),
+up from 15 before this round of test additions.
 
 ScaLAPACK on multifloats was the last hold-out; it landed once the
 T/V single-letter prefix switch resolved a `DDDOT` symbol-collision
@@ -44,10 +46,10 @@ otherwise breaks ASan link-time symbol resolution).
 | BLAS Level 1           |       25 | `tests/blas/level1/test_*.f90`       |
 | BLAS Level 2           |       27 | `tests/blas/level2/test_*.f90`       |
 | BLAS Level 3           |       17 | `tests/blas/level3/test_*.f90`       |
-| LAPACK                 |       15 | `tests/lapack/{linear_solve,factorization,eigenvalue,svd,auxiliary}/test_*.f90` |
+| LAPACK                 |       75 | `tests/lapack/{linear_solve,factorization,eigenvalue,svd,auxiliary}/test_*.f90` |
 | PBLAS Level 1 / 2 / 3  |    8 / 5 / 7 | `tests/pblas/level{1,2,3}/test_*.f90` |
 | ScaLAPACK              |       11 | `tests/scalapack/{linear_solve,factorization,eigenvalue,svd,auxiliary}/test_*.f90` |
-| **Total**              |  **121** |                                       |
+| **Total**              |  **181** |                                       |
 
 The MUMPS suite (`tests/mumps/`) is a placeholder.
 
@@ -265,7 +267,7 @@ through a higher-level test (`—`).
 | Library     | Real (q) | Complex (x) | Total entries | Direct tests | Coverage |
 |-------------|---------:|------------:|--------------:|-------------:|---------:|
 | BLAS        |       37 |          36 |          75 † |           75 |    100 % |
-| LAPACK      |      508 |         506 |        1 014 |           15 |    1.5 % |
+| LAPACK      |      508 |         506 |        1 014 |           75 |    7.4 % |
 | PBLAS       |       29 |          32 |           61 |           20 |     33 % |
 | ScaLAPACK   |      173 |         152 |          325 |           11 |    3.4 % |
 
@@ -288,10 +290,10 @@ matrix:
 | Library     | kind10 | kind16 | multifloats |
 |-------------|--------|--------|-------------|
 | BLAS        | ✓ 75   | ✓ 75   | ✓ 75        |
-| LAPACK      | ✓ 15   | ✓ 15   | ✓ 15        |
+| LAPACK      | ✓ 75   | ✓ 75   | ✓ 75        |
 | PBLAS       | ✓ 20   | ✓ 20   | ✓ 20        |
 | ScaLAPACK   | ✓ 11   | ✓ 11   | ✓ 11        |
-| **per-target total** | **121** | **121** | **121** |
+| **per-target total** | **181** | **181** | **181** |
 
 `✓ N` means N test drivers run on that target. All three targets
 now have full BLAS / LAPACK / PBLAS / ScaLAPACK coverage; the only
@@ -363,15 +365,20 @@ All 36 complex-side BLAS entries have a dedicated test driver
 
 ### LAPACK
 
-15 of 1 014 migrated entries have a dedicated test driver:
+75 of 1 014 migrated entries have a dedicated test driver. Coverage
+emphasizes user-facing drivers across the LAPACK Users' Guide chapters
+(linear systems, factorizations, eigenvalue/SVD, banded + tridiagonal +
+triangular variants); LAPACK auxiliaries (`xLA*`, `xLAR*`, `xLAS*`,
+`xLAB*`, blocked-panel helpers, …) remain exercised only transitively
+through the drivers below.
 
 | Group         | Tested entries                                              |
 |---------------|-------------------------------------------------------------|
-| linear_solve  | `dgesv`, `dgetrf`, `dgetrs`, `dpotrf`, `dpotrs`, `zgesv`    |
-| factorization | `dgeqrf`, `dorgqr`, `zgeqrf`                                |
-| eigenvalue    | `dsyev`, `zheev`                                            |
-| svd           | `dgesvd`                                                    |
-| auxiliary     | `dlange`, `dlacpy`, `dlaset`                                |
+| linear_solve  | `dgesv`, `dgetrf`, `dgetrs`, `dpotrf`, `dpotrs`, `dposv`, `dsysv`, `dsytrs`, `dgels`, `dtrtrs`, `dgbtrf`, `dgbtrs`, `dgbsv`, `dpbtrf`, `dpbtrs`, `dpbsv`, `dgttrf`, `dgttrs`, `dpttrf`, `dpttrs`, `zgesv`, `zgetrf`, `zgetrs`, `zpotrf`, `zpotrs`, `zposv`, `zhesv`, `zhetrs`, `zgels`, `ztrtrs` |
+| factorization | `dgeqrf`, `dorgqr`, `dsytrf`, `dpotri`, `dgetri`, `dtrtri`, `dgehrd`, `dorghr`, `dgelqf`, `dorglq`, `dgeqp3`, `dormqr`, `zgeqrf`, `zungqr`, `zgetri`, `zpotri`, `zhetrf`, `ztrtri`, `zgehrd`, `zunghr`, `zgelqf`, `zunglq`, `zgeqp3`, `zunmqr` |
+| eigenvalue    | `dsyev`, `dsyevd`, `dsyevr`, `dsygv`, `dgeev`, `zheev`, `zheevd`, `zheevr`, `zhegv`, `zgeev` |
+| svd           | `dgesvd`, `dgesdd`, `zgesvd`, `zgesdd`                      |
+| auxiliary     | `dlange`, `dlacpy`, `dlaset`, `zlange`, `zlanhe`, `zlacpy`, `zlaset` |
 
 The remaining ~1 000 routines are LAPACK auxiliaries (`xLAR*`,
 `xLAS*`, `xLAB*`, blocked-panel helpers like `dgetrf2`, the
