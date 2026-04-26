@@ -34,7 +34,7 @@ module target_scalapack
     end interface
 
     interface
-        subroutine pddgesv(n, nrhs, A, ia, ja, desca, ipiv, &
+        subroutine ptgesv(n, nrhs, A, ia, ja, desca, ipiv, &
                            B, ib, jb, descb, info)
             import :: real64x2
             integer, intent(in)    :: n, nrhs, ia, ja, ib, jb
@@ -42,14 +42,14 @@ module target_scalapack
             integer, intent(out)   :: ipiv(*), info
             type(real64x2), intent(inout) :: A(*), B(*)
         end subroutine
-        subroutine pddgetrf(m, n, A, ia, ja, desca, ipiv, info)
+        subroutine ptgetrf(m, n, A, ia, ja, desca, ipiv, info)
             import :: real64x2
             integer, intent(in)    :: m, n, ia, ja
             integer, intent(in)    :: desca(9)
             integer, intent(out)   :: ipiv(*), info
             type(real64x2), intent(inout) :: A(*)
         end subroutine
-        subroutine pddgetrs(trans, n, nrhs, A, ia, ja, desca, ipiv, &
+        subroutine ptgetrs(trans, n, nrhs, A, ia, ja, desca, ipiv, &
                             B, ib, jb, descb, info)
             import :: real64x2
             character, intent(in)    :: trans
@@ -59,7 +59,7 @@ module target_scalapack
             type(real64x2), intent(in)    :: A(*)
             type(real64x2), intent(inout) :: B(*)
         end subroutine
-        subroutine pddpotrf(uplo, n, A, ia, ja, desca, info)
+        subroutine ptpotrf(uplo, n, A, ia, ja, desca, info)
             import :: real64x2
             character, intent(in)    :: uplo
             integer,   intent(in)    :: n, ia, ja
@@ -67,7 +67,7 @@ module target_scalapack
             integer,   intent(out)   :: info
             type(real64x2), intent(inout) :: A(*)
         end subroutine
-        subroutine pddpotrs(uplo, n, nrhs, A, ia, ja, desca, &
+        subroutine ptpotrs(uplo, n, nrhs, A, ia, ja, desca, &
                             B, ib, jb, descb, info)
             import :: real64x2
             character, intent(in)    :: uplo
@@ -77,7 +77,7 @@ module target_scalapack
             type(real64x2), intent(in)    :: A(*)
             type(real64x2), intent(inout) :: B(*)
         end subroutine
-        subroutine pddgeqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        subroutine ptgeqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)
             import :: real64x2
             integer, intent(in)    :: m, n, ia, ja, lwork
             integer, intent(in)    :: desca(9)
@@ -85,7 +85,7 @@ module target_scalapack
             type(real64x2), intent(inout) :: A(*)
             type(real64x2), intent(out)   :: tau(*), work(*)
         end subroutine
-        subroutine pddsyev(jobz, uplo, n, A, ia, ja, desca, w, &
+        subroutine ptsyev(jobz, uplo, n, A, ia, ja, desca, w, &
                            Z, iz, jz, descz, work, lwork, info)
             import :: real64x2
             character, intent(in)    :: jobz, uplo
@@ -95,7 +95,7 @@ module target_scalapack
             type(real64x2), intent(inout) :: A(*)
             type(real64x2), intent(out)   :: w(*), Z(*), work(*)
         end subroutine
-        subroutine pddgesvd(jobu, jobvt, m, n, A, ia, ja, desca, s, &
+        subroutine ptgesvd(jobu, jobvt, m, n, A, ia, ja, desca, s, &
                             U, iu, ju, descu, VT, ivt, jvt, descvt, &
                             work, lwork, info)
             import :: real64x2
@@ -106,7 +106,7 @@ module target_scalapack
             type(real64x2), intent(inout) :: A(*)
             type(real64x2), intent(out)   :: s(*), U(*), VT(*), work(*)
         end subroutine
-        function pddlange(norm, m, n, A, ia, ja, desca, work) result(r)
+        function ptlange(norm, m, n, A, ia, ja, desca, work) result(r)
             import :: real64x2
             character, intent(in) :: norm
             integer,   intent(in) :: m, n, ia, ja
@@ -115,7 +115,7 @@ module target_scalapack
             type(real64x2)             :: work(*)
             type(real64x2) :: r
         end function
-        subroutine pddlacpy(uplo, m, n, A, ia, ja, desca, B, ib, jb, descb)
+        subroutine ptlacpy(uplo, m, n, A, ia, ja, desca, B, ib, jb, descb)
             import :: real64x2
             character, intent(in)  :: uplo
             integer,   intent(in)  :: m, n, ia, ja, ib, jb
@@ -123,7 +123,7 @@ module target_scalapack
             type(real64x2), intent(in)  :: A(*)
             type(real64x2), intent(out) :: B(*)
         end subroutine
-        subroutine pddlaset(uplo, m, n, alpha, beta, A, ia, ja, desca)
+        subroutine ptlaset(uplo, m, n, alpha, beta, A, ia, ja, desca)
             import :: real64x2
             character, intent(in)    :: uplo
             integer,   intent(in)    :: m, n, ia, ja
@@ -132,7 +132,7 @@ module target_scalapack
             type(real64x2), intent(inout) :: A(*)
         end subroutine
 
-        subroutine pzzgesv(n, nrhs, A, ia, ja, desca, ipiv, &
+        subroutine pvgesv(n, nrhs, A, ia, ja, desca, ipiv, &
                            B, ib, jb, descb, info)
             import :: cmplx64x2
             integer, intent(in)    :: n, nrhs, ia, ja, ib, jb
@@ -140,7 +140,7 @@ module target_scalapack
             integer, intent(out)   :: ipiv(*), info
             type(cmplx64x2), intent(inout) :: A(*), B(*)
         end subroutine
-        subroutine pzzgeqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        subroutine pvgeqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)
             import :: cmplx64x2
             integer, intent(in)    :: m, n, ia, ja, lwork
             integer, intent(in)    :: desca(9)
@@ -148,7 +148,7 @@ module target_scalapack
             type(cmplx64x2), intent(inout) :: A(*)
             type(cmplx64x2), intent(out)   :: tau(*), work(*)
         end subroutine
-        subroutine pzzheev(jobz, uplo, n, A, ia, ja, desca, w, &
+        subroutine pvheev(jobz, uplo, n, A, ia, ja, desca, w, &
                            Z, iz, jz, descz, work, lwork, rwork, lrwork, info)
             import :: real64x2, cmplx64x2
             character, intent(in)    :: jobz, uplo
@@ -222,7 +222,7 @@ contains
         na = nloc(desca); nb = nloc(descb)
         allocate(At(na), Bt(nb))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
-        call pddgesv(n, nrhs, At, ia, ja, desca, ipiv, &
+        call ptgesv(n, nrhs, At, ia, ja, desca, ipiv, &
                      Bt, ib, jb, descb, info)
         A(1:na) = dd2q(At); B(1:nb) = dd2q(Bt)
     end subroutine
@@ -237,7 +237,7 @@ contains
         na = nloc(desca)
         allocate(At(na))
         At = q2dd(A(1:na))
-        call pddgetrf(m, n, At, ia, ja, desca, ipiv, info)
+        call ptgetrf(m, n, At, ia, ja, desca, ipiv, info)
         A(1:na) = dd2q(At)
     end subroutine
 
@@ -254,7 +254,7 @@ contains
         na = nloc(desca); nb = nloc(descb)
         allocate(At(na), Bt(nb))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
-        call pddgetrs(trans, n, nrhs, At, ia, ja, desca, ipiv, &
+        call ptgetrs(trans, n, nrhs, At, ia, ja, desca, ipiv, &
                       Bt, ib, jb, descb, info)
         B(1:nb) = dd2q(Bt)
     end subroutine
@@ -270,7 +270,7 @@ contains
         na = nloc(desca)
         allocate(At(na))
         At = q2dd(A(1:na))
-        call pddpotrf(uplo, n, At, ia, ja, desca, info)
+        call ptpotrf(uplo, n, At, ia, ja, desca, info)
         A(1:na) = dd2q(At)
     end subroutine
 
@@ -287,7 +287,7 @@ contains
         na = nloc(desca); nb = nloc(descb)
         allocate(At(na), Bt(nb))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
-        call pddpotrs(uplo, n, nrhs, At, ia, ja, desca, &
+        call ptpotrs(uplo, n, nrhs, At, ia, ja, desca, &
                       Bt, ib, jb, descb, info)
         B(1:nb) = dd2q(Bt)
     end subroutine
@@ -304,13 +304,13 @@ contains
         ntau = max(1, loccols(desca))
         if (lwork == -1) then
             allocate(At(max(1,na)), tau_t(ntau), work_t(1))
-            call pddgeqrf(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            call ptgeqrf(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
             work(1) = dd2q(work_t(1))
         else
             lwt = max(1, lwork)
             allocate(At(na), tau_t(ntau), work_t(lwt))
             At = q2dd(A(1:na))
-            call pddgeqrf(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            call ptgeqrf(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
             A(1:na) = dd2q(At)
             tau(1:ntau) = dd2q(tau_t)
         end if
@@ -329,14 +329,14 @@ contains
         na = nloc(desca); nz = nloc(descz)
         if (lwork == -1) then
             allocate(At(1), Zt(1), wt(1), work_t(1))
-            call pddsyev(jobz, uplo, n, At, ia, ja, desca, wt, &
+            call ptsyev(jobz, uplo, n, At, ia, ja, desca, wt, &
                          Zt, iz, jz, descz, work_t, -1, info)
             work(1) = dd2q(work_t(1))
         else
             lwt = max(1, lwork)
             allocate(At(na), Zt(nz), wt(n), work_t(lwt))
             At = q2dd(A(1:na))
-            call pddsyev(jobz, uplo, n, At, ia, ja, desca, wt, &
+            call ptsyev(jobz, uplo, n, At, ia, ja, desca, wt, &
                          Zt, iz, jz, descz, work_t, lwt, info)
             w(1:n) = dd2q(wt)
             Z(1:nz) = dd2q(Zt)
@@ -358,7 +358,7 @@ contains
         ns = min(m, n)
         if (lwork == -1) then
             allocate(At(1), Ut(1), VTt(1), st(1), work_t(1))
-            call pddgesvd(jobu, jobvt, m, n, At, ia, ja, desca, st, &
+            call ptgesvd(jobu, jobvt, m, n, At, ia, ja, desca, st, &
                           Ut, iu, ju, descu, VTt, ivt, jvt, descvt, &
                           work_t, -1, info)
             work(1) = dd2q(work_t(1))
@@ -366,7 +366,7 @@ contains
             lwt = max(1, lwork)
             allocate(At(na), Ut(nu), VTt(nvt), st(ns), work_t(lwt))
             At = q2dd(A(1:na))
-            call pddgesvd(jobu, jobvt, m, n, At, ia, ja, desca, st, &
+            call ptgesvd(jobu, jobvt, m, n, At, ia, ja, desca, st, &
                           Ut, iu, ju, descu, VTt, ivt, jvt, descvt, &
                           work_t, lwt, info)
             s(1:ns) = dd2q(st)
@@ -389,7 +389,7 @@ contains
         nw = max(m, n, 1)
         allocate(At(na), work_t(nw))
         At = q2dd(A(1:na))
-        r_t = pddlange(norm, m, n, At, ia, ja, desca, work_t)
+        r_t = ptlange(norm, m, n, At, ia, ja, desca, work_t)
         r = dd2q(r_t)
     end function
 
@@ -404,7 +404,7 @@ contains
         na = nloc(desca); nb = nloc(descb)
         allocate(At(na), Bt(nb))
         At = q2dd(A(1:na))
-        call pddlacpy(uplo, m, n, At, ia, ja, desca, Bt, ib, jb, descb)
+        call ptlacpy(uplo, m, n, At, ia, ja, desca, Bt, ib, jb, descb)
         B(1:nb) = dd2q(Bt)
     end subroutine
 
@@ -419,7 +419,7 @@ contains
         na = nloc(desca)
         allocate(At(na))
         At = q2dd(A(1:na))
-        call pddlaset(uplo, m, n, q2dd(alpha), q2dd(beta), &
+        call ptlaset(uplo, m, n, q2dd(alpha), q2dd(beta), &
                       At, ia, ja, desca)
         A(1:na) = dd2q(At)
     end subroutine
@@ -435,7 +435,7 @@ contains
         na = nloc(desca); nb = nloc(descb)
         allocate(At(na), Bt(nb))
         At = q2zz(A(1:na)); Bt = q2zz(B(1:nb))
-        call pzzgesv(n, nrhs, At, ia, ja, desca, ipiv, &
+        call pvgesv(n, nrhs, At, ia, ja, desca, ipiv, &
                      Bt, ib, jb, descb, info)
         A(1:na) = zz2q(At); B(1:nb) = zz2q(Bt)
     end subroutine
@@ -451,13 +451,13 @@ contains
         na = nloc(desca); ntau = max(1, loccols(desca))
         if (lwork == -1) then
             allocate(At(max(1,na)), tau_t(ntau), work_t(1))
-            call pzzgeqrf(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            call pvgeqrf(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
             work(1) = zz2q(work_t(1))
         else
             lwt = max(1, lwork)
             allocate(At(na), tau_t(ntau), work_t(lwt))
             At = q2zz(A(1:na))
-            call pzzgeqrf(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            call pvgeqrf(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
             A(1:na) = zz2q(At)
             tau(1:ntau) = zz2q(tau_t)
         end if
@@ -478,7 +478,7 @@ contains
         na = nloc(desca); nz = nloc(descz)
         if (lwork == -1) then
             allocate(At(1), Zt(1), wt(1), work_t(1), rwork_t(1))
-            call pzzheev(jobz, uplo, n, At, ia, ja, desca, wt, &
+            call pvheev(jobz, uplo, n, At, ia, ja, desca, wt, &
                          Zt, iz, jz, descz, work_t, -1, rwork_t, -1, info)
             work(1) = zz2q(work_t(1))
             rwork(1) = dd2q(rwork_t(1))
@@ -486,7 +486,7 @@ contains
             lwt = max(1, lwork); lrwt = max(1, lrwork)
             allocate(At(na), Zt(nz), wt(n), work_t(lwt), rwork_t(lrwt))
             At = q2zz(A(1:na))
-            call pzzheev(jobz, uplo, n, At, ia, ja, desca, wt, &
+            call pvheev(jobz, uplo, n, At, ia, ja, desca, wt, &
                          Zt, iz, jz, descz, work_t, lwt, rwork_t, lrwt, info)
             w(1:n) = dd2q(wt)
             Z(1:nz) = zz2q(Zt)

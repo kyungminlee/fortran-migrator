@@ -8,7 +8,7 @@
 ! through unchanged — precision conversion is purely elementwise.
 !
 ! Migrated prefixes for multifloats:
-!   pdgemm → pddgemm, pddot → pdddot, …, pzgemm → pzzgemm, pzdotc → pzzdotc
+!   pdgemm → ptgemm, pddot → ptdot, …, pzgemm → pvgemm, pzdotc → pvdotc
 
 module target_pblas
     use prec_kinds,  only: ep, dp
@@ -32,42 +32,42 @@ module target_pblas
 
     interface
         ! ── Level 1 — real (DD) ──────────────────────────────────────
-        subroutine pdddot(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+        subroutine ptdot(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
             import :: real64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
             type(real64x2), intent(in)  :: x(*), y(*)
             type(real64x2), intent(out) :: dot
         end subroutine
-        subroutine pddnrm2(n, norm2, x, ix, jx, descx, incx)
+        subroutine ptnrm2(n, norm2, x, ix, jx, descx, incx)
             import :: real64x2
             integer, intent(in) :: n, ix, jx, incx
             integer, intent(in) :: descx(9)
             type(real64x2), intent(in)  :: x(*)
             type(real64x2), intent(out) :: norm2
         end subroutine
-        subroutine pddasum(n, asum, x, ix, jx, descx, incx)
+        subroutine ptasum(n, asum, x, ix, jx, descx, incx)
             import :: real64x2
             integer, intent(in) :: n, ix, jx, incx
             integer, intent(in) :: descx(9)
             type(real64x2), intent(in)  :: x(*)
             type(real64x2), intent(out) :: asum
         end subroutine
-        subroutine pddscal(n, alpha, x, ix, jx, descx, incx)
+        subroutine ptscal(n, alpha, x, ix, jx, descx, incx)
             import :: real64x2
             integer, intent(in) :: n, ix, jx, incx
             integer, intent(in) :: descx(9)
             type(real64x2), intent(in)    :: alpha
             type(real64x2), intent(inout) :: x(*)
         end subroutine
-        subroutine pddaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+        subroutine ptaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
             import :: real64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
             type(real64x2), intent(in)    :: alpha, x(*)
             type(real64x2), intent(inout) :: y(*)
         end subroutine
-        subroutine pddcopy(n, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+        subroutine ptcopy(n, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
             import :: real64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
@@ -76,14 +76,14 @@ module target_pblas
         end subroutine
 
         ! ── Level 1 — complex (ZZ) ───────────────────────────────────
-        subroutine pzzdotc(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+        subroutine pvdotc(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
             import :: cmplx64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
             type(cmplx64x2), intent(in)  :: x(*), y(*)
             type(cmplx64x2), intent(out) :: dot
         end subroutine
-        subroutine pzzaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+        subroutine pvaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
             import :: cmplx64x2
             integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
             integer, intent(in) :: descx(9), descy(9)
@@ -92,7 +92,7 @@ module target_pblas
         end subroutine
 
         ! ── Level 2 — real (DD) ──────────────────────────────────────
-        subroutine pddgemv(trans, m, n, alpha, A, ia, ja, desca, &
+        subroutine ptgemv(trans, m, n, alpha, A, ia, ja, desca, &
                            x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
             import :: real64x2
             character, intent(in) :: trans
@@ -101,7 +101,7 @@ module target_pblas
             type(real64x2), intent(in)    :: alpha, beta, A(*), x(*)
             type(real64x2), intent(inout) :: y(*)
         end subroutine
-        subroutine pddger(m, n, alpha, x, ix, jx, descx, incx, &
+        subroutine ptger(m, n, alpha, x, ix, jx, descx, incx, &
                           y, iy, jy, descy, incy, A, ia, ja, desca)
             import :: real64x2
             integer, intent(in) :: m, n, ix, jx, incx, iy, jy, incy, ia, ja
@@ -109,7 +109,7 @@ module target_pblas
             type(real64x2), intent(in)    :: alpha, x(*), y(*)
             type(real64x2), intent(inout) :: A(*)
         end subroutine
-        subroutine pddsymv(uplo, n, alpha, A, ia, ja, desca, &
+        subroutine ptsymv(uplo, n, alpha, A, ia, ja, desca, &
                            x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
             import :: real64x2
             character, intent(in) :: uplo
@@ -118,7 +118,7 @@ module target_pblas
             type(real64x2), intent(in)    :: alpha, beta, A(*), x(*)
             type(real64x2), intent(inout) :: y(*)
         end subroutine
-        subroutine pddtrsv(uplo, trans, diag, n, A, ia, ja, desca, &
+        subroutine pttrsv(uplo, trans, diag, n, A, ia, ja, desca, &
                            x, ix, jx, descx, incx)
             import :: real64x2
             character, intent(in) :: uplo, trans, diag
@@ -129,7 +129,7 @@ module target_pblas
         end subroutine
 
         ! ── Level 2 — complex (ZZ) ───────────────────────────────────
-        subroutine pzzgemv(trans, m, n, alpha, A, ia, ja, desca, &
+        subroutine pvgemv(trans, m, n, alpha, A, ia, ja, desca, &
                            x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
             import :: cmplx64x2
             character, intent(in) :: trans
@@ -140,7 +140,7 @@ module target_pblas
         end subroutine
 
         ! ── Level 3 — real (DD) ──────────────────────────────────────
-        subroutine pddgemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
+        subroutine ptgemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
                            B, ib, jb, descb, beta, C, ic, jc, descc)
             import :: real64x2
             character, intent(in) :: transa, transb
@@ -149,7 +149,7 @@ module target_pblas
             type(real64x2), intent(in)    :: alpha, beta, A(*), B(*)
             type(real64x2), intent(inout) :: C(*)
         end subroutine
-        subroutine pddsymm(side, uplo, m, n, alpha, A, ia, ja, desca, &
+        subroutine ptsymm(side, uplo, m, n, alpha, A, ia, ja, desca, &
                            B, ib, jb, descb, beta, C, ic, jc, descc)
             import :: real64x2
             character, intent(in) :: side, uplo
@@ -158,7 +158,7 @@ module target_pblas
             type(real64x2), intent(in)    :: alpha, beta, A(*), B(*)
             type(real64x2), intent(inout) :: C(*)
         end subroutine
-        subroutine pddsyrk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
+        subroutine ptsyrk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
                            beta, C, ic, jc, descc)
             import :: real64x2
             character, intent(in) :: uplo, trans
@@ -167,7 +167,7 @@ module target_pblas
             type(real64x2), intent(in)    :: alpha, beta, A(*)
             type(real64x2), intent(inout) :: C(*)
         end subroutine
-        subroutine pddtrmm(side, uplo, trans, diag, m, n, alpha, &
+        subroutine pttrmm(side, uplo, trans, diag, m, n, alpha, &
                            A, ia, ja, desca, B, ib, jb, descb)
             import :: real64x2
             character, intent(in) :: side, uplo, trans, diag
@@ -176,7 +176,7 @@ module target_pblas
             type(real64x2), intent(in)    :: alpha, A(*)
             type(real64x2), intent(inout) :: B(*)
         end subroutine
-        subroutine pddtrsm(side, uplo, trans, diag, m, n, alpha, &
+        subroutine pttrsm(side, uplo, trans, diag, m, n, alpha, &
                            A, ia, ja, desca, B, ib, jb, descb)
             import :: real64x2
             character, intent(in) :: side, uplo, trans, diag
@@ -187,7 +187,7 @@ module target_pblas
         end subroutine
 
         ! ── Level 3 — complex (ZZ) ───────────────────────────────────
-        subroutine pzzgemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
+        subroutine pvgemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
                            B, ib, jb, descb, beta, C, ic, jc, descc)
             import :: cmplx64x2
             character, intent(in) :: transa, transb
@@ -196,7 +196,7 @@ module target_pblas
             type(cmplx64x2), intent(in)    :: alpha, beta, A(*), B(*)
             type(cmplx64x2), intent(inout) :: C(*)
         end subroutine
-        subroutine pzzherk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
+        subroutine pvherk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
                            beta, C, ic, jc, descc)
             import :: real64x2, cmplx64x2
             character, intent(in) :: uplo, trans
@@ -251,7 +251,7 @@ contains
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call pdddot(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
+        call ptdot(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
         dot = dd2q(dot_t)
     end subroutine
 
@@ -266,7 +266,7 @@ contains
         nx = descx(9) * descx(4)
         allocate(xt(nx))
         xt = q2dd(x(1:nx))
-        call pddnrm2(n, norm_t, xt, ix, jx, descx, incx)
+        call ptnrm2(n, norm_t, xt, ix, jx, descx, incx)
         norm2 = dd2q(norm_t)
     end subroutine
 
@@ -281,7 +281,7 @@ contains
         nx = descx(9) * descx(4)
         allocate(xt(nx))
         xt = q2dd(x(1:nx))
-        call pddasum(n, asum_t, xt, ix, jx, descx, incx)
+        call ptasum(n, asum_t, xt, ix, jx, descx, incx)
         asum = dd2q(asum_t)
     end subroutine
 
@@ -295,7 +295,7 @@ contains
         nx = descx(9) * descx(4)
         allocate(xt(nx))
         xt = q2dd(x(1:nx))
-        call pddscal(n, q2dd(alpha), xt, ix, jx, descx, incx)
+        call ptscal(n, q2dd(alpha), xt, ix, jx, descx, incx)
         x(1:nx) = dd2q(xt)
     end subroutine
 
@@ -309,7 +309,7 @@ contains
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call pddaxpy(n, q2dd(alpha), xt, ix, jx, descx, incx, &
+        call ptaxpy(n, q2dd(alpha), xt, ix, jx, descx, incx, &
                      yt, iy, jy, descy, incy)
         y(1:ny) = dd2q(yt)
     end subroutine
@@ -324,7 +324,7 @@ contains
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2dd(x(1:nx))
-        call pddcopy(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
+        call ptcopy(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
         y(1:ny) = dd2q(yt)
     end subroutine
 
@@ -340,7 +340,7 @@ contains
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2zz(x(1:nx)); yt = q2zz(y(1:ny))
-        call pzzdotc(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
+        call pvdotc(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
         dot = zz2q(dot_t)
     end subroutine
 
@@ -354,7 +354,7 @@ contains
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
         xt = q2zz(x(1:nx)); yt = q2zz(y(1:ny))
-        call pzzaxpy(n, q2zz(alpha), xt, ix, jx, descx, incx, &
+        call pvaxpy(n, q2zz(alpha), xt, ix, jx, descx, incx, &
                      yt, iy, jy, descy, incy)
         y(1:ny) = zz2q(yt)
     end subroutine
@@ -374,7 +374,7 @@ contains
         allocate(At(na), xt(nx), yt(ny))
         At = q2dd(A(1:na))
         xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call pddgemv(trans, m, n, q2dd(alpha), At, ia, ja, desca, &
+        call ptgemv(trans, m, n, q2dd(alpha), At, ia, ja, desca, &
                      xt, ix, jx, descx, incx, q2dd(beta), &
                      yt, iy, jy, descy, incy)
         y(1:ny) = dd2q(yt)
@@ -393,7 +393,7 @@ contains
         allocate(At(na), xt(nx), yt(ny))
         At = q2dd(A(1:na))
         xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call pddger(m, n, q2dd(alpha), xt, ix, jx, descx, incx, &
+        call ptger(m, n, q2dd(alpha), xt, ix, jx, descx, incx, &
                     yt, iy, jy, descy, incy, At, ia, ja, desca)
         A(1:na) = dd2q(At)
     end subroutine
@@ -412,7 +412,7 @@ contains
         allocate(At(na), xt(nx), yt(ny))
         At = q2dd(A(1:na))
         xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call pddsymv(uplo, n, q2dd(alpha), At, ia, ja, desca, &
+        call ptsymv(uplo, n, q2dd(alpha), At, ia, ja, desca, &
                      xt, ix, jx, descx, incx, q2dd(beta), &
                      yt, iy, jy, descy, incy)
         y(1:ny) = dd2q(yt)
@@ -430,7 +430,7 @@ contains
         na = desca(9) * desca(4); nx = descx(9) * descx(4)
         allocate(At(na), xt(nx))
         At = q2dd(A(1:na)); xt = q2dd(x(1:nx))
-        call pddtrsv(uplo, trans, diag, n, At, ia, ja, desca, &
+        call pttrsv(uplo, trans, diag, n, At, ia, ja, desca, &
                      xt, ix, jx, descx, incx)
         x(1:nx) = dd2q(xt)
     end subroutine
@@ -450,7 +450,7 @@ contains
         allocate(At(na), xt(nx), yt(ny))
         At = q2zz(A(1:na))
         xt = q2zz(x(1:nx)); yt = q2zz(y(1:ny))
-        call pzzgemv(trans, m, n, q2zz(alpha), At, ia, ja, desca, &
+        call pvgemv(trans, m, n, q2zz(alpha), At, ia, ja, desca, &
                      xt, ix, jx, descx, incx, q2zz(beta), &
                      yt, iy, jy, descy, incy)
         y(1:ny) = zz2q(yt)
@@ -469,7 +469,7 @@ contains
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb)); Ct = q2dd(C(1:nc))
-        call pddgemm(transa, transb, m, n, k, q2dd(alpha), &
+        call ptgemm(transa, transb, m, n, k, q2dd(alpha), &
                      At, ia, ja, desca, Bt, ib, jb, descb, &
                      q2dd(beta), Ct, ic, jc, descc)
         C(1:nc) = dd2q(Ct)
@@ -487,7 +487,7 @@ contains
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb)); Ct = q2dd(C(1:nc))
-        call pddsymm(side, uplo, m, n, q2dd(alpha), &
+        call ptsymm(side, uplo, m, n, q2dd(alpha), &
                      At, ia, ja, desca, Bt, ib, jb, descb, &
                      q2dd(beta), Ct, ic, jc, descc)
         C(1:nc) = dd2q(Ct)
@@ -505,7 +505,7 @@ contains
         na = desca(9) * desca(4); nc = descc(9) * descc(4)
         allocate(At(na), Ct(nc))
         At = q2dd(A(1:na)); Ct = q2dd(C(1:nc))
-        call pddsyrk(uplo, trans, n, k, q2dd(alpha), &
+        call ptsyrk(uplo, trans, n, k, q2dd(alpha), &
                      At, ia, ja, desca, q2dd(beta), Ct, ic, jc, descc)
         C(1:nc) = dd2q(Ct)
     end subroutine
@@ -522,7 +522,7 @@ contains
         na = desca(9) * desca(4); nb = descb(9) * descb(4)
         allocate(At(na), Bt(nb))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
-        call pddtrmm(side, uplo, trans, diag, m, n, q2dd(alpha), &
+        call pttrmm(side, uplo, trans, diag, m, n, q2dd(alpha), &
                      At, ia, ja, desca, Bt, ib, jb, descb)
         B(1:nb) = dd2q(Bt)
     end subroutine
@@ -539,7 +539,7 @@ contains
         na = desca(9) * desca(4); nb = descb(9) * descb(4)
         allocate(At(na), Bt(nb))
         At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
-        call pddtrsm(side, uplo, trans, diag, m, n, q2dd(alpha), &
+        call pttrsm(side, uplo, trans, diag, m, n, q2dd(alpha), &
                      At, ia, ja, desca, Bt, ib, jb, descb)
         B(1:nb) = dd2q(Bt)
     end subroutine
@@ -557,7 +557,7 @@ contains
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2zz(A(1:na)); Bt = q2zz(B(1:nb)); Ct = q2zz(C(1:nc))
-        call pzzgemm(transa, transb, m, n, k, q2zz(alpha), &
+        call pvgemm(transa, transb, m, n, k, q2zz(alpha), &
                      At, ia, ja, desca, Bt, ib, jb, descb, &
                      q2zz(beta), Ct, ic, jc, descc)
         C(1:nc) = zz2q(Ct)
@@ -576,7 +576,7 @@ contains
         na = desca(9) * desca(4); nc = descc(9) * descc(4)
         allocate(At(na), Ct(nc))
         At = q2zz(A(1:na)); Ct = q2zz(C(1:nc))
-        call pzzherk(uplo, trans, n, k, q2dd(alpha), &
+        call pvherk(uplo, trans, n, k, q2dd(alpha), &
                      At, ia, ja, desca, q2dd(beta), Ct, ic, jc, descc)
         C(1:nc) = zz2q(Ct)
     end subroutine

@@ -8,8 +8,8 @@
 ! precision through the wrapper boundary.
 !
 ! Migrated routine prefixes for multifloats:
-!   D → DD   (ddgesv, ddgetrf, ddgeqrf, …)
-!   Z → ZZ   (zzgesv, zzheev, zzgeqrf, …)
+!   D → DD   (tgesv, tgetrf, tgeqrf, …)
+!   Z → ZZ   (vgesv, vheev, vgeqrf, …)
 
 module target_lapack
     use prec_kinds, only: ep, dp
@@ -30,19 +30,19 @@ module target_lapack
     real(ep),         parameter :: target_eps  = real(2.0_dp**(-104), ep)
 
     interface
-        subroutine ddgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
+        subroutine tgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
             import :: real64x2
             integer, intent(in) :: n, nrhs, lda, ldb
             type(real64x2), intent(inout) :: A(lda,*), B(ldb,*)
             integer, intent(out) :: ipiv(*), info
         end subroutine
-        subroutine ddgetrf(m, n, A, lda, ipiv, info)
+        subroutine tgetrf(m, n, A, lda, ipiv, info)
             import :: real64x2
             integer, intent(in) :: m, n, lda
             type(real64x2), intent(inout) :: A(lda,*)
             integer, intent(out) :: ipiv(*), info
         end subroutine
-        subroutine ddgetrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
+        subroutine tgetrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
             import :: real64x2
             character, intent(in) :: trans
             integer, intent(in) :: n, nrhs, lda, ldb
@@ -51,14 +51,14 @@ module target_lapack
             type(real64x2), intent(inout) :: B(ldb,*)
             integer, intent(out) :: info
         end subroutine
-        subroutine ddpotrf(uplo, n, A, lda, info)
+        subroutine tpotrf(uplo, n, A, lda, info)
             import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: n, lda
             type(real64x2), intent(inout) :: A(lda,*)
             integer, intent(out) :: info
         end subroutine
-        subroutine ddpotrs(uplo, n, nrhs, A, lda, B, ldb, info)
+        subroutine tpotrs(uplo, n, nrhs, A, lda, B, ldb, info)
             import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: n, nrhs, lda, ldb
@@ -66,20 +66,20 @@ module target_lapack
             type(real64x2), intent(inout) :: B(ldb,*)
             integer, intent(out) :: info
         end subroutine
-        subroutine zzgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
+        subroutine vgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
             import :: cmplx64x2
             integer, intent(in) :: n, nrhs, lda, ldb
             type(cmplx64x2), intent(inout) :: A(lda,*), B(ldb,*)
             integer, intent(out) :: ipiv(*), info
         end subroutine
-        subroutine ddgeqrf(m, n, A, lda, tau, work, lwork, info)
+        subroutine tgeqrf(m, n, A, lda, tau, work, lwork, info)
             import :: real64x2
             integer, intent(in) :: m, n, lda, lwork
             type(real64x2), intent(inout) :: A(lda,*)
             type(real64x2), intent(out)   :: tau(*), work(*)
             integer, intent(out) :: info
         end subroutine
-        subroutine ddorgqr(m, n, k, A, lda, tau, work, lwork, info)
+        subroutine torgqr(m, n, k, A, lda, tau, work, lwork, info)
             import :: real64x2
             integer, intent(in) :: m, n, k, lda, lwork
             type(real64x2), intent(inout) :: A(lda,*)
@@ -87,14 +87,14 @@ module target_lapack
             type(real64x2), intent(out)   :: work(*)
             integer, intent(out) :: info
         end subroutine
-        subroutine zzgeqrf(m, n, A, lda, tau, work, lwork, info)
+        subroutine vgeqrf(m, n, A, lda, tau, work, lwork, info)
             import :: cmplx64x2
             integer, intent(in) :: m, n, lda, lwork
             type(cmplx64x2), intent(inout) :: A(lda,*)
             type(cmplx64x2), intent(out)   :: tau(*), work(*)
             integer, intent(out) :: info
         end subroutine
-        subroutine ddsyev(jobz, uplo, n, A, lda, w, work, lwork, info)
+        subroutine tsyev(jobz, uplo, n, A, lda, w, work, lwork, info)
             import :: real64x2
             character, intent(in) :: jobz, uplo
             integer,   intent(in) :: n, lda, lwork
@@ -102,7 +102,7 @@ module target_lapack
             type(real64x2), intent(out)   :: w(*), work(*)
             integer, intent(out) :: info
         end subroutine
-        subroutine zzheev(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
+        subroutine vheev(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
             import :: real64x2, cmplx64x2
             character, intent(in) :: jobz, uplo
             integer,   intent(in) :: n, lda, lwork
@@ -111,7 +111,7 @@ module target_lapack
             type(cmplx64x2), intent(out)   :: work(*)
             integer, intent(out) :: info
         end subroutine
-        subroutine ddgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
+        subroutine tgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
                            work, lwork, info)
             import :: real64x2
             character, intent(in) :: jobu, jobvt
@@ -120,7 +120,7 @@ module target_lapack
             type(real64x2), intent(out)   :: s(*), U(ldu,*), VT(ldvt,*), work(*)
             integer, intent(out) :: info
         end subroutine
-        function ddlange(norm, m, n, A, lda, work) result(r)
+        function tlange(norm, m, n, A, lda, work) result(r)
             import :: real64x2
             character, intent(in) :: norm
             integer,   intent(in) :: m, n, lda
@@ -128,14 +128,14 @@ module target_lapack
             type(real64x2) :: work(*)
             type(real64x2) :: r
         end function
-        subroutine ddlacpy(uplo, m, n, A, lda, B, ldb)
+        subroutine tlacpy(uplo, m, n, A, lda, B, ldb)
             import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: m, n, lda, ldb
             type(real64x2), intent(in)  :: A(lda,*)
             type(real64x2), intent(out) :: B(ldb,*)
         end subroutine
-        subroutine ddlaset(uplo, m, n, alpha, beta, A, lda)
+        subroutine tlaset(uplo, m, n, alpha, beta, A, lda)
             import :: real64x2
             character, intent(in) :: uplo
             integer,   intent(in) :: m, n, lda
@@ -184,7 +184,7 @@ contains
         allocate(At(lda, n), Bt(ldb, nrhs))
         At = q2dd(A(1:lda, 1:n))
         Bt = q2dd(B(1:ldb, 1:nrhs))
-        call ddgesv(n, nrhs, At, lda, ipiv, Bt, ldb, info)
+        call tgesv(n, nrhs, At, lda, ipiv, Bt, ldb, info)
         A(1:lda, 1:n)    = dd2q(At)
         B(1:ldb, 1:nrhs) = dd2q(Bt)
     end subroutine
@@ -196,7 +196,7 @@ contains
         type(real64x2), allocatable :: At(:,:)
         allocate(At(lda, n))
         At = q2dd(A(1:lda, 1:n))
-        call ddgetrf(m, n, At, lda, ipiv, info)
+        call tgetrf(m, n, At, lda, ipiv, info)
         A(1:lda, 1:n) = dd2q(At)
     end subroutine
 
@@ -211,7 +211,7 @@ contains
         allocate(At(lda, n), Bt(ldb, nrhs))
         At = q2dd(A(1:lda, 1:n))
         Bt = q2dd(B(1:ldb, 1:nrhs))
-        call ddgetrs(trans, n, nrhs, At, lda, ipiv, Bt, ldb, info)
+        call tgetrs(trans, n, nrhs, At, lda, ipiv, Bt, ldb, info)
         B(1:ldb, 1:nrhs) = dd2q(Bt)
     end subroutine
 
@@ -223,7 +223,7 @@ contains
         type(real64x2), allocatable :: At(:,:)
         allocate(At(lda, n))
         At = q2dd(A(1:lda, 1:n))
-        call ddpotrf(uplo, n, At, lda, info)
+        call tpotrf(uplo, n, At, lda, info)
         A(1:lda, 1:n) = dd2q(At)
     end subroutine
 
@@ -237,7 +237,7 @@ contains
         allocate(At(lda, n), Bt(ldb, nrhs))
         At = q2dd(A(1:lda, 1:n))
         Bt = q2dd(B(1:ldb, 1:nrhs))
-        call ddpotrs(uplo, n, nrhs, At, lda, Bt, ldb, info)
+        call tpotrs(uplo, n, nrhs, At, lda, Bt, ldb, info)
         B(1:ldb, 1:nrhs) = dd2q(Bt)
     end subroutine
 
@@ -249,7 +249,7 @@ contains
         allocate(At(lda, n), Bt(ldb, nrhs))
         At = q2zz(A(1:lda, 1:n))
         Bt = q2zz(B(1:ldb, 1:nrhs))
-        call zzgesv(n, nrhs, At, lda, ipiv, Bt, ldb, info)
+        call vgesv(n, nrhs, At, lda, ipiv, Bt, ldb, info)
         A(1:lda, 1:n)    = zz2q(At)
         B(1:ldb, 1:nrhs) = zz2q(Bt)
     end subroutine
@@ -266,10 +266,10 @@ contains
         kmn = min(m, n)
         allocate(At(lda, n), taut(kmn))
         At = q2dd(A(1:lda, 1:n))
-        call ddgeqrf(m, n, At, lda, taut, wopt, -1, info)
+        call tgeqrf(m, n, At, lda, taut, wopt, -1, info)
         lwork = max(1, int(dd2q(wopt(1))))
         allocate(work(lwork))
-        call ddgeqrf(m, n, At, lda, taut, work, lwork, info)
+        call tgeqrf(m, n, At, lda, taut, work, lwork, info)
         A(1:lda, 1:n) = dd2q(At)
         tau(1:kmn)    = dd2q(taut)
     end subroutine
@@ -285,10 +285,10 @@ contains
         allocate(At(lda, n), taut(k))
         At = q2dd(A(1:lda, 1:n))
         taut = q2dd(tau(1:k))
-        call ddorgqr(m, n, k, At, lda, taut, wopt, -1, info)
+        call torgqr(m, n, k, At, lda, taut, wopt, -1, info)
         lwork = max(1, int(dd2q(wopt(1))))
         allocate(work(lwork))
-        call ddorgqr(m, n, k, At, lda, taut, work, lwork, info)
+        call torgqr(m, n, k, At, lda, taut, work, lwork, info)
         A(1:lda, 1:n) = dd2q(At)
     end subroutine
 
@@ -303,10 +303,10 @@ contains
         kmn = min(m, n)
         allocate(At(lda, n), taut(kmn))
         At = q2zz(A(1:lda, 1:n))
-        call zzgeqrf(m, n, At, lda, taut, wopt, -1, info)
+        call vgeqrf(m, n, At, lda, taut, wopt, -1, info)
         lwork = max(1, int(real(zz2q(wopt(1)), ep)))
         allocate(work(lwork))
-        call zzgeqrf(m, n, At, lda, taut, work, lwork, info)
+        call vgeqrf(m, n, At, lda, taut, work, lwork, info)
         A(1:lda, 1:n) = zz2q(At)
         tau(1:kmn)    = zz2q(taut)
     end subroutine
@@ -323,10 +323,10 @@ contains
         integer :: lwork
         allocate(At(lda, n), wt(n))
         At = q2dd(A(1:lda, 1:n))
-        call ddsyev(jobz, uplo, n, At, lda, wt, wopt, -1, info)
+        call tsyev(jobz, uplo, n, At, lda, wt, wopt, -1, info)
         lwork = max(1, int(dd2q(wopt(1))))
         allocate(work(lwork))
-        call ddsyev(jobz, uplo, n, At, lda, wt, work, lwork, info)
+        call tsyev(jobz, uplo, n, At, lda, wt, work, lwork, info)
         A(1:lda, 1:n) = dd2q(At)
         w(1:n)        = dd2q(wt)
     end subroutine
@@ -344,10 +344,10 @@ contains
         lrwork = max(1, 3*n - 2)
         allocate(At(lda, n), wt(n), rwork(lrwork))
         At = q2zz(A(1:lda, 1:n))
-        call zzheev(jobz, uplo, n, At, lda, wt, wopt, -1, rwork, info)
+        call vheev(jobz, uplo, n, At, lda, wt, wopt, -1, rwork, info)
         lwork = max(1, int(real(zz2q(wopt(1)), ep)))
         allocate(work(lwork))
-        call zzheev(jobz, uplo, n, At, lda, wt, work, lwork, rwork, info)
+        call vheev(jobz, uplo, n, At, lda, wt, work, lwork, rwork, info)
         A(1:lda, 1:n) = zz2q(At)
         w(1:n)        = dd2q(wt)
     end subroutine
@@ -365,11 +365,11 @@ contains
         kmn = min(m, n)
         allocate(At(lda, n), Ut(ldu, m), VTt(ldvt, n), st(kmn))
         At = q2dd(A(1:lda, 1:n))
-        call ddgesvd(jobu, jobvt, m, n, At, lda, st, Ut, ldu, VTt, ldvt, &
+        call tgesvd(jobu, jobvt, m, n, At, lda, st, Ut, ldu, VTt, ldvt, &
                      wopt, -1, info)
         lwork = max(1, int(dd2q(wopt(1))))
         allocate(work(lwork))
-        call ddgesvd(jobu, jobvt, m, n, At, lda, st, Ut, ldu, VTt, ldvt, &
+        call tgesvd(jobu, jobvt, m, n, At, lda, st, Ut, ldu, VTt, ldvt, &
                      work, lwork, info)
         A(1:lda, 1:n)    = dd2q(At)
         s(1:kmn)         = dd2q(st)
@@ -386,7 +386,7 @@ contains
         type(real64x2), allocatable :: At(:,:), work(:)
         allocate(At(lda, n), work(max(1, m)))
         At = q2dd(A(1:lda, 1:n))
-        r = dd2q(ddlange(norm, m, n, At, lda, work))
+        r = dd2q(tlange(norm, m, n, At, lda, work))
     end function
 
     subroutine target_dlacpy(uplo, m, n, A, lda, B, ldb)
@@ -398,7 +398,7 @@ contains
         allocate(At(lda, n), Bt(ldb, n))
         At = q2dd(A(1:lda, 1:n))
         Bt = q2dd(B(1:ldb, 1:n))
-        call ddlacpy(uplo, m, n, At, lda, Bt, ldb)
+        call tlacpy(uplo, m, n, At, lda, Bt, ldb)
         B(1:ldb, 1:n) = dd2q(Bt)
     end subroutine
 
@@ -410,7 +410,7 @@ contains
         type(real64x2), allocatable :: At(:,:)
         allocate(At(lda, n))
         At = q2dd(A(1:lda, 1:n))
-        call ddlaset(uplo, m, n, q2dd(alpha), q2dd(beta), At, lda)
+        call tlaset(uplo, m, n, q2dd(alpha), q2dd(beta), At, lda)
         A(1:lda, 1:n) = dd2q(At)
     end subroutine
 
