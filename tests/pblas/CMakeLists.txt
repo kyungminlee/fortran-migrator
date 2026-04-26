@@ -62,10 +62,15 @@ if(NOT IS_DIRECTORY ${_wrapper_dir})
     return()
 endif()
 
-add_library(pblas_test_target STATIC ${_wrapper_dir}/target_pblas.f90)
+add_fypp_source(_pblas_wrapper_src
+    ${_wrapper_dir}/target_pblas.fypp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+add_library(pblas_test_target STATIC ${_pblas_wrapper_src})
 fortran_module_layout(pblas_test_target)
 target_link_libraries(pblas_test_target PUBLIC
     pblas_test_common
+    target_conv
     ${LIB_PREFIX}pblas
 )
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)

@@ -72,9 +72,11 @@ target_include_directories(lapack_test_common PUBLIC
 target_link_libraries(lapack_test_common PUBLIC reflapack_quad)
 
 # ── Per-target wrapper module ───────────────────────────────────────
-add_library(lapack_test_target STATIC
-    ${_wrapper_dir}/target_lapack.f90
+add_fypp_source(_lapack_wrapper_src
+    ${_wrapper_dir}/target_lapack.fypp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
+add_library(lapack_test_target STATIC ${_lapack_wrapper_src})
 set_target_properties(lapack_test_target PROPERTIES
     Fortran_MODULE_DIRECTORY "${_lp_moddir}"
 )
@@ -83,6 +85,7 @@ target_include_directories(lapack_test_target PUBLIC
 )
 target_link_libraries(lapack_test_target PUBLIC
     lapack_test_common
+    target_conv
     ${LIB_PREFIX}lapack
     ${LIB_PREFIX}blas
 )

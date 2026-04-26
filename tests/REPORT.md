@@ -290,8 +290,17 @@ matrix:
 `✓ N` means N test drivers run on that target. All three targets
 now have full BLAS / LAPACK / PBLAS / ScaLAPACK coverage; the only
 remaining hole is complex-side ScaLAPACK (`pz*` / `px*` driver),
-where `target_scalapack.f90` exposes wrappers (`pxgesv`, `pxgeqrf`,
-`pxheev`) but no test exercises them.
+where the `target_scalapack` wrapper exposes interfaces (`pxgesv`,
+`pxgeqrf`, `pxheev`) but no test exercises them.
+
+Per-target wrapper modules are generated at build time from a single
+fypp template per framework (`tests/<fw>/common/target_<fw>_body.fypp`)
+plus a thin per-target shim that sets the type / prefix / converter.
+A new test driver therefore wires up once per framework — the three
+targets pick up the new entry point automatically through the shared
+body. The quad↔target conversion lives in
+`tests/common/target_<target>/target_conv.f90` (identity for kind16,
+intrinsic cast for kind10, double-double split for multifloats).
 
 ### BLAS (real, q-prefix)
 
@@ -417,13 +426,17 @@ in transitively through the drivers below.
 | svd           | `pdgesvd`                                                        |
 | auxiliary     | `pdlange`, `pdlacpy`, `pdlaset`                                  |
 
-No complex (`pz*`/`px*`) ScaLAPACK driver is tested today —
-`target_scalapack.f90` exposes complex wrappers (`pxgesv`,
+No complex (`pz*`/`px*`) ScaLAPACK driver is tested today — the
+`target_scalapack` template exposes complex wrappers (`pxgesv`,
 `pxgeqrf`, `pxheev`) but no test exercises them. Adding a complex
 ScaLAPACK test driver would close the largest remaining hole.
 
 
 ## Reproducing this report
+
+The build requires `fypp` on `PATH` (used by CMake to expand the
+per-target wrapper templates). `uv sync --dev` installs it as a dev
+dependency; `pip install fypp` works too.
 
 ```bash
 nproc                                # confirm worker count for -j

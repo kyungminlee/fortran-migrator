@@ -94,7 +94,11 @@ if(NOT IS_DIRECTORY ${_wrapper_dir})
     return()
 endif()
 
-add_library(scalapack_test_target STATIC ${_wrapper_dir}/target_scalapack.f90)
+add_fypp_source(_scalapack_wrapper_src
+    ${_wrapper_dir}/target_scalapack.fypp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+add_library(scalapack_test_target STATIC ${_scalapack_wrapper_src})
 set_target_properties(scalapack_test_target PROPERTIES
     Fortran_MODULE_DIRECTORY "${_sp_moddir}"
 )
@@ -103,6 +107,7 @@ target_include_directories(scalapack_test_target PUBLIC
 )
 target_link_libraries(scalapack_test_target PUBLIC
     scalapack_test_common
+    target_conv
     ${LIB_PREFIX}scalapack
     ${LIB_PREFIX}pblas
     ${LIB_PREFIX}lapack

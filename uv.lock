@@ -22,6 +22,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "fypp" },
     { name = "pytest" },
 ]
 
@@ -32,7 +33,19 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.0.3" }]
+dev = [
+    { name = "fypp", specifier = ">=3.2" },
+    { name = "pytest", specifier = ">=9.0.3" },
+]
+
+[[package]]
+name = "fypp"
+version = "3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/35/0e2dfffc90201f17436d3416f8d5c8b00e2187e410ec899bb62cf2cea59b/fypp-3.2.tar.gz", hash = "sha256:05c20f71dd9a7206ffe2d8688032723f97b8c2984d472ba045819d7d2b513bce", size = 69307, upload-time = "2023-08-22T08:25:26.014Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/14/d06b92997e66c7766e1f163f2c117248156e497f00ce6cee46ccc71c8d88/fypp-3.2-py3-none-any.whl", hash = "sha256:ec9d6fd0e54529e7873732be642ea9098e06cc7a1cbe0eb7faee31be6c2267fa", size = 29170, upload-time = "2023-08-22T08:25:24.144Z" },
+]
 
 [[package]]
 name = "iniconfig"

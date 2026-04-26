@@ -1,18 +1,47 @@
-! Per-target PBLAS wrapper for the multifloats (ddpblas) build.
-!
-! Test code works in REAL(KIND=ep)=KIND=16. The wrappers split each
-! quad value into the high (double approx) + low (double remainder)
-! representation that TYPE(real64x2) expects, call the migrated
-! dd*/zz*-prefix PBLAS routine, then recombine the two limbs back to
-! quad for the gather/compare step. Distribution descriptors pass
-! through unchanged — precision conversion is purely elementwise.
-!
-! Migrated prefixes for multifloats:
-!   pdgemm → ptgemm, pddot → ptdot, …, pzgemm → pvgemm, pzdotc → pvdotc
+#! Per-framework PBLAS test wrapper, parameterized by target.
+#!
+#! Each per-target shim sets:
+#!   target          'kind10' | 'kind16' | 'multifloats'
+#!   target_name     human-readable label string
+#!   target_eps      Fortran expression giving the target's epsilon as REAL(KIND=ep)
+#!   target_real     Fortran type-spec for the target's real type
+#!   target_complex  Fortran type-spec for the target's complex type
+#!   prefix_real     migrated entry-point prefix for the D family (e.g. 'pq')
+#!   prefix_complex  migrated entry-point prefix for the Z family (e.g. 'px')
+
+#:set R = prefix_real
+#:set C = prefix_complex
+
+#:def IMPORT_R()
+#:if target == 'multifloats'
+            import :: real64x2
+#:elif target == 'kind16'
+            import :: ep
+#:endif
+#:enddef
+
+#:def IMPORT_C()
+#:if target == 'multifloats'
+            import :: cmplx64x2
+#:elif target == 'kind16'
+            import :: ep
+#:endif
+#:enddef
+
+#:def IMPORT_RC()
+#:if target == 'multifloats'
+            import :: real64x2, cmplx64x2
+#:elif target == 'kind16'
+            import :: ep
+#:endif
+#:enddef
 
 module target_pblas
-    use prec_kinds,  only: ep, dp
+    use prec_kinds, only: ep
+    use target_conv, only: q2t_r, t2q_r, q2t_c, t2q_c
+#:if target == 'multifloats'
     use multifloats, only: real64x2, cmplx64x2
+#:endif
     implicit none
     private
 
@@ -26,218 +55,202 @@ module target_pblas
     public :: target_pdtrmm, target_pdtrsm
     public :: target_pzgemm, target_pzherk
 
-    character(len=*), parameter :: target_name = 'multifloats'
-    ! Double-double effective epsilon ≈ 2^-104 ≈ 4.93e-32.
-    real(ep),         parameter :: target_eps  = real(2.0_dp**(-104), ep)
+    character(len=*), parameter :: target_name = "${target_name}$"
+    real(ep),         parameter :: target_eps  = ${target_eps}$
 
     interface
-        ! ── Level 1 — real (DD) ──────────────────────────────────────
-        subroutine ptdot(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: real64x2
-            integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
-            integer, intent(in) :: descx(9), descy(9)
-            type(real64x2), intent(in)  :: x(*), y(*)
-            type(real64x2), intent(out) :: dot
-        end subroutine
-        subroutine ptnrm2(n, norm2, x, ix, jx, descx, incx)
-            import :: real64x2
-            integer, intent(in) :: n, ix, jx, incx
-            integer, intent(in) :: descx(9)
-            type(real64x2), intent(in)  :: x(*)
-            type(real64x2), intent(out) :: norm2
-        end subroutine
-        subroutine ptasum(n, asum, x, ix, jx, descx, incx)
-            import :: real64x2
-            integer, intent(in) :: n, ix, jx, incx
-            integer, intent(in) :: descx(9)
-            type(real64x2), intent(in)  :: x(*)
-            type(real64x2), intent(out) :: asum
-        end subroutine
-        subroutine ptscal(n, alpha, x, ix, jx, descx, incx)
-            import :: real64x2
-            integer, intent(in) :: n, ix, jx, incx
-            integer, intent(in) :: descx(9)
-            type(real64x2), intent(in)    :: alpha
-            type(real64x2), intent(inout) :: x(*)
-        end subroutine
-        subroutine ptaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: real64x2
-            integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
-            integer, intent(in) :: descx(9), descy(9)
-            type(real64x2), intent(in)    :: alpha, x(*)
-            type(real64x2), intent(inout) :: y(*)
-        end subroutine
-        subroutine ptcopy(n, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: real64x2
-            integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
-            integer, intent(in) :: descx(9), descy(9)
-            type(real64x2), intent(in)  :: x(*)
-            type(real64x2), intent(out) :: y(*)
+        ! ── Level 1 — real ───────────────────────────────────────────
+        subroutine ${R}$dot(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+$:IMPORT_R()
+            integer, intent(in)  :: n, ix, jx, incx, iy, jy, incy
+            integer, intent(in)  :: descx(9), descy(9)
+            ${target_real}$, intent(in)  :: x(*), y(*)
+            ${target_real}$, intent(out) :: dot
         end subroutine
 
-        ! ── Level 1 — complex (ZZ) ───────────────────────────────────
-        subroutine pvdotc(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: cmplx64x2
-            integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
-            integer, intent(in) :: descx(9), descy(9)
-            type(cmplx64x2), intent(in)  :: x(*), y(*)
-            type(cmplx64x2), intent(out) :: dot
-        end subroutine
-        subroutine pvaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
-            import :: cmplx64x2
-            integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
-            integer, intent(in) :: descx(9), descy(9)
-            type(cmplx64x2), intent(in)    :: alpha, x(*)
-            type(cmplx64x2), intent(inout) :: y(*)
+        subroutine ${R}$nrm2(n, norm2, x, ix, jx, descx, incx)
+$:IMPORT_R()
+            integer, intent(in) :: n, ix, jx, incx
+            integer, intent(in) :: descx(9)
+            ${target_real}$, intent(in)  :: x(*)
+            ${target_real}$, intent(out) :: norm2
         end subroutine
 
-        ! ── Level 2 — real (DD) ──────────────────────────────────────
-        subroutine ptgemv(trans, m, n, alpha, A, ia, ja, desca, &
-                           x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
-            import :: real64x2
+        subroutine ${R}$asum(n, asum, x, ix, jx, descx, incx)
+$:IMPORT_R()
+            integer, intent(in) :: n, ix, jx, incx
+            integer, intent(in) :: descx(9)
+            ${target_real}$, intent(in)  :: x(*)
+            ${target_real}$, intent(out) :: asum
+        end subroutine
+
+        subroutine ${R}$scal(n, alpha, x, ix, jx, descx, incx)
+$:IMPORT_R()
+            integer, intent(in) :: n, ix, jx, incx
+            integer, intent(in) :: descx(9)
+            ${target_real}$, intent(in)    :: alpha
+            ${target_real}$, intent(inout) :: x(*)
+        end subroutine
+
+        subroutine ${R}$axpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+$:IMPORT_R()
+            integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
+            integer, intent(in) :: descx(9), descy(9)
+            ${target_real}$, intent(in)    :: alpha, x(*)
+            ${target_real}$, intent(inout) :: y(*)
+        end subroutine
+
+        subroutine ${R}$copy(n, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+$:IMPORT_R()
+            integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
+            integer, intent(in) :: descx(9), descy(9)
+            ${target_real}$, intent(in)  :: x(*)
+            ${target_real}$, intent(out) :: y(*)
+        end subroutine
+
+        ! ── Level 1 — complex ────────────────────────────────────────
+        subroutine ${C}$dotc(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+$:IMPORT_C()
+            integer, intent(in)  :: n, ix, jx, incx, iy, jy, incy
+            integer, intent(in)  :: descx(9), descy(9)
+            ${target_complex}$, intent(in)  :: x(*), y(*)
+            ${target_complex}$, intent(out) :: dot
+        end subroutine
+
+        subroutine ${C}$axpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
+$:IMPORT_C()
+            integer, intent(in) :: n, ix, jx, incx, iy, jy, incy
+            integer, intent(in) :: descx(9), descy(9)
+            ${target_complex}$, intent(in)    :: alpha, x(*)
+            ${target_complex}$, intent(inout) :: y(*)
+        end subroutine
+
+        ! ── Level 2 — real ───────────────────────────────────────────
+        subroutine ${R}$gemv(trans, m, n, alpha, A, ia, ja, desca, &
+                             x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
+$:IMPORT_R()
             character, intent(in) :: trans
             integer,   intent(in) :: m, n, ia, ja, ix, jx, incx, iy, jy, incy
             integer,   intent(in) :: desca(9), descx(9), descy(9)
-            type(real64x2), intent(in)    :: alpha, beta, A(*), x(*)
-            type(real64x2), intent(inout) :: y(*)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*), x(*)
+            ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ptger(m, n, alpha, x, ix, jx, descx, incx, &
-                          y, iy, jy, descy, incy, A, ia, ja, desca)
-            import :: real64x2
+
+        subroutine ${R}$ger(m, n, alpha, x, ix, jx, descx, incx, &
+                            y, iy, jy, descy, incy, A, ia, ja, desca)
+$:IMPORT_R()
             integer, intent(in) :: m, n, ix, jx, incx, iy, jy, incy, ia, ja
             integer, intent(in) :: desca(9), descx(9), descy(9)
-            type(real64x2), intent(in)    :: alpha, x(*), y(*)
-            type(real64x2), intent(inout) :: A(*)
+            ${target_real}$, intent(in)    :: alpha, x(*), y(*)
+            ${target_real}$, intent(inout) :: A(*)
         end subroutine
-        subroutine ptsymv(uplo, n, alpha, A, ia, ja, desca, &
-                           x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
-            import :: real64x2
+
+        subroutine ${R}$symv(uplo, n, alpha, A, ia, ja, desca, &
+                             x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
+$:IMPORT_R()
             character, intent(in) :: uplo
             integer,   intent(in) :: n, ia, ja, ix, jx, incx, iy, jy, incy
             integer,   intent(in) :: desca(9), descx(9), descy(9)
-            type(real64x2), intent(in)    :: alpha, beta, A(*), x(*)
-            type(real64x2), intent(inout) :: y(*)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*), x(*)
+            ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine pttrsv(uplo, trans, diag, n, A, ia, ja, desca, &
-                           x, ix, jx, descx, incx)
-            import :: real64x2
+
+        subroutine ${R}$trsv(uplo, trans, diag, n, A, ia, ja, desca, &
+                             x, ix, jx, descx, incx)
+$:IMPORT_R()
             character, intent(in) :: uplo, trans, diag
             integer,   intent(in) :: n, ia, ja, ix, jx, incx
             integer,   intent(in) :: desca(9), descx(9)
-            type(real64x2), intent(in)    :: A(*)
-            type(real64x2), intent(inout) :: x(*)
+            ${target_real}$, intent(in)    :: A(*)
+            ${target_real}$, intent(inout) :: x(*)
         end subroutine
 
-        ! ── Level 2 — complex (ZZ) ───────────────────────────────────
-        subroutine pvgemv(trans, m, n, alpha, A, ia, ja, desca, &
-                           x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
-            import :: cmplx64x2
+        ! ── Level 2 — complex ────────────────────────────────────────
+        subroutine ${C}$gemv(trans, m, n, alpha, A, ia, ja, desca, &
+                             x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
+$:IMPORT_C()
             character, intent(in) :: trans
             integer,   intent(in) :: m, n, ia, ja, ix, jx, incx, iy, jy, incy
             integer,   intent(in) :: desca(9), descx(9), descy(9)
-            type(cmplx64x2), intent(in)    :: alpha, beta, A(*), x(*)
-            type(cmplx64x2), intent(inout) :: y(*)
+            ${target_complex}$, intent(in)    :: alpha, beta, A(*), x(*)
+            ${target_complex}$, intent(inout) :: y(*)
         end subroutine
 
-        ! ── Level 3 — real (DD) ──────────────────────────────────────
-        subroutine ptgemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
-                           B, ib, jb, descb, beta, C, ic, jc, descc)
-            import :: real64x2
+        ! ── Level 3 — real ───────────────────────────────────────────
+        subroutine ${R}$gemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
+                             B, ib, jb, descb, beta, C, ic, jc, descc)
+$:IMPORT_R()
             character, intent(in) :: transa, transb
             integer,   intent(in) :: m, n, k, ia, ja, ib, jb, ic, jc
             integer,   intent(in) :: desca(9), descb(9), descc(9)
-            type(real64x2), intent(in)    :: alpha, beta, A(*), B(*)
-            type(real64x2), intent(inout) :: C(*)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*), B(*)
+            ${target_real}$, intent(inout) :: C(*)
         end subroutine
-        subroutine ptsymm(side, uplo, m, n, alpha, A, ia, ja, desca, &
-                           B, ib, jb, descb, beta, C, ic, jc, descc)
-            import :: real64x2
+
+        subroutine ${R}$symm(side, uplo, m, n, alpha, A, ia, ja, desca, &
+                             B, ib, jb, descb, beta, C, ic, jc, descc)
+$:IMPORT_R()
             character, intent(in) :: side, uplo
             integer,   intent(in) :: m, n, ia, ja, ib, jb, ic, jc
             integer,   intent(in) :: desca(9), descb(9), descc(9)
-            type(real64x2), intent(in)    :: alpha, beta, A(*), B(*)
-            type(real64x2), intent(inout) :: C(*)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*), B(*)
+            ${target_real}$, intent(inout) :: C(*)
         end subroutine
-        subroutine ptsyrk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
-                           beta, C, ic, jc, descc)
-            import :: real64x2
+
+        subroutine ${R}$syrk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
+                             beta, C, ic, jc, descc)
+$:IMPORT_R()
             character, intent(in) :: uplo, trans
             integer,   intent(in) :: n, k, ia, ja, ic, jc
             integer,   intent(in) :: desca(9), descc(9)
-            type(real64x2), intent(in)    :: alpha, beta, A(*)
-            type(real64x2), intent(inout) :: C(*)
-        end subroutine
-        subroutine pttrmm(side, uplo, trans, diag, m, n, alpha, &
-                           A, ia, ja, desca, B, ib, jb, descb)
-            import :: real64x2
-            character, intent(in) :: side, uplo, trans, diag
-            integer,   intent(in) :: m, n, ia, ja, ib, jb
-            integer,   intent(in) :: desca(9), descb(9)
-            type(real64x2), intent(in)    :: alpha, A(*)
-            type(real64x2), intent(inout) :: B(*)
-        end subroutine
-        subroutine pttrsm(side, uplo, trans, diag, m, n, alpha, &
-                           A, ia, ja, desca, B, ib, jb, descb)
-            import :: real64x2
-            character, intent(in) :: side, uplo, trans, diag
-            integer,   intent(in) :: m, n, ia, ja, ib, jb
-            integer,   intent(in) :: desca(9), descb(9)
-            type(real64x2), intent(in)    :: alpha, A(*)
-            type(real64x2), intent(inout) :: B(*)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*)
+            ${target_real}$, intent(inout) :: C(*)
         end subroutine
 
-        ! ── Level 3 — complex (ZZ) ───────────────────────────────────
-        subroutine pvgemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
-                           B, ib, jb, descb, beta, C, ic, jc, descc)
-            import :: cmplx64x2
+        subroutine ${R}$trmm(side, uplo, trans, diag, m, n, alpha, &
+                             A, ia, ja, desca, B, ib, jb, descb)
+$:IMPORT_R()
+            character, intent(in) :: side, uplo, trans, diag
+            integer,   intent(in) :: m, n, ia, ja, ib, jb
+            integer,   intent(in) :: desca(9), descb(9)
+            ${target_real}$, intent(in)    :: alpha, A(*)
+            ${target_real}$, intent(inout) :: B(*)
+        end subroutine
+
+        subroutine ${R}$trsm(side, uplo, trans, diag, m, n, alpha, &
+                             A, ia, ja, desca, B, ib, jb, descb)
+$:IMPORT_R()
+            character, intent(in) :: side, uplo, trans, diag
+            integer,   intent(in) :: m, n, ia, ja, ib, jb
+            integer,   intent(in) :: desca(9), descb(9)
+            ${target_real}$, intent(in)    :: alpha, A(*)
+            ${target_real}$, intent(inout) :: B(*)
+        end subroutine
+
+        ! ── Level 3 — complex ────────────────────────────────────────
+        subroutine ${C}$gemm(transa, transb, m, n, k, alpha, A, ia, ja, desca, &
+                             B, ib, jb, descb, beta, C, ic, jc, descc)
+$:IMPORT_C()
             character, intent(in) :: transa, transb
             integer,   intent(in) :: m, n, k, ia, ja, ib, jb, ic, jc
             integer,   intent(in) :: desca(9), descb(9), descc(9)
-            type(cmplx64x2), intent(in)    :: alpha, beta, A(*), B(*)
-            type(cmplx64x2), intent(inout) :: C(*)
+            ${target_complex}$, intent(in)    :: alpha, beta, A(*), B(*)
+            ${target_complex}$, intent(inout) :: C(*)
         end subroutine
-        subroutine pvherk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
-                           beta, C, ic, jc, descc)
-            import :: real64x2, cmplx64x2
+
+        subroutine ${C}$herk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
+                             beta, C, ic, jc, descc)
+$:IMPORT_RC()
             character, intent(in) :: uplo, trans
             integer,   intent(in) :: n, k, ia, ja, ic, jc
             integer,   intent(in) :: desca(9), descc(9)
-            type(real64x2),   intent(in)    :: alpha, beta
-            type(cmplx64x2), intent(in)    :: A(*)
-            type(cmplx64x2), intent(inout) :: C(*)
+            ${target_real}$,    intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(*)
+            ${target_complex}$, intent(inout) :: C(*)
         end subroutine
     end interface
 
 contains
-
-    ! ── Quad ↔ double-double splitting (same pattern as tests/blas) ──
-    elemental function q2dd(x) result(r)
-        real(ep), intent(in) :: x
-        type(real64x2) :: r
-        real(dp) :: hi
-        hi = real(x, dp)
-        r%limbs(1) = hi
-        r%limbs(2) = real(x - real(hi, ep), dp)
-    end function
-
-    elemental function dd2q(x) result(r)
-        type(real64x2), intent(in) :: x
-        real(ep) :: r
-        r = real(x%limbs(1), ep) + real(x%limbs(2), ep)
-    end function
-
-    elemental function q2zz(z) result(r)
-        complex(ep), intent(in) :: z
-        type(cmplx64x2) :: r
-        r%re = q2dd(real(z, ep))
-        r%im = q2dd(aimag(z))
-    end function
-
-    elemental function zz2q(z) result(r)
-        type(cmplx64x2), intent(in) :: z
-        complex(ep) :: r
-        r = cmplx(dd2q(z%re), dd2q(z%im), ep)
-    end function
 
     ! ── Level 1 — real ───────────────────────────────────────────────
     subroutine target_pddot(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
@@ -246,13 +259,13 @@ contains
         real(ep), intent(in)  :: x(*), y(*)
         real(ep), intent(out) :: dot
         integer :: nx, ny
-        type(real64x2), allocatable :: xt(:), yt(:)
-        type(real64x2) :: dot_t
+        ${target_real}$, allocatable :: xt(:), yt(:)
+        ${target_real}$ :: dot_t
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
-        xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call ptdot(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
-        dot = dd2q(dot_t)
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${R}$dot(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
+        dot = t2q_r(dot_t)
     end subroutine
 
     subroutine target_pdnrm2(n, norm2, x, ix, jx, descx, incx)
@@ -261,13 +274,13 @@ contains
         real(ep), intent(in)  :: x(*)
         real(ep), intent(out) :: norm2
         integer :: nx
-        type(real64x2), allocatable :: xt(:)
-        type(real64x2) :: norm_t
+        ${target_real}$, allocatable :: xt(:)
+        ${target_real}$ :: norm_t
         nx = descx(9) * descx(4)
         allocate(xt(nx))
-        xt = q2dd(x(1:nx))
-        call ptnrm2(n, norm_t, xt, ix, jx, descx, incx)
-        norm2 = dd2q(norm_t)
+        xt = q2t_r(x(1:nx))
+        call ${R}$nrm2(n, norm_t, xt, ix, jx, descx, incx)
+        norm2 = t2q_r(norm_t)
     end subroutine
 
     subroutine target_pdasum(n, asum, x, ix, jx, descx, incx)
@@ -276,13 +289,13 @@ contains
         real(ep), intent(in)  :: x(*)
         real(ep), intent(out) :: asum
         integer :: nx
-        type(real64x2), allocatable :: xt(:)
-        type(real64x2) :: asum_t
+        ${target_real}$, allocatable :: xt(:)
+        ${target_real}$ :: asum_t
         nx = descx(9) * descx(4)
         allocate(xt(nx))
-        xt = q2dd(x(1:nx))
-        call ptasum(n, asum_t, xt, ix, jx, descx, incx)
-        asum = dd2q(asum_t)
+        xt = q2t_r(x(1:nx))
+        call ${R}$asum(n, asum_t, xt, ix, jx, descx, incx)
+        asum = t2q_r(asum_t)
     end subroutine
 
     subroutine target_pdscal(n, alpha, x, ix, jx, descx, incx)
@@ -291,12 +304,12 @@ contains
         real(ep), intent(in)    :: alpha
         real(ep), intent(inout) :: x(*)
         integer :: nx
-        type(real64x2), allocatable :: xt(:)
+        ${target_real}$, allocatable :: xt(:)
         nx = descx(9) * descx(4)
         allocate(xt(nx))
-        xt = q2dd(x(1:nx))
-        call ptscal(n, q2dd(alpha), xt, ix, jx, descx, incx)
-        x(1:nx) = dd2q(xt)
+        xt = q2t_r(x(1:nx))
+        call ${R}$scal(n, q2t_r(alpha), xt, ix, jx, descx, incx)
+        x(1:nx) = t2q_r(xt)
     end subroutine
 
     subroutine target_pdaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
@@ -305,13 +318,13 @@ contains
         real(ep), intent(in)    :: alpha, x(*)
         real(ep), intent(inout) :: y(*)
         integer :: nx, ny
-        type(real64x2), allocatable :: xt(:), yt(:)
+        ${target_real}$, allocatable :: xt(:), yt(:)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
-        xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call ptaxpy(n, q2dd(alpha), xt, ix, jx, descx, incx, &
-                     yt, iy, jy, descy, incy)
-        y(1:ny) = dd2q(yt)
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${R}$axpy(n, q2t_r(alpha), xt, ix, jx, descx, incx, &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
     end subroutine
 
     subroutine target_pdcopy(n, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
@@ -320,12 +333,12 @@ contains
         real(ep), intent(in)  :: x(*)
         real(ep), intent(out) :: y(*)
         integer :: nx, ny
-        type(real64x2), allocatable :: xt(:), yt(:)
+        ${target_real}$, allocatable :: xt(:), yt(:)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
-        xt = q2dd(x(1:nx))
-        call ptcopy(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
-        y(1:ny) = dd2q(yt)
+        xt = q2t_r(x(1:nx))
+        call ${R}$copy(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
     end subroutine
 
     ! ── Level 1 — complex ────────────────────────────────────────────
@@ -335,13 +348,13 @@ contains
         complex(ep), intent(in)  :: x(*), y(*)
         complex(ep), intent(out) :: dot
         integer :: nx, ny
-        type(cmplx64x2), allocatable :: xt(:), yt(:)
-        type(cmplx64x2) :: dot_t
+        ${target_complex}$, allocatable :: xt(:), yt(:)
+        ${target_complex}$ :: dot_t
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
-        xt = q2zz(x(1:nx)); yt = q2zz(y(1:ny))
-        call pvdotc(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
-        dot = zz2q(dot_t)
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$dotc(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
+        dot = t2q_c(dot_t)
     end subroutine
 
     subroutine target_pzaxpy(n, alpha, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
@@ -350,13 +363,13 @@ contains
         complex(ep), intent(in)    :: alpha, x(*)
         complex(ep), intent(inout) :: y(*)
         integer :: nx, ny
-        type(cmplx64x2), allocatable :: xt(:), yt(:)
+        ${target_complex}$, allocatable :: xt(:), yt(:)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(xt(nx), yt(ny))
-        xt = q2zz(x(1:nx)); yt = q2zz(y(1:ny))
-        call pvaxpy(n, q2zz(alpha), xt, ix, jx, descx, incx, &
-                     yt, iy, jy, descy, incy)
-        y(1:ny) = zz2q(yt)
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$axpy(n, q2t_c(alpha), xt, ix, jx, descx, incx, &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_c(yt)
     end subroutine
 
     ! ── Level 2 — real ───────────────────────────────────────────────
@@ -368,16 +381,16 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*), x(*)
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
-        type(real64x2), allocatable :: At(:), xt(:), yt(:)
+        ${target_real}$, allocatable :: At(:), xt(:), yt(:)
         na = desca(9) * desca(4)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(At(na), xt(nx), yt(ny))
-        At = q2dd(A(1:na))
-        xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call ptgemv(trans, m, n, q2dd(alpha), At, ia, ja, desca, &
-                     xt, ix, jx, descx, incx, q2dd(beta), &
-                     yt, iy, jy, descy, incy)
-        y(1:ny) = dd2q(yt)
+        At = q2t_r(A(1:na))
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${R}$gemv(trans, m, n, q2t_r(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_r(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
     end subroutine
 
     subroutine target_pdger(m, n, alpha, x, ix, jx, descx, incx, &
@@ -387,15 +400,15 @@ contains
         real(ep), intent(in)    :: alpha, x(*), y(*)
         real(ep), intent(inout) :: A(*)
         integer :: na, nx, ny
-        type(real64x2), allocatable :: At(:), xt(:), yt(:)
+        ${target_real}$, allocatable :: At(:), xt(:), yt(:)
         na = desca(9) * desca(4)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(At(na), xt(nx), yt(ny))
-        At = q2dd(A(1:na))
-        xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call ptger(m, n, q2dd(alpha), xt, ix, jx, descx, incx, &
-                    yt, iy, jy, descy, incy, At, ia, ja, desca)
-        A(1:na) = dd2q(At)
+        At = q2t_r(A(1:na))
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${R}$ger(m, n, q2t_r(alpha), xt, ix, jx, descx, incx, &
+                       yt, iy, jy, descy, incy, At, ia, ja, desca)
+        A(1:na) = t2q_r(At)
     end subroutine
 
     subroutine target_pdsymv(uplo, n, alpha, A, ia, ja, desca, &
@@ -406,16 +419,16 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*), x(*)
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
-        type(real64x2), allocatable :: At(:), xt(:), yt(:)
+        ${target_real}$, allocatable :: At(:), xt(:), yt(:)
         na = desca(9) * desca(4)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(At(na), xt(nx), yt(ny))
-        At = q2dd(A(1:na))
-        xt = q2dd(x(1:nx)); yt = q2dd(y(1:ny))
-        call ptsymv(uplo, n, q2dd(alpha), At, ia, ja, desca, &
-                     xt, ix, jx, descx, incx, q2dd(beta), &
-                     yt, iy, jy, descy, incy)
-        y(1:ny) = dd2q(yt)
+        At = q2t_r(A(1:na))
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${R}$symv(uplo, n, q2t_r(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_r(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
     end subroutine
 
     subroutine target_pdtrsv(uplo, trans, diag, n, A, ia, ja, desca, &
@@ -426,13 +439,13 @@ contains
         real(ep),  intent(in)    :: A(*)
         real(ep),  intent(inout) :: x(*)
         integer :: na, nx
-        type(real64x2), allocatable :: At(:), xt(:)
+        ${target_real}$, allocatable :: At(:), xt(:)
         na = desca(9) * desca(4); nx = descx(9) * descx(4)
         allocate(At(na), xt(nx))
-        At = q2dd(A(1:na)); xt = q2dd(x(1:nx))
-        call pttrsv(uplo, trans, diag, n, At, ia, ja, desca, &
-                     xt, ix, jx, descx, incx)
-        x(1:nx) = dd2q(xt)
+        At = q2t_r(A(1:na)); xt = q2t_r(x(1:nx))
+        call ${R}$trsv(uplo, trans, diag, n, At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx)
+        x(1:nx) = t2q_r(xt)
     end subroutine
 
     ! ── Level 2 — complex ────────────────────────────────────────────
@@ -444,16 +457,16 @@ contains
         complex(ep), intent(in)    :: alpha, beta, A(*), x(*)
         complex(ep), intent(inout) :: y(*)
         integer :: na, nx, ny
-        type(cmplx64x2), allocatable :: At(:), xt(:), yt(:)
+        ${target_complex}$, allocatable :: At(:), xt(:), yt(:)
         na = desca(9) * desca(4)
         nx = descx(9) * descx(4); ny = descy(9) * descy(4)
         allocate(At(na), xt(nx), yt(ny))
-        At = q2zz(A(1:na))
-        xt = q2zz(x(1:nx)); yt = q2zz(y(1:ny))
-        call pvgemv(trans, m, n, q2zz(alpha), At, ia, ja, desca, &
-                     xt, ix, jx, descx, incx, q2zz(beta), &
-                     yt, iy, jy, descy, incy)
-        y(1:ny) = zz2q(yt)
+        At = q2t_c(A(1:na))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call ${C}$gemv(trans, m, n, q2t_c(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_c(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_c(yt)
     end subroutine
 
     ! ── Level 3 — real ───────────────────────────────────────────────
@@ -465,14 +478,14 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*), B(*)
         real(ep),  intent(inout) :: C(*)
         integer :: na, nb, nc
-        type(real64x2), allocatable :: At(:), Bt(:), Ct(:)
+        ${target_real}$, allocatable :: At(:), Bt(:), Ct(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
-        At = q2dd(A(1:na)); Bt = q2dd(B(1:nb)); Ct = q2dd(C(1:nc))
-        call ptgemm(transa, transb, m, n, k, q2dd(alpha), &
-                     At, ia, ja, desca, Bt, ib, jb, descb, &
-                     q2dd(beta), Ct, ic, jc, descc)
-        C(1:nc) = dd2q(Ct)
+        At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb)); Ct = q2t_r(C(1:nc))
+        call ${R}$gemm(transa, transb, m, n, k, q2t_r(alpha), &
+                        At, ia, ja, desca, Bt, ib, jb, descb, &
+                        q2t_r(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_r(Ct)
     end subroutine
 
     subroutine target_pdsymm(side, uplo, m, n, alpha, A, ia, ja, desca, &
@@ -483,14 +496,14 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*), B(*)
         real(ep),  intent(inout) :: C(*)
         integer :: na, nb, nc
-        type(real64x2), allocatable :: At(:), Bt(:), Ct(:)
+        ${target_real}$, allocatable :: At(:), Bt(:), Ct(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
-        At = q2dd(A(1:na)); Bt = q2dd(B(1:nb)); Ct = q2dd(C(1:nc))
-        call ptsymm(side, uplo, m, n, q2dd(alpha), &
-                     At, ia, ja, desca, Bt, ib, jb, descb, &
-                     q2dd(beta), Ct, ic, jc, descc)
-        C(1:nc) = dd2q(Ct)
+        At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb)); Ct = q2t_r(C(1:nc))
+        call ${R}$symm(side, uplo, m, n, q2t_r(alpha), &
+                        At, ia, ja, desca, Bt, ib, jb, descb, &
+                        q2t_r(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_r(Ct)
     end subroutine
 
     subroutine target_pdsyrk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
@@ -501,13 +514,13 @@ contains
         real(ep),  intent(in)    :: alpha, beta, A(*)
         real(ep),  intent(inout) :: C(*)
         integer :: na, nc
-        type(real64x2), allocatable :: At(:), Ct(:)
+        ${target_real}$, allocatable :: At(:), Ct(:)
         na = desca(9) * desca(4); nc = descc(9) * descc(4)
         allocate(At(na), Ct(nc))
-        At = q2dd(A(1:na)); Ct = q2dd(C(1:nc))
-        call ptsyrk(uplo, trans, n, k, q2dd(alpha), &
-                     At, ia, ja, desca, q2dd(beta), Ct, ic, jc, descc)
-        C(1:nc) = dd2q(Ct)
+        At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
+        call ${R}$syrk(uplo, trans, n, k, q2t_r(alpha), &
+                        At, ia, ja, desca, q2t_r(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_r(Ct)
     end subroutine
 
     subroutine target_pdtrmm(side, uplo, trans, diag, m, n, alpha, &
@@ -518,13 +531,13 @@ contains
         real(ep),  intent(in)    :: alpha, A(*)
         real(ep),  intent(inout) :: B(*)
         integer :: na, nb
-        type(real64x2), allocatable :: At(:), Bt(:)
+        ${target_real}$, allocatable :: At(:), Bt(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4)
         allocate(At(na), Bt(nb))
-        At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
-        call pttrmm(side, uplo, trans, diag, m, n, q2dd(alpha), &
-                     At, ia, ja, desca, Bt, ib, jb, descb)
-        B(1:nb) = dd2q(Bt)
+        At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
+        call ${R}$trmm(side, uplo, trans, diag, m, n, q2t_r(alpha), &
+                        At, ia, ja, desca, Bt, ib, jb, descb)
+        B(1:nb) = t2q_r(Bt)
     end subroutine
 
     subroutine target_pdtrsm(side, uplo, trans, diag, m, n, alpha, &
@@ -535,13 +548,13 @@ contains
         real(ep),  intent(in)    :: alpha, A(*)
         real(ep),  intent(inout) :: B(*)
         integer :: na, nb
-        type(real64x2), allocatable :: At(:), Bt(:)
+        ${target_real}$, allocatable :: At(:), Bt(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4)
         allocate(At(na), Bt(nb))
-        At = q2dd(A(1:na)); Bt = q2dd(B(1:nb))
-        call pttrsm(side, uplo, trans, diag, m, n, q2dd(alpha), &
-                     At, ia, ja, desca, Bt, ib, jb, descb)
-        B(1:nb) = dd2q(Bt)
+        At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
+        call ${R}$trsm(side, uplo, trans, diag, m, n, q2t_r(alpha), &
+                        At, ia, ja, desca, Bt, ib, jb, descb)
+        B(1:nb) = t2q_r(Bt)
     end subroutine
 
     ! ── Level 3 — complex ────────────────────────────────────────────
@@ -553,14 +566,14 @@ contains
         complex(ep), intent(in)    :: alpha, beta, A(*), B(*)
         complex(ep), intent(inout) :: C(*)
         integer :: na, nb, nc
-        type(cmplx64x2), allocatable :: At(:), Bt(:), Ct(:)
+        ${target_complex}$, allocatable :: At(:), Bt(:), Ct(:)
         na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
         allocate(At(na), Bt(nb), Ct(nc))
-        At = q2zz(A(1:na)); Bt = q2zz(B(1:nb)); Ct = q2zz(C(1:nc))
-        call pvgemm(transa, transb, m, n, k, q2zz(alpha), &
-                     At, ia, ja, desca, Bt, ib, jb, descb, &
-                     q2zz(beta), Ct, ic, jc, descc)
-        C(1:nc) = zz2q(Ct)
+        At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb)); Ct = q2t_c(C(1:nc))
+        call ${C}$gemm(transa, transb, m, n, k, q2t_c(alpha), &
+                        At, ia, ja, desca, Bt, ib, jb, descb, &
+                        q2t_c(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_c(Ct)
     end subroutine
 
     subroutine target_pzherk(uplo, trans, n, k, alpha, A, ia, ja, desca, &
@@ -572,13 +585,13 @@ contains
         complex(ep), intent(in)    :: A(*)
         complex(ep), intent(inout) :: C(*)
         integer :: na, nc
-        type(cmplx64x2), allocatable :: At(:), Ct(:)
+        ${target_complex}$, allocatable :: At(:), Ct(:)
         na = desca(9) * desca(4); nc = descc(9) * descc(4)
         allocate(At(na), Ct(nc))
-        At = q2zz(A(1:na)); Ct = q2zz(C(1:nc))
-        call pvherk(uplo, trans, n, k, q2dd(alpha), &
-                     At, ia, ja, desca, q2dd(beta), Ct, ic, jc, descc)
-        C(1:nc) = zz2q(Ct)
+        At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
+        call ${C}$herk(uplo, trans, n, k, q2t_r(alpha), &
+                        At, ia, ja, desca, q2t_r(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_c(Ct)
     end subroutine
 
 end module target_pblas
