@@ -42,10 +42,10 @@ def test_build_sub_vars_multifloats_struct_types():
     assert v['MPI_COMPLEX'] == 'MPI_COMPLEX128X2'
     assert v['MPI_SUM_REAL'] == 'MPI_DD_SUM'
     assert v['MPI_SUM_COMPLEX'] == 'MPI_ZZ_SUM'
-    assert v['RP'] == 'dd'
-    assert v['CP'] == 'zz'
-    assert v['RPU'] == 'DD'
-    assert v['CPU'] == 'ZZ'
+    assert v['RP'] == 't'
+    assert v['CP'] == 'v'
+    assert v['RPU'] == 'T'
+    assert v['CPU'] == 'V'
 
 
 def test_build_sub_vars_kind16_unchanged():
@@ -100,7 +100,7 @@ def test_blacs_real_clone_multifloats(tmp_path):
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
-    assert new_name == 'BI_ddvvsum.c'
+    assert new_name == 'BI_tvvsum.c'
     assert 'float64x2 *v1' in text
     assert 'float64x2 *v2' in text
     assert 'MPI_FLOAT64X2' in text
@@ -109,8 +109,8 @@ def test_blacs_real_clone_multifloats(tmp_path):
     assert 'MPI_DD_SUM' in text
     assert 'MPI_SUM,' not in text  # the old constant is gone
     # Routine name renames cover both Cd* and BI_d* prefixes
-    assert 'Cddgebs2d_aux' in text
-    assert 'BI_ddMPI_sum' in text
+    assert 'Ctgebs2d_aux' in text
+    assert 'BI_tMPI_sum' in text
 
 
 def test_blacs_real_clone_kind16_still_uses_mpi_sum(tmp_path):
@@ -158,14 +158,14 @@ def test_blacs_complex_clone_multifloats(tmp_path):
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
-    assert new_name == 'BI_zzvvsum.c'
+    assert new_name == 'BI_vvvsum.c'
     assert 'complex64x2 *v1' in text
     assert 'float64x2 *r1' in text
     assert 'MPI_COMPLEX128X2' in text
     # Complex files use the zz reduction op
     assert 'MPI_ZZ_SUM' in text
     assert 'MPI_SUM,' not in text
-    assert 'Czzgebs2d_aux' in text
+    assert 'Cvgebs2d_aux' in text
 
 
 # ---------------------------------------------------------------------------
@@ -197,11 +197,11 @@ def test_patch_bdef_header_multifloats_includes_mfc_header(tmp_path):
     assert '__float128' not in out
     assert 'typedef __float128' not in out
     # Forward decls for the BI_*mvcopy/vmcopy helpers still present
-    assert 'BI_ddmvcopy' in out
-    assert 'BI_ddvmcopy' in out
+    assert 'BI_tmvcopy' in out
+    assert 'BI_tvmcopy' in out
     # Name-mangling defines for the dd/zz prefixes
-    assert 'ddgamn2d_' in out
-    assert 'zzgamn2d_' in out
+    assert 'tgamn2d_' in out
+    assert 'vgamn2d_' in out
 
 
 def test_patch_bdef_header_kind16_emits_legacy_typedef(tmp_path):
@@ -229,18 +229,18 @@ def test_apply_overrides_overwrites_clone(tmp_path):
 
     # Pre-existing clone (e.g. produced by the regex pass) -- will be
     # overwritten.
-    (output_dir / 'BI_ddvvsum.c').write_text('// clone produced by regex\n')
+    (output_dir / 'BI_tvvsum.c').write_text('// clone produced by regex\n')
 
     # Hand-written override.
-    override_text = '// hand-written override\nvoid BI_ddvvsum(...) {}\n'
-    (src_dir / 'BI_ddvvsum.c').write_text(override_text)
+    override_text = '// hand-written override\nvoid BI_tvvsum(...) {}\n'
+    (src_dir / 'BI_tvvsum.c').write_text(override_text)
 
     applied = _apply_overrides(
         output_dir,
-        [(src_dir / 'BI_ddvvsum.c', 'BI_ddvvsum.c')],
+        [(src_dir / 'BI_tvvsum.c', 'BI_tvvsum.c')],
     )
-    assert applied == ['BI_ddvvsum.c']
-    assert (output_dir / 'BI_ddvvsum.c').read_text() == override_text
+    assert applied == ['BI_tvvsum.c']
+    assert (output_dir / 'BI_tvvsum.c').read_text() == override_text
 
 
 def test_apply_overrides_missing_source_raises(tmp_path):
@@ -249,7 +249,7 @@ def test_apply_overrides_missing_source_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         _apply_overrides(
             output_dir,
-            [(tmp_path / 'does_not_exist.c', 'BI_ddvvsum.c')],
+            [(tmp_path / 'does_not_exist.c', 'BI_tvvsum.c')],
         )
 
 

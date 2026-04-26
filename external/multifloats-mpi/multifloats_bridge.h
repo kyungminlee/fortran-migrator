@@ -56,7 +56,13 @@ struct complex64x2 {
     complex64x2(float64x2 re_, float64x2 im_) : r(re_), i(im_) {}
 };
 
-/* Legacy name used by a handful of BLACS sources. */
+/* PBLAS / BLACS C array form for double-double complex.
+ * The migrator's ``c_type_aliases`` in pblas.yaml rewrites
+ * ``cmplx`` / ``cmplx16`` to ``cmplx{RPU}`` (= ``cmplxT`` for
+ * multifloats T-prefix; was ``cmplxDD`` under the legacy DD-prefix).
+ * Both names alias the same 2×float64x2 layout so existing
+ * mfc_overrides referring to ``cmplxDD`` keep working. */
+typedef float64x2 cmplxT[2];
 typedef float64x2 cmplxDD[2];
 
 /* ------------------------------------------------------------------ */
