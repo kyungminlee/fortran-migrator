@@ -55,6 +55,9 @@ module target_lapack
     public :: target_dgesvd, target_zgesvd
     public :: target_dlange, target_dlacpy, target_dlaset
     public :: target_zlange, target_zlanhe, target_zlacpy, target_zlaset
+    public :: target_dposv, target_dsysv, target_dsytrf, target_dsytrs
+    public :: target_dgels, target_dsyevd, target_dgeev, target_dgesdd
+    public :: target_dpotri, target_dgetri
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -194,6 +197,98 @@ $:IMPORT_C()
             integer,   intent(in) :: m, n, lda
             ${target_complex}$, intent(in)    :: alpha, beta
             ${target_complex}$, intent(inout) :: A(lda,*)
+        end subroutine
+
+        ! ── Phase 2 — real user-facing drivers ───────────────────────
+        subroutine ${R}$posv(uplo, n, nrhs, A, lda, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, lda, ldb
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$sysv(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer, intent(out) :: ipiv(*), info
+            ${target_real}$, intent(out) :: work(*)
+        end subroutine
+
+        subroutine ${R}$sytrf(uplo, n, A, lda, ipiv, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer, intent(out) :: ipiv(*), info
+            ${target_real}$, intent(out) :: work(*)
+        end subroutine
+
+        subroutine ${R}$sytrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, lda, ldb
+            ${target_real}$, intent(in)    :: A(lda,*)
+            integer,   intent(in)          :: ipiv(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gels(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: trans
+            integer,   intent(in) :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$syevd(jobz, uplo, n, A, lda, w, work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobz, uplo
+            integer,   intent(in) :: n, lda, lwork, liwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$geev(jobvl, jobvr, n, A, lda, wr, wi, &
+                              vl, ldvl, vr, ldvr, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobvl, jobvr
+            integer,   intent(in) :: n, lda, ldvl, ldvr, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: wr(*), wi(*), vl(ldvl,*), vr(ldvr,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gesdd(jobz, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                              work, lwork, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobz
+            integer,   intent(in) :: m, n, lda, ldu, ldvt, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: s(*), U(ldu,*), VT(ldvt,*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$potri(uplo, n, A, lda, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$getri(n, A, lda, ipiv, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in) :: n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer, intent(in) :: ipiv(*)
+            ${target_real}$, intent(out) :: work(*)
+            integer, intent(out) :: info
         end subroutine
 
         subroutine ${R}$geqrf(m, n, A, lda, tau, work, lwork, info)
@@ -661,6 +756,191 @@ contains
         At = q2t_c(A(1:lda, 1:n))
         call ${C}$laset(uplo, m, n, q2t_c(alpha), q2t_c(beta), At, lda)
         A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    ! ── Phase 2 wrappers ─────────────────────────────────────────────
+    subroutine target_dposv(uplo, n, nrhs, A, lda, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n))
+        Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$posv(uplo, n, nrhs, At, lda, Bt, ldb, info)
+        A(1:lda, 1:n)    = t2q_r(At)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dsysv(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n))
+        Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$sysv(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sysv(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n)    = t2q_r(At)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dsytrf(uplo, n, A, lda, ipiv, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: At(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$sytrf(uplo, n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sytrf(uplo, n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_dsytrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ldb
+        real(ep),  intent(in)    :: A(lda,*)
+        integer,   intent(in)    :: ipiv(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n))
+        Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$sytrs(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dgels(trans, m, n, nrhs, A, lda, B, ldb, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n))
+        Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$gels(trans, m, n, nrhs, At, lda, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$gels(trans, m, n, nrhs, At, lda, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n)    = t2q_r(At)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dsyevd(jobz, uplo, n, A, lda, w, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: w(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), wt(:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda, n), wt(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syevd(jobz, uplo, n, At, lda, wt, wopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$syevd(jobz, uplo, n, At, lda, wt, work, lwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dgeev(jobvl, jobvr, n, A, lda, wr, wi, &
+                            vl, ldvl, vr, ldvr, info)
+        character, intent(in)    :: jobvl, jobvr
+        integer,   intent(in)    :: n, lda, ldvl, ldvr
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: wr(*), wi(*), vl(ldvl,*), vr(ldvr,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), wrt(:), wit(:), vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), wrt(n), wit(n), vlt(ldvl, n), vrt(ldvr, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geev(jobvl, jobvr, n, At, lda, wrt, wit, vlt, ldvl, vrt, ldvr, &
+                       wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$geev(jobvl, jobvr, n, At, lda, wrt, wit, vlt, ldvl, vrt, ldvr, &
+                       work, lwork, info)
+        A(1:lda, 1:n)    = t2q_r(At)
+        wr(1:n)          = t2q_r(wrt)
+        wi(1:n)          = t2q_r(wit)
+        if (jobvl /= 'N' .and. jobvl /= 'n') vl(1:ldvl, 1:n) = t2q_r(vlt)
+        if (jobvr /= 'N' .and. jobvr /= 'n') vr(1:ldvr, 1:n) = t2q_r(vrt)
+    end subroutine
+
+    subroutine target_dgesdd(jobz, m, n, A, lda, s, U, ldu, VT, ldvt, info)
+        character, intent(in)    :: jobz
+        integer,   intent(in)    :: m, n, lda, ldu, ldvt
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: s(*), U(ldu,*), VT(ldvt,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Ut(:,:), VTt(:,:), st(:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, kmn
+        kmn = min(m, n)
+        allocate(At(lda, n), Ut(ldu, m), VTt(ldvt, n), st(kmn), iwork(8*kmn))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gesdd(jobz, m, n, At, lda, st, Ut, ldu, VTt, ldvt, &
+                        wopt, -1, iwork, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$gesdd(jobz, m, n, At, lda, st, Ut, ldu, VTt, ldvt, &
+                        work, lwork, iwork, info)
+        A(1:lda, 1:n)    = t2q_r(At)
+        s(1:kmn)         = t2q_r(st)
+        U(1:ldu, 1:m)    = t2q_r(Ut)
+        VT(1:ldvt, 1:n)  = t2q_r(VTt)
+    end subroutine
+
+    subroutine target_dpotri(uplo, n, A, lda, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$potri(uplo, n, At, lda, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_dgetri(n, A, lda, ipiv, info)
+        integer,  intent(in)    :: n, lda
+        real(ep), intent(inout) :: A(lda,*)
+        integer,  intent(in)    :: ipiv(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$getri(n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$getri(n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
     end subroutine
 
 end module target_lapack
