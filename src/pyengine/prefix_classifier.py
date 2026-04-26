@@ -107,6 +107,41 @@ class SymbolClassification:
             new_name = self.target_name(sym, target_mode)
             if new_name and new_name != sym:
                 rename[sym] = new_name
+
+        # Collision diagnostic: an orphaned (un-renamed) symbol whose
+        # name equals another symbol's rename target will silently
+        # shadow that target at link time. We hit this with multifloats'
+        # DD/ZZ prefixes: BLAS DDOT renamed to DDDOT collided with
+        # ScaLAPACK's orphaned DDDOT wrapper, corrupting pddpotf2.
+        # Surface the conflict so the developer can investigate
+        # (re-pick the prefix, force-rename, etc.) rather than letting
+        # the migrator emit a silent miscompile.
+        targets: dict[str, list[str]] = {}
+        for src, tgt in rename.items():
+            targets.setdefault(tgt, []).append(src)
+        collisions = sorted(
+            (tgt, sorted(srcs)) for tgt, srcs in targets.items()
+            if tgt in self.independent
+        )
+        if collisions:
+            import sys
+            lines = [
+                f"  {tgt!r}: rename target of {srcs}, "
+                f"but also exists as an orphaned (un-renamed) symbol"
+                for tgt, srcs in collisions
+            ]
+            print(
+                "WARNING: prefix-classifier rename-map collisions:\n"
+                + "\n".join(lines)
+                + "\n  Orphan symbols and rename targets share names; the "
+                "linker may silently pick the wrong definition. If the "
+                "orphan is the intended implementation (e.g. an "
+                "upstream-provided helper), this is benign. Otherwise, "
+                "investigate the family-discovery picker or change the "
+                "target prefix to avoid the overlap.",
+                file=sys.stderr,
+            )
+
         return rename
 
 
