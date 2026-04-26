@@ -422,6 +422,104 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zgels
+
+        ! ── Phase 4 — selected/generalized eig + QR/LQ family ────────
+        subroutine dsyevr(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, isuppz, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork, liwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dsyevr
+
+        subroutine zheevr(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, isuppz, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, lda, il, iu, ldz, lwork, lrwork, liwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+        end subroutine zheevr
+
+        subroutine dsygv(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                         work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsygv
+
+        subroutine zhegv(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                         work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhegv
+
+        subroutine dgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, ilo, ihi, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgehrd
+
+        subroutine dorghr(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, ilo, ihi, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorghr
+
+        subroutine dgelqf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgelqf
+
+        subroutine dorglq(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorglq
+
+        subroutine zgelqf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgelqf
+
+        subroutine zunglq(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunglq
     end interface
 
 end module ref_quad_lapack
