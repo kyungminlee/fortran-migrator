@@ -7,4 +7,5 @@
 #:set prefix_complex = 'x'
 #:set prefix_mixed   = 'qx'
 #:set prefix_idamax  = 'iq'
+#:set prefix_izamax  = 'ix'
 #:include 'target_blas_body.fypp'
