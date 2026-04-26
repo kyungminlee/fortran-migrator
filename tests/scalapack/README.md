@@ -67,8 +67,8 @@ any of these is missing:
 - `${LIB_PREFIX}scalapack`, `${LIB_PREFIX}pblas`, `${LIB_PREFIX}blacs`,
   `${LIB_PREFIX}lapack`
 - A per-target wrapper directory `target_${TARGET_NAME}/` with
-  `target_scalapack.f90` (currently only `target_kind16/` is populated;
-  kind10 and multifloats wrappers are future work)
+  `target_scalapack.f90` (`target_kind10/`, `target_kind16/`, and
+  `target_multifloats/` are all populated)
 
 
 ## Layout
@@ -85,8 +85,12 @@ tests/scalapack/
 │   ├── ref_quad_lapack.f90           # copied from tests/lapack/common
 │   ├── pblas_grid.f90                # BLACS init + numroc + descinit
 │   └── pblas_distrib.f90             # block-cyclic scatter/gather
+├── target_kind10/
+│   └── target_scalapack.f90          # passthrough to pe*/py* routines
 ├── target_kind16/
 │   └── target_scalapack.f90          # passthrough to pq*/px* routines
+├── target_multifloats/
+│   └── target_scalapack.f90          # passthrough to pt*/pv* routines
 ├── linear_solve/  test_pdgesv.f90, test_pdgetrf.f90, test_pdgetrs.f90,
 │                  test_pdpotrf.f90, test_pdpotrs.f90
 ├── factorization/ test_pdgeqrf.f90
@@ -153,18 +157,35 @@ surfaced during that work and are worth keeping written down:
    resolve them. Wired in `cmake/CMakeLists.txt` for the
    `${LIB_PREFIX}scalapack_c` target.
 
-6. **Multifloats: `scalapack_c` is gated off.** REDIST/SRC contained
-   K&R-style function definitions that don't survive C-as-C++
-   compilation. The bulk has been converted to ANSI in place
-   (`external/scalapack-2.2.3/REDIST/SRC/p*gemr*.c`,
-   `p*trmr*.c`); a few stragglers remain, and `tests/scalapack` ships
-   no `target_multifloats` wrapper today, so the library is excluded
-   from the multifloats build behind `if(NOT C_AS_CXX)`.
+6. **Multifloats `scalapack_c` is in.** REDIST/SRC originally shipped
+   K&R-style function definitions that didn't survive C-as-C++
+   compilation. They've all been ANSI-fied in place
+   (`external/scalapack-2.2.3/REDIST/SRC/p*gemr*.c`, `p*trmr*.c`),
+   and the `target_multifloats/target_scalapack.f90` wrapper is now
+   populated. The library now builds and tests pass under the
+   multifloats target — see `tests/REPORT.md` for the per-routine
+   digits-of-agreement.
 
-7. **kind10 / multifloats wrappers don't exist yet.** Only
-   `target_kind16/target_scalapack.f90` is populated. ctest on the
-   other two targets returns early with a `STATUS` message — that's
-   expected, not a failure.
+7. **`sizeof(double)` in C migrator promotion.** The
+   `_apply_c_type_subs` cast-protection regex `\(\s*double\s*\)`
+   originally over-matched `sizeof(double)`, so REDIST allocations like
+   `mr2d_malloc(blocksize * sizeof(double))` stayed at 8-byte sizing
+   while the buffer was cast to a 16-byte `float64x2*`. PDGEMR2D's
+   recvbuff overran 2× and crashed inside `pdsyev` / `pdgesvd`
+   teardown. Fixed by adding a negative lookbehind for `sizeof` /
+   `alignof` in the protect regex (commit `ef3bf81`).
+
+8. **`DDDOT` symbol collision drove the prefix switch from `DD`/`ZZ`
+   to single-letter `T`/`V`.** ScaLAPACK ships its own `DDDOT`
+   subroutine in `TOOLS/dddot.f`. With the original `DD`/`ZZ`
+   multifloats prefixes, BLAS `DDOT` renamed to `DDDOT` and collided
+   with the orphaned ScaLAPACK wrapper — the linker silently picked
+   the SUBROUTINE form, corrupting `pddpotf2`'s diagonal during panel
+   Cholesky. Switching to `T`/`V` (no upstream BLAS / LAPACK /
+   ScaLAPACK symbol begins with either letter) eliminated the
+   collision class entirely. The migrator now also emits a stderr
+   warning when an orphaned symbol's name shadows another symbol's
+   rename target (`prefix_classifier.build_rename_map`).
 
 
 ## Running

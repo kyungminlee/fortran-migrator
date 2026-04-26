@@ -3,7 +3,7 @@
 End-to-end migration and convergence check for all libraries,
 run on 2026-04-12 from `src/pyengine` with YAML-based targets.
 
-Targets tested: `kind16` (KIND=16, Q/X prefix) and `multifloats` (float64x2, DD/ZZ prefix).
+Targets tested: `kind16` (KIND=16, Q/X prefix) and `multifloats` (float64x2, T/V prefix — switched from `DD`/`ZZ` to single-letter `T`/`V` to avoid the `DDDOT` symbol-collision class; see `tests/scalapack/README.md` caveat 8).
 
 ## Summary
 

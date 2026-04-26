@@ -8,24 +8,29 @@ reports via `scripts/precision_report.py`.
 
 | target       | tests run | tests passed | wall-clock |
 |--------------|----------:|-------------:|-----------:|
+| **kind10**       |        86 |       **86** |    142 sec |
 | **kind16**       |        86 |       **86** |    144 sec |
-| **kind10**       |        75 |       **75** |     89 sec |
-| **multifloats**  |        75 |       **75** |     92 sec |
-| **total**        |       236 |      **236** |          — |
+| **multifloats**  |        86 |       **86** |    142 sec |
+| **total**        |       258 |      **258** |          — |
 
-Coverage: **86 unique routines** × **876 individual problem cases**
-across the three targets.
+Coverage: **86 unique routines** across all three targets, all
+green end-to-end (BLAS + LAPACK + PBLAS + ScaLAPACK).
 
-`kind10` and `multifloats` each run 75 of the 86 because
-`tests/scalapack/` ships no `target_kind10` / `target_multifloats`
-wrapper today (only kind16 has a ScaLAPACK test driver yet). The 75
-matching entries are the BLAS + LAPACK + PBLAS suites in full —
-multifloats now includes the PBLAS suite after the recent
-``extern "C"`` wrap got wired through (`recipes/pblas.yaml`'s
-``header_patches`` plus the ``_wrap_extern_c_after_last_include``
-post-pass in ``c_migrator.py``). ScaLAPACK on multifloats is still
-gated off pending the same treatment for ScaLAPACK / scalapack_c
-(see [`tests/scalapack/README.md`](scalapack/README.md)).
+ScaLAPACK on multifloats was the last hold-out; it landed once the
+T/V single-letter prefix switch resolved a `DDDOT` symbol-collision
+in `pddpotrf` (commits `6fdaa2a` … `f97970b`) and the
+`sizeof(double)` cast-protection bug was fixed in the C migrator
+(commit `ef3bf81` — heap corruption in `PDGEMR2D` was crashing
+`pdsyev` / `pdgesvd` at teardown).
+
+In addition to the standard Release builds, the multifloats and
+kind16 binaries also pass under **AddressSanitizer** (RelWithDebInfo
++ `-fsanitize=address`): 86/86 each, no sanitizer findings. See the
+"Reproducing this report" section for the exact CMake invocation
+(multifloats requires `-DMULTIFLOATS_USE_LTO=OFF
+-DMULTIFLOATS_HIDDEN_VISIBILITY=OFF -DMULTIFLOATS_STRIP_SYMBOLS=OFF`
+to bypass the upstream's hidden-visibility post-link step that
+otherwise breaks ASan link-time symbol resolution).
 
 
 ## Coverage by suite
@@ -110,7 +115,7 @@ no test driver / wrapper for that target.
 | dger    | 19.23  | exact  | 31.96  |
 | dnrm2   | 18.70  | exact  | 30.73  |
 | drot    | 19.04  | exact  | 31.76  |
-| drotg   | 18.94  | exact  | 31.56  |
+| drotg   | 18.94  | exact  | 31.69  |
 | drotm   | 19.09  | exact  | 32.05  |
 | drotmg  | 18.94  | exact  | 32.10  |
 | dsbmv   | 19.10  | exact  | 32.11  |
@@ -139,26 +144,27 @@ no test driver / wrapper for that target.
 | zhemv   | 18.65  | exact  | 31.56  |
 | zherk   | 18.53  | exact  | 31.17  |
 | zscal   | 19.11  | exact  | 31.82  |
+| ztrsm   | 18.42  | exact  | 31.13  |
 
 ### LAPACK
 
 | routine  | kind10 | kind16 | multifloats |
 |----------|--------|--------|-------------|
 | dgesv    | 17.49  | exact  | 29.82  |
-| dgesvd   | 17.54  | 32.29  | 29.82  |
+| dgesvd   | 17.54  | 32.29  | 29.67  |
 | dgetrf   | 17.82  | exact  | 30.68  |
 | dgetrs   | 17.63  | exact  | 30.21  |
-| dgeqrf   | 18.44  | exact  | 31.01  |
+| dgeqrf   | 18.44  | exact  | 31.32  |
 | dlange   | 19.00  | exact  | 31.96  |
 | dlacpy   | exact  | exact  | exact  |
 | dlaset   | exact  | exact  | exact  |
-| dorgqr   | 18.19  | exact  | 30.91  |
-| dpotrf   | 18.39  | 33.88  | 31.32  |
-| dpotrs   | 18.38  | exact  | 31.13  |
-| dsyev    | 17.63  | 32.41  | 30.16  |
+| dorgqr   | 18.19  | exact  | 30.88  |
+| dpotrf   | 18.39  | 33.88  | 31.48  |
+| dpotrs   | 18.38  | exact  | 31.18  |
+| dsyev    | 17.63  | 32.41  | 30.17  |
 | zgesv    | 17.31  | exact  | 30.17  |
-| zgeqrf   | 18.76  | exact  | 31.41  |
-| zheev    | 17.79  | 32.27  | 30.09  |
+| zgeqrf   | 18.76  | exact  | 31.35  |
+| zheev    | 17.79  | 32.27  | 30.07  |
 
 ### PBLAS
 
@@ -185,21 +191,21 @@ no test driver / wrapper for that target.
 | pzgemv  | 18.76  | exact  | 31.38  |
 | pzherk  | 18.59  | exact  | 31.19  |
 
-### ScaLAPACK (kind16 only)
+### ScaLAPACK
 
-| routine  | kind16 |
-|----------|--------|
-| pdgeqrf  | 33.29  |
-| pdgesv   | 33.38  |
-| pdgesvd  | 32.37  |
-| pdgetrf  | exact  |
-| pdgetrs  | 33.38  |
-| pdlacpy  | exact  |
-| pdlange  | exact  |
-| pdlaset  | exact  |
-| pdpotrf  | 33.59  |
-| pdpotrs  | 33.29  |
-| pdsyev   | 32.15  |
+| routine  | kind10 | kind16 | multifloats |
+|----------|--------|--------|-------------|
+| pdgeqrf  | 18.68  | 33.29  | 31.27  |
+| pdgesv   | 18.28  | 33.38  | 31.14  |
+| pdgesvd  | 17.99  | 32.37  | 29.80  |
+| pdgetrf  | 18.23  | exact  | 31.17  |
+| pdgetrs  | 18.10  | 33.38  | 31.12  |
+| pdlacpy  | exact  | exact  | exact  |
+| pdlange  | 18.90  | exact  | 31.77  |
+| pdlaset  | exact  | exact  | exact  |
+| pdpotrf  | 19.04  | 33.59  | 31.74  |
+| pdpotrs  | 18.28  | 33.29  | 31.11  |
+| pdsyev   | 17.50  | 32.15  | 29.78  |
 
 
 ## Coverage notes
@@ -278,15 +284,14 @@ matrix:
 | BLAS        | ✓ 40   | ✓ 40   | ✓ 40        |
 | LAPACK      | ✓ 15   | ✓ 15   | ✓ 15        |
 | PBLAS       | ✓ 20   | ✓ 20   | ✓ 20        |
-| ScaLAPACK   | —      | ✓ 11   | —           |
-| **per-target total** | **75** | **86** | **75** |
+| ScaLAPACK   | ✓ 11   | ✓ 11   | ✓ 11        |
+| **per-target total** | **86** | **86** | **86** |
 
-`✓ N` means N test drivers run on that target; `—` means no
-``target_<TARGET>/target_scalapack.f90`` wrapper has been written
-yet (only ``target_kind16/`` is populated for tests/scalapack).
-Adding kind10 / multifloats ScaLAPACK target wrappers — and the
-matching ``extern "C"`` wraps for ``scalapack_c`` — would close the
-last two ✗ cells.
+`✓ N` means N test drivers run on that target. All three targets
+now have full BLAS / LAPACK / PBLAS / ScaLAPACK coverage; the only
+remaining hole is complex-side ScaLAPACK (`pz*` / `px*` driver),
+where `target_scalapack.f90` exposes wrappers (`pxgesv`, `pxgeqrf`,
+`pxheev`) but no test exercises them.
 
 ### BLAS (real, q-prefix)
 
@@ -415,8 +420,7 @@ in transitively through the drivers below.
 No complex (`pz*`/`px*`) ScaLAPACK driver is tested today —
 `target_scalapack.f90` exposes complex wrappers (`pxgesv`,
 `pxgeqrf`, `pxheev`) but no test exercises them. Adding a complex
-ScaLAPACK test driver and the missing kind10 / multifloats
-target wrappers would close the largest remaining holes.
+ScaLAPACK test driver would close the largest remaining hole.
 
 
 ## Reproducing this report
@@ -444,6 +448,57 @@ cp /tmp/stg-multifloats/build/precision_reports/*.json /tmp/all-reports/
 
 python scripts/precision_report.py /tmp/all-reports --out tests/REPORT.md
 ```
+
+### AddressSanitizer build (multifloats / kind16)
+
+Both targets pass cleanly under ASan. The multifloats invocation
+needs three extra options because the upstream multifloats
+`localize_symbols.sh` POST_BUILD step (and its hidden-visibility
+preset, and fat-LTO) interact badly with ASan's link-time symbol
+resolution — disabling all three lets the static archive link cleanly
+under instrumentation:
+
+```bash
+# multifloats + ASan
+rm -rf /tmp/stg-mf-asan && \
+PYTHONPATH=src python -m pyengine stage /tmp/stg-mf-asan \
+    --target multifloats \
+    --libraries blas blacs lapack ptzblas pbblas pblas scalapack scalapack_c
+cmake -S /tmp/stg-mf-asan -B /tmp/stg-mf-asan/build \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DMULTIFLOATS_USE_LTO=OFF \
+    -DMULTIFLOATS_HIDDEN_VISIBILITY=OFF \
+    -DMULTIFLOATS_STRIP_SYMBOLS=OFF \
+    -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+    -DCMAKE_Fortran_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+cmake --build /tmp/stg-mf-asan/build -j8
+ASAN_OPTIONS="detect_leaks=0:abort_on_error=0" \
+    ctest --test-dir /tmp/stg-mf-asan/build --output-on-failure
+
+# kind16 + ASan (no multifloats opts needed)
+rm -rf /tmp/stg-k16-asan && \
+PYTHONPATH=src python -m pyengine stage /tmp/stg-k16-asan \
+    --target kind16 \
+    --libraries blas blacs lapack ptzblas pbblas pblas scalapack scalapack_c
+cmake -S /tmp/stg-k16-asan -B /tmp/stg-k16-asan/build \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+    -DCMAKE_Fortran_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+cmake --build /tmp/stg-k16-asan/build -j8
+ASAN_OPTIONS="detect_leaks=0:abort_on_error=0" \
+    ctest --test-dir /tmp/stg-k16-asan/build --output-on-failure
+```
+
+To use a non-default multifloats checkout (e.g. `develop` branch, a
+fork, or a local working copy) for any build:
+
+- `-DMULTIFLOATS_GIT_TAG=develop` — switch the FetchContent branch
+- `-DMULTIFLOATS_GIT_REPO=<url>` — point at a fork
+- `-DMULTIFLOATS_DIR=/path/to/checkout` — skip fetch, use a local tree
 
 `scripts/precision_report.py` produces the per-routine and per-case
 tables; this `REPORT.md` adds the headline status / coverage notes /
