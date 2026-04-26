@@ -852,7 +852,7 @@ set({lib_name}_LANGUAGE {config.language})
     needs_mf = target_mode.module_name is not None
     staged_list = ';'.join(staged)
 
-    helpers_src = proj_root / 'external' / 'lapack-3.12.1' / 'SRC'
+    helpers_src = proj_root / 'recipes' / 'lapack' / 'mf_helpers'
     helpers_dst = staging_dir / '_helpers'
     if needs_mf:
         helpers_dst.mkdir(exist_ok=True)

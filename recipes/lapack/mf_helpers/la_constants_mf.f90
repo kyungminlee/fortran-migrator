@@ -1,5 +1,5 @@
 !> \brief \b LA_CONSTANTS_MF defines scaling constants for the multifloats
-!> double-double (float64x2) precision, complementing LA_CONSTANTS.
+!> double-double (real64x2) precision, complementing LA_CONSTANTS.
 !
 !  =========== DOCUMENTATION ===========
 !
@@ -22,58 +22,58 @@
 !  to WLALSD created a conflict with the existing local integer.
 !
 module LA_CONSTANTS_MF
-   use multifloats, only: float64x2, complex64x2, &
+   use multifloats, only: real64x2, cmplx64x2, &
                           DD_ZERO, DD_HALF, DD_ONE, DD_TWO, DD_EIGHT, &
                           DD_SAFMIN, DD_SAFMAX, &
                           DD_TSML, DD_TBIG, DD_SSML, DD_SBIG, &
                           DD_RTMIN, DD_RTMAX
    implicit none
    private
-   public :: float64x2, complex64x2
+   public :: real64x2, cmplx64x2
 
 ! =====================================================================
 !  Multifloats double-double (~106-bit) constants
 ! =====================================================================
 
 !  Standard real constants
-   type(float64x2), parameter, public :: ddzero  = DD_ZERO
-   type(float64x2), parameter, public :: ddhalf  = DD_HALF
-   type(float64x2), parameter, public :: ddone   = DD_ONE
-   type(float64x2), parameter, public :: ddtwo   = DD_TWO
+   type(real64x2), parameter, public :: ddzero  = DD_ZERO
+   type(real64x2), parameter, public :: ddhalf  = DD_HALF
+   type(real64x2), parameter, public :: ddone   = DD_ONE
+   type(real64x2), parameter, public :: ddtwo   = DD_TWO
    ! Use named-component structure constructor (``limbs=...``) so that
    ! the compiler binds these initializers to the structure constructor
-   ! of float64x2 rather than to the overloaded ``float64x2(...)``
+   ! of real64x2 rather than to the overloaded ``real64x2(...)``
    ! generic interface — the latter is a function call and is therefore
    ! illegal in a PARAMETER initializer.
-   type(float64x2), parameter, public :: ddthree = float64x2(limbs=[3.0d0, 0.0d0])
-   type(float64x2), parameter, public :: ddfour  = float64x2(limbs=[4.0d0, 0.0d0])
-   type(float64x2), parameter, public :: ddeight = DD_EIGHT
-   type(float64x2), parameter, public :: ddten   = float64x2(limbs=[10.0d0, 0.0d0])
+   type(real64x2), parameter, public :: ddthree = real64x2(limbs=[3.0d0, 0.0d0])
+   type(real64x2), parameter, public :: ddfour  = real64x2(limbs=[4.0d0, 0.0d0])
+   type(real64x2), parameter, public :: ddeight = DD_EIGHT
+   type(real64x2), parameter, public :: ddten   = real64x2(limbs=[10.0d0, 0.0d0])
 
 !  Complex constants. Must use named-component structure constructor
 !  syntax (``re=`` / ``im=``) so the compiler picks the structure
-!  constructor and not the overloaded ``complex64x2`` interface
+!  constructor and not the overloaded ``cmplx64x2`` interface
 !  procedures (which are not allowed in PARAMETER initializers).
-   type(complex64x2), parameter, public :: zzzero = &
-      complex64x2(re=DD_ZERO, im=DD_ZERO)
-   type(complex64x2), parameter, public :: zzhalf = &
-      complex64x2(re=DD_HALF, im=DD_ZERO)
-   type(complex64x2), parameter, public :: zzone  = &
-      complex64x2(re=DD_ONE,  im=DD_ZERO)
+   type(cmplx64x2), parameter, public :: zzzero = &
+      cmplx64x2(re=DD_ZERO, im=DD_ZERO)
+   type(cmplx64x2), parameter, public :: zzhalf = &
+      cmplx64x2(re=DD_HALF, im=DD_ZERO)
+   type(cmplx64x2), parameter, public :: zzone  = &
+      cmplx64x2(re=DD_ONE,  im=DD_ZERO)
 
    character*2, parameter, public :: ddprefix = 'DD'
    character*2, parameter, public :: zzprefix = 'ZZ'
 
 !  Scaling constants (mirror la_constants.f90 names with dd prefix)
-   type(float64x2), parameter, public :: ddsafmin = DD_SAFMIN
-   type(float64x2), parameter, public :: ddsafmax = DD_SAFMAX
-   type(float64x2), parameter, public :: ddrtmin  = DD_RTMIN
-   type(float64x2), parameter, public :: ddrtmax  = DD_RTMAX
+   type(real64x2), parameter, public :: ddsafmin = DD_SAFMIN
+   type(real64x2), parameter, public :: ddsafmax = DD_SAFMAX
+   type(real64x2), parameter, public :: ddrtmin  = DD_RTMIN
+   type(real64x2), parameter, public :: ddrtmax  = DD_RTMAX
 
 !  Blue's scaling constants
-   type(float64x2), parameter, public :: ddtsml = DD_TSML
-   type(float64x2), parameter, public :: ddtbig = DD_TBIG
-   type(float64x2), parameter, public :: ddssml = DD_SSML
-   type(float64x2), parameter, public :: ddsbig = DD_SBIG
+   type(real64x2), parameter, public :: ddtsml = DD_TSML
+   type(real64x2), parameter, public :: ddtbig = DD_TBIG
+   type(real64x2), parameter, public :: ddssml = DD_SSML
+   type(real64x2), parameter, public :: ddsbig = DD_SBIG
 
 end module LA_CONSTANTS_MF
