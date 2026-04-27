@@ -178,6 +178,17 @@ module target_lapack
     public :: target_dgelst, target_zgelst
     public :: target_dgejsv, target_zgejsv
     public :: target_dgesvj, target_zgesvj
+    ! Phase L18 — Auxiliary matrix norm utilities.
+    public :: target_dlangb, target_zlangb
+    public :: target_dlangt, target_zlangt
+    public :: target_dlanhs, target_zlanhs
+    public :: target_dlansb, target_zlanhb
+    public :: target_dlansp, target_zlanhp
+    public :: target_dlanst, target_zlanht
+    public :: target_dlansy
+    public :: target_dlantb, target_zlantb
+    public :: target_dlantp, target_zlantp
+    public :: target_dlantr, target_zlantr
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -4065,6 +4076,175 @@ $:IMPORT_C()
             ${target_real}$,    intent(out)   :: sva(*)
             integer,     intent(out)   :: info
         end subroutine
+
+        ! Phase L18 — Norm utilities.
+        function ${R}$langb(norm, n, kl, ku, AB, ldab, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, kl, ku, ldab
+            ${target_real}$, intent(in) :: AB(ldab,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$langb(norm, n, kl, ku, AB, ldab, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n, kl, ku, ldab
+            ${target_complex}$, intent(in) :: AB(ldab,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$langt(norm, n, dl, d, du) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: dl(*), d(*), du(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$langt(norm, n, dl, d, du) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n
+            ${target_complex}$, intent(in) :: dl(*), d(*), du(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lanhs(norm, n, A, lda, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(in) :: A(lda,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhs(norm, n, A, lda, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n, lda
+            ${target_complex}$, intent(in) :: A(lda,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lansb(norm, uplo, n, k, AB, ldab, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, k, ldab
+            ${target_real}$, intent(in) :: AB(ldab,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhb(norm, uplo, n, k, AB, ldab, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, k, ldab
+            ${target_complex}$, intent(in) :: AB(ldab,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lansp(norm, uplo, n, AP, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: AP(*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhp(norm, uplo, n, AP, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n
+            ${target_complex}$, intent(in) :: AP(*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lanst(norm, n, d, e) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: d(*), e(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanht(norm, n, d, e) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n
+            ${target_real}$,    intent(in) :: d(*)
+            ${target_complex}$, intent(in) :: e(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lansy(norm, uplo, n, A, lda, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(in) :: A(lda,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lantb(norm, uplo, diag, n, k, AB, ldab, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: n, k, ldab
+            ${target_real}$, intent(in) :: AB(ldab,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lantb(norm, uplo, diag, n, k, AB, ldab, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: n, k, ldab
+            ${target_complex}$, intent(in) :: AB(ldab,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lantp(norm, uplo, diag, n, AP, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: AP(*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lantp(norm, uplo, diag, n, AP, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: n
+            ${target_complex}$, intent(in) :: AP(*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lantr(norm, uplo, diag, m, n, A, lda, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: m, n, lda
+            ${target_real}$, intent(in) :: A(lda,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lantr(norm, uplo, diag, m, n, A, lda, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: m, n, lda
+            ${target_complex}$, intent(in) :: A(lda,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
     end interface
 
 contains
@@ -11499,5 +11679,221 @@ $:CPACK_INV('zsptri', C + 'sptri')
         A(1:lda,1:n) = t2q_c(At); V(1:ldv,1:n) = t2q_c(Vt)
         sva(1:n) = t2q_r(svat)
     end subroutine
+
+    ! ── Phase L18 — Auxiliary matrix norm utilities ──────────────────
+    function target_dlangb(norm, n, kl, ku, AB, ldab) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n, kl, ku, ldab
+        real(ep),  intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: ABt(:,:), workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_r(AB(1:ldab,1:n))
+        r = t2q_r(${R}$langb(norm, n, kl, ku, ABt, ldab, workt))
+    end function
+
+    function target_zlangb(norm, n, kl, ku, AB, ldab) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n, kl, ku, ldab
+        complex(ep), intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: ABt(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_c(AB(1:ldab,1:n))
+        r = t2q_r(${C}$langb(norm, n, kl, ku, ABt, ldab, workt))
+    end function
+
+    function target_dlangt(norm, n, dl, d, du) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: dl(*), d(*), du(*)
+        real(ep) :: r
+        r = t2q_r(${R}$langt(norm, n, q2t_r(dl(1:max(1,n-1))), &
+                              q2t_r(d(1:n)), q2t_r(du(1:max(1,n-1)))))
+    end function
+
+    function target_zlangt(norm, n, dl, d, du) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n
+        complex(ep), intent(in) :: dl(*), d(*), du(*)
+        real(ep) :: r
+        r = t2q_r(${C}$langt(norm, n, q2t_c(dl(1:max(1,n-1))), &
+                              q2t_c(d(1:n)), q2t_c(du(1:max(1,n-1)))))
+    end function
+
+    function target_dlanhs(norm, n, A, lda) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n, lda
+        real(ep),  intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: At(:,:), workt(:)
+        allocate(At(lda,n), workt(max(1,n)))
+        At = q2t_r(A(1:lda,1:n))
+        r = t2q_r(${R}$lanhs(norm, n, At, lda, workt))
+    end function
+
+    function target_zlanhs(norm, n, A, lda) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n, lda
+        complex(ep), intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(At(lda,n), workt(max(1,n)))
+        At = q2t_c(A(1:lda,1:n))
+        r = t2q_r(${C}$lanhs(norm, n, At, lda, workt))
+    end function
+
+    function target_dlansb(norm, uplo, n, k, AB, ldab) result(r)
+        character, intent(in) :: norm, uplo
+        integer,   intent(in) :: n, k, ldab
+        real(ep),  intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: ABt(:,:), workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_r(AB(1:ldab,1:n))
+        r = t2q_r(${R}$lansb(norm, uplo, n, k, ABt, ldab, workt))
+    end function
+
+    function target_zlanhb(norm, uplo, n, k, AB, ldab) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n, k, ldab
+        complex(ep), intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: ABt(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_c(AB(1:ldab,1:n))
+        r = t2q_r(${C}$lanhb(norm, uplo, n, k, ABt, ldab, workt))
+    end function
+
+    function target_dlansp(norm, uplo, n, AP) result(r)
+        character, intent(in) :: norm, uplo
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_real}$, allocatable :: APt(:), workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_r(AP(1:nap))
+        r = t2q_r(${R}$lansp(norm, uplo, n, APt, workt))
+    end function
+
+    function target_zlanhp(norm, uplo, n, AP) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n
+        complex(ep), intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_complex}$, allocatable :: APt(:)
+        ${target_real}$,    allocatable :: workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_c(AP(1:nap))
+        r = t2q_r(${C}$lanhp(norm, uplo, n, APt, workt))
+    end function
+
+    function target_dlanst(norm, n, d, e) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: d(*), e(*)
+        real(ep) :: r
+        r = t2q_r(${R}$lanst(norm, n, q2t_r(d(1:n)), q2t_r(e(1:max(1,n-1)))))
+    end function
+
+    function target_zlanht(norm, n, d, e) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n
+        real(ep),    intent(in) :: d(*)
+        complex(ep), intent(in) :: e(*)
+        real(ep) :: r
+        r = t2q_r(${C}$lanht(norm, n, q2t_r(d(1:n)), q2t_c(e(1:max(1,n-1)))))
+    end function
+
+    function target_dlansy(norm, uplo, n, A, lda) result(r)
+        character, intent(in) :: norm, uplo
+        integer,   intent(in) :: n, lda
+        real(ep),  intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: At(:,:), workt(:)
+        allocate(At(lda,n), workt(max(1,n)))
+        At = q2t_r(A(1:lda,1:n))
+        r = t2q_r(${R}$lansy(norm, uplo, n, At, lda, workt))
+    end function
+
+    function target_dlantb(norm, uplo, diag, n, k, AB, ldab) result(r)
+        character, intent(in) :: norm, uplo, diag
+        integer,   intent(in) :: n, k, ldab
+        real(ep),  intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: ABt(:,:), workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_r(AB(1:ldab,1:n))
+        r = t2q_r(${R}$lantb(norm, uplo, diag, n, k, ABt, ldab, workt))
+    end function
+
+    function target_zlantb(norm, uplo, diag, n, k, AB, ldab) result(r)
+        character,   intent(in) :: norm, uplo, diag
+        integer,     intent(in) :: n, k, ldab
+        complex(ep), intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: ABt(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_c(AB(1:ldab,1:n))
+        r = t2q_r(${C}$lantb(norm, uplo, diag, n, k, ABt, ldab, workt))
+    end function
+
+    function target_dlantp(norm, uplo, diag, n, AP) result(r)
+        character, intent(in) :: norm, uplo, diag
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_real}$, allocatable :: APt(:), workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_r(AP(1:nap))
+        r = t2q_r(${R}$lantp(norm, uplo, diag, n, APt, workt))
+    end function
+
+    function target_zlantp(norm, uplo, diag, n, AP) result(r)
+        character,   intent(in) :: norm, uplo, diag
+        integer,     intent(in) :: n
+        complex(ep), intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_complex}$, allocatable :: APt(:)
+        ${target_real}$,    allocatable :: workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_c(AP(1:nap))
+        r = t2q_r(${C}$lantp(norm, uplo, diag, n, APt, workt))
+    end function
+
+    function target_dlantr(norm, uplo, diag, m, n, A, lda) result(r)
+        character, intent(in) :: norm, uplo, diag
+        integer,   intent(in) :: m, n, lda
+        real(ep),  intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: At(:,:), workt(:)
+        allocate(At(lda,n), workt(max(1,m)))
+        At = q2t_r(A(1:lda,1:n))
+        r = t2q_r(${R}$lantr(norm, uplo, diag, m, n, At, lda, workt))
+    end function
+
+    function target_zlantr(norm, uplo, diag, m, n, A, lda) result(r)
+        character,   intent(in) :: norm, uplo, diag
+        integer,     intent(in) :: m, n, lda
+        complex(ep), intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(At(lda,n), workt(max(1,m)))
+        At = q2t_c(A(1:lda,1:n))
+        r = t2q_r(${C}$lantr(norm, uplo, diag, m, n, At, lda, workt))
+    end function
 
 end module target_lapack
