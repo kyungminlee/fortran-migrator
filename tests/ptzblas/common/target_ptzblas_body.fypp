@@ -183,11 +183,13 @@ $:IMPORT_R()
         end subroutine
 
         ! ── Mixed: real-from-complex |x|-sum ─────────────────────────
+        ! Accumulator: intent(inout) so the wrapper's r=0 init isn't
+        ! elided.
         subroutine ${RC}$vasum(n, asum, x, incx)
 $:IMPORT_RC()
             integer, intent(in) :: n, incx
-            ${target_complex}$, intent(in)  :: x(*)
-            ${target_real}$,    intent(out) :: asum
+            ${target_complex}$, intent(in)    :: x(*)
+            ${target_real}$,    intent(inout) :: asum
         end subroutine
 
         ! ── Complex Level-1-style ────────────────────────────────────
@@ -360,6 +362,8 @@ contains
     end subroutine
 
     subroutine target_dzvasum(n, asum, x, incx)
+        ! *vasum is also an accumulator — zero-init r before the call,
+        ! see target_dvvdot for the gory details.
         integer,     intent(in)  :: n, incx
         complex(ep), intent(in)  :: x(*)
         real(ep),    intent(out) :: asum
@@ -368,6 +372,7 @@ contains
         ${target_real}$ :: r
         nx = 1 + (n - 1) * abs(incx)
         allocate(xt(nx)); xt = q2t_c(x(1:nx))
+        r = q2t_r(0.0_ep)
         call ${RC}$vasum(n, r, xt, incx)
         asum = t2q_r(r)
     end subroutine
