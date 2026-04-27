@@ -1,23 +1,24 @@
 # tests/scalapack — known upstream / migrator gaps
 
-## Banded / tridiagonal solver families (1D-distribution scaffolding)
+## Banded solver families (packed-banded layout helper)
 
-- **Status**: Deferred. The migrator exposes the full 1D-distributed
-  family — `pddtsv`/`pddttrf`/`pddttrs` (general tridiag),
-  `pdptsv`/`pdpttrf`/`pdpttrs` (PD tridiag),
-  `pddbsv`/`pddbtrf`/`pddbtrs` (diagonally-dominant banded),
-  `pdgbsv`/`pdgbtrf`/`pdgbtrs` (general banded),
-  `pdpbsv`/`pdpbtrf`/`pdpbtrs` (PD banded), plus complex mirrors —
-  but they all use the 1D row-distributed descriptor type
-  `DTYPE_A=501` (or 502), not the 2D block-cyclic descriptor that
-  `tests/scalapack/common/pblas_grid.f90` currently builds.
-- **What's needed**: Add a 1D-distribution helper alongside
-  `descinit_local` (e.g. `descinit_local_1d`) plus 1D scatter/gather
-  for the DL/D/DU diagonals (and the LD-banded layout for `gb`/`db`/
-  `pb` solvers). Then per-family test drivers can follow.
-- **Action**: Pick this up after the 2D suite ships, ideally in
-  one phase per family (tridiag → PD tridiag → general banded →
-  PD banded → diagonally-dominant banded).
+- **Status**: Tridiagonal piece landed. The 1D BLACS context and
+  `descinit_1d` helper were added to `pblas_grid.f90`; tests cover
+  `pddtsv` and `pdptsv` (general + PD tridiagonal). The remaining
+  banded entries (`pdgbsv`/`pdgbtrf`/`pdgbtrs`, `pdpbsv`/`pdpbtrf`/
+  `pdpbtrs`, `pddbsv`/`pddbtrf`/`pddbtrs`, plus complex mirrors) are
+  still deferred.
+- **What's needed for banded**: ScaLAPACK's banded format stores `A`
+  in `(2*bwl+2*bwu+1) × LOCc` packed strips with extra rows reserved
+  for fill-in during D&C factorisation, which differs from the LAPACK
+  banded layout. A small layout helper that packs from the natural
+  diagonal-by-diagonal representation into ScaLAPACK's storage (and
+  unpacks the reference LAPACK layout for `dgbsv`/`dpbsv` comparison)
+  would unblock those tests.
+- **Action**: Implement the packed-banded helper as a sibling to
+  `descinit_1d`, then add per-family drivers (general → PD → DD
+  banded). Each pulls in the same 1D scaffold the tridiagonal tests
+  use.
 
 
 
