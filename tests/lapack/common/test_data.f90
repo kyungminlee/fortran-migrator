@@ -8,6 +8,7 @@ module test_data
     public :: gen_symmetric_matrix_quad, gen_hpd_matrix_quad
     public :: pack_sym_band_quad, pack_herm_band_quad
     public :: pack_sym_packed_quad, pack_herm_packed_quad
+    public :: gen_complex_symmetric_quad
 
 contains
 
@@ -127,6 +128,17 @@ contains
             A(i, i) = cmplx(real(A(i, i), ep) + real(n, ep), 0.0_ep, ep)
         end do
     end subroutine gen_hpd_matrix_quad
+
+    ! Complex symmetric (A = A^T, not Hermitian): A = (X + X^T)/2.
+    subroutine gen_complex_symmetric_quad(n, A, seed)
+        integer,     intent(in)  :: n, seed
+        complex(ep), intent(out), allocatable :: A(:,:)
+        complex(ep), allocatable :: X(:,:)
+
+        call gen_matrix_complex(n, n, X, seed)
+        allocate(A(n, n))
+        A = 0.5_ep * (X + transpose(X))
+    end subroutine gen_complex_symmetric_quad
 
     ! Pack a symmetric matrix into LAPACK banded storage AB(kd+1, n).
     ! Off-band entries of the source are first zeroed (so the dense
