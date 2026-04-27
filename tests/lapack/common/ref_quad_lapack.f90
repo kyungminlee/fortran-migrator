@@ -1285,6 +1285,59 @@ module ref_quad_lapack
             complex(ep), intent(inout) :: e(*), B(ldb,*)
             integer,     intent(out)   :: info
         end subroutine zptsv
+
+        ! ── Phase 12 — triangular packed / banded ────────────────────
+        subroutine dtbtrs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+            real(ep),  intent(in)    :: AB(ldab,*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dtbtrs
+
+        subroutine ztbtrs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+            complex(ep), intent(in)    :: AB(ldab,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine ztbtrs
+
+        subroutine dtptrs(uplo, trans, diag, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: AP(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dtptrs
+
+        subroutine ztptrs(uplo, trans, diag, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: AP(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine ztptrs
+
+        subroutine dtptri(uplo, diag, n, AP, info)
+            import :: ep
+            character, intent(in)    :: uplo, diag
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: info
+        end subroutine dtptri
+
+        subroutine ztptri(uplo, diag, n, AP, info)
+            import :: ep
+            character,   intent(in)    :: uplo, diag
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: info
+        end subroutine ztptri
     end interface
 
 end module ref_quad_lapack

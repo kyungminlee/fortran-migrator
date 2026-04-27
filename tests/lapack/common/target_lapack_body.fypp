@@ -89,6 +89,9 @@ module target_lapack
     public :: target_zpbtrf, target_zpbtrs, target_zpbsv
     public :: target_zgttrf, target_zgttrs, target_zgtsv
     public :: target_zpttrf, target_zpttrs, target_zptsv
+    public :: target_dtbtrs, target_ztbtrs
+    public :: target_dtptrs, target_ztptrs
+    public :: target_dtptri, target_ztptri
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -1356,6 +1359,59 @@ $:IMPORT_RC()
             integer, intent(in) :: n, nrhs, ldb
             ${target_real}$,    intent(inout) :: d(*)
             ${target_complex}$, intent(inout) :: e(*), B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 12 — triangular packed / banded ────────────────────
+        subroutine ${R}$tbtrs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, kd, nrhs, ldab, ldb
+            ${target_real}$, intent(in)    :: AB(ldab,*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$tbtrs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, kd, nrhs, ldab, ldb
+            ${target_complex}$, intent(in)    :: AB(ldab,*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$tptrs(uplo, trans, diag, n, nrhs, AP, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_real}$, intent(in)    :: AP(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$tptrs(uplo, trans, diag, n, nrhs, AP, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_complex}$, intent(in)    :: AP(*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$tptri(uplo, diag, n, AP, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo, diag
+            integer,   intent(in) :: n
+            ${target_real}$, intent(inout) :: AP(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$tptri(uplo, diag, n, AP, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo, diag
+            integer,   intent(in) :: n
+            ${target_complex}$, intent(inout) :: AP(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -3728,6 +3784,91 @@ $:CPACK_INV('zsptri', C + 'sptri')
         d(1:n)   = t2q_r(dt)
         e(1:n-1) = t2q_c(et)
         B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    ! ── Phase 12 wrappers ────────────────────────────────────────────
+    subroutine target_dtbtrs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, info)
+        character, intent(in)    :: uplo, trans, diag
+        integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+        real(ep),  intent(in)    :: AB(ldab,*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_r(AB(1:ldab, 1:n)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$tbtrs(uplo, trans, diag, n, kd, nrhs, ABt, ldab, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_ztbtrs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, info)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+        complex(ep), intent(in)    :: AB(ldab,*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_c(AB(1:ldab, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$tbtrs(uplo, trans, diag, n, kd, nrhs, ABt, ldab, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dtptrs(uplo, trans, diag, n, nrhs, AP, B, ldb, info)
+        character, intent(in)    :: uplo, trans, diag
+        integer,   intent(in)    :: n, nrhs, ldb
+        real(ep),  intent(in)    :: AP(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), Bt(:,:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), Bt(ldb, nrhs))
+        APt = q2t_r(AP(1:np)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$tptrs(uplo, trans, diag, n, nrhs, APt, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_ztptrs(uplo, trans, diag, n, nrhs, AP, B, ldb, info)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, nrhs, ldb
+        complex(ep), intent(in)    :: AP(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: APt(:), Bt(:,:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), Bt(ldb, nrhs))
+        APt = q2t_c(AP(1:np)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$tptrs(uplo, trans, diag, n, nrhs, APt, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dtptri(uplo, diag, n, AP, info)
+        character, intent(in)    :: uplo, diag
+        integer,   intent(in)    :: n
+        real(ep),  intent(inout) :: AP(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np))
+        APt = q2t_r(AP(1:np))
+        call ${R}$tptri(uplo, diag, n, APt, info)
+        AP(1:np) = t2q_r(APt)
+    end subroutine
+
+    subroutine target_ztptri(uplo, diag, n, AP, info)
+        character,   intent(in)    :: uplo, diag
+        integer,     intent(in)    :: n
+        complex(ep), intent(inout) :: AP(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: APt(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np))
+        APt = q2t_c(AP(1:np))
+        call ${C}$tptri(uplo, diag, n, APt, info)
+        AP(1:np) = t2q_c(APt)
     end subroutine
 
 end module target_lapack

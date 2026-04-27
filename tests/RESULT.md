@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_133 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -555,7 +555,7 @@ _133 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dsytrs_rook | — | — | — |
 | ✓ | dtbcon | — | — | — |
 | ✓ | dtbrfs | — | — | — |
-| ✓ | dtbtrs | — | — | — |
+| ✓ | dtbtrs | 18.95 | exact | 31.53 |
 | ✓ | dtfsm | — | — | — |
 | ✓ | dtftri | — | — | — |
 | ✓ | dtfttp | — | — | — |
@@ -577,8 +577,8 @@ _133 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dtpqrt2 | — | — | — |
 | ✓ | dtprfb | — | — | — |
 | ✓ | dtprfs | — | — | — |
-| ✓ | dtptri | — | — | — |
-| ✓ | dtptrs | — | — | — |
+| ✓ | dtptri | 19.27 | exact | 31.63 |
+| ✓ | dtptrs | 18.67 | exact | 31.38 |
 | ✓ | dtpttf | — | — | — |
 | ✓ | dtpttr | — | — | — |
 | ✓ | dtrcon | — | — | — |
@@ -1024,7 +1024,7 @@ _133 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zsytrs_rook | — | — | — |
 | ✓ | ztbcon | — | — | — |
 | ✓ | ztbrfs | — | — | — |
-| ✓ | ztbtrs | — | — | — |
+| ✓ | ztbtrs | 19.04 | exact | 31.62 |
 | ✓ | ztfsm | — | — | — |
 | ✓ | ztftri | — | — | — |
 | ✓ | ztfttp | — | — | — |
@@ -1046,8 +1046,8 @@ _133 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | ztpqrt2 | — | — | — |
 | ✓ | ztprfb | — | — | — |
 | ✓ | ztprfs | — | — | — |
-| ✓ | ztptri | — | — | — |
-| ✓ | ztptrs | — | — | — |
+| ✓ | ztptri | 19.12 | exact | 31.35 |
+| ✓ | ztptrs | 18.43 | exact | 31.29 |
 | ✓ | ztpttf | — | — | — |
 | ✓ | ztpttr | — | — | — |
 | ✓ | ztrcon | — | — | — |
