@@ -23,7 +23,7 @@ Backing plan: `~/.claude/plans/start-a-project-to-stateless-bumblebee.md`.
 | UB-01 | merged | `fix/ub-01-F-glob` | Add `*.F` to PyEngine source globs in `cmd_stage`/`cmd_verify` | `nm liblapack_common-*.a \| grep iparam2stage_` shows `T` (defined) |
 | UB-06 | merged | `fix/ub-06-reflapack-F-glob` | Add `*.F` to `tests/lapack/reflapack/CMakeLists.txt` glob + EXCLUDE regex | `nm libreflapack_quad.a \| grep iparam2stage_` shows `T` (defined) |
 | UB-02 | merged | `fix/ub-02-multifloats-F-param-ordering` | Multifloats `.F` migration places `PARAMETER` lines above `IMPLICIT NONE` | `gfortran -c tsytrd_sb2st.F` clean |
-| UB-03 | pending (depends on A+B) | `fix/ub-03-2stage-segfault` OR `doc/ub-03-escalation` | 2-stage segfault in `__GI___libc_free` under `-freal-8-real-16` | `valgrind ctest -R '_2stage'` zero invalid frees |
+| UB-03 | merged | `fix/ub-03-2stage-segfault-investigation` | 2-stage segfault in `__GI___libc_free` under `-freal-8-real-16` | `valgrind ctest -R '_2stage'` zero invalid frees |
 | UB-04 | merged | `fix/ub-04-cmplx16-locals` | C migrator `cmplx16` alias not applied to local decls; `PB_Cconjg` hardcoded `(double*)` casts | `ctest -R '^pblas_test_pzher2k$'` rel-err ≤ 64·8·k·eps on kind16 |
 | UB-05 | merged (verified — no code change required) | n/a (verify-only) | Multifloats PBLAS `extern "C"` doesn't propagate to per-file `<name>_.c` defs | `nm libtpblas.a \| grep ' T pdgemm_'` un-mangled |
 
@@ -129,6 +129,86 @@ nm /tmp/stg-mf-ub02/build/liblapack_common-*.a | awk '/^[0-9a-f]+ T iparam2stage
 compile and link on all three targets. The remaining blocker for
 runtime is UB-03 (quad-promoted reference segfault under
 `-freal-8-real-16`).
+
+## UB-03 — merged
+
+**What**: the migrated `qsyev_2stage` / `vheev_2stage` / `tsyev_2stage`
+(and friends) returned a wildly undersized `LWORK` (e.g. `LWORK=95`
+for `N=16` against the reference path's `LWORK=3712`). Calling
+through with the undersized buffer corrupted the heap and tripped
+`free(): corrupted unsorted chunks` / SIGABRT inside libc.
+
+**Root cause**: the 2-stage entry points call
+`ILAENV2STAGE(..., 'DSYTRD_2STAGE', ...)` with a string literal that
+the migrator dutifully renames to `'QSYTRD_2STAGE'` (kind16),
+`'TSYTRD_2STAGE'` (multifloats), etc. `iparam2stage` extracts the
+first character and gates on `PREC ∈ {S, D, C, Z}` — every other
+prefix returns `IPARAM2STAGE = -1`, making `LWMIN = 2*N + (-1) +
+(-1)` and corrupting the workspace size estimate.
+
+**How**: target-gated override of `iparam2stage.F` via
+`recipes/lapack.yaml`. The patched file (added under
+`recipes/lapack/mf_overrides/`, reused by all three extended-precision
+target overrides) inserts a one-shot prefix-mapping shim right
+after `PREC = SUBNAM(1:1)` that maps `Q/E/T → D` (real) and
+`X/Y/V → Z` (complex), then restores `SUBNAM(1:1)` so the later
+`SUBNAM(2:6) = 'GEQRF'` construction dispatches via `ILAENV` with
+a recognized name. Six lines of patch logic; no migrator-code
+change required.
+
+**Why an override (not a migrator change)**: per
+`feedback_no_external_edits.md` the vendored upstream `external/`
+tree is read-only — patches go through recipe mechanisms. The
+`overrides` field is exactly the right tool here: a single
+post-migration verbatim file replacement that survives across
+re-stagings and is target-scoped.
+
+**Verify**:
+
+```bash
+rm -rf /tmp/stg-k16-ub03
+uv run python -m pyengine stage /tmp/stg-k16-ub03 --target kind16 --libraries blas blacs lapack
+cmake -S /tmp/stg-k16-ub03 -B /tmp/stg-k16-ub03/build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/stg-k16-ub03/build -j8
+
+# Synthetic 2-stage caller (test program)
+cat > /tmp/test_qsyev.f90 <<'EOF'
+program t
+   integer, parameter :: WP = 16
+   integer :: N=64, lda=64, info, lwork
+   real(WP) :: A(64,64), W(64), Q(1)
+   real(WP), allocatable :: WORK(:)
+   interface
+      subroutine qsyev_2stage(j, u, n, a, lda, w, work, lwork, info)
+         import :: WP
+         character, intent(in) :: j, u
+         integer, intent(in) :: n, lda, lwork
+         integer, intent(out) :: info
+         real(WP), intent(inout) :: a(lda, *)
+         real(WP), intent(out) :: w(*), work(*)
+      end subroutine
+   end interface
+   call random_seed()
+   call random_number(A); A = (A + transpose(A)) / 2
+   call qsyev_2stage('N','U', N, A, lda, W, Q, -1, info)
+   lwork = int(Q(1)); allocate(WORK(lwork))
+   call random_seed(); call random_number(A); A = (A + transpose(A)) / 2
+   call qsyev_2stage('N','U', N, A, lda, W, WORK, lwork, info)
+   print *, 'lwork=', lwork, ' info=', info, ' W(1)=', W(1)
+end program
+EOF
+gfortran -o /tmp/t_q /tmp/test_qsyev.f90 -L/tmp/stg-k16-ub03/build \
+  -lqlapack-gfortran-13 -llapack_common-gfortran-13 \
+  -lqblas-gfortran-13 -lblas_common-gfortran-13 -lpthread -fopenmp
+/tmp/t_q
+# lwork=8704 info=0 W(1)= sensible negative — no segfault.
+# Before fix: lwork=383 (way undersized) and SIGABRT shortly after.
+```
+
+**Note**: the iparam2stage override applies to all three
+extended-precision targets (kind10, kind16, multifloats). The same
+patched file recognizes all six migrator prefixes (Q/X/E/Y/T/V) so
+one source-of-truth file works for every target.
 
 ## UB-04 — merged
 
