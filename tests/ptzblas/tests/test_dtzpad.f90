@@ -8,14 +8,17 @@ program test_dtzpad
     implicit none
 
     integer, parameter :: m = 16, n = 16
-    integer, parameter :: ioffd_set(*) = [0, 0, 0, 0]
-    character(len=1), parameter :: uplo_set(*) = ['L', 'U', 'L', 'U']
-    character(len=1), parameter :: herm_set(*) = ['N', 'N', 'N', 'N']
+    ! UPLO ∈ {L,U} × IOFFD ∈ {0, +2, -1} — exercises the upstream two-loop
+    ! "full-fill / diagonal+strict" structure that triggers off-by-one
+    ! bugs when IOFFD≠0.
+    integer,          parameter :: ioffd_set(*) = [ 0,  0,  2,  2, -1, -1]
+    character(len=1), parameter :: uplo_set(*)  = ['L','U','L','U','L','U']
+    character(len=1), parameter :: herm_set(*)  = ['N','N','N','N','N','N']
     integer :: i, ioffd
     character :: uplo, herm
     real(ep), allocatable :: A_got(:,:), A_ref(:,:)
     real(ep) :: alpha, beta, err, tol
-    character(len=48) :: label
+    character(len=64) :: label
 
     call report_init('dtzpad', target_name, 0)
     do i = 1, size(uplo_set)
@@ -28,7 +31,7 @@ program test_dtzpad
         call ref_dtzpad(uplo, herm, m, n, ioffd, alpha, beta, A_ref)
         err = max_rel_err_mat(A_got, A_ref)
         tol = 4.0_ep * target_eps
-        write(label, '(a,a,a,a)') 'uplo=', uplo, ',herm=', herm
+        write(label, '(a,a,a,a,a,i0)') 'uplo=', uplo, ',herm=', herm, ',ioffd=', ioffd
         call report_case(trim(label), err, tol)
         deallocate(A_got, A_ref)
     end do

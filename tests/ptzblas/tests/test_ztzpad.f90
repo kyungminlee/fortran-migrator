@@ -8,27 +8,40 @@ program test_ztzpad
     implicit none
 
     integer, parameter :: m = 16, n = 16
-    character(len=1), parameter :: uplo_set(*) = ['L', 'U', 'L', 'U']
-    character(len=1), parameter :: herm_set(*) = ['N', 'N', 'Z', 'Z']
-    integer :: i
+    ! Cover UPLO ∈ {L,U,D} × HERM ∈ {N,Z} × IOFFD ∈ {0, +2, -1}.  The
+    ! UPLO='D' branch is upstream-supported only for ztzpad (real has no
+    ! imag to zero); HERM='Z' exercises the zero-imag-of-diagonal path.
+    character(len=1), parameter :: uplo_set(*)  = &
+        ['L','U','L','U','D','D', &
+         'L','U','L','U','D','D', &
+         'L','U','L','U','D','D']
+    character(len=1), parameter :: herm_set(*)  = &
+        ['N','N','Z','Z','N','Z', &
+         'N','N','Z','Z','N','Z', &
+         'N','N','Z','Z','N','Z']
+    integer,          parameter :: ioffd_set(*) = &
+        [ 0,  0,  0,  0,  0,  0, &
+          2,  2,  2,  2,  2,  2, &
+         -1, -1, -1, -1, -1, -1]
+    integer :: i, ioffd
     character :: uplo, herm
     complex(ep), allocatable :: A_got(:,:), A_ref(:,:)
     complex(ep) :: alpha, beta
     real(ep) :: err, tol
-    character(len=48) :: label
+    character(len=64) :: label
 
     call report_init('ztzpad', target_name, 0)
     do i = 1, size(uplo_set)
-        uplo = uplo_set(i); herm = herm_set(i)
+        uplo = uplo_set(i); herm = herm_set(i); ioffd = ioffd_set(i)
         call gen_matrix_complex(m, n, A_got, seed = 3300 + 7 * i)
         A_ref = A_got
         alpha = cmplx(0.25_ep + 0.1_ep * i, 0.3_ep, ep)
         beta  = cmplx(-1.0_ep, 0.5_ep, ep)
-        call target_ztzpad(uplo, herm, m, n, 0, alpha, beta, A_got, m)
-        call ref_ztzpad(uplo, herm, m, n, 0, alpha, beta, A_ref)
+        call target_ztzpad(uplo, herm, m, n, ioffd, alpha, beta, A_got, m)
+        call ref_ztzpad(uplo, herm, m, n, ioffd, alpha, beta, A_ref)
         err = max_rel_err_mat_z(A_got, A_ref)
         tol = 4.0_ep * target_eps
-        write(label, '(a,a,a,a)') 'uplo=', uplo, ',herm=', herm
+        write(label, '(a,a,a,a,a,i0)') 'uplo=', uplo, ',herm=', herm, ',ioffd=', ioffd
         call report_case(trim(label), err, tol)
         deallocate(A_got, A_ref)
     end do
