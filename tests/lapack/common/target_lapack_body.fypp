@@ -111,6 +111,8 @@ module target_lapack
     public :: target_dtbrfs, target_ztbrfs
     public :: target_dgeequ, target_dgbequ, target_dpoequ, target_dppequ, target_dpbequ
     public :: target_zgeequ, target_zgbequ, target_zpoequ, target_zppequ, target_zpbequ
+    public :: target_dgeequb, target_dgbequb, target_dpoequb, target_dsyequb
+    public :: target_zgeequb, target_zgbequb, target_zpoequb, target_zsyequb, target_zheequb
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2074,6 +2076,84 @@ $:IMPORT_RC()
             integer,   intent(in) :: n, kd, ldab
             ${target_complex}$, intent(in)  :: AB(ldab,*)
             ${target_real}$,    intent(out) :: S(*), scond, amax
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 20 — improved equilibration (equb) ────────────────
+        subroutine ${R}$geequb(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, lda
+            ${target_real}$, intent(in)  :: A(lda,*)
+            ${target_real}$, intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gbequb(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, kl, ku, ldab
+            ${target_real}$, intent(in)  :: AB(ldab,*)
+            ${target_real}$, intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$poequb(n, A, lda, S, scond, amax, info)
+$:IMPORT_R()
+            integer, intent(in) :: n, lda
+            ${target_real}$, intent(in)  :: A(lda,*)
+            ${target_real}$, intent(out) :: S(*), scond, amax
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$syequb(uplo, n, A, lda, S, scond, amax, work, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(in)  :: A(lda,*)
+            ${target_real}$, intent(out) :: S(*), scond, amax, work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$geequb(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+$:IMPORT_RC()
+            integer, intent(in) :: m, n, lda
+            ${target_complex}$, intent(in)  :: A(lda,*)
+            ${target_real}$,    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gbequb(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+$:IMPORT_RC()
+            integer, intent(in) :: m, n, kl, ku, ldab
+            ${target_complex}$, intent(in)  :: AB(ldab,*)
+            ${target_real}$,    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$poequb(n, A, lda, S, scond, amax, info)
+$:IMPORT_RC()
+            integer, intent(in) :: n, lda
+            ${target_complex}$, intent(in)  :: A(lda,*)
+            ${target_real}$,    intent(out) :: S(*), scond, amax
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$syequb(uplo, n, A, lda, S, scond, amax, work, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(in)  :: A(lda,*)
+            ${target_real}$,    intent(out) :: S(*), scond, amax
+            ${target_complex}$, intent(out) :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$heequb(uplo, n, A, lda, S, scond, amax, work, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(in)  :: A(lda,*)
+            ${target_real}$,    intent(out) :: S(*), scond, amax
+            ${target_complex}$, intent(out) :: work(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -5626,6 +5706,136 @@ $:CPACK_INV('zsptri', C + 'sptri')
         allocate(ABt(ldab, n), St(n))
         ABt = q2t_c(AB(1:ldab, 1:n))
         call ${C}$pbequ(uplo, n, kd, ABt, ldab, St, sct, amt, info)
+        S(1:n) = t2q_r(St); scond = t2q_r(sct); amax = t2q_r(amt)
+    end subroutine
+
+    ! ── Phase 20 wrappers ────────────────────────────────────────────
+    subroutine target_dgeequb(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+        integer,  intent(in)  :: m, n, lda
+        real(ep), intent(in)  :: A(lda,*)
+        real(ep), intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+        integer,  intent(out) :: info
+        ${target_real}$, allocatable :: At(:,:), Rt(:), Ct(:)
+        ${target_real}$ :: rct, cct, amt
+        allocate(At(lda, n), Rt(m), Ct(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geequb(m, n, At, lda, Rt, Ct, rct, cct, amt, info)
+        R(1:m) = t2q_r(Rt); C(1:n) = t2q_r(Ct)
+        rowcnd = t2q_r(rct); colcnd = t2q_r(cct); amax = t2q_r(amt)
+    end subroutine
+
+    subroutine target_dgbequb(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+        integer,  intent(in)  :: m, n, kl, ku, ldab
+        real(ep), intent(in)  :: AB(ldab,*)
+        real(ep), intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+        integer,  intent(out) :: info
+        ${target_real}$, allocatable :: ABt(:,:), Rt(:), Ct(:)
+        ${target_real}$ :: rct, cct, amt
+        allocate(ABt(ldab, n), Rt(m), Ct(n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$gbequb(m, n, kl, ku, ABt, ldab, Rt, Ct, rct, cct, amt, info)
+        R(1:m) = t2q_r(Rt); C(1:n) = t2q_r(Ct)
+        rowcnd = t2q_r(rct); colcnd = t2q_r(cct); amax = t2q_r(amt)
+    end subroutine
+
+    subroutine target_dpoequb(n, A, lda, S, scond, amax, info)
+        integer,  intent(in)  :: n, lda
+        real(ep), intent(in)  :: A(lda,*)
+        real(ep), intent(out) :: S(*), scond, amax
+        integer,  intent(out) :: info
+        ${target_real}$, allocatable :: At(:,:), St(:)
+        ${target_real}$ :: sct, amt
+        allocate(At(lda, n), St(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$poequb(n, At, lda, St, sct, amt, info)
+        S(1:n) = t2q_r(St); scond = t2q_r(sct); amax = t2q_r(amt)
+    end subroutine
+
+    subroutine target_dsyequb(uplo, n, A, lda, S, scond, amax, info)
+        character, intent(in)  :: uplo
+        integer,   intent(in)  :: n, lda
+        real(ep),  intent(in)  :: A(lda,*)
+        real(ep),  intent(out) :: S(*), scond, amax
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: At(:,:), St(:), work(:)
+        ${target_real}$ :: sct, amt
+        allocate(At(lda, n), St(n), work(2*n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syequb(uplo, n, At, lda, St, sct, amt, work, info)
+        S(1:n) = t2q_r(St); scond = t2q_r(sct); amax = t2q_r(amt)
+    end subroutine
+
+    subroutine target_zgeequb(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+        integer,     intent(in)  :: m, n, lda
+        complex(ep), intent(in)  :: A(lda,*)
+        real(ep),    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: Rt(:), Ct(:)
+        ${target_real}$ :: rct, cct, amt
+        allocate(At(lda, n), Rt(m), Ct(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$geequb(m, n, At, lda, Rt, Ct, rct, cct, amt, info)
+        R(1:m) = t2q_r(Rt); C(1:n) = t2q_r(Ct)
+        rowcnd = t2q_r(rct); colcnd = t2q_r(cct); amax = t2q_r(amt)
+    end subroutine
+
+    subroutine target_zgbequb(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+        integer,     intent(in)  :: m, n, kl, ku, ldab
+        complex(ep), intent(in)  :: AB(ldab,*)
+        real(ep),    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: ABt(:,:)
+        ${target_real}$,    allocatable :: Rt(:), Ct(:)
+        ${target_real}$ :: rct, cct, amt
+        allocate(ABt(ldab, n), Rt(m), Ct(n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$gbequb(m, n, kl, ku, ABt, ldab, Rt, Ct, rct, cct, amt, info)
+        R(1:m) = t2q_r(Rt); C(1:n) = t2q_r(Ct)
+        rowcnd = t2q_r(rct); colcnd = t2q_r(cct); amax = t2q_r(amt)
+    end subroutine
+
+    subroutine target_zpoequb(n, A, lda, S, scond, amax, info)
+        integer,     intent(in)  :: n, lda
+        complex(ep), intent(in)  :: A(lda,*)
+        real(ep),    intent(out) :: S(*), scond, amax
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: St(:)
+        ${target_real}$ :: sct, amt
+        allocate(At(lda, n), St(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$poequb(n, At, lda, St, sct, amt, info)
+        S(1:n) = t2q_r(St); scond = t2q_r(sct); amax = t2q_r(amt)
+    end subroutine
+
+    subroutine target_zsyequb(uplo, n, A, lda, S, scond, amax, info)
+        character,   intent(in)  :: uplo
+        integer,     intent(in)  :: n, lda
+        complex(ep), intent(in)  :: A(lda,*)
+        real(ep),    intent(out) :: S(*), scond, amax
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$,    allocatable :: St(:)
+        ${target_real}$ :: sct, amt
+        allocate(At(lda, n), St(n), work(2*n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$syequb(uplo, n, At, lda, St, sct, amt, work, info)
+        S(1:n) = t2q_r(St); scond = t2q_r(sct); amax = t2q_r(amt)
+    end subroutine
+
+    subroutine target_zheequb(uplo, n, A, lda, S, scond, amax, info)
+        character,   intent(in)  :: uplo
+        integer,     intent(in)  :: n, lda
+        complex(ep), intent(in)  :: A(lda,*)
+        real(ep),    intent(out) :: S(*), scond, amax
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$,    allocatable :: St(:)
+        ${target_real}$ :: sct, amt
+        allocate(At(lda, n), St(n), work(2*n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heequb(uplo, n, At, lda, St, sct, amt, work, info)
         S(1:n) = t2q_r(St); scond = t2q_r(sct); amax = t2q_r(amt)
     end subroutine
 
