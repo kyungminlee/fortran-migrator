@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_105 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_113 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -443,11 +443,11 @@ _105 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dppcon | — | — | — |
 | ✓ | dppequ | — | — | — |
 | ✓ | dpprfs | — | — | — |
-| ✓ | dppsv | — | — | — |
+| ✓ | dppsv | 18.48 | exact | 31.11 |
 | ✓ | dppsvx | — | — | — |
-| ✓ | dpptrf | — | — | — |
-| ✓ | dpptri | — | — | — |
-| ✓ | dpptrs | — | — | — |
+| ✓ | dpptrf | 19.17 | exact | 31.70 |
+| ✓ | dpptri | 18.45 | exact | 31.26 |
+| ✓ | dpptrs | 18.47 | exact | 31.20 |
 |  | dpstf2 | — | — | — |
 | ✓ | dpstrf | — | — | — |
 | ✓ | dptcon | — | — | — |
@@ -481,12 +481,12 @@ _105 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dspgvd | — | — | — |
 | ✓ | dspgvx | — | — | — |
 | ✓ | dsprfs | — | — | — |
-| ✓ | dspsv | — | — | — |
+| ✓ | dspsv | 17.20 | exact | 30.16 |
 | ✓ | dspsvx | — | — | — |
 | ✓ | dsptrd | — | — | — |
-| ✓ | dsptrf | — | — | — |
-| ✓ | dsptri | — | — | — |
-| ✓ | dsptrs | — | — | — |
+| ✓ | dsptrf | 17.73 | exact | 30.22 |
+| ✓ | dsptri | 15.76 | exact | 28.35 |
+| ✓ | dsptrs | 17.13 | exact | 29.94 |
 | ✓ | dstebz | — | — | — |
 | ✓ | dstedc | — | — | — |
 | ✓ | dstegr | — | — | — |
