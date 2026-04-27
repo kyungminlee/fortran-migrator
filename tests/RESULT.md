@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_240 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_246 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -487,13 +487,13 @@ _240 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dsptrf | 17.73 | exact | 30.22 |
 | ✓ | dsptri | 15.76 | exact | 28.35 |
 | ✓ | dsptrs | 17.13 | exact | 29.94 |
-| ✓ | dstebz | — | — | — |
-| ✓ | dstedc | — | — | — |
+| ✓ | dstebz | 18.98 | exact | 31.70 |
+| ✓ | dstedc | 17.81 | exact | 30.33 |
 | ✓ | dstegr | — | — | — |
 | ✓ | dstein | — | — | — |
 | ✓ | dstemr | — | — | — |
-| ✓ | dsteqr | — | — | — |
-| ✓ | dsterf | — | — | — |
+| ✓ | dsteqr | 18.24 | exact | 30.52 |
+| ✓ | dsterf | 18.05 | exact | 30.78 |
 | ✓ | dstev | 17.83 | exact | 29.93 |
 | ✓ | dstevd | 17.83 | exact | 30.02 |
 | ✓ | dstevr | 17.72 | exact | 30.13 |
@@ -978,11 +978,11 @@ _240 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zsptrf | 17.40 | exact | 30.20 |
 | ✓ | zsptri | 17.13 | exact | 29.89 |
 | ✓ | zsptrs | 17.28 | exact | 30.12 |
-| ✓ | zstedc | — | — | — |
+| ✓ | zstedc | 17.99 | exact | 30.32 |
 | ✓ | zstegr | — | — | — |
 | ✓ | zstein | — | — | — |
 | ✓ | zstemr | — | — | — |
-| ✓ | zsteqr | — | — | — |
+| ✓ | zsteqr | 18.05 | exact | 30.61 |
 | ✓ | zsycon | — | — | — |
 |  | zsycon_3 | — | — | — |
 | ✓ | zsycon_rook | — | — | — |

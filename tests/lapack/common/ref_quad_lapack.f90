@@ -2363,6 +2363,65 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: Z(ldz,*), work(*)
             integer,     intent(out)   :: iwork(*), info
         end subroutine zhbgvd
+
+        ! ── Tridiagonal eigenvalue solvers ───────────────────────────
+        subroutine dsterf(n, D, E, info)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(inout) :: D(*), E(*)
+            integer,  intent(out)   :: info
+        end subroutine dsterf
+
+        subroutine dsteqr(compz, n, D, E, Z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: compz
+            integer,   intent(in)    :: n, ldz
+            real(ep),  intent(inout) :: D(*), E(*), Z(ldz,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsteqr
+
+        subroutine zsteqr(compz, n, D, E, Z, ldz, work, info)
+            import :: ep
+            character,   intent(in)    :: compz
+            integer,     intent(in)    :: n, ldz
+            real(ep),    intent(inout) :: D(*), E(*)
+            complex(ep), intent(inout) :: Z(ldz,*)
+            real(ep),    intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsteqr
+
+        subroutine dstedc(compz, n, D, E, Z, ldz, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: compz
+            integer,   intent(in)    :: n, ldz, lwork, liwork
+            real(ep),  intent(inout) :: D(*), E(*), Z(ldz,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dstedc
+
+        subroutine zstedc(compz, n, D, E, Z, ldz, work, lwork, rwork, lrwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: compz
+            integer,     intent(in)    :: n, ldz, lwork, lrwork, liwork
+            real(ep),    intent(inout) :: D(*), E(*)
+            complex(ep), intent(inout) :: Z(ldz,*)
+            real(ep),    intent(out)   :: rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zstedc
+
+        subroutine dstebz(range, order, n, vl, vu, il, iu, abstol, D, E, &
+                          m, nsplit, W, iblock, isplit, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: range, order
+            integer,   intent(in)  :: n, il, iu
+            real(ep),  intent(in)  :: vl, vu, abstol, D(*), E(*)
+            integer,   intent(out) :: m, nsplit
+            real(ep),  intent(out) :: W(*), work(*)
+            integer,   intent(out) :: iblock(*), isplit(*), iwork(*), info
+        end subroutine dstebz
     end interface
 
 end module ref_quad_lapack

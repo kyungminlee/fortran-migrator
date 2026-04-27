@@ -119,6 +119,8 @@ module target_lapack
     public :: target_dgebrd, target_zgebrd, target_dorgbr, target_zungbr, target_dormbr, target_zunmbr
     public :: target_dspgv, target_zhpgv, target_dsbgv, target_zhbgv
     public :: target_dsygvd, target_zhegvd, target_dspgvd, target_zhpgvd, target_dsbgvd, target_zhbgvd
+    public :: target_dsterf, target_dsteqr, target_zsteqr
+    public :: target_dstedc, target_zstedc, target_dstebz
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2463,6 +2465,65 @@ $:IMPORT_RC()
             ${target_real}$,    intent(out)   :: W(*), rwork(*)
             ${target_complex}$, intent(out)   :: Z(ldz,*), work(*)
             integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        ! ── Phase 26 — tridiagonal eigenvalue solvers ───────────────
+        subroutine ${R}$sterf(n, D, E, info)
+$:IMPORT_R()
+            integer, intent(in) :: n
+            ${target_real}$, intent(inout) :: D(*), E(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$steqr(compz, n, D, E, Z, ldz, work, info)
+$:IMPORT_R()
+            character, intent(in) :: compz
+            integer,   intent(in) :: n, ldz
+            ${target_real}$, intent(inout) :: D(*), E(*), Z(ldz,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$steqr(compz, n, D, E, Z, ldz, work, info)
+$:IMPORT_RC()
+            character, intent(in) :: compz
+            integer,   intent(in) :: n, ldz
+            ${target_real}$,    intent(inout) :: D(*), E(*)
+            ${target_complex}$, intent(inout) :: Z(ldz,*)
+            ${target_real}$,    intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$stedc(compz, n, D, E, Z, ldz, work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in) :: compz
+            integer,   intent(in) :: n, ldz, lwork, liwork
+            ${target_real}$, intent(inout) :: D(*), E(*), Z(ldz,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$stedc(compz, n, D, E, Z, ldz, work, lwork, rwork, lrwork, &
+                              iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: compz
+            integer,   intent(in) :: n, ldz, lwork, lrwork, liwork
+            ${target_real}$,    intent(inout) :: D(*), E(*)
+            ${target_complex}$, intent(inout) :: Z(ldz,*)
+            ${target_real}$,    intent(out)   :: rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$stebz(range, order, n, vl, vu, il, iu, abstol, D, E, &
+                              m, nsplit, W, iblock, isplit, work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: range, order
+            integer,   intent(in) :: n, il, iu
+            ${target_real}$, intent(in)  :: vl, vu, abstol, D(*), E(*)
+            integer,   intent(out) :: m, nsplit
+            ${target_real}$, intent(out) :: W(*), work(*)
+            integer,   intent(out) :: iblock(*), isplit(*), iwork(*), info
         end subroutine
     end interface
 
@@ -6746,6 +6807,121 @@ $:CPACK_INV('zsptri', C + 'sptri')
         AB(1:ldab, 1:n) = t2q_c(ABt); BB(1:ldbb, 1:n) = t2q_c(BBt)
         W(1:n) = t2q_r(Wt)
         if (jobz == 'V' .or. jobz == 'v') Z(1:ldz, 1:n) = t2q_c(Zt)
+    end subroutine
+
+    ! ── Phase 26 wrappers ────────────────────────────────────────────
+    subroutine target_dsterf(n, D, E, info)
+        integer,  intent(in)    :: n
+        real(ep), intent(inout) :: D(*), E(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: Dt(:), Et(:)
+        allocate(Dt(n), Et(max(1, n - 1)))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        call ${R}$sterf(n, Dt, Et, info)
+        D(1:n) = t2q_r(Dt); E(1:max(1, n - 1)) = t2q_r(Et)
+    end subroutine
+
+    subroutine target_dsteqr(compz, n, D, E, Z, ldz, info)
+        character, intent(in)    :: compz
+        integer,   intent(in)    :: n, ldz
+        real(ep),  intent(inout) :: D(*), E(*), Z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Dt(:), Et(:), Zt(:,:), work(:)
+        integer :: nz, lwork
+        nz = merge(n, 1, compz == 'V' .or. compz == 'v' .or. compz == 'I' .or. compz == 'i')
+        lwork = merge(max(1, 2*n - 2), 1, compz == 'V' .or. compz == 'v' &
+                                          .or. compz == 'I' .or. compz == 'i')
+        allocate(Dt(n), Et(max(1, n - 1)), Zt(ldz, nz), work(lwork))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        if (compz == 'V' .or. compz == 'v') Zt = q2t_r(Z(1:ldz, 1:nz))
+        call ${R}$steqr(compz, n, Dt, Et, Zt, ldz, work, info)
+        D(1:n) = t2q_r(Dt); E(1:max(1, n - 1)) = t2q_r(Et)
+        if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zsteqr(compz, n, D, E, Z, ldz, info)
+        character,   intent(in)    :: compz
+        integer,     intent(in)    :: n, ldz
+        real(ep),    intent(inout) :: D(*), E(*)
+        complex(ep), intent(inout) :: Z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_real}$,    allocatable :: Dt(:), Et(:), work(:)
+        ${target_complex}$, allocatable :: Zt(:,:)
+        integer :: nz, lwork
+        nz = merge(n, 1, compz == 'V' .or. compz == 'v' .or. compz == 'I' .or. compz == 'i')
+        lwork = merge(max(1, 2*n - 2), 1, compz == 'V' .or. compz == 'v' &
+                                          .or. compz == 'I' .or. compz == 'i')
+        allocate(Dt(n), Et(max(1, n - 1)), Zt(ldz, nz), work(lwork))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        if (compz == 'V' .or. compz == 'v') Zt = q2t_c(Z(1:ldz, 1:nz))
+        call ${C}$steqr(compz, n, Dt, Et, Zt, ldz, work, info)
+        D(1:n) = t2q_r(Dt); E(1:max(1, n - 1)) = t2q_r(Et)
+        if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_c(Zt)
+    end subroutine
+
+    subroutine target_dstedc(compz, n, D, E, Z, ldz, info)
+        character, intent(in)    :: compz
+        integer,   intent(in)    :: n, ldz
+        real(ep),  intent(inout) :: D(*), E(*), Z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Dt(:), Et(:), Zt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: nz, lwork, liwork, iwopt(1)
+        nz = merge(n, 1, compz == 'V' .or. compz == 'v' .or. compz == 'I' .or. compz == 'i')
+        allocate(Dt(n), Et(max(1, n - 1)), Zt(ldz, nz))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        if (compz == 'V' .or. compz == 'v') Zt = q2t_r(Z(1:ldz, 1:nz))
+        call ${R}$stedc(compz, n, Dt, Et, Zt, ldz, wopt, -1, iwopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$stedc(compz, n, Dt, Et, Zt, ldz, work, lwork, iwork, liwork, info)
+        D(1:n) = t2q_r(Dt); E(1:max(1, n - 1)) = t2q_r(Et)
+        if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zstedc(compz, n, D, E, Z, ldz, info)
+        character,   intent(in)    :: compz
+        integer,     intent(in)    :: n, ldz
+        real(ep),    intent(inout) :: D(*), E(*)
+        complex(ep), intent(inout) :: Z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_real}$,    allocatable :: Dt(:), Et(:), rwork(:)
+        ${target_complex}$, allocatable :: Zt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: rwopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: nz, lwork, lrwork, liwork, iwopt(1)
+        nz = merge(n, 1, compz == 'V' .or. compz == 'v' .or. compz == 'I' .or. compz == 'i')
+        allocate(Dt(n), Et(max(1, n - 1)), Zt(ldz, nz))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        if (compz == 'V' .or. compz == 'v') Zt = q2t_c(Z(1:ldz, 1:nz))
+        call ${C}$stedc(compz, n, Dt, Et, Zt, ldz, wopt, -1, rwopt, -1, iwopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1)))); liwork = max(1, iwopt(1))
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$stedc(compz, n, Dt, Et, Zt, ldz, work, lwork, rwork, lrwork, &
+                       iwork, liwork, info)
+        D(1:n) = t2q_r(Dt); E(1:max(1, n - 1)) = t2q_r(Et)
+        if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_c(Zt)
+    end subroutine
+
+    subroutine target_dstebz(range, order, n, vl, vu, il, iu, abstol, D, E, &
+                             m, nsplit, W, iblock, isplit, info)
+        character, intent(in)  :: range, order
+        integer,   intent(in)  :: n, il, iu
+        real(ep),  intent(in)  :: vl, vu, abstol, D(*), E(*)
+        integer,   intent(out) :: m, nsplit
+        real(ep),  intent(out) :: W(*)
+        integer,   intent(out) :: iblock(*), isplit(*), info
+        ${target_real}$, allocatable :: Dt(:), Et(:), Wt(:), work(:)
+        integer, allocatable :: iworkt(:)
+        allocate(Dt(n), Et(max(1, n - 1)), Wt(n), work(4*n), iworkt(3*n))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        call ${R}$stebz(range, order, n, q2t_r(vl), q2t_r(vu), il, iu, &
+                       q2t_r(abstol), Dt, Et, m, nsplit, Wt, iblock, isplit, &
+                       work, iworkt, info)
+        W(1:n) = t2q_r(Wt)
     end subroutine
 
 end module target_lapack
