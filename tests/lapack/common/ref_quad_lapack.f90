@@ -3206,6 +3206,201 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zhegv_2stage
+
+        ! ── Phase L2 — Hessenberg/Schur expert drivers ───────────────
+        subroutine dgees(jobvs, sort, select, n, A, lda, sdim, wr, wi, &
+                         vs, ldvs, work, lwork, bwork, info)
+            import :: ep
+            character, intent(in)    :: jobvs, sort
+            interface
+                logical function select(re, im)
+                    import :: ep
+                    real(ep), intent(in) :: re, im
+                end function select
+            end interface
+            integer,   intent(in)    :: n, lda, ldvs, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: sdim, info
+            real(ep),  intent(out)   :: wr(*), wi(*), vs(ldvs,*), work(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine dgees
+
+        subroutine zgees(jobvs, sort, select, n, A, lda, sdim, w, &
+                         vs, ldvs, work, lwork, rwork, bwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvs, sort
+            interface
+                logical function select(z)
+                    import :: ep
+                    complex(ep), intent(in) :: z
+                end function select
+            end interface
+            integer,     intent(in)    :: n, lda, ldvs, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: sdim, info
+            complex(ep), intent(out)   :: w(*), vs(ldvs,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            logical,     intent(out)   :: bwork(*)
+        end subroutine zgees
+
+        subroutine dgeesx(jobvs, sort, select, sense, n, A, lda, sdim, &
+                          wr, wi, vs, ldvs, rconde, rcondv, work, lwork, &
+                          iwork, liwork, bwork, info)
+            import :: ep
+            character, intent(in)    :: jobvs, sort, sense
+            interface
+                logical function select(re, im)
+                    import :: ep
+                    real(ep), intent(in) :: re, im
+                end function select
+            end interface
+            integer,   intent(in)    :: n, lda, ldvs, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: sdim, iwork(*), info
+            real(ep),  intent(out)   :: wr(*), wi(*), vs(ldvs,*), work(*)
+            real(ep),  intent(out)   :: rconde, rcondv
+            logical,   intent(out)   :: bwork(*)
+        end subroutine dgeesx
+
+        subroutine zgeesx(jobvs, sort, select, sense, n, A, lda, sdim, &
+                          w, vs, ldvs, rconde, rcondv, work, lwork, &
+                          rwork, bwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvs, sort, sense
+            interface
+                logical function select(z)
+                    import :: ep
+                    complex(ep), intent(in) :: z
+                end function select
+            end interface
+            integer,     intent(in)    :: n, lda, ldvs, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: sdim, info
+            complex(ep), intent(out)   :: w(*), vs(ldvs,*), work(*)
+            real(ep),    intent(out)   :: rconde, rcondv, rwork(*)
+            logical,     intent(out)   :: bwork(*)
+        end subroutine zgeesx
+
+        subroutine dgeevx(balanc, jobvl, jobvr, sense, n, A, lda, &
+                          wr, wi, vl, ldvl, vr, ldvr, ilo, ihi, &
+                          scale, abnrm, rconde, rcondv, work, lwork, &
+                          iwork, info)
+            import :: ep
+            character, intent(in)    :: balanc, jobvl, jobvr, sense
+            integer,   intent(in)    :: n, lda, ldvl, ldvr, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ilo, ihi, iwork(*), info
+            real(ep),  intent(out)   :: wr(*), wi(*), vl(ldvl,*), vr(ldvr,*)
+            real(ep),  intent(out)   :: scale(*), abnrm
+            real(ep),  intent(out)   :: rconde(*), rcondv(*), work(*)
+        end subroutine dgeevx
+
+        subroutine zgeevx(balanc, jobvl, jobvr, sense, n, A, lda, w, &
+                          vl, ldvl, vr, ldvr, ilo, ihi, scale, abnrm, &
+                          rconde, rcondv, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: balanc, jobvl, jobvr, sense
+            integer,     intent(in)    :: n, lda, ldvl, ldvr, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ilo, ihi, info
+            complex(ep), intent(out)   :: w(*), vl(ldvl,*), vr(ldvr,*), work(*)
+            real(ep),    intent(out)   :: scale(*), abnrm
+            real(ep),    intent(out)   :: rconde(*), rcondv(*), rwork(*)
+        end subroutine zgeevx
+
+        subroutine dhsein(side, eigsrc, initv, select, n, H, ldh, &
+                          wr, wi, vl, ldvl, vr, ldvr, mm, m, work, &
+                          ifaill, ifailr, info)
+            import :: ep
+            character, intent(in)    :: side, eigsrc, initv
+            integer,   intent(in)    :: n, ldh, ldvl, ldvr, mm
+            logical,   intent(inout) :: select(*)
+            real(ep),  intent(in)    :: H(ldh,*)
+            real(ep),  intent(inout) :: wr(*)
+            real(ep),  intent(in)    :: wi(*)
+            real(ep),  intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out)   :: m, ifaill(*), ifailr(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dhsein
+
+        subroutine zhsein(side, eigsrc, initv, select, n, H, ldh, &
+                          w, vl, ldvl, vr, ldvr, mm, m, work, rwork, &
+                          ifaill, ifailr, info)
+            import :: ep
+            character,   intent(in)    :: side, eigsrc, initv
+            integer,     intent(in)    :: n, ldh, ldvl, ldvr, mm
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(in)    :: H(ldh,*)
+            complex(ep), intent(inout) :: w(*), vl(ldvl,*), vr(ldvr,*)
+            integer,     intent(out)   :: m, ifaill(*), ifailr(*), info
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+        end subroutine zhsein
+
+        subroutine dtrevc3(side, howmny, select, n, T, ldt, vl, ldvl, &
+                           vr, ldvr, mm, m, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm, lwork
+            logical,   intent(inout) :: select(*)
+            real(ep),  intent(in)    :: T(ldt,*)
+            real(ep),  intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out)   :: m, info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dtrevc3
+
+        subroutine ztrevc3(side, howmny, select, n, T, ldt, vl, ldvl, &
+                           vr, ldvr, mm, m, work, lwork, rwork, lrwork, info)
+            import :: ep
+            character,   intent(in)    :: side, howmny
+            integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm, lwork, lrwork
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(inout) :: T(ldt,*), vl(ldvl,*), vr(ldvr,*)
+            integer,     intent(out)   :: m, info
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+        end subroutine ztrevc3
+
+        subroutine dtrexc(compq, n, T, ldt, Q, ldq, ifst, ilst, work, info)
+            import :: ep
+            character, intent(in)    :: compq
+            integer,   intent(in)    :: n, ldt, ldq
+            integer,   intent(inout) :: ifst, ilst
+            real(ep),  intent(inout) :: T(ldt,*), Q(ldq,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtrexc
+
+        subroutine ztrexc(compq, n, T, ldt, Q, ldq, ifst, ilst, info)
+            import :: ep
+            character,   intent(in)    :: compq
+            integer,     intent(in)    :: n, ldt, ldq, ifst, ilst
+            complex(ep), intent(inout) :: T(ldt,*), Q(ldq,*)
+            integer,     intent(out)   :: info
+        end subroutine ztrexc
+
+        subroutine dtrsen(job, compq, select, n, T, ldt, Q, ldq, &
+                          wr, wi, m, s, sep, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: job, compq
+            integer,   intent(in)    :: n, ldt, ldq, lwork, liwork
+            logical,   intent(in)    :: select(*)
+            real(ep),  intent(inout) :: T(ldt,*), Q(ldq,*)
+            real(ep),  intent(out)   :: wr(*), wi(*), s, sep, work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtrsen
+
+        subroutine ztrsen(job, compq, select, n, T, ldt, Q, ldq, &
+                          w, m, s, sep, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: job, compq
+            integer,     intent(in)    :: n, ldt, ldq, lwork
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(inout) :: T(ldt,*), Q(ldq,*)
+            complex(ep), intent(out)   :: w(*), work(*)
+            real(ep),    intent(out)   :: s, sep
+            integer,     intent(out)   :: m, info
+        end subroutine ztrsen
     end interface
 
 end module ref_quad_lapack
