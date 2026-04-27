@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_210 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_216 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -470,7 +470,7 @@ _210 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dsbgv | — | — | — |
 | ✓ | dsbgvd | — | — | — |
 | ✓ | dsbgvx | — | — | — |
-| ✓ | dsbtrd | — | — | — |
+| ✓ | dsbtrd | 16.27 | exact | 28.25 |
 | ✓ | dsfrk | — | — | — |
 | ✓ | dspcon | 16.41 | exact | 29.16 |
 | ✓ | dspev | 17.91 | exact | 30.15 |
@@ -483,7 +483,7 @@ _210 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dsprfs | 18.01 | exact | 30.74 |
 | ✓ | dspsv | 17.20 | exact | 30.16 |
 | ✓ | dspsvx | — | — | — |
-| ✓ | dsptrd | — | — | — |
+| ✓ | dsptrd | 17.10 | exact | 29.70 |
 | ✓ | dsptrf | 17.73 | exact | 30.22 |
 | ✓ | dsptri | 15.76 | exact | 28.35 |
 | ✓ | dsptrs | 17.13 | exact | 29.94 |
@@ -533,7 +533,7 @@ _210 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dsytf2 | — | — | — |
 | ✓ | dsytf2_rk | — | — | — |
 | ✓ | dsytf2_rook | — | — | — |
-| ✓ | dsytrd | — | — | — |
+| ✓ | dsytrd | 16.38 | 31.01 | 29.11 |
 | ✓ | dsytrd_2stage | — | — | — |
 | ✓ | dsytrd_sy2sb | — | — | — |
 | ✓ | dsytrf | 18.23 | exact | 31.07 |
@@ -712,7 +712,7 @@ _210 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhbgv | — | — | — |
 | ✓ | zhbgvd | — | — | — |
 | ✓ | zhbgvx | — | — | — |
-| ✓ | zhbtrd | — | — | — |
+| ✓ | zhbtrd | 17.06 | exact | 29.62 |
 | ✓ | zhecon | 14.60 | exact | 27.99 |
 |  | zhecon_3 | — | — | — |
 | ✓ | zhecon_rook | — | — | — |
@@ -745,7 +745,7 @@ _210 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zhetf2 | — | — | — |
 | ✓ | zhetf2_rk | — | — | — |
 | ✓ | zhetf2_rook | — | — | — |
-| ✓ | zhetrd | — | — | — |
+| ✓ | zhetrd | 17.46 | 32.08 | 30.17 |
 | ✓ | zhetrd_2stage | — | — | — |
 | ✓ | zhetrd_he2hb | — | — | — |
 | ✓ | zhetrf | 18.22 | exact | 31.19 |
@@ -778,7 +778,7 @@ _210 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhprfs | — | — | — |
 | ✓ | zhpsv | 17.55 | exact | 30.27 |
 | ✓ | zhpsvx | — | — | — |
-| ✓ | zhptrd | — | — | — |
+| ✓ | zhptrd | 17.49 | exact | 29.60 |
 | ✓ | zhptrf | 17.30 | exact | 30.44 |
 | ✓ | zhptri | 17.16 | exact | 30.10 |
 | ✓ | zhptrs | 17.26 | exact | 30.20 |
