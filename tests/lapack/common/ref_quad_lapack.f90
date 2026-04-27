@@ -2298,6 +2298,71 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: Z(ldz,*), work(*)
             integer,     intent(out)   :: info
         end subroutine zhbgv
+
+        ! ── Generalized eigenvalue D&C variants ──────────────────────
+        subroutine dsygvd(itype, jobz, uplo, n, A, lda, B, ldb, W, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: W(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsygvd
+
+        subroutine zhegvd(itype, jobz, uplo, n, A, lda, B, ldb, W, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, lda, ldb, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhegvd
+
+        subroutine dspgvd(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AP(*), BP(*)
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dspgvd
+
+        subroutine zhpgvd(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, ldz, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: AP(*), BP(*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhpgvd
+
+        subroutine dsbgvd(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsbgvd
+
+        subroutine zhbgvd(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                          work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldz, lwork, &
+                                          lrwork, liwork
+            complex(ep), intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhbgvd
     end interface
 
 end module ref_quad_lapack
