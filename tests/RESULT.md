@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_113 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_121 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -952,11 +952,11 @@ _113 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zppcon | — | — | — |
 | ✓ | zppequ | — | — | — |
 | ✓ | zpprfs | — | — | — |
-| ✓ | zppsv | — | — | — |
+| ✓ | zppsv | 18.49 | exact | 31.17 |
 | ✓ | zppsvx | — | — | — |
-| ✓ | zpptrf | — | — | — |
-| ✓ | zpptri | — | — | — |
-| ✓ | zpptrs | — | — | — |
+| ✓ | zpptrf | 19.18 | exact | 31.81 |
+| ✓ | zpptri | 18.34 | exact | 31.14 |
+| ✓ | zpptrs | 18.50 | exact | 31.11 |
 |  | zpstf2 | — | — | — |
 | ✓ | zpstrf | — | — | — |
 | ✓ | zptcon | — | — | — |
@@ -973,11 +973,11 @@ _113 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zspmv | — | — | — |
 | ✓ | zspr | — | — | — |
 | ✓ | zsprfs | — | — | — |
-| ✓ | zspsv | — | — | — |
+| ✓ | zspsv | 17.31 | exact | 29.79 |
 | ✓ | zspsvx | — | — | — |
-| ✓ | zsptrf | — | — | — |
-| ✓ | zsptri | — | — | — |
-| ✓ | zsptrs | — | — | — |
+| ✓ | zsptrf | 17.40 | exact | 30.20 |
+| ✓ | zsptri | 17.13 | exact | 29.89 |
+| ✓ | zsptrs | 17.28 | exact | 30.12 |
 | ✓ | zstedc | — | — | — |
 | ✓ | zstegr | — | — | — |
 | ✓ | zstein | — | — | — |

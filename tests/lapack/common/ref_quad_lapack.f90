@@ -1078,6 +1078,112 @@ module ref_quad_lapack
             real(ep),  intent(inout) :: AP(*)
             integer,   intent(out)   :: info
         end subroutine dpptri
+
+        ! ── Phase 10 — complex packed factor / solve / inverse ───────
+        subroutine zhptrf(uplo, n, AP, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhptrf
+
+        subroutine zhptrs(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: AP(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhptrs
+
+        subroutine zhpsv(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: AP(*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhpsv
+
+        subroutine zhptri(uplo, n, AP, ipiv, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhptri
+
+        subroutine zsptrf(uplo, n, AP, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsptrf
+
+        subroutine zsptrs(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: AP(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zsptrs
+
+        subroutine zspsv(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: AP(*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zspsv
+
+        subroutine zsptri(uplo, n, AP, ipiv, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsptri
+
+        subroutine zpptrf(uplo, n, AP, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: info
+        end subroutine zpptrf
+
+        subroutine zpptrs(uplo, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: AP(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpptrs
+
+        subroutine zppsv(uplo, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: AP(*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zppsv
+
+        subroutine zpptri(uplo, n, AP, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: info
+        end subroutine zpptri
     end interface
 
 end module ref_quad_lapack
