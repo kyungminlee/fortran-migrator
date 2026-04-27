@@ -87,7 +87,12 @@ $:IMPORT_R()
 $:IMPORT_R()
             integer, intent(in)  :: n, incx, incy
             ${target_real}$, intent(in)  :: x(*), y(*)
-            ${target_real}$, intent(out) :: dot
+            ! NOTE: vvdot accumulates (DOT = DOT + sum(X*Y)), so the
+            ! interface must declare DOT as intent(inout). With
+            ! intent(out) here, gfortran is permitted to elide any
+            ! caller-side initialisation as dead store, which surfaces
+            ! as NaN under -O on kind10 (kind16 happened to be lucky).
+            ${target_real}$, intent(inout) :: dot
         end subroutine
 
         subroutine ${R}$set(n, alpha, x, incx)
@@ -186,18 +191,20 @@ $:IMPORT_RC()
         end subroutine
 
         ! ── Complex Level-1-style ────────────────────────────────────
+        ! Same accumulator semantics: intent(inout) so the wrapper's
+        ! r = 0 init isn't elided.
         subroutine ${C}$vvdotc(n, dot, x, incx, y, incy)
 $:IMPORT_C()
             integer, intent(in) :: n, incx, incy
-            ${target_complex}$, intent(in)  :: x(*), y(*)
-            ${target_complex}$, intent(out) :: dot
+            ${target_complex}$, intent(in)    :: x(*), y(*)
+            ${target_complex}$, intent(inout) :: dot
         end subroutine
 
         subroutine ${C}$vvdotu(n, dot, x, incx, y, incy)
 $:IMPORT_C()
             integer, intent(in) :: n, incx, incy
-            ${target_complex}$, intent(in)  :: x(*), y(*)
-            ${target_complex}$, intent(out) :: dot
+            ${target_complex}$, intent(in)    :: x(*), y(*)
+            ${target_complex}$, intent(inout) :: dot
         end subroutine
 
         subroutine ${C}$set(n, alpha, x, incx)
@@ -308,6 +315,12 @@ contains
     end subroutine
 
     subroutine target_dvvdot(n, dot, x, incx, y, incy)
+        ! The migrated *vvdot accumulates (DOT = DOT + sum(X*Y)), so
+        ! the target-type `r` must be initialized to zero before the
+        ! call. (Stack scalars are not zero-initialized; on kind10
+        ! the uninitialised path produces NaN — kind16 happened to
+        ! be lucky.) The wrapper only forwards a freshly-zeroed `dot`,
+        ! it does not preserve a caller-side accumulation.
         integer,  intent(in)  :: n, incx, incy
         real(ep), intent(in)  :: x(*), y(*)
         real(ep), intent(out) :: dot
@@ -317,6 +330,7 @@ contains
         nx = 1 + (n - 1) * abs(incx); ny = 1 + (n - 1) * abs(incy)
         allocate(xt(nx), yt(ny))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        r = q2t_r(0.0_ep)
         call ${R}$vvdot(n, r, xt, incx, yt, incy)
         dot = t2q_r(r)
     end subroutine
@@ -485,6 +499,7 @@ contains
 
     ! ─── Complex Level-1-style ───────────────────────────────────────
     subroutine target_zvvdotc(n, dot, x, incx, y, incy)
+        ! Accumulator semantics: zero-init r before the call.
         integer,     intent(in)  :: n, incx, incy
         complex(ep), intent(in)  :: x(*), y(*)
         complex(ep), intent(out) :: dot
@@ -494,6 +509,7 @@ contains
         nx = 1 + (n - 1) * abs(incx); ny = 1 + (n - 1) * abs(incy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        r = q2t_c((0.0_ep, 0.0_ep))
         call ${C}$vvdotc(n, r, xt, incx, yt, incy)
         dot = t2q_c(r)
     end subroutine
@@ -508,6 +524,7 @@ contains
         nx = 1 + (n - 1) * abs(incx); ny = 1 + (n - 1) * abs(incy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        r = q2t_c((0.0_ep, 0.0_ep))
         call ${C}$vvdotu(n, r, xt, incx, yt, incy)
         dot = t2q_c(r)
     end subroutine
