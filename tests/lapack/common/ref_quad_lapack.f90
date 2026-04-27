@@ -2118,6 +2118,85 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zhbtrd
+
+        ! ── Orthogonal/unitary Q generation/application for *trd ─────
+        subroutine dorgtr(uplo, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(in)    :: tau(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorgtr
+
+        subroutine zungtr(uplo, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungtr
+
+        subroutine dormtr(side, uplo, trans, m, n, A, lda, tau, C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, uplo, trans
+            integer,   intent(in)    :: m, n, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormtr
+
+        subroutine zunmtr(side, uplo, trans, m, n, A, lda, tau, C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, uplo, trans
+            integer,     intent(in)    :: m, n, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmtr
+
+        subroutine dopgtr(uplo, n, AP, tau, Q, ldq, work, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, ldq
+            real(ep),  intent(in)  :: AP(*), tau(*)
+            real(ep),  intent(out) :: Q(ldq,*), work(*)
+            integer,   intent(out) :: info
+        end subroutine dopgtr
+
+        subroutine zupgtr(uplo, n, AP, tau, Q, ldq, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, ldq
+            complex(ep), intent(in)  :: AP(*), tau(*)
+            complex(ep), intent(out) :: Q(ldq,*), work(*)
+            integer,     intent(out) :: info
+        end subroutine zupgtr
+
+        subroutine dopmtr(side, uplo, trans, m, n, AP, tau, C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: side, uplo, trans
+            integer,   intent(in)    :: m, n, ldc
+            real(ep),  intent(in)    :: AP(*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dopmtr
+
+        subroutine zupmtr(side, uplo, trans, m, n, AP, tau, C, ldc, work, info)
+            import :: ep
+            character,   intent(in)    :: side, uplo, trans
+            integer,     intent(in)    :: m, n, ldc
+            complex(ep), intent(in)    :: AP(*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zupmtr
     end interface
 
 end module ref_quad_lapack

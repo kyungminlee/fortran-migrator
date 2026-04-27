@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_216 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_224 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -376,8 +376,8 @@ _216 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dlatsqr | — | — | — |
 |  | dlauu2 | — | — | — |
 |  | dlauum | — | — | — |
-| ✓ | dopgtr | — | — | — |
-| ✓ | dopmtr | — | — | — |
+| ✓ | dopgtr | 18.79 | exact | 31.63 |
+| ✓ | dopmtr | 18.56 | exact | 31.45 |
 | ✓ | dorbdb | — | — | — |
 |  | dorbdb1 | — | — | — |
 |  | dorbdb2 | — | — | — |
@@ -397,7 +397,7 @@ _216 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dorgqr | 18.19 | exact | 30.88 |
 |  | dorgr2 | — | — | — |
 | ✓ | dorgrq | 18.23 | exact | 30.86 |
-| ✓ | dorgtr | — | — | — |
+| ✓ | dorgtr | 18.74 | exact | 31.55 |
 | ✓ | dorgtsqr | — | — | — |
 | ✓ | dorgtsqr_row | — | — | — |
 | ✓ | dorhr_col | — | — | — |
@@ -414,7 +414,7 @@ _216 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dormr3 | — | — | — |
 | ✓ | dormrq | 18.52 | exact | 31.15 |
 | ✓ | dormrz | — | — | — |
-| ✓ | dormtr | — | — | — |
+| ✓ | dormtr | 18.63 | exact | 31.48 |
 | ✓ | dpbcon | 18.94 | exact | 31.05 |
 | ✓ | dpbequ | 19.16 | exact | 31.58 |
 | ✓ | dpbrfs | 18.95 | exact | 31.78 |
@@ -1084,7 +1084,7 @@ _216 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zungqr | 18.15 | exact | 30.89 |
 |  | zungr2 | — | — | — |
 | ✓ | zungrq | 18.16 | exact | 30.90 |
-| ✓ | zungtr | — | — | — |
+| ✓ | zungtr | 18.96 | exact | 31.79 |
 | ✓ | zungtsqr | — | — | — |
 | ✓ | zungtsqr_row | — | — | — |
 | ✓ | zunhr_col | — | — | — |
@@ -1101,9 +1101,9 @@ _216 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zunmr3 | — | — | — |
 | ✓ | zunmrq | 18.50 | exact | 31.34 |
 | ✓ | zunmrz | — | — | — |
-| ✓ | zunmtr | — | — | — |
-| ✓ | zupgtr | — | — | — |
-| ✓ | zupmtr | — | — | — |
+| ✓ | zunmtr | 18.61 | exact | 31.41 |
+| ✓ | zupgtr | 18.94 | exact | 31.69 |
+| ✓ | zupmtr | 18.60 | exact | 31.47 |
 
 ## PBLAS
 
