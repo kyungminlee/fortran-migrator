@@ -148,12 +148,14 @@ $:IMPORT_R()
         end subroutine
 
         ! ── Level 1 — mixed real-from-complex (asum, nrm2) ───────────
+        ! Accumulator: intent(inout) so the wrapper's asum_t = 0 init
+        ! isn't elided.
         subroutine ${RC}$asum(n, asum, x, ix, jx, descx, incx)
 $:IMPORT_RC()
             integer, intent(in) :: n, ix, jx, incx
             integer, intent(in) :: descx(9)
-            ${target_complex}$, intent(in)  :: x(*)
-            ${target_real}$,    intent(out) :: asum
+            ${target_complex}$, intent(in)    :: x(*)
+            ${target_real}$,    intent(inout) :: asum
         end subroutine
 
         subroutine ${RC}$nrm2(n, norm2, x, ix, jx, descx, incx)
@@ -727,6 +729,9 @@ contains
 
     ! ── Level 1 — mixed real-from-complex ────────────────────────────
     subroutine target_pdzasum(n, asum, x, ix, jx, descx, incx)
+        ! Zero-init the target accumulator before the call — see
+        ! target_dvvdot in tests/ptzblas for the gory details on why
+        ! intent(out) is unsafe for accumulator routines under -O.
         integer,     intent(in)  :: n, ix, jx, incx
         integer,     intent(in)  :: descx(9)
         complex(ep), intent(in)  :: x(*)
@@ -737,6 +742,7 @@ contains
         nx = descx(9) * descx(4)
         allocate(xt(nx))
         xt = q2t_c(x(1:nx))
+        asum_t = q2t_r(0.0_ep)
         call ${RC}$asum(n, asum_t, xt, ix, jx, descx, incx)
         asum = t2q_r(asum_t)
     end subroutine
