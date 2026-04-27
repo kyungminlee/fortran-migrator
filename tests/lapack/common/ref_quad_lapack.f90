@@ -895,6 +895,119 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: w(*), rwork(*)
             integer,     intent(out)   :: m, iwork(*), ifail(*), info
         end subroutine zhpevx
+
+        ! ── Phase 8 — QL / RQ family ─────────────────────────────────
+        subroutine dgeqlf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqlf
+
+        subroutine dorgql(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgql
+
+        subroutine dormql(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormql
+
+        subroutine zgeqlf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqlf
+
+        subroutine zungql(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungql
+
+        subroutine zunmql(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmql
+
+        subroutine dgerqf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgerqf
+
+        subroutine dorgrq(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgrq
+
+        subroutine dormrq(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormrq
+
+        subroutine zgerqf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgerqf
+
+        subroutine zungrq(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungrq
+
+        subroutine zunmrq(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmrq
     end interface
 
 end module ref_quad_lapack

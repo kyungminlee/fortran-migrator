@@ -76,6 +76,10 @@ module target_lapack
     public :: target_zhbev,  target_zhbevd, target_zhbevx
     public :: target_dspev,  target_dspevd, target_dspevx
     public :: target_zhpev,  target_zhpevd, target_zhpevx
+    public :: target_dgeqlf, target_dorgql, target_dormql
+    public :: target_zgeqlf, target_zungql, target_zunmql
+    public :: target_dgerqf, target_dorgrq, target_dormrq
+    public :: target_zgerqf, target_zungrq, target_zunmrq
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -954,6 +958,119 @@ $:IMPORT_RC()
             ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
             ${target_real}$,    intent(out)   :: w(*), rwork(*)
             integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        ! ── Phase 8 — QL / RQ family ─────────────────────────────────
+        subroutine ${R}$geqlf(m, n, A, lda, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$orgql(m, n, k, A, lda, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, k, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(in)    :: tau(*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$ormql(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                              work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, lda, ldc, lwork
+            ${target_real}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$geqlf(m, n, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ungql(m, n, k, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, k, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(in)    :: tau(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$unmql(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                              work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, lda, ldc, lwork
+            ${target_complex}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gerqf(m, n, A, lda, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$orgrq(m, n, k, A, lda, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, k, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(in)    :: tau(*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$ormrq(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                              work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, lda, ldc, lwork
+            ${target_real}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gerqf(m, n, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ungrq(m, n, k, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, k, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(in)    :: tau(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$unmrq(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                              work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, lda, ldc, lwork
+            ${target_complex}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
         end subroutine
     end interface
 
@@ -2659,6 +2776,255 @@ contains
         AP(1:np) = t2q_c(APt)
         w(1:n)   = t2q_r(wt)
         if (jobz /= 'N' .and. jobz /= 'n') z(1:ldz, 1:n) = t2q_c(zt)
+    end subroutine
+
+    ! ── Phase 8 wrappers ─────────────────────────────────────────────
+    subroutine target_dgeqlf(m, n, A, lda, tau, info)
+        integer,  intent(in)    :: m, n, lda
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: tau(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, kmn
+        kmn = min(m, n)
+        allocate(At(lda, n), taut(kmn))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geqlf(m, n, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$geqlf(m, n, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        tau(1:kmn)    = t2q_r(taut)
+    end subroutine
+
+    subroutine target_dorgql(m, n, k, A, lda, tau, info)
+        integer,  intent(in)    :: m, n, k, lda
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(in)    :: tau(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(k))
+        At = q2t_r(A(1:lda, 1:n))
+        taut = q2t_r(tau(1:k))
+        call ${R}$orgql(m, n, k, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$orgql(m, n, k, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_dormql(side, trans, m, n, k, A, lda, tau, C, ldc, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, k, lda, ldc
+        real(ep),  intent(in)    :: A(lda,*), tau(*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, ncolA
+        ncolA = k
+        allocate(At(lda, ncolA), taut(k), Ct(ldc, n))
+        At = q2t_r(A(1:lda, 1:ncolA))
+        taut = q2t_r(tau(1:k))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$ormql(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
+                        wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$ormql(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
+                        work, lwork, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zgeqlf(m, n, A, lda, tau, info)
+        integer,     intent(in)    :: m, n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, kmn
+        kmn = min(m, n)
+        allocate(At(lda, n), taut(kmn))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$geqlf(m, n, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$geqlf(m, n, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        tau(1:kmn)    = t2q_c(taut)
+    end subroutine
+
+    subroutine target_zungql(m, n, k, A, lda, tau, info)
+        integer,     intent(in)    :: m, n, k, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(k))
+        At = q2t_c(A(1:lda, 1:n))
+        taut = q2t_c(tau(1:k))
+        call ${C}$ungql(m, n, k, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$ungql(m, n, k, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zunmql(side, trans, m, n, k, A, lda, tau, C, ldc, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, k, lda, ldc
+        complex(ep), intent(in)    :: A(lda,*), tau(*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, ncolA
+        ncolA = k
+        allocate(At(lda, ncolA), taut(k), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:ncolA))
+        taut = q2t_c(tau(1:k))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$unmql(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
+                        wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$unmql(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
+                        work, lwork, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_dgerqf(m, n, A, lda, tau, info)
+        integer,  intent(in)    :: m, n, lda
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: tau(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, kmn
+        kmn = min(m, n)
+        allocate(At(lda, n), taut(kmn))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gerqf(m, n, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$gerqf(m, n, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        tau(1:kmn)    = t2q_r(taut)
+    end subroutine
+
+    subroutine target_dorgrq(m, n, k, A, lda, tau, info)
+        integer,  intent(in)    :: m, n, k, lda
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(in)    :: tau(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(k))
+        At = q2t_r(A(1:lda, 1:n))
+        taut = q2t_r(tau(1:k))
+        call ${R}$orgrq(m, n, k, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$orgrq(m, n, k, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_dormrq(side, trans, m, n, k, A, lda, tau, C, ldc, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, k, lda, ldc
+        real(ep),  intent(in)    :: A(lda,*), tau(*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, ncolA
+        if (side == 'L' .or. side == 'l') then
+            ncolA = m
+        else
+            ncolA = n
+        end if
+        allocate(At(lda, ncolA), taut(k), Ct(ldc, n))
+        At = q2t_r(A(1:lda, 1:ncolA))
+        taut = q2t_r(tau(1:k))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$ormrq(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
+                        wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$ormrq(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
+                        work, lwork, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zgerqf(m, n, A, lda, tau, info)
+        integer,     intent(in)    :: m, n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, kmn
+        kmn = min(m, n)
+        allocate(At(lda, n), taut(kmn))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gerqf(m, n, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$gerqf(m, n, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        tau(1:kmn)    = t2q_c(taut)
+    end subroutine
+
+    subroutine target_zungrq(m, n, k, A, lda, tau, info)
+        integer,     intent(in)    :: m, n, k, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(k))
+        At = q2t_c(A(1:lda, 1:n))
+        taut = q2t_c(tau(1:k))
+        call ${C}$ungrq(m, n, k, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$ungrq(m, n, k, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zunmrq(side, trans, m, n, k, A, lda, tau, C, ldc, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, k, lda, ldc
+        complex(ep), intent(in)    :: A(lda,*), tau(*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, ncolA
+        if (side == 'L' .or. side == 'l') then
+            ncolA = m
+        else
+            ncolA = n
+        end if
+        allocate(At(lda, ncolA), taut(k), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:ncolA))
+        taut = q2t_c(tau(1:k))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$unmrq(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
+                        wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$unmrq(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
+                        work, lwork, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
     end subroutine
 
 end module target_lapack
