@@ -2031,7 +2031,15 @@ def is_comment_line(line: str) -> bool:
     return bool(line) and line[0] in ('C', 'c', '*', '!')
 
 def is_continuation_line(line: str) -> bool:
-    return len(line) > 5 and line[0:5].strip() == '' and line[5] not in (' ', '0', '')
+    # Fixed-form continuation: cols 1-5 blank (spaces only — NOT tabs), col 6
+    # holds a non-blank, non-zero marker. A tab in col 1 is the gfortran/intel
+    # extension that means "rest of line is normal source from col 7"; such a
+    # line is a fresh statement, not a continuation, even when col 6 (i.e. the
+    # 6th character after the tab) happens to be alphabetic. See dlarre2.f in
+    # ScaLAPACK 2.2.3 for the wild form: `\t    CALL DLARRC(...)`.
+    if not line or line[0] == '\t':
+        return False
+    return len(line) > 5 and line[0:5] == '     ' and line[5] not in (' ', '0', '')
 
 def _build_split_mask(body: str) -> list[bool]:
     mask = [True] * len(body)
@@ -2148,7 +2156,7 @@ def _segment_fixed_form_statements(
                 ntext, nterm = nxt[:-1], nxt[-1]
             else:
                 ntext, nterm = nxt, ''
-            if (len(ntext) > 5 and ntext[:5].strip() == ''
+            if (len(ntext) > 5 and ntext[:1] != '\t' and ntext[:5] == '     '
                     and ntext[5:6] not in (' ', '0', '\t', '')):
                 lines.append(ntext)
                 terms.append(nterm)
