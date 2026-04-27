@@ -152,6 +152,29 @@ def _is_free_form_comment(line: str) -> bool:
     return not line or line.lstrip().startswith('!')
 
 
+def _collect_source_files(src_dir: Path, language: str) -> list[Path]:
+    """Discover migrated source files in ``src_dir`` for the given language.
+
+    Honors all four Fortran extension cases (``.f``/``.F``/``.f90``/``.F90``).
+    Dedupe uses ``(st_dev, st_ino)`` so case-insensitive filesystems (where
+    ``*.f`` and ``*.F`` glob the same physical file) do not double-stage.
+    """
+    if language == 'c':
+        patterns = ('*.c', '*.f', '*.F', '*.f90', '*.F90')
+    else:
+        patterns = ('*.f', '*.F', '*.f90', '*.F90')
+    seen: dict[tuple, Path] = {}
+    for pat in patterns:
+        for f in src_dir.glob(pat):
+            try:
+                st = f.stat()
+                key = (st.st_dev, st.st_ino)
+            except OSError:
+                key = ('missing', str(f))
+            seen.setdefault(key, f)
+    return sorted(seen.values())
+
+
 def cmd_verify(args):
     """Verify migrated output: residual types, literals, column width."""
     out_dir = args.output_dir
@@ -163,7 +186,7 @@ def cmd_verify(args):
 
     target_mode = _get_target_mode(args)
 
-    f_files = sorted(src_dir.glob('*.f'))
+    f_files = sorted(list(src_dir.glob('*.f')) + list(src_dir.glob('*.F')))
     f90_files = sorted(list(src_dir.glob('*.f90')) + list(src_dir.glob('*.F90')))
     all_files = f_files + f90_files
 
@@ -753,23 +776,13 @@ def cmd_stage(args):
         classification = classify_symbols(symbols)
         independent = classification.independent
 
-        if config.language == 'c':
-            # Pick up precision-independent Fortran helpers staged via
-            # ``copy_files`` (e.g. PBLAS/SRC/pilaenv.f). CMake's
-            # ``add_library(… STATIC …)`` handles mixed C + Fortran
-            # sources because both languages are enabled at the top
-            # project(). Copy-files are precision-independent by
-            # contract, so they land in COMMON_SOURCES below.
-            files = sorted(
-                list(src_dir.glob('*.c'))
-                + list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
-                + list(src_dir.glob('*.F90'))
-            )
-        else:
-            files = sorted(
-                list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
-                + list(src_dir.glob('*.F90'))
-            )
+        # Pick up precision-independent Fortran helpers staged via
+        # ``copy_files`` (e.g. PBLAS/SRC/pilaenv.f) when the recipe is C —
+        # CMake's ``add_library(… STATIC …)`` handles mixed C + Fortran
+        # sources because both languages are enabled at the top
+        # project(). Copy-files are precision-independent by contract,
+        # so they land in COMMON_SOURCES below.
+        files = _collect_source_files(src_dir, config.language)
 
         # MF helper modules are built as separate targets; exclude from manifests.
         _mf_helpers = {'la_constants_mf', 'la_xisnan_mf'}
