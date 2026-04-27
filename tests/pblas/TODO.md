@@ -93,11 +93,17 @@ that uses `Calph16` (rank-2k, Hermitian matmul, etc.) gets garbage
 for `conjg(alpha)`.
 
 `tests/pblas/level3/test_pzher2k.f90` exercises exactly this path
-(complex `alpha` with non-zero imaginary part, `UPLO='U'`,
-`TRANS='N'`) and surfaces the bug as max-rel-err ≈ 1.0+ with
-tolerance ≈ 1e-30. The test is intentionally left in place so the
-failure is visible; once the migrator bug is fixed, the test should
-go green automatically.
+(complex `alpha` with non-zero imaginary part) and surfaces the bug
+as max-rel-err ≈ 1.0+ with tolerance ≈ 1e-30. The test is
+intentionally left in place so the failure is visible; once the
+migrator bug is fixed, the test should go green automatically.
+
+The test now also exercises the additional UPLO/TRANS combinations
+(UPLO ∈ {'U','L'} × TRANS ∈ {'N','C'}, four combos × three sizes =
+12 cases). Every combo routes through the same PB_Ctzher2k stack
+allocation and PB_Cconjg call site, so all 12 cases also fail with
+max-rel-err ≈ 1.0+ on kind16. They are kept so the migrator fix can
+be validated across PB_Cptzher2k{LU,LL,UN,UC,LN,LC} simultaneously.
 
 Fix should land in two places, both outside `tests/pblas/`:
 
