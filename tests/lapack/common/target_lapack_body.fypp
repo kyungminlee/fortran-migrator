@@ -123,6 +123,8 @@ module target_lapack
     public :: target_dstedc, target_zstedc, target_dstebz
     public :: target_dbdsqr, target_zbdsqr, target_dbdsdc
     public :: target_ddisna, target_dgebal, target_zgebal, target_dgebak, target_zgebak
+    public :: target_dggbal, target_zggbal, target_dggbak, target_zggbak
+    public :: target_dgghrd, target_zgghrd
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2605,6 +2607,65 @@ $:IMPORT_RC()
             integer,   intent(in) :: n, ilo, ihi, m, ldv
             ${target_real}$,    intent(in)    :: scale(*)
             ${target_complex}$, intent(inout) :: V(ldv,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 29 — generalized balance/back-transform/Hessenberg ──
+        subroutine ${R}$ggbal(job, n, A, lda, B, ldb, ilo, ihi, lscale, rscale, &
+                              work, info)
+$:IMPORT_R()
+            character, intent(in) :: job
+            integer,   intent(in) :: n, lda, ldb
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out) :: ilo, ihi
+            ${target_real}$, intent(out) :: lscale(*), rscale(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ggbal(job, n, A, lda, B, ldb, ilo, ihi, lscale, rscale, &
+                              work, info)
+$:IMPORT_RC()
+            character, intent(in) :: job
+            integer,   intent(in) :: n, lda, ldb
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out) :: ilo, ihi
+            ${target_real}$,    intent(out) :: lscale(*), rscale(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$ggbak(job, side, n, ilo, ihi, lscale, rscale, m, V, ldv, info)
+$:IMPORT_R()
+            character, intent(in) :: job, side
+            integer,   intent(in) :: n, ilo, ihi, m, ldv
+            ${target_real}$, intent(in)    :: lscale(*), rscale(*)
+            ${target_real}$, intent(inout) :: V(ldv,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ggbak(job, side, n, ilo, ihi, lscale, rscale, m, V, ldv, info)
+$:IMPORT_RC()
+            character, intent(in) :: job, side
+            integer,   intent(in) :: n, ilo, ihi, m, ldv
+            ${target_real}$,    intent(in)    :: lscale(*), rscale(*)
+            ${target_complex}$, intent(inout) :: V(ldv,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gghrd(compq, compz, n, ilo, ihi, A, lda, B, ldb, &
+                              Q, ldq, Z, ldz, info)
+$:IMPORT_R()
+            character, intent(in) :: compq, compz
+            integer,   intent(in) :: n, ilo, ihi, lda, ldb, ldq, ldz
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gghrd(compq, compz, n, ilo, ihi, A, lda, B, ldb, &
+                              Q, ldq, Z, ldz, info)
+$:IMPORT_C()
+            character, intent(in) :: compq, compz
+            integer,   intent(in) :: n, ilo, ihi, lda, ldb, ldq, ldz
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -7125,6 +7186,107 @@ $:CPACK_INV('zsptri', C + 'sptri')
         Vt = q2t_c(V(1:ldv, 1:m)); scalet = q2t_r(scale(1:n))
         call ${C}$gebak(job, side, n, ilo, ihi, scalet, m, Vt, ldv, info)
         V(1:ldv, 1:m) = t2q_c(Vt)
+    end subroutine
+
+    ! ── Phase 29 wrappers ────────────────────────────────────────────
+    subroutine target_dggbal(job, n, A, lda, B, ldb, ilo, ihi, lscale, rscale, info)
+        character, intent(in)    :: job
+        integer,   intent(in)    :: n, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: ilo, ihi
+        real(ep),  intent(out)   :: lscale(*), rscale(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), lst(:), rst(:), work(:)
+        allocate(At(lda, n), Bt(ldb, n), lst(n), rst(n), work(6*n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$ggbal(job, n, At, lda, Bt, ldb, ilo, ihi, lst, rst, work, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+        lscale(1:n) = t2q_r(lst); rscale(1:n) = t2q_r(rst)
+    end subroutine
+
+    subroutine target_zggbal(job, n, A, lda, B, ldb, ilo, ihi, lscale, rscale, info)
+        character,   intent(in)    :: job
+        integer,     intent(in)    :: n, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: ilo, ihi
+        real(ep),    intent(out)   :: lscale(*), rscale(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        ${target_real}$,    allocatable :: lst(:), rst(:), work(:)
+        allocate(At(lda, n), Bt(ldb, n), lst(n), rst(n), work(6*n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$ggbal(job, n, At, lda, Bt, ldb, ilo, ihi, lst, rst, work, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
+        lscale(1:n) = t2q_r(lst); rscale(1:n) = t2q_r(rst)
+    end subroutine
+
+    subroutine target_dggbak(job, side, n, ilo, ihi, lscale, rscale, m, V, ldv, info)
+        character, intent(in)    :: job, side
+        integer,   intent(in)    :: n, ilo, ihi, m, ldv
+        real(ep),  intent(in)    :: lscale(*), rscale(*)
+        real(ep),  intent(inout) :: V(ldv,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Vt(:,:), lst(:), rst(:)
+        allocate(Vt(ldv, m), lst(n), rst(n))
+        Vt = q2t_r(V(1:ldv, 1:m)); lst = q2t_r(lscale(1:n)); rst = q2t_r(rscale(1:n))
+        call ${R}$ggbak(job, side, n, ilo, ihi, lst, rst, m, Vt, ldv, info)
+        V(1:ldv, 1:m) = t2q_r(Vt)
+    end subroutine
+
+    subroutine target_zggbak(job, side, n, ilo, ihi, lscale, rscale, m, V, ldv, info)
+        character,   intent(in)    :: job, side
+        integer,     intent(in)    :: n, ilo, ihi, m, ldv
+        real(ep),    intent(in)    :: lscale(*), rscale(*)
+        complex(ep), intent(inout) :: V(ldv,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Vt(:,:)
+        ${target_real}$,    allocatable :: lst(:), rst(:)
+        allocate(Vt(ldv, m), lst(n), rst(n))
+        Vt = q2t_c(V(1:ldv, 1:m)); lst = q2t_r(lscale(1:n)); rst = q2t_r(rscale(1:n))
+        call ${C}$ggbak(job, side, n, ilo, ihi, lst, rst, m, Vt, ldv, info)
+        V(1:ldv, 1:m) = t2q_c(Vt)
+    end subroutine
+
+    subroutine target_dgghrd(compq, compz, n, ilo, ihi, A, lda, B, ldb, &
+                             Q, ldq, Z, ldz, info)
+        character, intent(in)    :: compq, compz
+        integer,   intent(in)    :: n, ilo, ihi, lda, ldb, ldq, ldz
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Qt(:,:), Zt(:,:)
+        integer :: nq, nz
+        nq = merge(n, 1, compq == 'V' .or. compq == 'v' .or. compq == 'I' .or. compq == 'i')
+        nz = merge(n, 1, compz == 'V' .or. compz == 'v' .or. compz == 'I' .or. compz == 'i')
+        allocate(At(lda, n), Bt(ldb, n), Qt(ldq, nq), Zt(ldz, nz))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        if (compq == 'V' .or. compq == 'v') Qt = q2t_r(Q(1:ldq, 1:nq))
+        if (compz == 'V' .or. compz == 'v') Zt = q2t_r(Z(1:ldz, 1:nz))
+        call ${R}$gghrd(compq, compz, n, ilo, ihi, At, lda, Bt, ldb, &
+                       Qt, ldq, Zt, ldz, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+        if (compq /= 'N' .and. compq /= 'n') Q(1:ldq, 1:nq) = t2q_r(Qt)
+        if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zgghrd(compq, compz, n, ilo, ihi, A, lda, B, ldb, &
+                             Q, ldq, Z, ldz, info)
+        character,   intent(in)    :: compq, compz
+        integer,     intent(in)    :: n, ilo, ihi, lda, ldb, ldq, ldz
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Qt(:,:), Zt(:,:)
+        integer :: nq, nz
+        nq = merge(n, 1, compq == 'V' .or. compq == 'v' .or. compq == 'I' .or. compq == 'i')
+        nz = merge(n, 1, compz == 'V' .or. compz == 'v' .or. compz == 'I' .or. compz == 'i')
+        allocate(At(lda, n), Bt(ldb, n), Qt(ldq, nq), Zt(ldz, nz))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        if (compq == 'V' .or. compq == 'v') Qt = q2t_c(Q(1:ldq, 1:nq))
+        if (compz == 'V' .or. compz == 'v') Zt = q2t_c(Z(1:ldz, 1:nz))
+        call ${C}$gghrd(compq, compz, n, ilo, ihi, At, lda, Bt, ldb, &
+                       Qt, ldq, Zt, ldz, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
+        if (compq /= 'N' .and. compq /= 'n') Q(1:ldq, 1:nq) = t2q_c(Qt)
+        if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_c(Zt)
     end subroutine
 
     subroutine target_dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, info)

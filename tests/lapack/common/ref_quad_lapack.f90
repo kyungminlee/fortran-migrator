@@ -2502,6 +2502,65 @@ module ref_quad_lapack
             complex(ep), intent(inout) :: V(ldv,*)
             integer,     intent(out)   :: info
         end subroutine zgebak
+
+        ! ── Generalized balance/back-transform/Hessenberg ────────────
+        subroutine dggbal(job, n, A, lda, B, ldb, ilo, ihi, lscale, rscale, &
+                          work, info)
+            import :: ep
+            character, intent(in)    :: job
+            integer,   intent(in)    :: n, lda, ldb
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ilo, ihi
+            real(ep),  intent(out)   :: lscale(*), rscale(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dggbal
+
+        subroutine zggbal(job, n, A, lda, B, ldb, ilo, ihi, lscale, rscale, &
+                          work, info)
+            import :: ep
+            character,   intent(in)    :: job
+            integer,     intent(in)    :: n, lda, ldb
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ilo, ihi
+            real(ep),    intent(out)   :: lscale(*), rscale(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggbal
+
+        subroutine dggbak(job, side, n, ilo, ihi, lscale, rscale, m, V, ldv, info)
+            import :: ep
+            character, intent(in)    :: job, side
+            integer,   intent(in)    :: n, ilo, ihi, m, ldv
+            real(ep),  intent(in)    :: lscale(*), rscale(*)
+            real(ep),  intent(inout) :: V(ldv,*)
+            integer,   intent(out)   :: info
+        end subroutine dggbak
+
+        subroutine zggbak(job, side, n, ilo, ihi, lscale, rscale, m, V, ldv, info)
+            import :: ep
+            character,   intent(in)    :: job, side
+            integer,     intent(in)    :: n, ilo, ihi, m, ldv
+            real(ep),    intent(in)    :: lscale(*), rscale(*)
+            complex(ep), intent(inout) :: V(ldv,*)
+            integer,     intent(out)   :: info
+        end subroutine zggbak
+
+        subroutine dgghrd(compq, compz, n, ilo, ihi, A, lda, B, ldb, &
+                          Q, ldq, Z, ldz, info)
+            import :: ep
+            character, intent(in)    :: compq, compz
+            integer,   intent(in)    :: n, ilo, ihi, lda, ldb, ldq, ldz
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer,   intent(out)   :: info
+        end subroutine dgghrd
+
+        subroutine zgghrd(compq, compz, n, ilo, ihi, A, lda, B, ldb, &
+                          Q, ldq, Z, ldz, info)
+            import :: ep
+            character,   intent(in)    :: compq, compz
+            integer,     intent(in)    :: n, ilo, ihi, lda, ldb, ldq, ldz
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer,     intent(out)   :: info
+        end subroutine zgghrd
     end interface
 
 end module ref_quad_lapack

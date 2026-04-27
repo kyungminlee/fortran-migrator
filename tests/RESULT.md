@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_254 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_260 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -172,8 +172,8 @@ _254 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgetrs | 17.63 | exact | 30.21 |
 | ✓ | dgetsls | — | — | — |
 | ✓ | dgetsqrhrt | — | — | — |
-| ✓ | dggbak | — | — | — |
-| ✓ | dggbal | — | — | — |
+| ✓ | dggbak | exact | exact | exact |
+| ✓ | dggbal | exact | exact | exact |
 | ✓ | dgges | — | — | — |
 |  | dgges3 | — | — | — |
 | ✓ | dggesx | — | — | — |
@@ -182,7 +182,7 @@ _254 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dggevx | — | — | — |
 | ✓ | dggglm | — | — | — |
 |  | dgghd3 | — | — | — |
-| ✓ | dgghrd | — | — | — |
+| ✓ | dgghrd | 17.39 | exact | 29.60 |
 | ✓ | dgglse | — | — | — |
 | ✓ | dggqrf | — | — | — |
 | ✓ | dggrqf | — | — | — |
@@ -676,8 +676,8 @@ _254 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgetrs | 17.80 | exact | 30.44 |
 | ✓ | zgetsls | — | — | — |
 | ✓ | zgetsqrhrt | — | — | — |
-| ✓ | zggbak | — | — | — |
-| ✓ | zggbal | — | — | — |
+| ✓ | zggbak | exact | exact | exact |
+| ✓ | zggbal | exact | exact | exact |
 | ✓ | zgges | — | — | — |
 |  | zgges3 | — | — | — |
 | ✓ | zggesx | — | — | — |
@@ -686,7 +686,7 @@ _254 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zggevx | — | — | — |
 | ✓ | zggglm | — | — | — |
 |  | zgghd3 | — | — | — |
-| ✓ | zgghrd | — | — | — |
+| ✓ | zgghrd | 16.02 | exact | 28.59 |
 | ✓ | zgglse | — | — | — |
 | ✓ | zggqrf | — | — | — |
 | ✓ | zggrqf | — | — | — |
