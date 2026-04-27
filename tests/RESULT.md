@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_249 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_254 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -96,7 +96,7 @@ _249 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dbdsdc | 18.48 | exact | 30.53 |
 | ✓ | dbdsqr | 18.50 | exact | 30.74 |
 | ✓ | dbdsvdx | — | — | — |
-| ✓ | ddisna | — | — | — |
+| ✓ | ddisna | exact | exact | exact |
 | ✓ | dgbbrd | — | — | — |
 | ✓ | dgbcon | 18.95 | exact | 31.78 |
 | ✓ | dgbequ | 19.12 | exact | 31.96 |
@@ -109,8 +109,8 @@ _249 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dgbtf2 | — | — | — |
 | ✓ | dgbtrf | 19.02 | exact | 31.77 |
 | ✓ | dgbtrs | 18.94 | exact | 31.36 |
-| ✓ | dgebak | — | — | — |
-| ✓ | dgebal | — | — | — |
+| ✓ | dgebak | exact | exact | exact |
+| ✓ | dgebal | exact | exact | exact |
 |  | dgebd2 | — | — | — |
 | ✓ | dgebrd | 17.34 | exact | 30.48 |
 | ✓ | dgecon | 18.00 | exact | 30.41 |
@@ -613,8 +613,8 @@ _249 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zgbtf2 | — | — | — |
 | ✓ | zgbtrf | 19.07 | exact | 31.88 |
 | ✓ | zgbtrs | 18.89 | exact | 31.39 |
-| ✓ | zgebak | — | — | — |
-| ✓ | zgebal | — | — | — |
+| ✓ | zgebak | exact | exact | exact |
+| ✓ | zgebal | exact | exact | exact |
 |  | zgebd2 | — | — | — |
 | ✓ | zgebrd | 17.31 | exact | 30.53 |
 | ✓ | zgecon | 17.80 | exact | 30.45 |

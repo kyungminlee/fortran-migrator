@@ -122,6 +122,7 @@ module target_lapack
     public :: target_dsterf, target_dsteqr, target_zsteqr
     public :: target_dstedc, target_zstedc, target_dstebz
     public :: target_dbdsqr, target_zbdsqr, target_dbdsdc
+    public :: target_ddisna, target_dgebal, target_zgebal, target_dgebak, target_zgebak
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2557,6 +2558,54 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: D(*), E(*)
             ${target_real}$, intent(out)   :: U(ldu,*), VT(ldvt,*), Q(*), work(*)
             integer, intent(out) :: IQ(*), iwork(*), info
+        end subroutine
+
+        ! ── Phase 28 — ddisna + balancing/back-transform ────────────
+        subroutine ${R}$disna(job, m, n, D, sep, info)
+$:IMPORT_R()
+            character, intent(in) :: job
+            integer,   intent(in) :: m, n
+            ${target_real}$, intent(in)  :: D(*)
+            ${target_real}$, intent(out) :: sep(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gebal(job, n, A, lda, ilo, ihi, scale, info)
+$:IMPORT_R()
+            character, intent(in) :: job
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer,   intent(out) :: ilo, ihi
+            ${target_real}$, intent(out) :: scale(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gebal(job, n, A, lda, ilo, ihi, scale, info)
+$:IMPORT_RC()
+            character, intent(in) :: job
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer,   intent(out) :: ilo, ihi
+            ${target_real}$,    intent(out) :: scale(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gebak(job, side, n, ilo, ihi, scale, m, V, ldv, info)
+$:IMPORT_R()
+            character, intent(in) :: job, side
+            integer,   intent(in) :: n, ilo, ihi, m, ldv
+            ${target_real}$, intent(in)    :: scale(*)
+            ${target_real}$, intent(inout) :: V(ldv,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gebak(job, side, n, ilo, ihi, scale, m, V, ldv, info)
+$:IMPORT_RC()
+            character, intent(in) :: job, side
+            integer,   intent(in) :: n, ilo, ihi, m, ldv
+            ${target_real}$,    intent(in)    :: scale(*)
+            ${target_complex}$, intent(inout) :: V(ldv,*)
+            integer, intent(out) :: info
         end subroutine
     end interface
 
@@ -7004,6 +7053,78 @@ $:CPACK_INV('zsptri', C + 'sptri')
         if (ncvt > 0) VT(1:ldvt, 1:nVT) = t2q_c(VTt)
         if (nru  > 0) U(1:ldu, 1:n)     = t2q_c(Ut)
         if (ncc  > 0) C(1:ldc, 1:nC)    = t2q_c(Ct)
+    end subroutine
+
+    ! ── Phase 28 wrappers ────────────────────────────────────────────
+    subroutine target_ddisna(job, m, n, D, sep, info)
+        character, intent(in)  :: job
+        integer,   intent(in)  :: m, n
+        real(ep),  intent(in)  :: D(*)
+        real(ep),  intent(out) :: sep(*)
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: Dt(:), sept(:)
+        integer :: nlen
+        nlen = min(m, n)
+        allocate(Dt(nlen), sept(nlen))
+        Dt = q2t_r(D(1:nlen))
+        call ${R}$disna(job, m, n, Dt, sept, info)
+        sep(1:nlen) = t2q_r(sept)
+    end subroutine
+
+    subroutine target_dgebal(job, n, A, lda, ilo, ihi, scale, info)
+        character, intent(in)    :: job
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: ilo, ihi
+        real(ep),  intent(out)   :: scale(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), scalet(:)
+        allocate(At(lda, n), scalet(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gebal(job, n, At, lda, ilo, ihi, scalet, info)
+        A(1:lda, 1:n) = t2q_r(At); scale(1:n) = t2q_r(scalet)
+    end subroutine
+
+    subroutine target_zgebal(job, n, A, lda, ilo, ihi, scale, info)
+        character,   intent(in)    :: job
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: ilo, ihi
+        real(ep),    intent(out)   :: scale(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: scalet(:)
+        allocate(At(lda, n), scalet(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gebal(job, n, At, lda, ilo, ihi, scalet, info)
+        A(1:lda, 1:n) = t2q_c(At); scale(1:n) = t2q_r(scalet)
+    end subroutine
+
+    subroutine target_dgebak(job, side, n, ilo, ihi, scale, m, V, ldv, info)
+        character, intent(in)    :: job, side
+        integer,   intent(in)    :: n, ilo, ihi, m, ldv
+        real(ep),  intent(in)    :: scale(*)
+        real(ep),  intent(inout) :: V(ldv,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Vt(:,:), scalet(:)
+        allocate(Vt(ldv, m), scalet(n))
+        Vt = q2t_r(V(1:ldv, 1:m)); scalet = q2t_r(scale(1:n))
+        call ${R}$gebak(job, side, n, ilo, ihi, scalet, m, Vt, ldv, info)
+        V(1:ldv, 1:m) = t2q_r(Vt)
+    end subroutine
+
+    subroutine target_zgebak(job, side, n, ilo, ihi, scale, m, V, ldv, info)
+        character,   intent(in)    :: job, side
+        integer,     intent(in)    :: n, ilo, ihi, m, ldv
+        real(ep),    intent(in)    :: scale(*)
+        complex(ep), intent(inout) :: V(ldv,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Vt(:,:)
+        ${target_real}$,    allocatable :: scalet(:)
+        allocate(Vt(ldv, m), scalet(n))
+        Vt = q2t_c(V(1:ldv, 1:m)); scalet = q2t_r(scale(1:n))
+        call ${C}$gebak(job, side, n, ilo, ihi, scalet, m, Vt, ldv, info)
+        V(1:ldv, 1:m) = t2q_c(Vt)
     end subroutine
 
     subroutine target_dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, info)
