@@ -2,10 +2,11 @@
 ! optional locator (RA, CA) tracking which (prow, pcol) held the
 ! extremum.
 !
-! Each rank loads A(1,1) = rank * 0.5_ep (so values are 0.0, 0.5, 1.0,
-! 1.5 for nproc=4). After qgamx2d → rank (0,0) holds 1.5; the locator
-! identifies the rank with my_rank == nproc-1.
-! After qgamn2d → rank (0,0) holds 0.0; locator identifies rank 0.
+! Real qgamx2d/qgamn2d compare by |value| (see dgamx2d_.c). Each rank
+! loads A(1,1) = ((-1)**my_rank) * (my_rank + 1) * 0.5_ep so values
+! are -0.5, +1.0, -1.5, +2.0 for nproc=4 (|.| = 0.5, 1.0, 1.5, 2.0).
+! After qgamx2d → rank (0,0) holds +2.0 (largest |.|, from rank 3).
+! After qgamn2d → rank (0,0) holds -0.5 (smallest |.|, from rank 0).
 program test_qgamx2d
     use prec_kinds,        only: ep
     use blacs_prec_report, only: report_init, report_case, report_finalize
@@ -26,14 +27,16 @@ program test_qgamx2d
     call grid_init()
     call report_init('blacs_qgamx2d', target_name, my_rank)
 
-    expected_max = real(my_nproc - 1, ep) * 0.5_ep
-    expected_min = 0.0_ep
+    ! Largest |.| comes from the highest rank (=nproc-1). Sign is
+    ! ((-1)**(nproc-1)) * (nproc) * 0.5.
     max_rank = my_nproc - 1
     min_rank = 0
+    expected_max = real((-1)**max_rank, ep) * real(max_rank + 1, ep) * 0.5_ep
+    expected_min = real((-1)**min_rank, ep) * real(min_rank + 1, ep) * 0.5_ep
     ldia = 1
 
     ! ── Max with locator ────────────────────────────────────────────
-    A(1, 1) = real(my_rank, ep) * 0.5_ep
+    A(1, 1) = real((-1)**my_rank, ep) * real(my_rank + 1, ep) * 0.5_ep
     rA(1) = -77; cA(1) = -77
     call target_qgamx2d(my_context, 'A', ' ', 1, 1, A, 1, rA, cA, ldia, 0, 0)
     err = 0.0_ep
@@ -53,7 +56,7 @@ program test_qgamx2d
     end if
 
     ! ── Min with locator ────────────────────────────────────────────
-    A(1, 1) = real(my_rank, ep) * 0.5_ep
+    A(1, 1) = real((-1)**my_rank, ep) * real(my_rank + 1, ep) * 0.5_ep
     rA(1) = -77; cA(1) = -77
     call target_qgamn2d(my_context, 'A', ' ', 1, 1, A, 1, rA, cA, ldia, 0, 0)
     err = 0.0_ep
@@ -72,7 +75,7 @@ program test_qgamx2d
     end if
 
     ! ── Max without locator (LDIA = -1) ─────────────────────────────
-    A(1, 1) = real(my_rank, ep) * 0.5_ep
+    A(1, 1) = real((-1)**my_rank, ep) * real(my_rank + 1, ep) * 0.5_ep
     call target_qgamx2d(my_context, 'A', ' ', 1, 1, A, 1, rA, cA, -1, 0, 0)
     err = 0.0_ep
     if (my_row == 0 .and. my_col == 0) then

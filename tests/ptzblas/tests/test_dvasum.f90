@@ -26,5 +26,18 @@ program test_dvasum
         call report_case(trim(label), err, tol)
         deallocate(x)
     end do
+    ! N=0 smoke: wrapper must leave the OUT scalar at zero (no-op).
+    block
+        real(ep) :: got0
+        real(ep), allocatable :: x0(:)
+        allocate(x0(1))
+        x0(1) = 1.0_ep   ! sentinel — must not be read
+        got0 = 0.0_ep
+        call target_dvasum(0, got0, x0, 1)
+        err = rel_err_scalar(got0, 0.0_ep)
+        tol = 8.0_ep * target_eps
+        call report_case('n=0', err, tol)
+        deallocate(x0)
+    end block
     call report_finalize()
 end program test_dvasum

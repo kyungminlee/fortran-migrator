@@ -7,9 +7,9 @@ program test_drshft
     use target_ptzblas,       only: target_name, target_eps, target_drshft
     implicit none
 
-    integer, parameter :: m_cases(*)   = [10, 50, 128]
-    integer, parameter :: n_cases(*)   = [12, 50, 64]
-    integer, parameter :: off_cases(*) = [1, 7, 33]
+    integer, parameter :: m_cases(*)   = [10, 50, 128, 24,  60]
+    integer, parameter :: n_cases(*)   = [12, 50,  64, 16,  40]
+    integer, parameter :: off_cases(*) = [ 1,  7,  33, -3, -19]
     integer :: i, m, n, off, lda
     real(ep), allocatable :: A_got(:,:), A_ref(:,:)
     real(ep) :: err, tol

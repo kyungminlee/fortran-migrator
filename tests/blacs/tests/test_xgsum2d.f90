@@ -23,6 +23,7 @@ program test_xgsum2d
     rsum = real(my_nproc, ep) * real(my_nproc - 1, ep) / 2.0_ep
     expected = cmplx(rsum, -rsum, ep)
 
+    ! ── Reduce-to-(0,0) ─────────────────────────────────────────────
     A(1, 1) = cmplx(real(my_rank, ep), -real(my_rank, ep), ep)
     call target_xgsum2d(my_context, 'A', ' ', 1, 1, A, 1, 0, 0)
     err = 0.0_ep
@@ -36,6 +37,20 @@ program test_xgsum2d
     if (my_rank == 0) then
         if (fail_global /= 0 .and. err <= tol) err = BAD
         call report_case('reduce_to_00', err, tol)
+    end if
+
+    ! ── All-reduce (rdest = -1) ─────────────────────────────────────
+    A(1, 1) = cmplx(real(my_rank, ep), -real(my_rank, ep), ep)
+    call target_xgsum2d(my_context, 'A', ' ', 1, 1, A, 1, -1, -1)
+    err = 0.0_ep
+    if (A(1, 1) /= expected) err = BAD
+    fail_local = 0
+    if (err > tol) fail_local = 1
+    call mpi_allreduce(fail_local, fail_global, 1, mpi_integer, &
+                       mpi_max, mpi_comm_world, ierr)
+    if (my_rank == 0) then
+        if (fail_global /= 0 .and. err <= tol) err = BAD
+        call report_case('all_reduce', err, tol)
     end if
 
     call report_finalize()

@@ -572,100 +572,144 @@ contains
     end subroutine ref_xagemv
 
     ! Symmetric abs-matvec — UPLO selects which triangle is referenced;
-    ! the missing triangle is implicitly mirrored.
+    ! the missing triangle is implicitly mirrored.  Mirrors upstream
+    ! PTZBLAS/dasymv.f exactly: the diagonal-and-stored-column contribution
+    ! is accumulated with |alpha|, while the mirrored (off-stored-column)
+    ! contribution to the diagonal-row Y(j) is added back with SIGNED
+    ! alpha (see dasymv.f lines 198-199, 221-222, 249, 275).
     subroutine ref_dasymv(uplo, n, alpha, A, x, beta, y)
         character, intent(in)    :: uplo
         integer,   intent(in)    :: n
         real(ep),  intent(in)    :: alpha, beta
         real(ep),  intent(in)    :: A(:,:), x(:)
         real(ep),  intent(inout) :: y(:)
-        real(ep), allocatable :: As(:,:)
-        integer :: i, j
-        allocate(As(n, n))
-        As = 0.0_ep
+        real(ep) :: temp1, temp2, temp0
+        integer  :: i, j
+        if (n <= 0) return
+        ! First form  y := |beta * y|.
+        do i = 1, n
+            y(i) = abs(beta * y(i))
+        end do
+        if (alpha == 0.0_ep) return
         if (uplo == 'U' .or. uplo == 'u') then
             do j = 1, n
-                do i = 1, j
-                    As(i, j) = A(i, j)
-                    As(j, i) = A(i, j)
+                temp1 = abs(alpha) * abs(x(j))
+                temp2 = 0.0_ep
+                do i = 1, j - 1
+                    temp0 = abs(A(i, j))
+                    y(i)  = y(i) + temp1 * temp0
+                    temp2 = temp2 + temp0 * abs(x(i))
                 end do
+                y(j) = y(j) + temp1 * abs(A(j, j)) + alpha * temp2
             end do
         else
             do j = 1, n
-                do i = j, n
-                    As(i, j) = A(i, j)
-                    As(j, i) = A(i, j)
+                temp1 = abs(alpha) * abs(x(j))
+                temp2 = 0.0_ep
+                y(j)  = y(j) + temp1 * abs(A(j, j))
+                do i = j + 1, n
+                    temp0 = abs(A(i, j))
+                    y(i)  = y(i) + temp1 * temp0
+                    temp2 = temp2 + temp0 * abs(x(i))
                 end do
+                y(j) = y(j) + alpha * temp2
             end do
         end if
-        y(1:n) = abs(alpha) * matmul(abs(As), abs(x(1:n))) + abs(beta * y(1:n))
-        deallocate(As)
     end subroutine ref_dasymv
 
     ! Hermitian variant (complex A). Upstream xahemv uses CABS1 for
-    ! off-diagonal A and |Re(A_jj)| for the diagonal (Hermitian => imag
-    ! diagonal is zero by convention).
+    ! off-diagonal A and |Re(A_jj)| for the diagonal.  Mirrors zahemv.f
+    ! lines 198-208, 220-231, 245-258, 264-284: stored-column contribution
+    ! uses |alpha|; mirrored contribution to Y(j) uses SIGNED alpha.
     subroutine ref_zahemv(uplo, n, alpha, A, x, beta, y)
         character,   intent(in)    :: uplo
         integer,     intent(in)    :: n
         real(ep),    intent(in)    :: alpha, beta
         complex(ep), intent(in)    :: A(:,:), x(:)
         real(ep),    intent(inout) :: y(:)
-        real(ep), allocatable :: aA(:,:), aX(:)
-        integer :: i, j
-        allocate(aA(n, n), aX(n))
-        do j = 1, n; aX(j) = abs(real(x(j), ep)) + abs(aimag(x(j))); end do
-        ! Build symmetric |A| using CABS1 off-diagonal, |Re| on diagonal.
+        real(ep) :: temp1, temp2, temp0, ax_i, ax_j
+        integer  :: i, j
+        if (n <= 0) return
+        do i = 1, n
+            y(i) = abs(beta * y(i))
+        end do
+        if (alpha == 0.0_ep) return
         if (uplo == 'U' .or. uplo == 'u') then
             do j = 1, n
+                ax_j  = abs(real(x(j), ep)) + abs(aimag(x(j)))
+                temp1 = abs(alpha) * ax_j
+                temp2 = 0.0_ep
                 do i = 1, j - 1
-                    aA(i, j) = abs(real(A(i, j), ep)) + abs(aimag(A(i, j)))
-                    aA(j, i) = aA(i, j)
+                    temp0 = abs(real(A(i, j), ep)) + abs(aimag(A(i, j)))
+                    ax_i  = abs(real(x(i), ep)) + abs(aimag(x(i)))
+                    y(i)  = y(i) + temp1 * temp0
+                    temp2 = temp2 + temp0 * ax_i
                 end do
-                aA(j, j) = abs(real(A(j, j), ep))
+                y(j) = y(j) + temp1 * abs(real(A(j, j), ep)) + alpha * temp2
             end do
         else
             do j = 1, n
-                aA(j, j) = abs(real(A(j, j), ep))
+                ax_j  = abs(real(x(j), ep)) + abs(aimag(x(j)))
+                temp1 = abs(alpha) * ax_j
+                temp2 = 0.0_ep
+                y(j)  = y(j) + temp1 * abs(real(A(j, j), ep))
                 do i = j + 1, n
-                    aA(i, j) = abs(real(A(i, j), ep)) + abs(aimag(A(i, j)))
-                    aA(j, i) = aA(i, j)
+                    temp0 = abs(real(A(i, j), ep)) + abs(aimag(A(i, j)))
+                    ax_i  = abs(real(x(i), ep)) + abs(aimag(x(i)))
+                    y(i)  = y(i) + temp1 * temp0
+                    temp2 = temp2 + temp0 * ax_i
                 end do
+                y(j) = y(j) + alpha * temp2
             end do
         end if
-        y(1:n) = abs(alpha) * matmul(aA, aX) + abs(beta * y(1:n))
-        deallocate(aA, aX)
     end subroutine ref_zahemv
 
     ! Symmetric (not Hermitian) abs-matvec for complex A. Upstream
     ! xasymv uses CABS1 throughout (no special diagonal handling).
+    ! Mirrors zasymv.f lines 196-205, 214-228, 242-255, 264-281: stored
+    ! contribution uses |alpha|; mirrored Y(j) contribution uses SIGNED alpha.
     subroutine ref_zasymv(uplo, n, alpha, A, x, beta, y)
         character,   intent(in)    :: uplo
         integer,     intent(in)    :: n
         real(ep),    intent(in)    :: alpha, beta
         complex(ep), intent(in)    :: A(:,:), x(:)
         real(ep),    intent(inout) :: y(:)
-        real(ep), allocatable :: aA(:,:), aX(:)
-        integer :: i, j
-        allocate(aA(n, n), aX(n))
-        do j = 1, n; aX(j) = abs(real(x(j), ep)) + abs(aimag(x(j))); end do
+        real(ep) :: temp1, temp2, temp0, ax_i, ax_j
+        integer  :: i, j
+        if (n <= 0) return
+        do i = 1, n
+            y(i) = abs(beta * y(i))
+        end do
+        if (alpha == 0.0_ep) return
         if (uplo == 'U' .or. uplo == 'u') then
             do j = 1, n
-                do i = 1, j
-                    aA(i, j) = abs(real(A(i, j), ep)) + abs(aimag(A(i, j)))
-                    aA(j, i) = aA(i, j)
+                ax_j  = abs(real(x(j), ep)) + abs(aimag(x(j)))
+                temp1 = abs(alpha) * ax_j
+                temp2 = 0.0_ep
+                do i = 1, j - 1
+                    temp0 = abs(real(A(i, j), ep)) + abs(aimag(A(i, j)))
+                    ax_i  = abs(real(x(i), ep)) + abs(aimag(x(i)))
+                    y(i)  = y(i) + temp1 * temp0
+                    temp2 = temp2 + temp0 * ax_i
                 end do
+                y(j) = y(j) + temp1 * (abs(real(A(j, j), ep)) + abs(aimag(A(j, j)))) &
+                            + alpha * temp2
             end do
         else
             do j = 1, n
-                do i = j, n
-                    aA(i, j) = abs(real(A(i, j), ep)) + abs(aimag(A(i, j)))
-                    aA(j, i) = aA(i, j)
+                ax_j  = abs(real(x(j), ep)) + abs(aimag(x(j)))
+                temp1 = abs(alpha) * ax_j
+                temp2 = 0.0_ep
+                y(j)  = y(j) + temp1 * (abs(real(A(j, j), ep)) + abs(aimag(A(j, j))))
+                do i = j + 1, n
+                    temp0 = abs(real(A(i, j), ep)) + abs(aimag(A(i, j)))
+                    ax_i  = abs(real(x(i), ep)) + abs(aimag(x(i)))
+                    y(i)  = y(i) + temp1 * temp0
+                    temp2 = temp2 + temp0 * ax_i
                 end do
+                y(j) = y(j) + alpha * temp2
             end do
         end if
-        y(1:n) = abs(alpha) * matmul(aA, aX) + abs(beta * y(1:n))
-        deallocate(aA, aX)
     end subroutine ref_zasymv
 
     ! Triangular abs-matvec — the upstream qatrmv is in fact a *gemv*

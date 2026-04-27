@@ -52,6 +52,7 @@ module target_blacs
     public :: target_qgsum2d, target_qgamx2d, target_qgamn2d
     ! ── Complex wrappers ────────────────────────────────────────────
     public :: target_xgesd2d, target_xgerv2d
+    public :: target_xtrsd2d, target_xtrrv2d
     public :: target_xgebs2d, target_xgebr2d
     public :: target_xgsum2d, target_xgamx2d, target_xgamn2d
     ! ── Integer pass-through (no per-target rename) ─────────────────
@@ -144,6 +145,18 @@ $:IMPORT_C()
 $:IMPORT_C()
             integer, intent(in)    :: icontxt, m, n, lda, rsrc, csrc
             ${target_complex}$, intent(out) :: A(lda, *)
+        end subroutine
+        subroutine ${C}$trsd2d(icontxt, uplo, diag, m, n, A, lda, rdest, cdest)
+$:IMPORT_C()
+            character, intent(in) :: uplo, diag
+            integer, intent(in)   :: icontxt, m, n, lda, rdest, cdest
+            ${target_complex}$, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine ${C}$trrv2d(icontxt, uplo, diag, m, n, A, lda, rsrc, csrc)
+$:IMPORT_C()
+            character, intent(in) :: uplo, diag
+            integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+            ${target_complex}$, intent(inout) :: A(lda, *)
         end subroutine
 
         ! ── Complex broadcast ───────────────────────────────────────
@@ -358,6 +371,29 @@ contains
         ${target_complex}$, allocatable :: At(:,:)
         allocate(At(lda, max(1, n)))
         call ${C}$gerv2d(icontxt, m, n, At, lda, rsrc, csrc)
+        if (n > 0) A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_xtrsd2d(icontxt, uplo, diag, m, n, A, lda, rdest, cdest)
+        character, intent(in)   :: uplo, diag
+        integer, intent(in)     :: icontxt, m, n, lda, rdest, cdest
+        complex(ep), intent(in) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$trsd2d(icontxt, uplo, diag, m, n, At, lda, rdest, cdest)
+    end subroutine
+
+    subroutine target_xtrrv2d(icontxt, uplo, diag, m, n, A, lda, rsrc, csrc)
+        character, intent(in)      :: uplo, diag
+        integer, intent(in)        :: icontxt, m, n, lda, rsrc, csrc
+        complex(ep), intent(inout) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        ! Off-trapezoid entries are not transmitted; preload them so the
+        ! receive doesn't lose untouched cells when we round-trip.
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$trrv2d(icontxt, uplo, diag, m, n, At, lda, rsrc, csrc)
         if (n > 0) A(1:lda, 1:n) = t2q_c(At)
     end subroutine
 

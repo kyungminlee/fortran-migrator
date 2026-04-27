@@ -70,17 +70,16 @@ having them call `target_qtrbr2d` indirectly through… actually it
 ### `qtrrv2d`/`xtrrv2d` companions
 
 Receive partners for the trapezoidal point-to-point send. The real
-variant is exercised in `test_qtrsd2d`; complex (`xtrsd2d`/`xtrrv2d`)
-trapezoidal p2p has no dedicated test — the wrapper module does NOT
-declare `target_xtrsd2d`/`target_xtrrv2d` interfaces. Add them and a
-mirrored `test_xtrsd2d` if complex trapezoidal coverage is wanted.
+variant is exercised in `test_qtrsd2d`; complex variant is exercised
+in `test_xtrsd2d` (added — `target_xtrsd2d`/`target_xtrrv2d` wrappers
+declared in `common/target_blacs_body.fypp`).
 
-### `qgamn2d` row/column scopes
+### `qgamn2d` / `xgamn2d` / `qgsum2d` / `xgsum2d` row/column scopes
 
-`test_qgamx2d` covers `'A'` scope max+min plus a no-locator variant.
-Per-row and per-column scopes (`'R'`/`'C'`) are not covered for
-either reduction; expected behavior matches what we test for `qgsum2d`
-under those scopes (which also remains untested).
+`test_qgamx2d` / `test_xgamx2d` cover `'A'` scope max+min. Per-row
+and per-column scopes (`'R'`/`'C'`) are not covered for any of the
+reductions (sum, amx, amn). Add them mirroring the broadcast scope
+loops in `test_qgebs2d` / `test_qtrbs2d`.
 
 ### `blacs_set` / `blacs_pinfo` direct probes
 
