@@ -548,6 +548,69 @@ module ref_quad_lapack
             real(ep) :: r
         end function dlange
 
+        function dlansy(norm, uplo, n, A, lda, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, lda
+            real(ep),  intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function dlansy
+
+        function dlanhs(norm, n, A, lda, work) result(r)
+            import :: ep
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, lda
+            real(ep),  intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function dlanhs
+
+        function dlantr(norm, uplo, diag, m, n, A, lda, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: m, n, lda
+            real(ep),  intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function dlantr
+
+        function zlange(norm, m, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm
+            integer,     intent(in) :: m, n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlange
+
+        function zlanhe(norm, uplo, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlanhe
+
+        function zlanhs(norm, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlanhs
+
+        function zlantr(norm, uplo, diag, m, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: m, n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlantr
+
         subroutine dlacpy(uplo, m, n, A, lda, B, ldb)
             import :: ep
             character, intent(in)  :: uplo

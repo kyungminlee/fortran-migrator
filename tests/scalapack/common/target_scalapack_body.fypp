@@ -61,7 +61,8 @@ module target_scalapack
     public :: target_pdgebrd
     public :: target_pdsyev, target_pdsyevd
     public :: target_pdgesvd
-    public :: target_pdlange
+    public :: target_pdlange, target_pdlansy, target_pdlanhs, target_pdlantr
+    public :: target_pzlange, target_pzlanhe, target_pzlanhs, target_pzlantr
     public :: target_pdlacpy, target_pdlaset
     public :: target_pzgesv, target_pzgeqrf, target_pzheev
     public :: target_pzgeqr2, target_pzungqr, target_pzunmqr
@@ -459,6 +460,36 @@ $:IMPORT_R()
             ${target_real}$ :: r
         end function
 
+        function ${R}$lansy(norm, uplo, n, A, ia, ja, desca, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, ia, ja
+            integer,   intent(in) :: desca(9)
+            ${target_real}$, intent(in) :: A(*)
+            ${target_real}$             :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lanhs(norm, n, A, ia, ja, desca, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, ia, ja
+            integer,   intent(in) :: desca(9)
+            ${target_real}$, intent(in) :: A(*)
+            ${target_real}$             :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lantr(norm, uplo, diag, m, n, A, ia, ja, desca, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: m, n, ia, ja
+            integer,   intent(in) :: desca(9)
+            ${target_real}$, intent(in) :: A(*)
+            ${target_real}$             :: work(*)
+            ${target_real}$ :: r
+        end function
+
         subroutine ${R}$lacpy(uplo, m, n, A, ia, ja, desca, B, ib, jb, descb)
 $:IMPORT_R()
             character, intent(in)  :: uplo
@@ -758,6 +789,46 @@ $:IMPORT_RC()
             ${target_real}$,    intent(out)   :: d(*), e(*)
             ${target_complex}$, intent(out)   :: tauq(*), taup(*), work(*)
         end subroutine
+
+        function ${C}$lange(norm, m, n, A, ia, ja, desca, work) result(r)
+$:IMPORT_RC()
+            character, intent(in) :: norm
+            integer,   intent(in) :: m, n, ia, ja
+            integer,   intent(in) :: desca(9)
+            ${target_complex}$, intent(in) :: A(*)
+            ${target_real}$                :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhe(norm, uplo, n, A, ia, ja, desca, work) result(r)
+$:IMPORT_RC()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, ia, ja
+            integer,   intent(in) :: desca(9)
+            ${target_complex}$, intent(in) :: A(*)
+            ${target_real}$                :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhs(norm, n, A, ia, ja, desca, work) result(r)
+$:IMPORT_RC()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, ia, ja
+            integer,   intent(in) :: desca(9)
+            ${target_complex}$, intent(in) :: A(*)
+            ${target_real}$                :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lantr(norm, uplo, diag, m, n, A, ia, ja, desca, work) result(r)
+$:IMPORT_RC()
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: m, n, ia, ja
+            integer,   intent(in) :: desca(9)
+            ${target_complex}$, intent(in) :: A(*)
+            ${target_real}$                :: work(*)
+            ${target_real}$ :: r
+        end function
 
         subroutine ${C}$heev(jobz, uplo, n, A, ia, ja, desca, w, &
                              Z, iz, jz, descz, work, lwork, rwork, lrwork, info)
@@ -1665,6 +1736,129 @@ contains
         allocate(At(na), work_t(nw))
         At = q2t_r(A(1:na))
         r_t = ${R}$lange(norm, m, n, At, ia, ja, desca, work_t)
+        r = t2q_r(r_t)
+    end function
+
+    function target_pdlansy(norm, uplo, n, A, ia, ja, desca, work) result(r)
+        character, intent(in) :: norm, uplo
+        integer,   intent(in) :: n, ia, ja
+        integer,   intent(in) :: desca(9)
+        real(ep),  intent(in) :: A(*)
+        real(ep)              :: work(*)
+        real(ep) :: r
+        integer :: na, nw
+        ${target_real}$, allocatable :: At(:), work_t(:)
+        ${target_real}$ :: r_t
+        na = nloc(desca); nw = max(8 * n, 1024)
+        allocate(At(na), work_t(nw))
+        At = q2t_r(A(1:na))
+        r_t = ${R}$lansy(norm, uplo, n, At, ia, ja, desca, work_t)
+        r = t2q_r(r_t)
+    end function
+
+    function target_pdlanhs(norm, n, A, ia, ja, desca, work) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n, ia, ja
+        integer,   intent(in) :: desca(9)
+        real(ep),  intent(in) :: A(*)
+        real(ep)              :: work(*)
+        real(ep) :: r
+        integer :: na, nw
+        ${target_real}$, allocatable :: At(:), work_t(:)
+        ${target_real}$ :: r_t
+        na = nloc(desca); nw = max(4 * n, 1024)
+        allocate(At(na), work_t(nw))
+        At = q2t_r(A(1:na))
+        r_t = ${R}$lanhs(norm, n, At, ia, ja, desca, work_t)
+        r = t2q_r(r_t)
+    end function
+
+    function target_pdlantr(norm, uplo, diag, m, n, A, ia, ja, desca, work) result(r)
+        character, intent(in) :: norm, uplo, diag
+        integer,   intent(in) :: m, n, ia, ja
+        integer,   intent(in) :: desca(9)
+        real(ep),  intent(in) :: A(*)
+        real(ep)              :: work(*)
+        real(ep) :: r
+        integer :: na, nw
+        ${target_real}$, allocatable :: At(:), work_t(:)
+        ${target_real}$ :: r_t
+        na = nloc(desca); nw = max(8 * max(m, n), 1024)
+        allocate(At(na), work_t(nw))
+        At = q2t_r(A(1:na))
+        r_t = ${R}$lantr(norm, uplo, diag, m, n, At, ia, ja, desca, work_t)
+        r = t2q_r(r_t)
+    end function
+
+    function target_pzlange(norm, m, n, A, ia, ja, desca, work) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: m, n, ia, ja
+        integer,     intent(in) :: desca(9)
+        complex(ep), intent(in) :: A(*)
+        real(ep)                :: work(*)
+        real(ep) :: r
+        integer :: na, nw
+        ${target_complex}$, allocatable :: At(:)
+        ${target_real}$,    allocatable :: work_t(:)
+        ${target_real}$ :: r_t
+        na = nloc(desca); nw = max(8 * max(m, n), 1024)
+        allocate(At(na), work_t(nw))
+        At = q2t_c(A(1:na))
+        r_t = ${C}$lange(norm, m, n, At, ia, ja, desca, work_t)
+        r = t2q_r(r_t)
+    end function
+
+    function target_pzlanhe(norm, uplo, n, A, ia, ja, desca, work) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n, ia, ja
+        integer,     intent(in) :: desca(9)
+        complex(ep), intent(in) :: A(*)
+        real(ep)                :: work(*)
+        real(ep) :: r
+        integer :: na, nw
+        ${target_complex}$, allocatable :: At(:)
+        ${target_real}$,    allocatable :: work_t(:)
+        ${target_real}$ :: r_t
+        na = nloc(desca); nw = max(8 * n, 1024)
+        allocate(At(na), work_t(nw))
+        At = q2t_c(A(1:na))
+        r_t = ${C}$lanhe(norm, uplo, n, At, ia, ja, desca, work_t)
+        r = t2q_r(r_t)
+    end function
+
+    function target_pzlanhs(norm, n, A, ia, ja, desca, work) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n, ia, ja
+        integer,     intent(in) :: desca(9)
+        complex(ep), intent(in) :: A(*)
+        real(ep)                :: work(*)
+        real(ep) :: r
+        integer :: na, nw
+        ${target_complex}$, allocatable :: At(:)
+        ${target_real}$,    allocatable :: work_t(:)
+        ${target_real}$ :: r_t
+        na = nloc(desca); nw = max(4 * n, 1024)
+        allocate(At(na), work_t(nw))
+        At = q2t_c(A(1:na))
+        r_t = ${C}$lanhs(norm, n, At, ia, ja, desca, work_t)
+        r = t2q_r(r_t)
+    end function
+
+    function target_pzlantr(norm, uplo, diag, m, n, A, ia, ja, desca, work) result(r)
+        character,   intent(in) :: norm, uplo, diag
+        integer,     intent(in) :: m, n, ia, ja
+        integer,     intent(in) :: desca(9)
+        complex(ep), intent(in) :: A(*)
+        real(ep)                :: work(*)
+        real(ep) :: r
+        integer :: na, nw
+        ${target_complex}$, allocatable :: At(:)
+        ${target_real}$,    allocatable :: work_t(:)
+        ${target_real}$ :: r_t
+        na = nloc(desca); nw = max(8 * max(m, n), 1024)
+        allocate(At(na), work_t(nw))
+        At = q2t_c(A(1:na))
+        r_t = ${C}$lantr(norm, uplo, diag, m, n, At, ia, ja, desca, work_t)
         r = t2q_r(r_t)
     end function
 

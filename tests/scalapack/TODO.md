@@ -26,6 +26,22 @@ issue is fixed outside `tests/scalapack/`.
   test that pulls in `scalapack_test_target`, so they had to be
   reverted out of the shared template.
 
+## pdlanhs / pxlanhs (Hessenberg matrix norms)
+
+- **Symptom**: For NORM='1' / 'F' / 'M' on n in {32,64,96}, the
+  migrated `pdlanhs` / `pxlanhs` disagree with quad `dlanhs` /
+  `zlanhs` at order 0.1 (only NORM='I' matches). Even after
+  zeroing the input matrix below the first subdiagonal so the
+  matrix is genuinely Hessenberg, the disagreement persists.
+- **Diagnosis**: Likely a scaling or norm-of-norms bug specific to
+  the migrated `pdlanhs` family — `pdlange`, `pdlansy`, `pdlantr`,
+  `pzlange`, `pzlanhe`, `pzlantr` all agree to >30 digits with the
+  same scaffold, so the harness is fine.
+- **Action**: Re-enable `tests/scalapack/auxiliary/test_pdlanhs.f90`
+  / `test_pzlanhs.f90` once the migrated `lanhs` family is fixed.
+  Wrappers `target_pdlanhs` / `target_pzlanhs` remain in the
+  template for later re-instatement.
+
 ## pxhetrd (complex Hermitian tridiagonal reduction)
 
 - **Symptom**: A `test_pzhetrd` driver returns matrix-element errors of
