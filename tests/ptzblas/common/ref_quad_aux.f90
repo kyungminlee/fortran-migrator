@@ -12,8 +12,8 @@ module ptzblas_ref_quad_aux
     public :: ref_dset, ref_zset
     public :: ref_dascal
     public :: ref_zhescal
-    public :: ref_dmmadd, ref_dmmtadd, ref_dmmcadd, ref_dtzpadcpy
-    public :: ref_zmmadd, ref_zmmtadd, ref_zmmcadd, ref_ztzpadcpy
+    public :: ref_dmmadd, ref_dmmtadd, ref_dmmcadd, ref_dmmtcadd, ref_dtzpadcpy
+    public :: ref_zmmadd, ref_zmmtadd, ref_zmmcadd, ref_zmmtcadd, ref_ztzpadcpy
     public :: ref_drshft, ref_dcshft
     public :: ref_zrshft, ref_zcshft
     public :: ref_dasqrtb
@@ -163,6 +163,24 @@ contains
         complex(ep), intent(inout) :: B(:,:)
         B(1:m, 1:n) = alpha * conjg(A(1:m, 1:n)) + beta * B(1:m, 1:n)
     end subroutine ref_zmmcadd
+
+    ! qmmtcadd: real domain ≡ qmmtadd (no conjugation).
+    subroutine ref_dmmtcadd(m, n, alpha, A, beta, B)
+        integer,  intent(in)    :: m, n
+        real(ep), intent(in)    :: alpha, beta
+        real(ep), intent(in)    :: A(:,:)
+        real(ep), intent(inout) :: B(:,:)
+        B(1:n, 1:m) = alpha * transpose(A(1:m, 1:n)) + beta * B(1:n, 1:m)
+    end subroutine ref_dmmtcadd
+
+    ! xmmtcadd: B := alpha*conj(A^T) + beta*B.
+    subroutine ref_zmmtcadd(m, n, alpha, A, beta, B)
+        integer,     intent(in)    :: m, n
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(:,:)
+        complex(ep), intent(inout) :: B(:,:)
+        B(1:n, 1:m) = alpha * conjg(transpose(A(1:m, 1:n))) + beta * B(1:n, 1:m)
+    end subroutine ref_zmmtcadd
 
     ! qtzpadcpy / xtzpadcpy: trapezoidal pad-copy. The named triangle
     ! of A (shifted by IOFFD) is copied into B; the off-triangle of B

@@ -60,14 +60,16 @@ module target_ptzblas
 
     public :: target_name, target_eps
     public :: target_dvasum, target_dvvdot, target_dset, target_dascal
-    public :: target_dmmadd, target_dmmtadd, target_dmmcadd, target_dtzpadcpy
+    public :: target_dmmadd, target_dmmtadd, target_dmmcadd, target_dmmtcadd
+    public :: target_dtzpadcpy
     public :: target_drshft, target_dcshft, target_dasqrtb
     public :: target_dtzpad, target_dtzscal
     public :: target_dagemv, target_dasymv, target_datrmv
     public :: target_dzvasum
     public :: target_zvvdotc, target_zvvdotu, target_zset
     public :: target_zhescal, target_ztzcnjg
-    public :: target_zmmadd, target_zmmtadd, target_zmmcadd, target_ztzpadcpy
+    public :: target_zmmadd, target_zmmtadd, target_zmmcadd, target_zmmtcadd
+    public :: target_ztzpadcpy
     public :: target_ztzpad, target_ztzscal
     public :: target_zagemv, target_zahemv, target_zasymv, target_zatrmv
 
@@ -125,6 +127,13 @@ $:IMPORT_R()
         end subroutine
 
         subroutine ${R}$mmcadd(m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, lda, ldb
+            ${target_real}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_real}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${R}$mmtcadd(m, n, alpha, A, lda, beta, B, ldb)
 $:IMPORT_R()
             integer, intent(in)    :: m, n, lda, ldb
             ${target_real}$, intent(in)    :: alpha, beta, A(lda, *)
@@ -263,6 +272,13 @@ $:IMPORT_C()
         end subroutine
 
         subroutine ${C}$mmcadd(m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, lda, ldb
+            ${target_complex}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_complex}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${C}$mmtcadd(m, n, alpha, A, lda, beta, B, ldb)
 $:IMPORT_C()
             integer, intent(in) :: m, n, lda, ldb
             ${target_complex}$, intent(in)    :: alpha, beta, A(lda, *)
@@ -444,6 +460,19 @@ contains
         At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
         call ${R}$mmcadd(m, n, q2t_r(alpha), At, lda, q2t_r(beta), Bt, ldb)
         B(1:ldb, 1:n) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dmmtcadd(m, n, alpha, A, lda, beta, B, ldb)
+        ! Transposed conjugate add: A is M×N, B is N×M (same shape as
+        ! mmtadd). Real domain ≡ mmtadd (no conjugation).
+        integer,  intent(in)    :: m, n, lda, ldb
+        real(ep), intent(in)    :: alpha, beta, A(lda, *)
+        real(ep), intent(inout) :: B(ldb, *)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, m))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:m))
+        call ${R}$mmtcadd(m, n, q2t_r(alpha), At, lda, q2t_r(beta), Bt, ldb)
+        B(1:ldb, 1:m) = t2q_r(Bt)
     end subroutine
 
     subroutine target_dtzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
@@ -662,6 +691,19 @@ contains
         At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
         call ${C}$mmcadd(m, n, q2t_c(alpha), At, lda, q2t_c(beta), Bt, ldb)
         B(1:ldb, 1:n) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zmmtcadd(m, n, alpha, A, lda, beta, B, ldb)
+        ! Conjugate transposed add: B := alpha*conj(A^T) + beta*B.
+        ! A is M×N (lda ≥ M); B is N×M (ldb ≥ N).
+        integer,     intent(in)    :: m, n, lda, ldb
+        complex(ep), intent(in)    :: alpha, beta, A(lda, *)
+        complex(ep), intent(inout) :: B(ldb, *)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, m))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:m))
+        call ${C}$mmtcadd(m, n, q2t_c(alpha), At, lda, q2t_c(beta), Bt, ldb)
+        B(1:ldb, 1:m) = t2q_c(Bt)
     end subroutine
 
     subroutine target_ztzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
