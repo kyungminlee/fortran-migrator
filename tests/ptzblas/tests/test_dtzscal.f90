@@ -8,8 +8,8 @@ program test_dtzscal
     implicit none
 
     integer, parameter :: m = 24, n = 24
-    character(len=1), parameter :: uplo_set(*) = ['L','U','L','U','L','U']
-    integer,          parameter :: ioffd_set(*) = [0, 0, 2, 2, -3, -3]
+    character(len=1), parameter :: uplo_set(*) = ['L','U','L','U','L','U','D']
+    integer,          parameter :: ioffd_set(*) = [0, 0, 2, 2, -3, -3, 0]
     integer :: i, ioffd
     character :: uplo
     real(ep), allocatable :: A_got(:,:), A_ref(:,:)

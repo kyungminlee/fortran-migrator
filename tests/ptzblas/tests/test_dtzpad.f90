@@ -11,9 +11,9 @@ program test_dtzpad
     ! UPLO ∈ {L,U} × IOFFD ∈ {0, +2, -1} — exercises the upstream two-loop
     ! "full-fill / diagonal+strict" structure that triggers off-by-one
     ! bugs when IOFFD≠0.
-    integer,          parameter :: ioffd_set(*) = [ 0,  0,  2,  2, -1, -1]
-    character(len=1), parameter :: uplo_set(*)  = ['L','U','L','U','L','U']
-    character(len=1), parameter :: herm_set(*)  = ['N','N','N','N','N','N']
+    integer,          parameter :: ioffd_set(*) = [ 0,  0,  2,  2, -1, -1,  0]
+    character(len=1), parameter :: uplo_set(*)  = ['L','U','L','U','L','U','D']
+    character(len=1), parameter :: herm_set(*)  = ['N','N','N','N','N','N','N']
     integer :: i, ioffd
     character :: uplo, herm
     real(ep), allocatable :: A_got(:,:), A_ref(:,:)
