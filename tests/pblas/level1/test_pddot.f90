@@ -2,7 +2,7 @@ program test_pddot
     use prec_kinds,    only: ep
     use compare,       only: rel_err_scalar
     use pblas_prec_report,   only: report_init, report_case, report_finalize
-    use ref_quad_blas, only: ddot
+    use pblas_ref_quad_blas, only: ddot
     use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
                              my_nprow, my_row, numroc_local, descinit_local
     use pblas_distrib, only: gen_distrib_vector

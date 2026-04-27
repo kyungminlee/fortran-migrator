@@ -1,0 +1,8 @@
+#:set target         = 'kind16'
+#:set target_name    = 'kind16'
+#:set target_eps     = 'epsilon(1.0_ep)'
+#:set target_real    = 'real(ep)'
+#:set target_complex = 'complex(ep)'
+#:set prefix_real    = 'q'
+#:set prefix_complex = 'x'
+#:include 'target_ptzblas_body.fypp'

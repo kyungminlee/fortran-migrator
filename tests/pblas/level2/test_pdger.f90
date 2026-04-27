@@ -2,7 +2,7 @@ program test_pdger
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_mat
     use pblas_prec_report,   only: report_init, report_case, report_finalize
-    use ref_quad_blas, only: dger
+    use pblas_ref_quad_blas, only: dger
     use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
                              my_nprow, my_npcol, my_row, my_col, &
                              numroc_local, descinit_local

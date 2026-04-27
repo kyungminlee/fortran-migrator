@@ -1,0 +1,277 @@
+#! Per-framework PBBLAS test wrapper, parameterized by target.
+#!
+#! PBBLAS routine names are the original 'pb' prefix concatenated with
+#! the same single-letter (or two-letter for multifloats) prefixes that
+#! PTZBLAS uses — e.g. pbdmatadd → pbqmatadd (kind16), pbematadd
+#! (kind10), pbddmatadd (multifloats); pbzmatadd → pbxmatadd (kind16),
+#! pbymatadd (kind10), pbvmatadd (multifloats).
+#!
+#! Each per-target shim sets:
+#!   target          'kind16' | 'kind10' | 'multifloats'
+#!   target_name     human-readable label string
+#!   target_eps      Fortran expression giving the target's epsilon
+#!   target_real     Fortran type-spec for the target's real type
+#!   target_complex  Fortran type-spec for the target's complex type
+#!   prefix_real     PTZBLAS-style real prefix (e.g. 'q')
+#!   prefix_complex  PTZBLAS-style complex prefix (e.g. 'x')
+
+#:set R = prefix_real
+#:set C = prefix_complex
+
+#:def IMPORT_R()
+#:if target == 'multifloats'
+            import :: real64x2
+#:elif target == 'kind16'
+            import :: ep
+#:endif
+#:enddef
+
+#:def IMPORT_C()
+#:if target == 'multifloats'
+            import :: cmplx64x2
+#:elif target == 'kind16'
+            import :: ep
+#:endif
+#:enddef
+
+module target_pbblas
+    use prec_kinds, only: ep
+    use target_conv, only: q2t_r, t2q_r, q2t_c, t2q_c
+#:if target == 'multifloats'
+    use multifloats, only: real64x2, cmplx64x2
+#:endif
+    implicit none
+    private
+
+    public :: target_name, target_eps
+    public :: target_pbdmatadd, target_pbdvecadd, target_pbdtran, target_pbdtrnv
+    public :: target_pbzmatadd, target_pbzvecadd, target_pbztran, target_pbztrnv
+
+    character(len=*), parameter :: target_name = "${target_name}$"
+    real(ep),         parameter :: target_eps  = ${target_eps}$
+
+    interface
+        ! ── Real PBBLAS ─────────────────────────────────────────────
+        subroutine pb${R}$matadd(icontxt, mode, m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_R()
+            character, intent(in) :: mode
+            integer,   intent(in) :: icontxt, m, n, lda, ldb
+            ${target_real}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_real}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine pb${R}$vecadd(icontxt, mode, n, alpha, x, incx, beta, y, incy)
+$:IMPORT_R()
+            character, intent(in) :: mode
+            integer,   intent(in) :: icontxt, n, incx, incy
+            ${target_real}$, intent(in)    :: alpha, beta, x(*)
+            ${target_real}$, intent(inout) :: y(*)
+        end subroutine
+
+        subroutine pb${R}$tran(icontxt, adist, trans, m, n, nb, A, lda, beta, &
+                              C, ldc, iarow, iacol, icrow, iccol, work)
+$:IMPORT_R()
+            character, intent(in) :: adist, trans
+            integer,   intent(in) :: icontxt, m, n, nb, lda, ldc
+            integer,   intent(in) :: iarow, iacol, icrow, iccol
+            ${target_real}$, intent(in)    :: beta, A(lda, *)
+            ${target_real}$, intent(inout) :: C(ldc, *)
+            ${target_real}$, intent(inout) :: work(*)
+        end subroutine
+
+        subroutine pb${R}$trnv(icontxt, xdist, trans, n, nb, nz, x, incx, beta, &
+                              y, incy, ixrow, ixcol, iyrow, iycol, work)
+$:IMPORT_R()
+            character, intent(in) :: xdist, trans
+            integer,   intent(in) :: icontxt, n, nb, nz, incx, incy
+            integer,   intent(in) :: ixrow, ixcol, iyrow, iycol
+            ${target_real}$, intent(in)    :: beta, x(*)
+            ${target_real}$, intent(inout) :: y(*)
+            ${target_real}$, intent(inout) :: work(*)
+        end subroutine
+
+        ! ── Complex PBBLAS ──────────────────────────────────────────
+        subroutine pb${C}$matadd(icontxt, mode, m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_C()
+            character, intent(in) :: mode
+            integer,   intent(in) :: icontxt, m, n, lda, ldb
+            ${target_complex}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_complex}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine pb${C}$vecadd(icontxt, mode, n, alpha, x, incx, beta, y, incy)
+$:IMPORT_C()
+            character, intent(in) :: mode
+            integer,   intent(in) :: icontxt, n, incx, incy
+            ${target_complex}$, intent(in)    :: alpha, beta, x(*)
+            ${target_complex}$, intent(inout) :: y(*)
+        end subroutine
+
+        subroutine pb${C}$tran(icontxt, adist, trans, m, n, nb, A, lda, beta, &
+                              C, ldc, iarow, iacol, icrow, iccol, work)
+$:IMPORT_C()
+            character, intent(in) :: adist, trans
+            integer,   intent(in) :: icontxt, m, n, nb, lda, ldc
+            integer,   intent(in) :: iarow, iacol, icrow, iccol
+            ${target_complex}$, intent(in)    :: beta, A(lda, *)
+            ${target_complex}$, intent(inout) :: C(ldc, *)
+            ${target_complex}$, intent(inout) :: work(*)
+        end subroutine
+
+        subroutine pb${C}$trnv(icontxt, xdist, trans, n, nb, nz, x, incx, beta, &
+                              y, incy, ixrow, ixcol, iyrow, iycol, work)
+$:IMPORT_C()
+            character, intent(in) :: xdist, trans
+            integer,   intent(in) :: icontxt, n, nb, nz, incx, incy
+            integer,   intent(in) :: ixrow, ixcol, iyrow, iycol
+            ${target_complex}$, intent(in)    :: beta, x(*)
+            ${target_complex}$, intent(inout) :: y(*)
+            ${target_complex}$, intent(inout) :: work(*)
+        end subroutine
+    end interface
+
+contains
+
+    ! ─── Real wrappers ───────────────────────────────────────────────
+    subroutine target_pbdmatadd(icontxt, mode, m, n, alpha, A, lda, beta, B, ldb)
+        character, intent(in)    :: mode
+        integer,   intent(in)    :: icontxt, m, n, lda, ldb
+        real(ep),  intent(in)    :: alpha, beta, A(lda, *)
+        real(ep),  intent(inout) :: B(ldb, *)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        integer :: arows, acols, brows, bcols
+        ! When MODE = 'T'/'C': A is N×M (lda ≥ N), B is M×N (ldb ≥ M).
+        ! Otherwise: A is M×N (lda ≥ M), B is M×N (ldb ≥ M).
+        if (mode == 'T' .or. mode == 't' .or. mode == 'C' .or. mode == 'c') then
+            arows = lda; acols = m
+        else
+            arows = lda; acols = n
+        end if
+        brows = ldb; bcols = n
+        allocate(At(arows, max(1, acols)), Bt(brows, max(1, bcols)))
+        if (acols > 0) At = q2t_r(A(1:arows, 1:acols))
+        if (bcols > 0) Bt = q2t_r(B(1:brows, 1:bcols))
+        call pb${R}$matadd(icontxt, mode, m, n, q2t_r(alpha), At, lda, q2t_r(beta), Bt, ldb)
+        if (bcols > 0) B(1:brows, 1:bcols) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_pbdvecadd(icontxt, mode, n, alpha, x, incx, beta, y, incy)
+        character, intent(in)    :: mode
+        integer,   intent(in)    :: icontxt, n, incx, incy
+        real(ep),  intent(in)    :: alpha, beta, x(*)
+        real(ep),  intent(inout) :: y(*)
+        integer :: nx, ny
+        ${target_real}$, allocatable :: xt(:), yt(:)
+        nx = max(1, 1 + (n - 1) * abs(incx))
+        ny = max(1, 1 + (n - 1) * abs(incy))
+        allocate(xt(nx), yt(ny))
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call pb${R}$vecadd(icontxt, mode, n, q2t_r(alpha), xt, incx, q2t_r(beta), yt, incy)
+        y(1:ny) = t2q_r(yt)
+    end subroutine
+
+    subroutine target_pbdtran(icontxt, adist, trans, m, n, nb, A, lda, beta, &
+                              C, ldc, iarow, iacol, icrow, iccol, ncolsA, ncolsC, lwork)
+        character, intent(in)    :: adist, trans
+        integer,   intent(in)    :: icontxt, m, n, nb, lda, ldc
+        integer,   intent(in)    :: iarow, iacol, icrow, iccol
+        integer,   intent(in)    :: ncolsA, ncolsC, lwork
+        real(ep),  intent(in)    :: beta, A(lda, *)
+        real(ep),  intent(inout) :: C(ldc, *)
+        ${target_real}$, allocatable :: At(:,:), Ct(:,:), wt(:)
+        allocate(At(lda, max(1, ncolsA)), Ct(ldc, max(1, ncolsC)), wt(max(1, lwork)))
+        if (ncolsA > 0) At = q2t_r(A(1:lda, 1:ncolsA))
+        if (ncolsC > 0) Ct = q2t_r(C(1:ldc, 1:ncolsC))
+        call pb${R}$tran(icontxt, adist, trans, m, n, nb, At, lda, q2t_r(beta), &
+                        Ct, ldc, iarow, iacol, icrow, iccol, wt)
+        if (ncolsC > 0) C(1:ldc, 1:ncolsC) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_pbdtrnv(icontxt, xdist, trans, n, nb, nz, x, incx, beta, &
+                              y, incy, ixrow, ixcol, iyrow, iycol, lenx, leny, lwork)
+        character, intent(in)    :: xdist, trans
+        integer,   intent(in)    :: icontxt, n, nb, nz, incx, incy
+        integer,   intent(in)    :: ixrow, ixcol, iyrow, iycol
+        integer,   intent(in)    :: lenx, leny, lwork
+        real(ep),  intent(in)    :: beta, x(*)
+        real(ep),  intent(inout) :: y(*)
+        ${target_real}$, allocatable :: xt(:), yt(:), wt(:)
+        allocate(xt(max(1, lenx)), yt(max(1, leny)), wt(max(1, lwork)))
+        if (lenx > 0) xt = q2t_r(x(1:lenx))
+        if (leny > 0) yt = q2t_r(y(1:leny))
+        call pb${R}$trnv(icontxt, xdist, trans, n, nb, nz, xt, incx, q2t_r(beta), &
+                        yt, incy, ixrow, ixcol, iyrow, iycol, wt)
+        if (leny > 0) y(1:leny) = t2q_r(yt)
+    end subroutine
+
+    ! ─── Complex wrappers ────────────────────────────────────────────
+    subroutine target_pbzmatadd(icontxt, mode, m, n, alpha, A, lda, beta, B, ldb)
+        character,   intent(in)    :: mode
+        integer,     intent(in)    :: icontxt, m, n, lda, ldb
+        complex(ep), intent(in)    :: alpha, beta, A(lda, *)
+        complex(ep), intent(inout) :: B(ldb, *)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        integer :: arows, acols, brows, bcols
+        if (mode == 'T' .or. mode == 't' .or. mode == 'C' .or. mode == 'c') then
+            arows = lda; acols = m
+        else
+            arows = lda; acols = n
+        end if
+        brows = ldb; bcols = n
+        allocate(At(arows, max(1, acols)), Bt(brows, max(1, bcols)))
+        if (acols > 0) At = q2t_c(A(1:arows, 1:acols))
+        if (bcols > 0) Bt = q2t_c(B(1:brows, 1:bcols))
+        call pb${C}$matadd(icontxt, mode, m, n, q2t_c(alpha), At, lda, q2t_c(beta), Bt, ldb)
+        if (bcols > 0) B(1:brows, 1:bcols) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_pbzvecadd(icontxt, mode, n, alpha, x, incx, beta, y, incy)
+        character,   intent(in)    :: mode
+        integer,     intent(in)    :: icontxt, n, incx, incy
+        complex(ep), intent(in)    :: alpha, beta, x(*)
+        complex(ep), intent(inout) :: y(*)
+        integer :: nx, ny
+        ${target_complex}$, allocatable :: xt(:), yt(:)
+        nx = max(1, 1 + (n - 1) * abs(incx))
+        ny = max(1, 1 + (n - 1) * abs(incy))
+        allocate(xt(nx), yt(ny))
+        xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        call pb${C}$vecadd(icontxt, mode, n, q2t_c(alpha), xt, incx, q2t_c(beta), yt, incy)
+        y(1:ny) = t2q_c(yt)
+    end subroutine
+
+    subroutine target_pbztran(icontxt, adist, trans, m, n, nb, A, lda, beta, &
+                              C, ldc, iarow, iacol, icrow, iccol, ncolsA, ncolsC, lwork)
+        character,   intent(in)    :: adist, trans
+        integer,     intent(in)    :: icontxt, m, n, nb, lda, ldc
+        integer,     intent(in)    :: iarow, iacol, icrow, iccol
+        integer,     intent(in)    :: ncolsA, ncolsC, lwork
+        complex(ep), intent(in)    :: beta, A(lda, *)
+        complex(ep), intent(inout) :: C(ldc, *)
+        ${target_complex}$, allocatable :: At(:,:), Ct(:,:), wt(:)
+        allocate(At(lda, max(1, ncolsA)), Ct(ldc, max(1, ncolsC)), wt(max(1, lwork)))
+        if (ncolsA > 0) At = q2t_c(A(1:lda, 1:ncolsA))
+        if (ncolsC > 0) Ct = q2t_c(C(1:ldc, 1:ncolsC))
+        call pb${C}$tran(icontxt, adist, trans, m, n, nb, At, lda, q2t_c(beta), &
+                        Ct, ldc, iarow, iacol, icrow, iccol, wt)
+        if (ncolsC > 0) C(1:ldc, 1:ncolsC) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_pbztrnv(icontxt, xdist, trans, n, nb, nz, x, incx, beta, &
+                              y, incy, ixrow, ixcol, iyrow, iycol, lenx, leny, lwork)
+        character,   intent(in)    :: xdist, trans
+        integer,     intent(in)    :: icontxt, n, nb, nz, incx, incy
+        integer,     intent(in)    :: ixrow, ixcol, iyrow, iycol
+        integer,     intent(in)    :: lenx, leny, lwork
+        complex(ep), intent(in)    :: beta, x(*)
+        complex(ep), intent(inout) :: y(*)
+        ${target_complex}$, allocatable :: xt(:), yt(:), wt(:)
+        allocate(xt(max(1, lenx)), yt(max(1, leny)), wt(max(1, lwork)))
+        if (lenx > 0) xt = q2t_c(x(1:lenx))
+        if (leny > 0) yt = q2t_c(y(1:leny))
+        call pb${C}$trnv(icontxt, xdist, trans, n, nb, nz, xt, incx, q2t_c(beta), &
+                        yt, incy, ixrow, ixcol, iyrow, iycol, wt)
+        if (leny > 0) y(1:leny) = t2q_c(yt)
+    end subroutine
+
+end module target_pbblas

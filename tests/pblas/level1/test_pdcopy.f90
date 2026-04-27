@@ -2,7 +2,7 @@ program test_pdcopy
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_vec
     use pblas_prec_report,   only: report_init, report_case, report_finalize
-    use ref_quad_blas, only: dcopy
+    use pblas_ref_quad_blas, only: dcopy
     use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
                              my_nprow, my_row, numroc_local, descinit_local
     use pblas_distrib, only: gen_distrib_vector, gather_vector
