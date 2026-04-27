@@ -698,6 +698,203 @@ module ref_quad_lapack
             real(ep), intent(inout) :: B(ldb,*)
             integer,  intent(out)   :: info
         end subroutine dpttrs
+        ! ── Phase 7 — symmetric / Hermitian eigenvalue family ────────
+        subroutine dsyevx(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, lwork, &
+                          iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dsyevx
+
+        subroutine zheevx(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, lwork, &
+                          rwork, iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, lda, il, iu, ldz, lwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+        end subroutine zheevx
+
+        subroutine dstev(jobz, n, d, e, z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: jobz
+            integer,   intent(in)    :: n, ldz
+            real(ep),  intent(inout) :: d(*), e(*)
+            real(ep),  intent(out)   :: z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dstev
+
+        subroutine dstevd(jobz, n, d, e, z, ldz, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz
+            integer,   intent(in)    :: n, ldz, lwork, liwork
+            real(ep),  intent(inout) :: d(*), e(*)
+            real(ep),  intent(out)   :: z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dstevd
+
+        subroutine dstevx(jobz, range, n, d, e, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range
+            integer,   intent(in)    :: n, il, iu, ldz
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: d(*), e(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dstevx
+
+        subroutine dstevr(jobz, range, n, d, e, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, isuppz, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range
+            integer,   intent(in)    :: n, il, iu, ldz, lwork, liwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: d(*), e(*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dstevr
+
+        subroutine dsbev(jobz, uplo, n, kd, AB, ldab, w, z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbev
+
+        subroutine dsbevd(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsbevd
+
+        subroutine dsbevx(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                          vl, vu, il, iu, abstol, m, w, z, ldz, &
+                          work, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: Q(ldq,*), w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dsbevx
+
+        subroutine zhbev(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                         work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldz
+            complex(ep), intent(inout) :: AB(ldab,*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbev
+
+        subroutine zhbevd(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                          work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldz, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: AB(ldab,*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhbevd
+
+        subroutine zhbevx(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                          vl, vu, il, iu, abstol, m, w, z, ldz, &
+                          work, rwork, iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldq, il, iu, ldz
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: AB(ldab,*)
+            complex(ep), intent(out)   :: Q(ldq,*), z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhbevx
+
+        subroutine dspev(jobz, uplo, n, AP, w, z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ldz
+            real(ep),  intent(inout) :: AP(*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dspev
+
+        subroutine dspevd(jobz, uplo, n, AP, w, z, ldz, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AP(*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dspevd
+
+        subroutine dspevx(jobz, range, uplo, n, AP, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, il, iu, ldz
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dspevx
+
+        subroutine zhpev(jobz, uplo, n, AP, w, z, ldz, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, ldz
+            complex(ep), intent(inout) :: AP(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhpev
+
+        subroutine zhpevd(jobz, uplo, n, AP, w, z, ldz, &
+                          work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, ldz, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: AP(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhpevd
+
+        subroutine zhpevx(jobz, range, uplo, n, AP, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, rwork, &
+                          iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, il, iu, ldz
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: AP(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhpevx
     end interface
 
 end module ref_quad_lapack

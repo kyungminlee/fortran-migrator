@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -460,11 +460,11 @@ _75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 |  | dptts2 | — | — | — |
 | ✓ | drscl | — | — | — |
 | ✓ | dsb2st_kernels | — | — | — |
-| ✓ | dsbev | — | — | — |
+| ✓ | dsbev | 18.02 | 32.78 | 30.05 |
 | ✓ | dsbev_2stage | — | — | — |
-| ✓ | dsbevd | — | — | — |
+| ✓ | dsbevd | 17.95 | exact | 29.97 |
 | ✓ | dsbevd_2stage | — | — | — |
-| ✓ | dsbevx | — | — | — |
+| ✓ | dsbevx | 17.89 | exact | 30.05 |
 | ✓ | dsbevx_2stage | — | — | — |
 | ✓ | dsbgst | — | — | — |
 | ✓ | dsbgv | — | — | — |
@@ -473,9 +473,9 @@ _75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | dsbtrd | — | — | — |
 | ✓ | dsfrk | — | — | — |
 | ✓ | dspcon | — | — | — |
-| ✓ | dspev | — | — | — |
-| ✓ | dspevd | — | — | — |
-| ✓ | dspevx | — | — | — |
+| ✓ | dspev | 17.91 | exact | 30.15 |
+| ✓ | dspevd | 17.86 | exact | 30.18 |
+| ✓ | dspevx | 17.70 | exact | 30.31 |
 | ✓ | dspgst | — | — | — |
 | ✓ | dspgv | — | — | — |
 | ✓ | dspgvd | — | — | — |
@@ -494,10 +494,10 @@ _75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | dstemr | — | — | — |
 | ✓ | dsteqr | — | — | — |
 | ✓ | dsterf | — | — | — |
-| ✓ | dstev | — | — | — |
-| ✓ | dstevd | — | — | — |
-| ✓ | dstevr | — | — | — |
-| ✓ | dstevx | — | — | — |
+| ✓ | dstev | 17.83 | exact | 29.93 |
+| ✓ | dstevd | 17.83 | exact | 30.02 |
+| ✓ | dstevr | 17.72 | exact | 30.13 |
+| ✓ | dstevx | 17.79 | exact | 29.97 |
 | ✓ | dsycon | — | — | — |
 |  | dsycon_3 | — | — | — |
 | ✓ | dsycon_rook | — | — | — |
@@ -511,7 +511,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | dsyevd_2stage | — | — | — |
 | ✓ | dsyevr | 17.79 | 33.03 | 30.40 |
 | ✓ | dsyevr_2stage | — | — | — |
-| ✓ | dsyevx | — | — | — |
+| ✓ | dsyevx | 18.14 | 32.63 | 30.40 |
 | ✓ | dsyevx_2stage | — | — | — |
 |  | dsygs2 | — | — | — |
 | ✓ | dsygst | — | — | — |
@@ -702,11 +702,11 @@ _75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | zgttrs | — | — | — |
 |  | zgtts2 | — | — | — |
 | ✓ | zhb2st_kernels | — | — | — |
-| ✓ | zhbev | — | — | — |
+| ✓ | zhbev | 17.89 | exact | 30.22 |
 | ✓ | zhbev_2stage | — | — | — |
-| ✓ | zhbevd | — | — | — |
+| ✓ | zhbevd | 18.00 | exact | 30.15 |
 | ✓ | zhbevd_2stage | — | — | — |
-| ✓ | zhbevx | — | — | — |
+| ✓ | zhbevx | 17.97 | exact | 30.10 |
 | ✓ | zhbevx_2stage | — | — | — |
 | ✓ | zhbgst | — | — | — |
 | ✓ | zhbgv | — | — | — |
@@ -723,7 +723,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | zheevd_2stage | — | — | — |
 | ✓ | zheevr | 18.09 | 32.86 | 30.60 |
 | ✓ | zheevr_2stage | — | — | — |
-| ✓ | zheevx | — | — | — |
+| ✓ | zheevx | 18.20 | 33.16 | 30.39 |
 | ✓ | zheevx_2stage | — | — | — |
 |  | zhegs2 | — | — | — |
 | ✓ | zhegst | — | — | — |
@@ -768,9 +768,9 @@ _75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | zhfrk | — | — | — |
 | ✓ | zhgeqz | — | — | — |
 | ✓ | zhpcon | — | — | — |
-| ✓ | zhpev | — | — | — |
-| ✓ | zhpevd | — | — | — |
-| ✓ | zhpevx | — | — | — |
+| ✓ | zhpev | 18.10 | exact | 30.36 |
+| ✓ | zhpevd | 17.91 | exact | 30.15 |
+| ✓ | zhpevx | 18.02 | exact | 30.17 |
 | ✓ | zhpgst | — | — | — |
 | ✓ | zhpgv | — | — | — |
 | ✓ | zhpgvd | — | — | — |
