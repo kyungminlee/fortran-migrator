@@ -25,11 +25,19 @@ LIBRARIES = ['BLAS', 'LAPACK', 'PBLAS', 'ScaLAPACK']
 SECTION_RE = re.compile(r'^###\s+(BLAS|LAPACK|PBLAS|ScaLAPACK)\s+—')
 ROW_RE = re.compile(r'^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|')
 
-# LAPACK / ScaLAPACK auxiliary routines all use the "LA" infix after
-# the precision prefix (`dla*`, `zla*`, `pdla*`, `pzla*`, …). The
-# ScaLAPACK b-prefix family is explicitly back-transformation helpers
-# (PROCEDURES.md), so anything starting with `b` is auxiliary too.
-AUX_RE = re.compile(r'^[bp]?[diz]+la')
+# LAPACK / ScaLAPACK auxiliary heuristic, aligned with the LAPACK
+# Users' Guide split (drivers + computational routines vs. auxiliaries):
+#   * `xLA*` infix after the precision prefix is always auxiliary.
+#   * Names ending in a digit are unblocked variants or recursive
+#     helpers (`xGETF2`, `xPOTF2`, `xGEQR2`, `xGEHD2`, `xGEQRT2`,
+#     `xPOTRF2`, `xGEQRT3`, …) — auxiliaries by convention. The one
+#     widely-documented exception is `qp3` (rank-revealing QR), which
+#     is a top-level computational routine.
+#   * ScaLAPACK b-prefix entries are back-transformation helpers
+#     (PROCEDURES.md) — auxiliary.
+AUX_LA_RE = re.compile(r'^[bp]?[diz]+la')
+TRAILING_DIGIT_RE = re.compile(r'[0-9]$')
+DIGIT_DRIVER_SUFFIXES = ('qp3',)
 
 
 def is_user_facing(library: str, name: str) -> bool:
@@ -37,7 +45,11 @@ def is_user_facing(library: str, name: str) -> bool:
         return True
     if library == 'ScaLAPACK' and name.startswith('b'):
         return False
-    return AUX_RE.match(name) is None
+    if AUX_LA_RE.match(name):
+        return False
+    if TRAILING_DIGIT_RE.search(name):
+        return any(name.endswith(s) for s in DIGIT_DRIVER_SUFFIXES)
+    return True
 
 
 def parse_procedures(md_path: Path) -> dict[str, list[str]]:

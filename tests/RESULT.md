@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_75 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -106,12 +106,12 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dgbsv | 18.91 | exact | 31.60 |
 | ✓ | dgbsvx | — | — | — |
 | ✓ | dgbsvxx | — | — | — |
-| ✓ | dgbtf2 | — | — | — |
+|  | dgbtf2 | — | — | — |
 | ✓ | dgbtrf | 19.02 | exact | 31.77 |
 | ✓ | dgbtrs | 18.94 | exact | 31.36 |
 | ✓ | dgebak | — | — | — |
 | ✓ | dgebal | — | — | — |
-| ✓ | dgebd2 | — | — | — |
+|  | dgebd2 | — | — | — |
 | ✓ | dgebrd | — | — | — |
 | ✓ | dgecon | — | — | — |
 | ✓ | dgedmd | — | — | — |
@@ -122,14 +122,14 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dgeesx | — | — | — |
 | ✓ | dgeev | 17.15 | exact | 29.73 |
 | ✓ | dgeevx | — | — | — |
-| ✓ | dgehd2 | — | — | — |
+|  | dgehd2 | — | — | — |
 | ✓ | dgehrd | 17.33 | exact | 29.77 |
 | ✓ | dgejsv | — | — | — |
 | ✓ | dgelq | — | — | — |
-| ✓ | dgelq2 | — | — | — |
+|  | dgelq2 | — | — | — |
 | ✓ | dgelqf | 18.92 | exact | 31.47 |
 | ✓ | dgelqt | — | — | — |
-| ✓ | dgelqt3 | — | — | — |
+|  | dgelqt3 | — | — | — |
 | ✓ | dgels | 18.49 | exact | 31.14 |
 | ✓ | dgelsd | — | — | — |
 | ✓ | dgelss | — | — | — |
@@ -139,23 +139,23 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dgemlqt | — | — | — |
 | ✓ | dgemqr | — | — | — |
 | ✓ | dgemqrt | — | — | — |
-| ✓ | dgeql2 | — | — | — |
+|  | dgeql2 | — | — | — |
 | ✓ | dgeqlf | — | — | — |
 | ✓ | dgeqp3 | 18.88 | exact | 31.45 |
 | ✓ | dgeqp3rk | — | — | — |
 | ✓ | dgeqr | — | — | — |
-| ✓ | dgeqr2 | — | — | — |
+|  | dgeqr2 | — | — | — |
 | ✓ | dgeqr2p | — | — | — |
 | ✓ | dgeqrf | 18.44 | exact | 31.32 |
 | ✓ | dgeqrfp | — | — | — |
 | ✓ | dgeqrt | — | — | — |
-| ✓ | dgeqrt2 | — | — | — |
-| ✓ | dgeqrt3 | — | — | — |
+|  | dgeqrt2 | — | — | — |
+|  | dgeqrt3 | — | — | — |
 | ✓ | dgerfs | — | — | — |
 | ✓ | dgerfsx | — | — | — |
-| ✓ | dgerq2 | — | — | — |
+|  | dgerq2 | — | — | — |
 | ✓ | dgerqf | — | — | — |
-| ✓ | dgesc2 | — | — | — |
+|  | dgesc2 | — | — | — |
 | ✓ | dgesdd | 17.60 | 32.45 | 29.91 |
 | ✓ | dgesv | 17.49 | exact | 29.82 |
 | ✓ | dgesvd | 17.54 | 32.29 | 29.67 |
@@ -164,10 +164,10 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dgesvj | — | — | — |
 | ✓ | dgesvx | — | — | — |
 | ✓ | dgesvxx | — | — | — |
-| ✓ | dgetc2 | — | — | — |
-| ✓ | dgetf2 | — | — | — |
+|  | dgetc2 | — | — | — |
+|  | dgetf2 | — | — | — |
 | ✓ | dgetrf | 17.82 | exact | 30.68 |
-| ✓ | dgetrf2 | — | — | — |
+|  | dgetrf2 | — | — | — |
 | ✓ | dgetri | 18.21 | exact | 31.08 |
 | ✓ | dgetrs | 17.63 | exact | 30.21 |
 | ✓ | dgetsls | — | — | — |
@@ -175,28 +175,28 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dggbak | — | — | — |
 | ✓ | dggbal | — | — | — |
 | ✓ | dgges | — | — | — |
-| ✓ | dgges3 | — | — | — |
+|  | dgges3 | — | — | — |
 | ✓ | dggesx | — | — | — |
 | ✓ | dggev | — | — | — |
-| ✓ | dggev3 | — | — | — |
+|  | dggev3 | — | — | — |
 | ✓ | dggevx | — | — | — |
 | ✓ | dggglm | — | — | — |
-| ✓ | dgghd3 | — | — | — |
+|  | dgghd3 | — | — | — |
 | ✓ | dgghrd | — | — | — |
 | ✓ | dgglse | — | — | — |
 | ✓ | dggqrf | — | — | — |
 | ✓ | dggrqf | — | — | — |
-| ✓ | dggsvd3 | — | — | — |
-| ✓ | dggsvp3 | — | — | — |
-| ✓ | dgsvj0 | — | — | — |
-| ✓ | dgsvj1 | — | — | — |
+|  | dggsvd3 | — | — | — |
+|  | dggsvp3 | — | — | — |
+|  | dgsvj0 | — | — | — |
+|  | dgsvj1 | — | — | — |
 | ✓ | dgtcon | — | — | — |
 | ✓ | dgtrfs | — | — | — |
 | ✓ | dgtsv | — | — | — |
 | ✓ | dgtsvx | — | — | — |
 | ✓ | dgttrf | 19.35 | exact | 31.87 |
 | ✓ | dgttrs | 19.04 | exact | 31.63 |
-| ✓ | dgtts2 | — | — | — |
+|  | dgtts2 | — | — | — |
 | ✓ | dhgeqz | — | — | — |
 | ✓ | dhsein | — | — | — |
 | ✓ | dhseqr | — | — | — |
@@ -379,39 +379,39 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dopgtr | — | — | — |
 | ✓ | dopmtr | — | — | — |
 | ✓ | dorbdb | — | — | — |
-| ✓ | dorbdb1 | — | — | — |
-| ✓ | dorbdb2 | — | — | — |
-| ✓ | dorbdb3 | — | — | — |
-| ✓ | dorbdb4 | — | — | — |
-| ✓ | dorbdb5 | — | — | — |
-| ✓ | dorbdb6 | — | — | — |
+|  | dorbdb1 | — | — | — |
+|  | dorbdb2 | — | — | — |
+|  | dorbdb3 | — | — | — |
+|  | dorbdb4 | — | — | — |
+|  | dorbdb5 | — | — | — |
+|  | dorbdb6 | — | — | — |
 | ✓ | dorcsd | — | — | — |
-| ✓ | dorcsd2by1 | — | — | — |
+|  | dorcsd2by1 | — | — | — |
 | ✓ | dorg2l | — | — | — |
 | ✓ | dorg2r | — | — | — |
 | ✓ | dorgbr | — | — | — |
 | ✓ | dorghr | 17.74 | exact | 30.25 |
-| ✓ | dorgl2 | — | — | — |
+|  | dorgl2 | — | — | — |
 | ✓ | dorglq | 18.19 | exact | 31.11 |
 | ✓ | dorgql | — | — | — |
 | ✓ | dorgqr | 18.19 | exact | 30.88 |
-| ✓ | dorgr2 | — | — | — |
+|  | dorgr2 | — | — | — |
 | ✓ | dorgrq | — | — | — |
 | ✓ | dorgtr | — | — | — |
 | ✓ | dorgtsqr | — | — | — |
 | ✓ | dorgtsqr_row | — | — | — |
 | ✓ | dorhr_col | — | — | — |
-| ✓ | dorm22 | — | — | — |
+|  | dorm22 | — | — | — |
 | ✓ | dorm2l | — | — | — |
 | ✓ | dorm2r | — | — | — |
 | ✓ | dormbr | — | — | — |
 | ✓ | dormhr | — | — | — |
-| ✓ | dorml2 | — | — | — |
+|  | dorml2 | — | — | — |
 | ✓ | dormlq | — | — | — |
 | ✓ | dormql | — | — | — |
 | ✓ | dormqr | 18.40 | exact | 31.11 |
-| ✓ | dormr2 | — | — | — |
-| ✓ | dormr3 | — | — | — |
+|  | dormr2 | — | — | — |
+|  | dormr3 | — | — | — |
 | ✓ | dormrq | — | — | — |
 | ✓ | dormrz | — | — | — |
 | ✓ | dormtr | — | — | — |
@@ -421,7 +421,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dpbstf | — | — | — |
 | ✓ | dpbsv | 18.77 | exact | 31.32 |
 | ✓ | dpbsvx | — | — | — |
-| ✓ | dpbtf2 | — | — | — |
+|  | dpbtf2 | — | — | — |
 | ✓ | dpbtrf | 19.16 | exact | 31.63 |
 | ✓ | dpbtrs | 18.78 | exact | 31.08 |
 | ✓ | dpftrf | — | — | — |
@@ -435,9 +435,9 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dposv | 18.28 | exact | 30.96 |
 | ✓ | dposvx | — | — | — |
 | ✓ | dposvxx | — | — | — |
-| ✓ | dpotf2 | — | — | — |
+|  | dpotf2 | — | — | — |
 | ✓ | dpotrf | 18.39 | 33.88 | 31.48 |
-| ✓ | dpotrf2 | — | — | — |
+|  | dpotrf2 | — | — | — |
 | ✓ | dpotri | 18.22 | exact | 30.98 |
 | ✓ | dpotrs | 18.38 | exact | 31.18 |
 | ✓ | dppcon | — | — | — |
@@ -448,7 +448,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dpptrf | — | — | — |
 | ✓ | dpptri | — | — | — |
 | ✓ | dpptrs | — | — | — |
-| ✓ | dpstf2 | — | — | — |
+|  | dpstf2 | — | — | — |
 | ✓ | dpstrf | — | — | — |
 | ✓ | dptcon | — | — | — |
 | ✓ | dpteqr | — | — | — |
@@ -457,7 +457,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dptsvx | — | — | — |
 | ✓ | dpttrf | 19.27 | exact | 31.63 |
 | ✓ | dpttrs | 19.05 | exact | 31.55 |
-| ✓ | dptts2 | — | — | — |
+|  | dptts2 | — | — | — |
 | ✓ | drscl | — | — | — |
 | ✓ | dsb2st_kernels | — | — | — |
 | ✓ | dsbev | — | — | — |
@@ -499,7 +499,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dstevr | — | — | — |
 | ✓ | dstevx | — | — | — |
 | ✓ | dsycon | — | — | — |
-| ✓ | dsycon_3 | — | — | — |
+|  | dsycon_3 | — | — | — |
 | ✓ | dsycon_rook | — | — | — |
 | ✓ | dsyconv | — | — | — |
 | ✓ | dsyconvf | — | — | — |
@@ -513,7 +513,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dsyevr_2stage | — | — | — |
 | ✓ | dsyevx | — | — | — |
 | ✓ | dsyevx_2stage | — | — | — |
-| ✓ | dsygs2 | — | — | — |
+|  | dsygs2 | — | — | — |
 | ✓ | dsygst | — | — | — |
 | ✓ | dsygv | 18.11 | 32.65 | 30.58 |
 | ✓ | dsygv_2stage | — | — | — |
@@ -529,8 +529,8 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dsysvx | — | — | — |
 | ✓ | dsysvxx | — | — | — |
 | ✓ | dsyswapr | — | — | — |
-| ✓ | dsytd2 | — | — | — |
-| ✓ | dsytf2 | — | — | — |
+|  | dsytd2 | — | — | — |
+|  | dsytf2 | — | — | — |
 | ✓ | dsytf2_rk | — | — | — |
 | ✓ | dsytf2_rook | — | — | — |
 | ✓ | dsytrd | — | — | — |
@@ -542,14 +542,14 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dsytrf_rk | — | — | — |
 | ✓ | dsytrf_rook | — | — | — |
 | ✓ | dsytri | — | — | — |
-| ✓ | dsytri2 | — | — | — |
+|  | dsytri2 | — | — | — |
 | ✓ | dsytri2x | — | — | — |
-| ✓ | dsytri_3 | — | — | — |
+|  | dsytri_3 | — | — | — |
 | ✓ | dsytri_3x | — | — | — |
 | ✓ | dsytri_rook | — | — | — |
 | ✓ | dsytrs | 18.22 | exact | 31.14 |
-| ✓ | dsytrs2 | — | — | — |
-| ✓ | dsytrs_3 | — | — | — |
+|  | dsytrs2 | — | — | — |
+|  | dsytrs_3 | — | — | — |
 | ✓ | dsytrs_aa | — | — | — |
 | ✓ | dsytrs_aa_2stage | — | — | — |
 | ✓ | dsytrs_rook | — | — | — |
@@ -561,20 +561,20 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dtfttp | — | — | — |
 | ✓ | dtfttr | — | — | — |
 | ✓ | dtgevc | — | — | — |
-| ✓ | dtgex2 | — | — | — |
+|  | dtgex2 | — | — | — |
 | ✓ | dtgexc | — | — | — |
 | ✓ | dtgsen | — | — | — |
 | ✓ | dtgsja | — | — | — |
 | ✓ | dtgsna | — | — | — |
-| ✓ | dtgsy2 | — | — | — |
+|  | dtgsy2 | — | — | — |
 | ✓ | dtgsyl | — | — | — |
 | ✓ | dtpcon | — | — | — |
 | ✓ | dtplqt | — | — | — |
-| ✓ | dtplqt2 | — | — | — |
+|  | dtplqt2 | — | — | — |
 | ✓ | dtpmlqt | — | — | — |
 | ✓ | dtpmqrt | — | — | — |
 | ✓ | dtpqrt | — | — | — |
-| ✓ | dtpqrt2 | — | — | — |
+|  | dtpqrt2 | — | — | — |
 | ✓ | dtprfb | — | — | — |
 | ✓ | dtprfs | — | — | — |
 | ✓ | dtptri | — | — | — |
@@ -583,21 +583,21 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | dtpttr | — | — | — |
 | ✓ | dtrcon | — | — | — |
 | ✓ | dtrevc | — | — | — |
-| ✓ | dtrevc3 | — | — | — |
+|  | dtrevc3 | — | — | — |
 | ✓ | dtrexc | — | — | — |
 | ✓ | dtrrfs | — | — | — |
 | ✓ | dtrsen | — | — | — |
 | ✓ | dtrsna | — | — | — |
 | ✓ | dtrsyl | — | — | — |
-| ✓ | dtrsyl3 | — | — | — |
-| ✓ | dtrti2 | — | — | — |
+|  | dtrsyl3 | — | — | — |
+|  | dtrti2 | — | — | — |
 | ✓ | dtrtri | 18.47 | exact | 31.25 |
 | ✓ | dtrtrs | 18.17 | exact | 31.01 |
 | ✓ | dtrttf | — | — | — |
 | ✓ | dtrttp | — | — | — |
 | ✓ | dtzrzf | — | — | — |
-| ✓ | dzsum1 | — | — | — |
-| ✓ | izmax1 | — | — | — |
+|  | dzsum1 | — | — | — |
+|  | izmax1 | — | — | — |
 | ✓ | zbbcsd | — | — | — |
 | ✓ | zbdsqr | — | — | — |
 | ✓ | zdrscl | — | — | — |
@@ -610,12 +610,12 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zgbsv | — | — | — |
 | ✓ | zgbsvx | — | — | — |
 | ✓ | zgbsvxx | — | — | — |
-| ✓ | zgbtf2 | — | — | — |
+|  | zgbtf2 | — | — | — |
 | ✓ | zgbtrf | — | — | — |
 | ✓ | zgbtrs | — | — | — |
 | ✓ | zgebak | — | — | — |
 | ✓ | zgebal | — | — | — |
-| ✓ | zgebd2 | — | — | — |
+|  | zgebd2 | — | — | — |
 | ✓ | zgebrd | — | — | — |
 | ✓ | zgecon | — | — | — |
 | ✓ | zgedmd | — | — | — |
@@ -626,14 +626,14 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zgeesx | — | — | — |
 | ✓ | zgeev | 17.48 | exact | 29.64 |
 | ✓ | zgeevx | — | — | — |
-| ✓ | zgehd2 | — | — | — |
+|  | zgehd2 | — | — | — |
 | ✓ | zgehrd | 17.35 | exact | 30.31 |
 | ✓ | zgejsv | — | — | — |
 | ✓ | zgelq | — | — | — |
-| ✓ | zgelq2 | — | — | — |
+|  | zgelq2 | — | — | — |
 | ✓ | zgelqf | 18.67 | exact | 31.43 |
 | ✓ | zgelqt | — | — | — |
-| ✓ | zgelqt3 | — | — | — |
+|  | zgelqt3 | — | — | — |
 | ✓ | zgels | 18.06 | exact | 31.01 |
 | ✓ | zgelsd | — | — | — |
 | ✓ | zgelss | — | — | — |
@@ -643,23 +643,23 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zgemlqt | — | — | — |
 | ✓ | zgemqr | — | — | — |
 | ✓ | zgemqrt | — | — | — |
-| ✓ | zgeql2 | — | — | — |
+|  | zgeql2 | — | — | — |
 | ✓ | zgeqlf | — | — | — |
 | ✓ | zgeqp3 | 18.93 | exact | 31.48 |
 | ✓ | zgeqp3rk | — | — | — |
 | ✓ | zgeqr | — | — | — |
-| ✓ | zgeqr2 | — | — | — |
+|  | zgeqr2 | — | — | — |
 | ✓ | zgeqr2p | — | — | — |
 | ✓ | zgeqrf | 18.76 | exact | 31.35 |
 | ✓ | zgeqrfp | — | — | — |
 | ✓ | zgeqrt | — | — | — |
-| ✓ | zgeqrt2 | — | — | — |
-| ✓ | zgeqrt3 | — | — | — |
+|  | zgeqrt2 | — | — | — |
+|  | zgeqrt3 | — | — | — |
 | ✓ | zgerfs | — | — | — |
 | ✓ | zgerfsx | — | — | — |
-| ✓ | zgerq2 | — | — | — |
+|  | zgerq2 | — | — | — |
 | ✓ | zgerqf | — | — | — |
-| ✓ | zgesc2 | — | — | — |
+|  | zgesc2 | — | — | — |
 | ✓ | zgesdd | 17.73 | 32.52 | 29.96 |
 | ✓ | zgesv | 17.31 | exact | 30.17 |
 | ✓ | zgesvd | 17.64 | 32.41 | 29.78 |
@@ -668,10 +668,10 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zgesvj | — | — | — |
 | ✓ | zgesvx | — | — | — |
 | ✓ | zgesvxx | — | — | — |
-| ✓ | zgetc2 | — | — | — |
-| ✓ | zgetf2 | — | — | — |
+|  | zgetc2 | — | — | — |
+|  | zgetf2 | — | — | — |
 | ✓ | zgetrf | 18.03 | exact | 30.92 |
-| ✓ | zgetrf2 | — | — | — |
+|  | zgetrf2 | — | — | — |
 | ✓ | zgetri | 18.30 | exact | 31.12 |
 | ✓ | zgetrs | 17.80 | exact | 30.44 |
 | ✓ | zgetsls | — | — | — |
@@ -679,28 +679,28 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zggbak | — | — | — |
 | ✓ | zggbal | — | — | — |
 | ✓ | zgges | — | — | — |
-| ✓ | zgges3 | — | — | — |
+|  | zgges3 | — | — | — |
 | ✓ | zggesx | — | — | — |
 | ✓ | zggev | — | — | — |
-| ✓ | zggev3 | — | — | — |
+|  | zggev3 | — | — | — |
 | ✓ | zggevx | — | — | — |
 | ✓ | zggglm | — | — | — |
-| ✓ | zgghd3 | — | — | — |
+|  | zgghd3 | — | — | — |
 | ✓ | zgghrd | — | — | — |
 | ✓ | zgglse | — | — | — |
 | ✓ | zggqrf | — | — | — |
 | ✓ | zggrqf | — | — | — |
-| ✓ | zggsvd3 | — | — | — |
-| ✓ | zggsvp3 | — | — | — |
-| ✓ | zgsvj0 | — | — | — |
-| ✓ | zgsvj1 | — | — | — |
+|  | zggsvd3 | — | — | — |
+|  | zggsvp3 | — | — | — |
+|  | zgsvj0 | — | — | — |
+|  | zgsvj1 | — | — | — |
 | ✓ | zgtcon | — | — | — |
 | ✓ | zgtrfs | — | — | — |
 | ✓ | zgtsv | — | — | — |
 | ✓ | zgtsvx | — | — | — |
 | ✓ | zgttrf | — | — | — |
 | ✓ | zgttrs | — | — | — |
-| ✓ | zgtts2 | — | — | — |
+|  | zgtts2 | — | — | — |
 | ✓ | zhb2st_kernels | — | — | — |
 | ✓ | zhbev | — | — | — |
 | ✓ | zhbev_2stage | — | — | — |
@@ -714,7 +714,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zhbgvx | — | — | — |
 | ✓ | zhbtrd | — | — | — |
 | ✓ | zhecon | — | — | — |
-| ✓ | zhecon_3 | — | — | — |
+|  | zhecon_3 | — | — | — |
 | ✓ | zhecon_rook | — | — | — |
 | ✓ | zheequb | — | — | — |
 | ✓ | zheev | 17.79 | 32.27 | 30.07 |
@@ -725,7 +725,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zheevr_2stage | — | — | — |
 | ✓ | zheevx | — | — | — |
 | ✓ | zheevx_2stage | — | — | — |
-| ✓ | zhegs2 | — | — | — |
+|  | zhegs2 | — | — | — |
 | ✓ | zhegst | — | — | — |
 | ✓ | zhegv | 18.38 | 32.77 | 30.58 |
 | ✓ | zhegv_2stage | — | — | — |
@@ -741,8 +741,8 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zhesvx | — | — | — |
 | ✓ | zhesvxx | — | — | — |
 | ✓ | zheswapr | — | — | — |
-| ✓ | zhetd2 | — | — | — |
-| ✓ | zhetf2 | — | — | — |
+|  | zhetd2 | — | — | — |
+|  | zhetf2 | — | — | — |
 | ✓ | zhetf2_rk | — | — | — |
 | ✓ | zhetf2_rook | — | — | — |
 | ✓ | zhetrd | — | — | — |
@@ -754,14 +754,14 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zhetrf_rk | — | — | — |
 | ✓ | zhetrf_rook | — | — | — |
 | ✓ | zhetri | — | — | — |
-| ✓ | zhetri2 | — | — | — |
+|  | zhetri2 | — | — | — |
 | ✓ | zhetri2x | — | — | — |
-| ✓ | zhetri_3 | — | — | — |
+|  | zhetri_3 | — | — | — |
 | ✓ | zhetri_3x | — | — | — |
 | ✓ | zhetri_rook | — | — | — |
 | ✓ | zhetrs | 18.35 | exact | 31.17 |
-| ✓ | zhetrs2 | — | — | — |
-| ✓ | zhetrs_3 | — | — | — |
+|  | zhetrs2 | — | — | — |
+|  | zhetrs_3 | — | — | — |
 | ✓ | zhetrs_aa | — | — | — |
 | ✓ | zhetrs_aa_2stage | — | — | — |
 | ✓ | zhetrs_rook | — | — | — |
@@ -930,7 +930,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zpbstf | — | — | — |
 | ✓ | zpbsv | — | — | — |
 | ✓ | zpbsvx | — | — | — |
-| ✓ | zpbtf2 | — | — | — |
+|  | zpbtf2 | — | — | — |
 | ✓ | zpbtrf | — | — | — |
 | ✓ | zpbtrs | — | — | — |
 | ✓ | zpftrf | — | — | — |
@@ -944,9 +944,9 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zposv | 18.44 | exact | 31.09 |
 | ✓ | zposvx | — | — | — |
 | ✓ | zposvxx | — | — | — |
-| ✓ | zpotf2 | — | — | — |
+|  | zpotf2 | — | — | — |
 | ✓ | zpotrf | 18.66 | 33.62 | 31.45 |
-| ✓ | zpotrf2 | — | — | — |
+|  | zpotrf2 | — | — | — |
 | ✓ | zpotri | 18.38 | exact | 31.08 |
 | ✓ | zpotrs | 18.48 | exact | 31.22 |
 | ✓ | zppcon | — | — | — |
@@ -957,7 +957,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zpptrf | — | — | — |
 | ✓ | zpptri | — | — | — |
 | ✓ | zpptrs | — | — | — |
-| ✓ | zpstf2 | — | — | — |
+|  | zpstf2 | — | — | — |
 | ✓ | zpstrf | — | — | — |
 | ✓ | zptcon | — | — | — |
 | ✓ | zpteqr | — | — | — |
@@ -966,7 +966,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zptsvx | — | — | — |
 | ✓ | zpttrf | — | — | — |
 | ✓ | zpttrs | — | — | — |
-| ✓ | zptts2 | — | — | — |
+|  | zptts2 | — | — | — |
 | ✓ | zrot | — | — | — |
 | ✓ | zrscl | — | — | — |
 | ✓ | zspcon | — | — | — |
@@ -984,7 +984,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zstemr | — | — | — |
 | ✓ | zsteqr | — | — | — |
 | ✓ | zsycon | — | — | — |
-| ✓ | zsycon_3 | — | — | — |
+|  | zsycon_3 | — | — | — |
 | ✓ | zsycon_rook | — | — | — |
 | ✓ | zsyconv | — | — | — |
 | ✓ | zsyconvf | — | — | — |
@@ -1002,7 +1002,7 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zsysvx | — | — | — |
 | ✓ | zsysvxx | — | — | — |
 | ✓ | zsyswapr | — | — | — |
-| ✓ | zsytf2 | — | — | — |
+|  | zsytf2 | — | — | — |
 | ✓ | zsytf2_rk | — | — | — |
 | ✓ | zsytf2_rook | — | — | — |
 | ✓ | zsytrf | — | — | — |
@@ -1011,14 +1011,14 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | zsytrf_rk | — | — | — |
 | ✓ | zsytrf_rook | — | — | — |
 | ✓ | zsytri | — | — | — |
-| ✓ | zsytri2 | — | — | — |
+|  | zsytri2 | — | — | — |
 | ✓ | zsytri2x | — | — | — |
-| ✓ | zsytri_3 | — | — | — |
+|  | zsytri_3 | — | — | — |
 | ✓ | zsytri_3x | — | — | — |
 | ✓ | zsytri_rook | — | — | — |
 | ✓ | zsytrs | — | — | — |
-| ✓ | zsytrs2 | — | — | — |
-| ✓ | zsytrs_3 | — | — | — |
+|  | zsytrs2 | — | — | — |
+|  | zsytrs_3 | — | — | — |
 | ✓ | zsytrs_aa | — | — | — |
 | ✓ | zsytrs_aa_2stage | — | — | — |
 | ✓ | zsytrs_rook | — | — | — |
@@ -1030,20 +1030,20 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | ztfttp | — | — | — |
 | ✓ | ztfttr | — | — | — |
 | ✓ | ztgevc | — | — | — |
-| ✓ | ztgex2 | — | — | — |
+|  | ztgex2 | — | — | — |
 | ✓ | ztgexc | — | — | — |
 | ✓ | ztgsen | — | — | — |
 | ✓ | ztgsja | — | — | — |
 | ✓ | ztgsna | — | — | — |
-| ✓ | ztgsy2 | — | — | — |
+|  | ztgsy2 | — | — | — |
 | ✓ | ztgsyl | — | — | — |
 | ✓ | ztpcon | — | — | — |
 | ✓ | ztplqt | — | — | — |
-| ✓ | ztplqt2 | — | — | — |
+|  | ztplqt2 | — | — | — |
 | ✓ | ztpmlqt | — | — | — |
 | ✓ | ztpmqrt | — | — | — |
 | ✓ | ztpqrt | — | — | — |
-| ✓ | ztpqrt2 | — | — | — |
+|  | ztpqrt2 | — | — | — |
 | ✓ | ztprfb | — | — | — |
 | ✓ | ztprfs | — | — | — |
 | ✓ | ztptri | — | — | — |
@@ -1052,53 +1052,53 @@ _75 of 1012 migrated entries have a dedicated test driver. 697 are user-facing (
 | ✓ | ztpttr | — | — | — |
 | ✓ | ztrcon | — | — | — |
 | ✓ | ztrevc | — | — | — |
-| ✓ | ztrevc3 | — | — | — |
+|  | ztrevc3 | — | — | — |
 | ✓ | ztrexc | — | — | — |
 | ✓ | ztrrfs | — | — | — |
 | ✓ | ztrsen | — | — | — |
 | ✓ | ztrsna | — | — | — |
 | ✓ | ztrsyl | — | — | — |
-| ✓ | ztrsyl3 | — | — | — |
-| ✓ | ztrti2 | — | — | — |
+|  | ztrsyl3 | — | — | — |
+|  | ztrti2 | — | — | — |
 | ✓ | ztrtri | 18.32 | exact | 31.14 |
 | ✓ | ztrtrs | 18.04 | exact | 30.85 |
 | ✓ | ztrttf | — | — | — |
 | ✓ | ztrttp | — | — | — |
 | ✓ | ztzrzf | — | — | — |
 | ✓ | zunbdb | — | — | — |
-| ✓ | zunbdb1 | — | — | — |
-| ✓ | zunbdb2 | — | — | — |
-| ✓ | zunbdb3 | — | — | — |
-| ✓ | zunbdb4 | — | — | — |
-| ✓ | zunbdb5 | — | — | — |
-| ✓ | zunbdb6 | — | — | — |
+|  | zunbdb1 | — | — | — |
+|  | zunbdb2 | — | — | — |
+|  | zunbdb3 | — | — | — |
+|  | zunbdb4 | — | — | — |
+|  | zunbdb5 | — | — | — |
+|  | zunbdb6 | — | — | — |
 | ✓ | zuncsd | — | — | — |
-| ✓ | zuncsd2by1 | — | — | — |
+|  | zuncsd2by1 | — | — | — |
 | ✓ | zung2l | — | — | — |
 | ✓ | zung2r | — | — | — |
 | ✓ | zungbr | — | — | — |
 | ✓ | zunghr | 17.76 | exact | 30.58 |
-| ✓ | zungl2 | — | — | — |
+|  | zungl2 | — | — | — |
 | ✓ | zunglq | 18.20 | exact | 30.81 |
 | ✓ | zungql | — | — | — |
 | ✓ | zungqr | 18.15 | exact | 30.89 |
-| ✓ | zungr2 | — | — | — |
+|  | zungr2 | — | — | — |
 | ✓ | zungrq | — | — | — |
 | ✓ | zungtr | — | — | — |
 | ✓ | zungtsqr | — | — | — |
 | ✓ | zungtsqr_row | — | — | — |
 | ✓ | zunhr_col | — | — | — |
-| ✓ | zunm22 | — | — | — |
+|  | zunm22 | — | — | — |
 | ✓ | zunm2l | — | — | — |
 | ✓ | zunm2r | — | — | — |
 | ✓ | zunmbr | — | — | — |
 | ✓ | zunmhr | — | — | — |
-| ✓ | zunml2 | — | — | — |
+|  | zunml2 | — | — | — |
 | ✓ | zunmlq | — | — | — |
 | ✓ | zunmql | — | — | — |
 | ✓ | zunmqr | 18.54 | exact | 31.28 |
-| ✓ | zunmr2 | — | — | — |
-| ✓ | zunmr3 | — | — | — |
+|  | zunmr2 | — | — | — |
+|  | zunmr3 | — | — | — |
 | ✓ | zunmrq | — | — | — |
 | ✓ | zunmrz | — | — | — |
 | ✓ | zunmtr | — | — | — |
@@ -1175,7 +1175,7 @@ _20 of 61 migrated entries have a dedicated test driver. 61 are user-facing (✓
 
 ## ScaLAPACK
 
-_11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -1194,27 +1194,27 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 | ✓ | pdgbtrf | — | — | — |
 | ✓ | pdgbtrs | — | — | — |
 | ✓ | pdgebal | — | — | — |
-| ✓ | pdgebd2 | — | — | — |
+|  | pdgebd2 | — | — | — |
 | ✓ | pdgebrd | — | — | — |
 | ✓ | pdgecon | — | — | — |
 | ✓ | pdgeequ | — | — | — |
-| ✓ | pdgehd2 | — | — | — |
+|  | pdgehd2 | — | — | — |
 | ✓ | pdgehrd | — | — | — |
-| ✓ | pdgelq2 | — | — | — |
+|  | pdgelq2 | — | — | — |
 | ✓ | pdgelqf | — | — | — |
 | ✓ | pdgels | — | — | — |
-| ✓ | pdgeql2 | — | — | — |
+|  | pdgeql2 | — | — | — |
 | ✓ | pdgeqlf | — | — | — |
 | ✓ | pdgeqpf | — | — | — |
-| ✓ | pdgeqr2 | — | — | — |
+|  | pdgeqr2 | — | — | — |
 | ✓ | pdgeqrf | 18.68 | 33.29 | 31.27 |
 | ✓ | pdgerfs | — | — | — |
-| ✓ | pdgerq2 | — | — | — |
+|  | pdgerq2 | — | — | — |
 | ✓ | pdgerqf | — | — | — |
 | ✓ | pdgesv | 18.28 | 33.38 | 31.14 |
 | ✓ | pdgesvd | 17.99 | 32.37 | 29.80 |
 | ✓ | pdgesvx | — | — | — |
-| ✓ | pdgetf2 | — | — | — |
+|  | pdgetf2 | — | — | — |
 | ✓ | pdgetrf | 18.23 | exact | 31.17 |
 | ✓ | pdgetri | — | — | — |
 | ✓ | pdgetrs | 18.10 | 33.38 | 31.12 |
@@ -1278,22 +1278,22 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 |  | pdlawil | — | — | — |
 | ✓ | pdorg2l | — | — | — |
 | ✓ | pdorg2r | — | — | — |
-| ✓ | pdorgl2 | — | — | — |
+|  | pdorgl2 | — | — | — |
 | ✓ | pdorglq | — | — | — |
 | ✓ | pdorgql | — | — | — |
 | ✓ | pdorgqr | — | — | — |
-| ✓ | pdorgr2 | — | — | — |
+|  | pdorgr2 | — | — | — |
 | ✓ | pdorgrq | — | — | — |
 | ✓ | pdorm2l | — | — | — |
 | ✓ | pdorm2r | — | — | — |
 | ✓ | pdormbr | — | — | — |
 | ✓ | pdormhr | — | — | — |
-| ✓ | pdorml2 | — | — | — |
+|  | pdorml2 | — | — | — |
 | ✓ | pdormlq | — | — | — |
 | ✓ | pdormql | — | — | — |
 | ✓ | pdormqr | — | — | — |
-| ✓ | pdormr2 | — | — | — |
-| ✓ | pdormr3 | — | — | — |
+|  | pdormr2 | — | — | — |
+|  | pdormr3 | — | — | — |
 | ✓ | pdormrq | — | — | — |
 | ✓ | pdormrz | — | — | — |
 | ✓ | pdormtr | — | — | — |
@@ -1306,7 +1306,7 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 | ✓ | pdporfs | — | — | — |
 | ✓ | pdposv | — | — | — |
 | ✓ | pdposvx | — | — | — |
-| ✓ | pdpotf2 | — | — | — |
+|  | pdpotf2 | — | — | — |
 | ✓ | pdpotrf | 19.04 | 33.59 | 31.74 |
 | ✓ | pdpotri | — | — | — |
 | ✓ | pdpotrs | 18.28 | 33.29 | 31.11 |
@@ -1323,23 +1323,23 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 | ✓ | pdsyevd | — | — | — |
 | ✓ | pdsyevr | — | — | — |
 | ✓ | pdsyevx | — | — | — |
-| ✓ | pdsygs2 | — | — | — |
+|  | pdsygs2 | — | — | — |
 | ✓ | pdsygst | — | — | — |
 | ✓ | pdsygvx | — | — | — |
 | ✓ | pdsyngst | — | — | — |
 | ✓ | pdsyntrd | — | — | — |
-| ✓ | pdsytd2 | — | — | — |
+|  | pdsytd2 | — | — | — |
 | ✓ | pdsytrd | — | — | — |
 | ✓ | pdsyttrd | — | — | — |
 | ✓ | pdtrcon | — | — | — |
 | ✓ | pdtrord | — | — | — |
 | ✓ | pdtrrfs | — | — | — |
 | ✓ | pdtrsen | — | — | — |
-| ✓ | pdtrti2 | — | — | — |
+|  | pdtrti2 | — | — | — |
 | ✓ | pdtrtri | — | — | — |
 | ✓ | pdtrtrs | — | — | — |
 | ✓ | pdtzrzf | — | — | — |
-| ✓ | pdzsum1 | — | — | — |
+|  | pdzsum1 | — | — | — |
 | ✓ | pzdbsv | — | — | — |
 | ✓ | pzdbtrf | — | — | — |
 | ✓ | pzdbtrs | — | — | — |
@@ -1352,27 +1352,27 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 | ✓ | pzgbsv | — | — | — |
 | ✓ | pzgbtrf | — | — | — |
 | ✓ | pzgbtrs | — | — | — |
-| ✓ | pzgebd2 | — | — | — |
+|  | pzgebd2 | — | — | — |
 | ✓ | pzgebrd | — | — | — |
 | ✓ | pzgecon | — | — | — |
 | ✓ | pzgeequ | — | — | — |
-| ✓ | pzgehd2 | — | — | — |
+|  | pzgehd2 | — | — | — |
 | ✓ | pzgehrd | — | — | — |
-| ✓ | pzgelq2 | — | — | — |
+|  | pzgelq2 | — | — | — |
 | ✓ | pzgelqf | — | — | — |
 | ✓ | pzgels | — | — | — |
-| ✓ | pzgeql2 | — | — | — |
+|  | pzgeql2 | — | — | — |
 | ✓ | pzgeqlf | — | — | — |
 | ✓ | pzgeqpf | — | — | — |
-| ✓ | pzgeqr2 | — | — | — |
+|  | pzgeqr2 | — | — | — |
 | ✓ | pzgeqrf | — | — | — |
 | ✓ | pzgerfs | — | — | — |
-| ✓ | pzgerq2 | — | — | — |
+|  | pzgerq2 | — | — | — |
 | ✓ | pzgerqf | — | — | — |
 | ✓ | pzgesv | — | — | — |
 | ✓ | pzgesvd | — | — | — |
 | ✓ | pzgesvx | — | — | — |
-| ✓ | pzgetf2 | — | — | — |
+|  | pzgetf2 | — | — | — |
 | ✓ | pzgetrf | — | — | — |
 | ✓ | pzgetri | — | — | — |
 | ✓ | pzgetrs | — | — | — |
@@ -1382,12 +1382,12 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 | ✓ | pzheevd | — | — | — |
 | ✓ | pzheevr | — | — | — |
 | ✓ | pzheevx | — | — | — |
-| ✓ | pzhegs2 | — | — | — |
+|  | pzhegs2 | — | — | — |
 | ✓ | pzhegst | — | — | — |
 | ✓ | pzhegvx | — | — | — |
 | ✓ | pzhengst | — | — | — |
 | ✓ | pzhentrd | — | — | — |
-| ✓ | pzhetd2 | — | — | — |
+|  | pzhetd2 | — | — | — |
 | ✓ | pzhetrd | — | — | — |
 | ✓ | pzhettrd | — | — | — |
 |  | pzlabrd | — | — | — |
@@ -1433,7 +1433,7 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 |  | pzlauu2 | — | — | — |
 |  | pzlauum | — | — | — |
 |  | pzlawil | — | — | — |
-| ✓ | pzmax1 | — | — | — |
+|  | pzmax1 | — | — | — |
 | ✓ | pzpbsv | — | — | — |
 | ✓ | pzpbtrf | — | — | — |
 | ✓ | pzpbtrs | — | — | — |
@@ -1443,7 +1443,7 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 | ✓ | pzporfs | — | — | — |
 | ✓ | pzposv | — | — | — |
 | ✓ | pzposvx | — | — | — |
-| ✓ | pzpotf2 | — | — | — |
+|  | pzpotf2 | — | — | — |
 | ✓ | pzpotrf | — | — | — |
 | ✓ | pzpotri | — | — | — |
 | ✓ | pzpotrs | — | — | — |
@@ -1455,28 +1455,28 @@ _11 of 301 migrated entries have a dedicated test driver. 200 are user-facing (�
 | ✓ | pztrcon | — | — | — |
 | ✓ | pztrevc | — | — | — |
 | ✓ | pztrrfs | — | — | — |
-| ✓ | pztrti2 | — | — | — |
+|  | pztrti2 | — | — | — |
 | ✓ | pztrtri | — | — | — |
 | ✓ | pztrtrs | — | — | — |
 | ✓ | pztzrzf | — | — | — |
 | ✓ | pzung2l | — | — | — |
 | ✓ | pzung2r | — | — | — |
-| ✓ | pzungl2 | — | — | — |
+|  | pzungl2 | — | — | — |
 | ✓ | pzunglq | — | — | — |
 | ✓ | pzungql | — | — | — |
 | ✓ | pzungqr | — | — | — |
-| ✓ | pzungr2 | — | — | — |
+|  | pzungr2 | — | — | — |
 | ✓ | pzungrq | — | — | — |
 | ✓ | pzunm2l | — | — | — |
 | ✓ | pzunm2r | — | — | — |
 | ✓ | pzunmbr | — | — | — |
 | ✓ | pzunmhr | — | — | — |
-| ✓ | pzunml2 | — | — | — |
+|  | pzunml2 | — | — | — |
 | ✓ | pzunmlq | — | — | — |
 | ✓ | pzunmql | — | — | — |
 | ✓ | pzunmqr | — | — | — |
-| ✓ | pzunmr2 | — | — | — |
-| ✓ | pzunmr3 | — | — | — |
+|  | pzunmr2 | — | — | — |
+|  | pzunmr3 | — | — | — |
 | ✓ | pzunmrq | — | — | — |
 | ✓ | pzunmrz | — | — | — |
 | ✓ | pzunmtr | — | — | — |
