@@ -12,10 +12,12 @@ program test_pdsyr
     implicit none
 
     integer, parameter :: ns(*) = [32, 80, 160]
+    character(len=1), parameter :: uplos(*) = ['U', 'L']
     integer, parameter :: mb = 8
-    integer :: i, n, info
+    integer :: i, iu, n, info
     integer :: locm_a, locn_a, locn_x, lld_a, lld_x
     integer :: desca(9), descx(9)
+    character(len=1) :: uplo
     real(ep), allocatable :: A_loc(:,:), x_loc(:)
     real(ep), allocatable :: A_glob(:,:), x_glob(:), A_got(:,:), A_ref(:,:)
     real(ep) :: alpha, err, tol
@@ -25,37 +27,41 @@ program test_pdsyr
     call report_init('pdsyr', target_name, my_rank)
 
     alpha = 0.5_ep
-    do i = 1, size(ns)
-        n = ns(i)
-        ! A is symmetric: PBLAS reads/writes only UPPER triangle. dsyr
-        ! does the same — comparing only the touched half is implicit
-        ! in max_rel_err_mat over the full A_got vs A_ref since both
-        ! routines leave the lower half identically untouched.
-        call gen_distrib_matrix(n, n, mb, mb, A_loc, A_glob, seed = 5201 + 19 * i)
-        call gen_distrib_vector(n, mb, x_loc, x_glob, seed = 5211 + 19 * i)
+    do iu = 1, size(uplos)
+        uplo = uplos(iu)
+        do i = 1, size(ns)
+            n = ns(i)
+            ! A is symmetric: PBLAS reads/writes only the named triangle;
+            ! reference dsyr does the same. Comparing the full A_got vs
+            ! A_ref is fine because both leave the other triangle alone.
+            call gen_distrib_matrix(n, n, mb, mb, A_loc, A_glob, &
+                                    seed = 5201 + 19 * i + 113 * iu)
+            call gen_distrib_vector(n, mb, x_loc, x_glob, &
+                                    seed = 5211 + 19 * i + 113 * iu)
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        locn_x = numroc_local(n, mb, my_row, 0, my_nprow); lld_x = max(1, locn_x)
+            locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
+            locn_a = numroc_local(n, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
+            locn_x = numroc_local(n, mb, my_row, 0, my_nprow); lld_x = max(1, locn_x)
 
-        call descinit_local(desca, n, n, mb, mb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
+            call descinit_local(desca, n, n, mb, mb, 0, 0, my_context, lld_a, info)
+            call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
 
-        call target_pdsyr('U', n, alpha, x_loc, 1, 1, descx, 1, &
-                          A_loc, 1, 1, desca)
-        call gather_matrix(n, n, mb, mb, A_loc, A_got)
+            call target_pdsyr(uplo, n, alpha, x_loc, 1, 1, descx, 1, &
+                              A_loc, 1, 1, desca)
+            call gather_matrix(n, n, mb, mb, A_loc, A_got)
 
-        if (my_rank == 0) then
-            allocate(A_ref(n, n))
-            A_ref = A_glob
-            call dsyr('U', n, alpha, x_glob, 1, A_ref, n)
-            err = max_rel_err_mat(A_got, A_ref)
-            tol = 32.0_ep * target_eps
-            write(label, '(a,i0)') 'n=', n
-            call report_case(trim(label), err, tol)
-            deallocate(A_ref, A_got)
-        end if
-        deallocate(A_loc, x_loc, A_glob, x_glob)
+            if (my_rank == 0) then
+                allocate(A_ref(n, n))
+                A_ref = A_glob
+                call dsyr(uplo, n, alpha, x_glob, 1, A_ref, n)
+                err = max_rel_err_mat(A_got, A_ref)
+                tol = 32.0_ep * target_eps
+                write(label, '(a,a,a,i0)') 'uplo=', uplo, ',n=', n
+                call report_case(trim(label), err, tol)
+                deallocate(A_ref, A_got)
+            end if
+            deallocate(A_loc, x_loc, A_glob, x_glob)
+        end do
     end do
 
     call report_finalize()
