@@ -1597,6 +1597,55 @@ module ref_quad_lapack
             complex(ep), intent(out) :: work(*)
             integer,     intent(out) :: info
         end subroutine ztbcon
+
+        ! ── Phase 15 — iterative refinement ──────────────────────────
+        subroutine dgerfs(trans, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgerfs
+
+        subroutine zgerfs(trans, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgerfs
+
+        subroutine dporfs(uplo, n, nrhs, A, lda, AF, ldaf, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dporfs
+
+        subroutine zporfs(uplo, n, nrhs, A, lda, AF, ldaf, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zporfs
     end interface
 
 end module ref_quad_lapack
