@@ -54,7 +54,7 @@ module target_scalapack
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
     public :: target_pdgerqf, target_pdorgrq, target_pdormrq
     public :: target_pdgehrd, target_pdormhr
-    public :: target_pdsytrd, target_pdsygst
+    public :: target_pdsytrd, target_pdsygst, target_pdormtr
     public :: target_pdgels
     public :: target_pdposv, target_pdpotri, target_pdgetri
     public :: target_pdgebrd
@@ -288,6 +288,18 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: A(*)
             ${target_real}$, intent(in)    :: B(*)
             ${target_real}$, intent(out)   :: scale
+        end subroutine
+
+        subroutine ${R}$ormtr(side, uplo, trans, m, n, A, ia, ja, desca, &
+                              tau, C, ic, jc, descc, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: side, uplo, trans
+            integer,   intent(in)    :: m, n, ia, ja, ic, jc, lwork
+            integer,   intent(in)    :: desca(9), descc(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(in)    :: A(*), tau(*)
+            ${target_real}$, intent(inout) :: C(*)
+            ${target_real}$, intent(out)   :: work(*)
         end subroutine
 
         subroutine ${R}$gehrd(n, ilo, ihi, A, ia, ja, desca, tau, &
@@ -1144,6 +1156,34 @@ contains
                          Bt, ib, jb, descb, scale_t, info)
         A(1:na) = t2q_r(At)
         scale = t2q_r(scale_t)
+    end subroutine
+
+    subroutine target_pdormtr(side, uplo, trans, m, n, A, ia, ja, desca, &
+                              tau, C, ic, jc, descc, work, lwork, info)
+        character, intent(in)    :: side, uplo, trans
+        integer,   intent(in)    :: m, n, ia, ja, ic, jc, lwork
+        integer,   intent(in)    :: desca(9), descc(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(in)    :: A(*), tau(*)
+        real(ep),  intent(inout) :: C(*)
+        real(ep),  intent(out)   :: work(*)
+        integer :: na, nc, ntau, lwt
+        ${target_real}$, allocatable :: At(:), Ct(:), tau_t(:), work_t(:)
+        na = nloc(desca); nc = nloc(descc); ntau = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Ct(max(1,nc)), tau_t(ntau), work_t(1))
+            call ${R}$ormtr(side, uplo, trans, m, n, At, ia, ja, desca, &
+                             tau_t, Ct, ic, jc, descc, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Ct(nc), tau_t(ntau), work_t(lwt))
+            At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
+            tau_t(1:ntau) = q2t_r(tau(1:ntau))
+            call ${R}$ormtr(side, uplo, trans, m, n, At, ia, ja, desca, &
+                             tau_t, Ct, ic, jc, descc, work_t, lwt, info)
+            C(1:nc) = t2q_r(Ct)
+        end if
     end subroutine
 
     subroutine target_pdsytrd(uplo, n, A, ia, ja, desca, d, e, tau, &
