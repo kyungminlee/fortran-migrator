@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_270 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_272 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -177,7 +177,7 @@ _270 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgges | — | — | — |
 |  | dgges3 | — | — | — |
 | ✓ | dggesx | — | — | — |
-| ✓ | dggev | — | — | — |
+| ✓ | dggev | 17.53 | exact | 30.41 |
 |  | dggev3 | — | — | — |
 | ✓ | dggevx | — | — | — |
 | ✓ | dggglm | — | — | — |
@@ -681,7 +681,7 @@ _270 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgges | — | — | — |
 |  | zgges3 | — | — | — |
 | ✓ | zggesx | — | — | — |
-| ✓ | zggev | — | — | — |
+| ✓ | zggev | 17.53 | exact | 30.96 |
 |  | zggev3 | — | — | — |
 | ✓ | zggevx | — | — | — |
 | ✓ | zggglm | — | — | — |

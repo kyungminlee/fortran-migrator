@@ -2665,6 +2665,30 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: rwork(*)
             integer,     intent(out)   :: info
         end subroutine ztrevc
+
+        ! ── Generalized non-symmetric eigenvalue ─────────────────────
+        subroutine dggev(jobvl, jobvr, n, A, lda, B, ldb, alphar, alphai, beta, &
+                         VL, ldvl, VR, ldvr, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobvl, jobvr
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+            real(ep),  intent(out)   :: VL(ldvl,*), VR(ldvr,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dggev
+
+        subroutine zggev(jobvl, jobvr, n, A, lda, B, ldb, alpha, beta, &
+                         VL, ldvl, VR, ldvr, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvl, jobvr
+            integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: VL(ldvl,*), VR(ldvr,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zggev
     end interface
 
 end module ref_quad_lapack
