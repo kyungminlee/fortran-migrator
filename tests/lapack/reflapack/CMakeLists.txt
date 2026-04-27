@@ -39,15 +39,17 @@ if(NOT IS_DIRECTORY ${_reflap_dir})
 endif()
 
 file(GLOB _reflap_f   CONFIGURE_DEPENDS ${_reflap_dir}/*.f)
+file(GLOB _reflap_F   CONFIGURE_DEPENDS ${_reflap_dir}/*.F)
 file(GLOB _reflap_f90 CONFIGURE_DEPENDS ${_reflap_dir}/*.f90)
-file(GLOB _reflap_FF  CONFIGURE_DEPENDS ${_reflap_dir}/*.F90)
-set(_reflap_srcs ${_reflap_f} ${_reflap_f90} ${_reflap_FF})
+file(GLOB _reflap_F90 CONFIGURE_DEPENDS ${_reflap_dir}/*.F90)
+set(_reflap_srcs ${_reflap_f} ${_reflap_F} ${_reflap_f90} ${_reflap_F90})
 
 # Skip mixed-precision / cross-precision routines (single+double or
 # complex+real32 bridges) that don't promote cleanly under
-# -freal-8-real-16.
-list(FILTER _reflap_srcs EXCLUDE REGEX "/(dsgesv|zcgesv|dsposv|zcposv|dsgels|zcgels)\\.f9?0?$")
-list(FILTER _reflap_srcs EXCLUDE REGEX "/(dlag2s|slag2d|zlag2c|clag2z|dlat2s|zlat2c)\\.f9?0?$")
+# -freal-8-real-16. Match either case of the .f / .F suffix in case
+# upstream Netlib ever renames a bridge file to capital F.
+list(FILTER _reflap_srcs EXCLUDE REGEX "/(dsgesv|zcgesv|dsposv|zcposv|dsgels|zcgels)\\.[fF]9?0?$")
+list(FILTER _reflap_srcs EXCLUDE REGEX "/(dlag2s|slag2d|zlag2c|clag2z|dlat2s|zlat2c)\\.[fF]9?0?$")
 
 # Skip multifloats-specific auxiliary modules (la_*_mf / la_*_ep are
 # for targets that don't use the standard -freal-8-real-16 promotion).

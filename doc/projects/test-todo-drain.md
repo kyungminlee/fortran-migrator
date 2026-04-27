@@ -21,7 +21,7 @@ Backing plan: `~/.claude/plans/start-a-project-to-stateless-bumblebee.md`.
 | ID | Status | Branch | One-line | E2E verify |
 |----|--------|--------|----------|-----------|
 | UB-01 | merged | `fix/ub-01-F-glob` | Add `*.F` to PyEngine source globs in `cmd_stage`/`cmd_verify` | `nm liblapack_common-*.a \| grep iparam2stage_` shows `T` (defined) |
-| UB-06 | pending | `fix/ub-06-reflapack-F-glob` | Add `*.F` to `tests/lapack/reflapack/CMakeLists.txt` glob + EXCLUDE regex | `nm libreflapack_quad.a \| grep iparam2stage_` shows `T` (currently `U`) |
+| UB-06 | merged | `fix/ub-06-reflapack-F-glob` | Add `*.F` to `tests/lapack/reflapack/CMakeLists.txt` glob + EXCLUDE regex | `nm libreflapack_quad.a \| grep iparam2stage_` shows `T` (defined) |
 | UB-02 | pending (depends on UB-01) | `fix/ub-02-multifloats-F-param-ordering` | Multifloats `.F` migration places `PARAMETER` lines above `IMPLICIT NONE` | `gfortran -c tsytrd_sb2st.F` clean |
 | UB-03 | pending (depends on A+B) | `fix/ub-03-2stage-segfault` OR `doc/ub-03-escalation` | 2-stage segfault in `__GI___libc_free` under `-freal-8-real-16` | `valgrind ctest -R '_2stage'` zero invalid frees |
 | UB-04 | pending | `fix/ub-04-cmplx16-locals` | C migrator `cmplx16` alias not applied to local decls; `PB_Cconjg` hardcoded `(double*)` casts | `ctest -R '^pblas_test_pzher2k$'` rel-err ≤ 64·8·k·eps on kind16 |
@@ -57,3 +57,36 @@ nm /tmp/stg-k16-ub01/build/libqlapack-*.a | grep qsytrd_sb2st_       # T qsytrd_
 **Note**: with UB-01 merged, the next blocker for any 2-stage runtime
 test is UB-06 — `libreflapack_quad.a` still has undefined references
 because `tests/lapack/reflapack/CMakeLists.txt` has the same glob bug.
+
+## UB-06 — merged
+
+**What**: `tests/lapack/reflapack/CMakeLists.txt` enumerated reference
+sources via `file(GLOB ${_reflap_dir}/*.f)` / `*.f90` / `*.F90` but not
+`*.F`, so the quad-promoted Netlib reference library
+`libreflapack_quad.a` lacked `iparam2stage`, `dsytrd_sb2st`,
+`ssytrd_sb2st`, `chetrd_hb2st`, `zhetrd_hb2st`. Even with UB-01 fixed,
+linking any 2-stage test against the reference library failed with
+`undefined reference`.
+
+**How**: added `file(GLOB _reflap_F ${_reflap_dir}/*.F)` and renamed
+`_reflap_FF` → `_reflap_F90` for clarity. Widened the EXCLUDE REGEXes
+that filter mixed-precision and helper files from `\.f9?0?$` to
+`\.[fF]9?0?$` so a hypothetical `*.F` rename of a bridge file would
+still be filtered correctly.
+
+**Verify**:
+
+```bash
+rm -rf /tmp/stg-k16-ub06
+uv run python -m pyengine stage /tmp/stg-k16-ub06 --target kind16 --libraries blas lapack
+cmake -S /tmp/stg-k16-ub06 -B /tmp/stg-k16-ub06/build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/stg-k16-ub06/build -j8 --target reflapack_quad
+nm /tmp/stg-k16-ub06/build/tests/lapack/reflapack/libreflapack_quad.a \
+  | awk '/^[0-9a-f]+ T (iparam2stage_|dsytrd_sb2st_|ssytrd_sb2st_|chetrd_hb2st_|zhetrd_hb2st_)$/'
+# All 5 symbols print as T (defined).
+```
+
+**Note**: with UB-01 + UB-06 merged, 2-stage tests can now LINK. The
+remaining blockers are UB-02 (multifloats `.F` PARAMETER ordering for
+the migrated side) and UB-03 (quad-promoted reference segfault at
+runtime). Either can be tackled next.
