@@ -138,6 +138,15 @@ module target_lapack
     public :: target_dgesvx, target_zgesvx, target_dposvx, target_zposvx
     public :: target_dpbsvx, target_zpbsvx, target_dppsvx, target_zppsvx
     public :: target_dgbsvx, target_zgbsvx, target_dsysvx, target_zsysvx, target_zhesvx
+    ! Phase L1 — 2-stage symmetric/Hermitian eigensolvers (JOBZ='N' only).
+    public :: target_dsyev_2stage,  target_zheev_2stage
+    public :: target_dsyevd_2stage, target_zheevd_2stage
+    public :: target_dsyevr_2stage, target_zheevr_2stage
+    public :: target_dsyevx_2stage, target_zheevx_2stage
+    public :: target_dsbev_2stage,  target_zhbev_2stage
+    public :: target_dsbevd_2stage, target_zhbevd_2stage
+    public :: target_dsbevx_2stage, target_zhbevx_2stage
+    public :: target_dsygv_2stage,  target_zhegv_2stage
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -3145,6 +3154,188 @@ $:IMPORT_RC()
             integer,   intent(inout) :: ipiv(*)
             ${target_complex}$, intent(out)   :: X(ldx,*), work(*)
             ${target_real}$,    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase L1 — 2-stage symmetric/Hermitian eigensolvers ──────
+        ! Signatures match the non-2-stage variants except where noted
+        ! (sbev_2stage / sbevx_2stage / hbev_2stage / hbevx_2stage add an
+        ! LWORK parameter not present in the non-2-stage versions).
+        subroutine ${R}$syev_2stage(jobz, uplo, n, A, lda, w, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$heev_2stage(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$syevd_2stage(jobz, uplo, n, A, lda, w, work, lwork, &
+                                     iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, liwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$heevd_2stage(jobz, uplo, n, A, lda, w, work, lwork, &
+                                     rwork, lrwork, iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, lrwork, liwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$syevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                     abstol, m, w, z, ldz, isuppz, &
+                                     work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork, liwork
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), z(ldz,*), work(*)
+            integer, intent(out) :: m, isuppz(*), iwork(*), info
+        end subroutine
+
+        subroutine ${C}$heevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                     abstol, m, w, z, ldz, isuppz, &
+                                     work, lwork, rwork, lrwork, iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork, lrwork, liwork
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: m, isuppz(*), iwork(*), info
+        end subroutine
+
+        subroutine ${R}$syevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                     abstol, m, w, z, ldz, work, lwork, iwork, &
+                                     ifail, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), z(ldz,*), work(*)
+            integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${C}$heevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                     abstol, m, w, z, ldz, work, lwork, rwork, &
+                                     iwork, ifail, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${R}$sbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                    work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            ${target_real}$, intent(out)   :: w(*), z(ldz,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                    work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$sbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                     work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork, liwork
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            ${target_real}$, intent(out)   :: w(*), z(ldz,*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$hbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                     work, lwork, rwork, lrwork, iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork, lrwork, liwork
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$sbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                     vl, vu, il, iu, abstol, m, w, z, ldz, &
+                                     work, lwork, iwork, ifail, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz, lwork
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            ${target_real}$, intent(out)   :: Q(ldq,*), w(*), z(ldz,*), work(*)
+            integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${C}$hbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                     vl, vu, il, iu, abstol, m, w, z, ldz, &
+                                     work, lwork, rwork, iwork, ifail, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz, lwork
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            ${target_complex}$, intent(out)   :: Q(ldq,*), z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${R}$sygv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                                    work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: w(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hegv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                                    work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -8722,6 +8913,402 @@ $:CPACK_INV('zsptri', C + 'sptri')
         X(1:ldx, 1:nrhs) = t2q_c(Xt)
         rcond = t2q_r(rcondt)
         ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    ! ── Phase L1 — 2-stage symmetric/Hermitian eigensolvers (JOBZ='N') ──
+    ! All 2-stage drivers reject JOBZ='V' at parameter check 1; tests
+    ! must hard-code 'N'. Workspaces are much larger than the regular
+    ! variants — always do the (-1) workspace query first.
+    subroutine target_dsyev_2stage(jobz, uplo, n, A, lda, w, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: w(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), wt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), wt(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syev_2stage(jobz, uplo, n, At, lda, wt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$syev_2stage(jobz, uplo, n, At, lda, wt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zheev_2stage(jobz, uplo, n, A, lda, w, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, lrwork
+        lrwork = max(1, 3*n - 2)
+        allocate(At(lda, n), wt(n), rwork(lrwork))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heev_2stage(jobz, uplo, n, At, lda, wt, wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$heev_2stage(jobz, uplo, n, At, lda, wt, work, lwork, rwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsyevd_2stage(jobz, uplo, n, A, lda, w, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: w(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), wt(:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda, n), wt(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syevd_2stage(jobz, uplo, n, At, lda, wt, wopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$syevd_2stage(jobz, uplo, n, At, lda, wt, work, lwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zheevd_2stage(jobz, uplo, n, A, lda, w, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, lrwork, liwork, iwopt(1)
+        allocate(At(lda, n), wt(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heevd_2stage(jobz, uplo, n, At, lda, wt, wopt, -1, &
+                               rwopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$heevd_2stage(jobz, uplo, n, At, lda, wt, work, lwork, &
+                               rwork, lrwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsyevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                    abstol, m, w, z, ldz, isuppz, info)
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, lda, il, iu, ldz
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: m, isuppz(*), info
+        real(ep),  intent(out)   :: w(*), z(ldz,*)
+        ${target_real}$, allocatable :: At(:,:), wt(:), zt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda, n), wt(n), zt(ldz, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syevr_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, isuppz, &
+                               wopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$syevr_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, isuppz, &
+                               work, lwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zheevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                    abstol, m, w, z, ldz, isuppz, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, lda, il, iu, ldz
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: m, isuppz(*), info
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: z(ldz,*)
+        ${target_complex}$, allocatable :: At(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, lrwork, liwork, iwopt(1)
+        allocate(At(lda, n), zt(ldz, n), wt(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heevr_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, isuppz, &
+                               wopt, -1, rwopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$heevr_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, isuppz, &
+                               work, lwork, rwork, lrwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsyevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                    abstol, m, w, z, ldz, ifail, info)
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, lda, il, iu, ldz
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: m, ifail(*), info
+        real(ep),  intent(out)   :: w(*), z(ldz,*)
+        ${target_real}$, allocatable :: At(:,:), wt(:), zt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), wt(n), zt(ldz, n), iwork(5*n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syevx_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, &
+                               wopt, -1, iwork, ifail, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$syevx_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, &
+                               work, lwork, iwork, ifail, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zheevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                    abstol, m, w, z, ldz, ifail, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, lda, il, iu, ldz
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: m, ifail(*), info
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: z(ldz,*)
+        ${target_complex}$, allocatable :: At(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), zt(ldz, n), wt(n), rwork(7*n), iwork(5*n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heevx_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, &
+                               wopt, -1, rwork, iwork, ifail, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$heevx_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, &
+                               work, lwork, rwork, iwork, ifail, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, kd, ldab, ldz
+        real(ep),  intent(inout) :: AB(ldab,*)
+        real(ep),  intent(out)   :: w(*), z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), wt(:), zt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(ABt(ldab, n), wt(n), zt(ldz, n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$sbev_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sbev_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, work, lwork, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zhbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, kd, ldab, ldz
+        complex(ep), intent(inout) :: AB(ldab,*)
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(ABt(ldab, n), wt(n), zt(ldz, n), rwork(max(1, n)))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$hbev_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                              wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hbev_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                              work, lwork, rwork, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, kd, ldab, ldz
+        real(ep),  intent(inout) :: AB(ldab,*)
+        real(ep),  intent(out)   :: w(*), z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), wt(:), zt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(ABt(ldab, n), wt(n), zt(ldz, n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$sbevd_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                               wopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$sbevd_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                               work, lwork, iwork, liwork, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zhbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, kd, ldab, ldz
+        complex(ep), intent(inout) :: AB(ldab,*)
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, lrwork, liwork, iwopt(1)
+        allocate(ABt(ldab, n), wt(n), zt(ldz, n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$hbevd_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                               wopt, -1, rwopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$hbevd_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                               work, lwork, rwork, lrwork, iwork, liwork, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                    vl, vu, il, iu, abstol, m, w, z, ldz, ifail, info)
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: AB(ldab,*)
+        real(ep),  intent(out)   :: Q(ldq,*), w(*), z(ldz,*)
+        integer,   intent(out)   :: m, ifail(*), info
+        ${target_real}$, allocatable :: ABt(:,:), Qt(:,:), wt(:), zt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(ABt(ldab, n), Qt(ldq, n), wt(n), zt(ldz, n), iwork(5*n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$sbevx_2stage(jobz, range, uplo, n, kd, ABt, ldab, Qt, ldq, &
+                               q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                               m, wt, zt, ldz, wopt, -1, iwork, ifail, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sbevx_2stage(jobz, range, uplo, n, kd, ABt, ldab, Qt, ldq, &
+                               q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                               m, wt, zt, ldz, work, lwork, iwork, ifail, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zhbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                    vl, vu, il, iu, abstol, m, w, z, ldz, ifail, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, kd, ldab, ldq, il, iu, ldz
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: AB(ldab,*)
+        complex(ep), intent(out)   :: Q(ldq,*), z(ldz,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: m, ifail(*), info
+        ${target_complex}$, allocatable :: ABt(:,:), Qt(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(ABt(ldab, n), Qt(ldq, n), wt(n), zt(ldz, n), &
+                 rwork(7*n), iwork(5*n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$hbevx_2stage(jobz, range, uplo, n, kd, ABt, ldab, Qt, ldq, &
+                               q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                               m, wt, zt, ldz, wopt, -1, rwork, iwork, ifail, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hbevx_2stage(jobz, range, uplo, n, kd, ABt, ldab, Qt, ldq, &
+                               q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                               m, wt, zt, ldz, work, lwork, rwork, iwork, ifail, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsygv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: itype, n, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),  intent(out)   :: w(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), wt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, n), wt(n))
+        At = q2t_r(A(1:lda, 1:n))
+        Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$sygv_2stage(itype, jobz, uplo, n, At, lda, Bt, ldb, wt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sygv_2stage(itype, jobz, uplo, n, At, lda, Bt, ldb, wt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        B(1:ldb, 1:n) = t2q_r(Bt)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zhegv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: itype, n, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, lrwork
+        lrwork = max(1, 3*n - 2)
+        allocate(At(lda, n), Bt(ldb, n), wt(n), rwork(lrwork))
+        At = q2t_c(A(1:lda, 1:n))
+        Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$hegv_2stage(itype, jobz, uplo, n, At, lda, Bt, ldb, wt, &
+                              wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hegv_2stage(itype, jobz, uplo, n, At, lda, Bt, ldb, wt, &
+                              work, lwork, rwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        B(1:ldb, 1:n) = t2q_c(Bt)
+        w(1:n)        = t2q_r(wt)
     end subroutine
 
 end module target_lapack

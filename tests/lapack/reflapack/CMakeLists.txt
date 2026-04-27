@@ -58,6 +58,21 @@ list(FILTER _reflap_srcs EXCLUDE REGEX "la_constants_ep")
 list(FILTER _reflap_srcs EXCLUDE REGEX "la_xisnan_mf")
 list(FILTER _reflap_srcs EXCLUDE REGEX "la_xisnan_ep")
 
+# Skip iparam2stage.F. It is a precision-independent INTEGER function
+# (no FP argument promotion), and the staged lapack/src/iparam2stage.F
+# already ships a patched copy via recipes/lapack/mf_overrides/ that
+# recognizes the migrator precision prefixes (Q / X / E / Y / T / V).
+# If we let reflapack_quad keep its own iparam2stage_ symbol the linker
+# resolves it from this archive first, which masks the patched copy in
+# liblapack_common — and qsyev_2stage / vheev_2stage / etc. then get
+# IPARAM2STAGE = -1 on the migrated path, undersized LWORK, and heap
+# corruption inside libc free. Excluding the upstream copy here lets
+# the linker pull the patched version from liblapack_common for both
+# the reference (D-prefix) and migrated (Q/E/T/X/Y/V-prefix) call
+# sites — they're ABI-compatible because iparam2stage takes only
+# INTEGER and CHARACTER arguments.
+list(FILTER _reflap_srcs EXCLUDE REGEX "/iparam2stage\\.F$")
+
 add_library(reflapack_quad STATIC ${_reflap_srcs})
 target_compile_options(reflapack_quad PRIVATE
     -freal-8-real-16

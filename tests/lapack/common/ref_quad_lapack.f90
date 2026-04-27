@@ -3027,6 +3027,185 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
             integer,     intent(out)   :: info
         end subroutine zhesvx
+
+        ! ── Phase L1 — 2-stage symmetric/Hermitian eigensolvers ──────
+        subroutine dsyev_2stage(jobz, uplo, n, A, lda, w, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyev_2stage
+
+        subroutine zheev_2stage(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zheev_2stage
+
+        subroutine dsyevd_2stage(jobz, uplo, n, A, lda, w, work, lwork, &
+                                 iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyevd_2stage
+
+        subroutine zheevd_2stage(jobz, uplo, n, A, lda, w, work, lwork, &
+                                 rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, lda, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zheevd_2stage
+
+        subroutine dsyevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                 abstol, m, w, z, ldz, isuppz, &
+                                 work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork, liwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+        end subroutine dsyevr_2stage
+
+        subroutine zheevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                 abstol, m, w, z, ldz, isuppz, &
+                                 work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, lda, il, iu, ldz, lwork, lrwork, liwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            integer,     intent(out)   :: m, isuppz(*), iwork(*), info
+        end subroutine zheevr_2stage
+
+        subroutine dsyevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                 abstol, m, w, z, ldz, work, lwork, iwork, &
+                                 ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dsyevx_2stage
+
+        subroutine zheevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                 abstol, m, w, z, ldz, work, lwork, rwork, &
+                                 iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, lda, il, iu, ldz, lwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zheevx_2stage
+
+        subroutine dsbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbev_2stage
+
+        subroutine zhbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldz, lwork
+            complex(ep), intent(inout) :: AB(ldab,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbev_2stage
+
+        subroutine dsbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                 work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsbevd_2stage
+
+        subroutine zhbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                 work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldz, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: AB(ldab,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhbevd_2stage
+
+        subroutine dsbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                 vl, vu, il, iu, abstol, m, w, z, ldz, &
+                                 work, lwork, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz, lwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: Q(ldq,*), w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dsbevx_2stage
+
+        subroutine zhbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                 vl, vu, il, iu, abstol, m, w, z, ldz, &
+                                 work, lwork, rwork, iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldq, il, iu, ldz, lwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: AB(ldab,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: Q(ldq,*), z(ldz,*), work(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhbevx_2stage
+
+        subroutine dsygv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                                work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsygv_2stage
+
+        subroutine zhegv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                                work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhegv_2stage
     end interface
 
 end module ref_quad_lapack
