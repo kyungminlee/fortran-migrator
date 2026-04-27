@@ -132,6 +132,8 @@ module target_lapack
     public :: target_dggev, target_zggev
     public :: target_dgeqr, target_zgeqr, target_dgelq, target_zgelq
     public :: target_dgemqr, target_zgemqr, target_dgemlq, target_zgemlq
+    public :: target_dgeqrt, target_zgeqrt, target_dgelqt, target_zgelqt
+    public :: target_dgemqrt, target_zgemqrt, target_dgemlqt, target_zgemlqt
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2876,6 +2878,83 @@ $:IMPORT_C()
             character, intent(in) :: side, trans
             integer,   intent(in) :: m, n, k, lda, tsize, ldc, lwork
             ${target_complex}$, intent(in)    :: A(lda,*), T(*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 36 — recursive blocked QR/LQ with explicit T ───────
+        subroutine ${R}$geqrt(m, n, nb, A, lda, T, ldt, work, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, nb, lda, ldt
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: T(ldt,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$geqrt(m, n, nb, A, lda, T, ldt, work, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, nb, lda, ldt
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: T(ldt,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gelqt(m, n, mb, A, lda, T, ldt, work, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, mb, lda, ldt
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: T(ldt,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gelqt(m, n, mb, A, lda, T, ldt, work, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, mb, lda, ldt
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: T(ldt,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gemqrt(side, trans, m, n, k, nb, V, ldv, T, ldt, &
+                               C, ldc, work, info)
+$:IMPORT_R()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, nb, ldv, ldt, ldc
+            ${target_real}$, intent(in)    :: V(ldv,*), T(ldt,*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gemqrt(side, trans, m, n, k, nb, V, ldv, T, ldt, &
+                               C, ldc, work, info)
+$:IMPORT_C()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, nb, ldv, ldt, ldc
+            ${target_complex}$, intent(in)    :: V(ldv,*), T(ldt,*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gemlqt(side, trans, m, n, k, mb, V, ldv, T, ldt, &
+                               C, ldc, work, info)
+$:IMPORT_R()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, mb, ldv, ldt, ldc
+            ${target_real}$, intent(in)    :: V(ldv,*), T(ldt,*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gemlqt(side, trans, m, n, k, mb, V, ldv, T, ldt, &
+                               C, ldc, work, info)
+$:IMPORT_C()
+            character, intent(in) :: side, trans
+            integer,   intent(in) :: m, n, k, mb, ldv, ldt, ldc
+            ${target_complex}$, intent(in)    :: V(ldv,*), T(ldt,*)
             ${target_complex}$, intent(inout) :: C(ldc,*)
             ${target_complex}$, intent(out)   :: work(*)
             integer, intent(out) :: info
@@ -7863,6 +7942,127 @@ $:CPACK_INV('zsptri', C + 'sptri')
         allocate(work(lwork))
         call ${R}$gemlq(side, trans, m, n, k, At, lda, Tt, tsize, Ct, ldc, work, lwork, info)
         C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    ! ── Phase 36 wrappers ────────────────────────────────────────────
+    subroutine target_dgeqrt(m, n, nb, A, lda, T, ldt, info)
+        integer,  intent(in)    :: m, n, nb, lda, ldt
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        allocate(At(lda, n), Tt(ldt, min(m, n)), work(nb*n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geqrt(m, n, nb, At, lda, Tt, ldt, work, info)
+        A(1:lda, 1:n) = t2q_r(At); T(1:ldt, 1:min(m,n)) = t2q_r(Tt)
+    end subroutine
+
+    subroutine target_zgeqrt(m, n, nb, A, lda, T, ldt, info)
+        integer,     intent(in)    :: m, n, nb, lda, ldt
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        allocate(At(lda, n), Tt(ldt, min(m, n)), work(nb*n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$geqrt(m, n, nb, At, lda, Tt, ldt, work, info)
+        A(1:lda, 1:n) = t2q_c(At); T(1:ldt, 1:min(m,n)) = t2q_c(Tt)
+    end subroutine
+
+    subroutine target_dgelqt(m, n, mb, A, lda, T, ldt, info)
+        integer,  intent(in)    :: m, n, mb, lda, ldt
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        allocate(At(lda, n), Tt(ldt, min(m, n)), work(mb*m))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gelqt(m, n, mb, At, lda, Tt, ldt, work, info)
+        A(1:lda, 1:n) = t2q_r(At); T(1:ldt, 1:min(m,n)) = t2q_r(Tt)
+    end subroutine
+
+    subroutine target_zgelqt(m, n, mb, A, lda, T, ldt, info)
+        integer,     intent(in)    :: m, n, mb, lda, ldt
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        allocate(At(lda, n), Tt(ldt, min(m, n)), work(mb*m))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gelqt(m, n, mb, At, lda, Tt, ldt, work, info)
+        A(1:lda, 1:n) = t2q_c(At); T(1:ldt, 1:min(m,n)) = t2q_c(Tt)
+    end subroutine
+
+    subroutine target_dgemqrt(side, trans, m, n, k, nb, V, ldv, T, ldt, &
+                              C, ldc, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, k, nb, ldv, ldt, ldc
+        real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Vt(:,:), Tt(:,:), Ct(:,:), work(:)
+        integer :: nq, lwork
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        lwork = merge(n, m, side == 'L' .or. side == 'l') * nb
+        allocate(Vt(ldv, k), Tt(ldt, k), Ct(ldc, n), work(max(1, lwork)))
+        Vt = q2t_r(V(1:ldv, 1:k)); Tt = q2t_r(T(1:ldt, 1:k))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$gemqrt(side, trans, m, n, k, nb, Vt, ldv, Tt, ldt, Ct, ldc, work, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zgemqrt(side, trans, m, n, k, nb, V, ldv, T, ldt, &
+                              C, ldc, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, k, nb, ldv, ldt, ldc
+        complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Vt(:,:), Tt(:,:), Ct(:,:), work(:)
+        integer :: nq, lwork
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        lwork = merge(n, m, side == 'L' .or. side == 'l') * nb
+        allocate(Vt(ldv, k), Tt(ldt, k), Ct(ldc, n), work(max(1, lwork)))
+        Vt = q2t_c(V(1:ldv, 1:k)); Tt = q2t_c(T(1:ldt, 1:k))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$gemqrt(side, trans, m, n, k, nb, Vt, ldv, Tt, ldt, Ct, ldc, work, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_dgemlqt(side, trans, m, n, k, mb, V, ldv, T, ldt, &
+                              C, ldc, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, k, mb, ldv, ldt, ldc
+        real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Vt(:,:), Tt(:,:), Ct(:,:), work(:)
+        integer :: nq, lwork
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        lwork = merge(n, m, side == 'L' .or. side == 'l') * mb
+        allocate(Vt(ldv, nq), Tt(ldt, k), Ct(ldc, n), work(max(1, lwork)))
+        Vt = q2t_r(V(1:ldv, 1:nq)); Tt = q2t_r(T(1:ldt, 1:k))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$gemlqt(side, trans, m, n, k, mb, Vt, ldv, Tt, ldt, Ct, ldc, work, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zgemlqt(side, trans, m, n, k, mb, V, ldv, T, ldt, &
+                              C, ldc, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, k, mb, ldv, ldt, ldc
+        complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Vt(:,:), Tt(:,:), Ct(:,:), work(:)
+        integer :: nq, lwork
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        lwork = merge(n, m, side == 'L' .or. side == 'l') * mb
+        allocate(Vt(ldv, nq), Tt(ldt, k), Ct(ldc, n), work(max(1, lwork)))
+        Vt = q2t_c(V(1:ldv, 1:nq)); Tt = q2t_c(T(1:ldt, 1:k))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$gemlqt(side, trans, m, n, k, mb, Vt, ldv, Tt, ldt, Ct, ldc, work, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
     end subroutine
 
     subroutine target_zgemlq(side, trans, m, n, k, A, lda, T, tsize, C, ldc, info)

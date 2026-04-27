@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_280 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -128,7 +128,7 @@ _280 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgelq | 18.74 | exact | 31.46 |
 |  | dgelq2 | — | — | — |
 | ✓ | dgelqf | 18.92 | exact | 31.47 |
-| ✓ | dgelqt | — | — | — |
+| ✓ | dgelqt | 18.64 | exact | 31.46 |
 |  | dgelqt3 | — | — | — |
 | ✓ | dgels | 18.49 | exact | 31.14 |
 | ✓ | dgelsd | — | — | — |
@@ -136,9 +136,9 @@ _280 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgelst | — | — | — |
 | ✓ | dgelsy | — | — | — |
 | ✓ | dgemlq | 18.82 | exact | 31.48 |
-| ✓ | dgemlqt | — | — | — |
+| ✓ | dgemlqt | 18.77 | exact | 31.40 |
 | ✓ | dgemqr | 18.63 | exact | 31.38 |
-| ✓ | dgemqrt | — | — | — |
+| ✓ | dgemqrt | 18.72 | exact | 31.42 |
 |  | dgeql2 | — | — | — |
 | ✓ | dgeqlf | 18.18 | exact | 31.01 |
 | ✓ | dgeqp3 | 18.88 | exact | 31.45 |
@@ -148,7 +148,7 @@ _280 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgeqr2p | — | — | — |
 | ✓ | dgeqrf | 18.44 | exact | 31.32 |
 | ✓ | dgeqrfp | — | — | — |
-| ✓ | dgeqrt | — | — | — |
+| ✓ | dgeqrt | 18.81 | exact | 31.53 |
 |  | dgeqrt2 | — | — | — |
 |  | dgeqrt3 | — | — | — |
 | ✓ | dgerfs | 17.66 | exact | 30.48 |
@@ -632,7 +632,7 @@ _280 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgelq | 18.79 | exact | 31.62 |
 |  | zgelq2 | — | — | — |
 | ✓ | zgelqf | 18.67 | exact | 31.43 |
-| ✓ | zgelqt | — | — | — |
+| ✓ | zgelqt | 18.69 | exact | 31.48 |
 |  | zgelqt3 | — | — | — |
 | ✓ | zgels | 18.06 | exact | 31.01 |
 | ✓ | zgelsd | — | — | — |
@@ -640,9 +640,9 @@ _280 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgelst | — | — | — |
 | ✓ | zgelsy | — | — | — |
 | ✓ | zgemlq | 18.65 | exact | 31.41 |
-| ✓ | zgemlqt | — | — | — |
+| ✓ | zgemlqt | 18.62 | exact | 31.45 |
 | ✓ | zgemqr | 18.72 | exact | 31.43 |
-| ✓ | zgemqrt | — | — | — |
+| ✓ | zgemqrt | 18.63 | exact | 31.54 |
 |  | zgeql2 | — | — | — |
 | ✓ | zgeqlf | 18.55 | exact | 31.05 |
 | ✓ | zgeqp3 | 18.93 | exact | 31.48 |
@@ -652,7 +652,7 @@ _280 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgeqr2p | — | — | — |
 | ✓ | zgeqrf | 18.76 | exact | 31.35 |
 | ✓ | zgeqrfp | — | — | — |
-| ✓ | zgeqrt | — | — | — |
+| ✓ | zgeqrt | 18.84 | exact | 31.42 |
 |  | zgeqrt2 | — | — | — |
 |  | zgeqrt3 | — | — | — |
 | ✓ | zgerfs | 18.08 | exact | 30.74 |
