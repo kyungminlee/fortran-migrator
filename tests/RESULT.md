@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_201 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -99,7 +99,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | ddisna | — | — | — |
 | ✓ | dgbbrd | — | — | — |
 | ✓ | dgbcon | 18.95 | exact | 31.78 |
-| ✓ | dgbequ | — | — | — |
+| ✓ | dgbequ | 19.12 | exact | 31.96 |
 | ✓ | dgbequb | — | — | — |
 | ✓ | dgbrfs | 19.04 | exact | 31.68 |
 | ✓ | dgbrfsx | — | — | — |
@@ -116,7 +116,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgecon | 18.00 | exact | 30.41 |
 | ✓ | dgedmd | — | — | — |
 | ✓ | dgedmdq | — | — | — |
-| ✓ | dgeequ | — | — | — |
+| ✓ | dgeequ | 18.99 | exact | 31.60 |
 | ✓ | dgeequb | — | — | — |
 | ✓ | dgees | — | — | — |
 | ✓ | dgeesx | — | — | — |
@@ -416,7 +416,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dormrz | — | — | — |
 | ✓ | dormtr | — | — | — |
 | ✓ | dpbcon | 18.94 | exact | 31.05 |
-| ✓ | dpbequ | — | — | — |
+| ✓ | dpbequ | 19.16 | exact | 31.58 |
 | ✓ | dpbrfs | 18.95 | exact | 31.78 |
 | ✓ | dpbstf | — | — | — |
 | ✓ | dpbsv | 18.77 | exact | 31.32 |
@@ -428,7 +428,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dpftri | — | — | — |
 | ✓ | dpftrs | — | — | — |
 | ✓ | dpocon | 19.32 | exact | 31.46 |
-| ✓ | dpoequ | — | — | — |
+| ✓ | dpoequ | 19.11 | exact | 31.36 |
 | ✓ | dpoequb | — | — | — |
 | ✓ | dporfs | 18.95 | exact | 31.75 |
 | ✓ | dporfsx | — | — | — |
@@ -441,7 +441,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dpotri | 18.22 | exact | 30.98 |
 | ✓ | dpotrs | 18.38 | exact | 31.18 |
 | ✓ | dppcon | 18.79 | exact | 31.39 |
-| ✓ | dppequ | — | — | — |
+| ✓ | dppequ | 19.10 | exact | 31.32 |
 | ✓ | dpprfs | 19.06 | exact | 31.80 |
 | ✓ | dppsv | 18.48 | exact | 31.11 |
 | ✓ | dppsvx | — | — | — |
@@ -603,7 +603,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zdrscl | — | — | — |
 | ✓ | zgbbrd | — | — | — |
 | ✓ | zgbcon | 18.82 | exact | 32.26 |
-| ✓ | zgbequ | — | — | — |
+| ✓ | zgbequ | 19.09 | exact | 31.92 |
 | ✓ | zgbequb | — | — | — |
 | ✓ | zgbrfs | 18.82 | exact | 31.65 |
 | ✓ | zgbrfsx | — | — | — |
@@ -620,7 +620,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgecon | 17.80 | exact | 30.45 |
 | ✓ | zgedmd | — | — | — |
 | ✓ | zgedmdq | — | — | — |
-| ✓ | zgeequ | — | — | — |
+| ✓ | zgeequ | 19.01 | exact | 31.67 |
 | ✓ | zgeequb | — | — | — |
 | ✓ | zgees | — | — | — |
 | ✓ | zgeesx | — | — | — |
@@ -925,7 +925,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zlauu2 | — | — | — |
 |  | zlauum | — | — | — |
 | ✓ | zpbcon | 19.12 | exact | 31.43 |
-| ✓ | zpbequ | — | — | — |
+| ✓ | zpbequ | 19.13 | exact | 31.74 |
 | ✓ | zpbrfs | 18.87 | exact | 31.85 |
 | ✓ | zpbstf | — | — | — |
 | ✓ | zpbsv | 18.79 | exact | 31.42 |
@@ -937,7 +937,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zpftri | — | — | — |
 | ✓ | zpftrs | — | — | — |
 | ✓ | zpocon | 18.86 | exact | 31.54 |
-| ✓ | zpoequ | — | — | — |
+| ✓ | zpoequ | 18.92 | exact | 31.72 |
 | ✓ | zpoequb | — | — | — |
 | ✓ | zporfs | 18.95 | exact | 31.39 |
 | ✓ | zporfsx | — | — | — |
@@ -950,7 +950,7 @@ _191 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zpotri | 18.38 | exact | 31.08 |
 | ✓ | zpotrs | 18.48 | exact | 31.22 |
 | ✓ | zppcon | 18.80 | exact | 31.68 |
-| ✓ | zppequ | — | — | — |
+| ✓ | zppequ | 19.08 | exact | 31.39 |
 | ✓ | zpprfs | 18.86 | exact | 31.48 |
 | ✓ | zppsv | 18.49 | exact | 31.17 |
 | ✓ | zppsvx | — | — | — |
