@@ -2454,6 +2454,54 @@ module ref_quad_lapack
             real(ep),  intent(out)   :: U(ldu,*), VT(ldvt,*), Q(*), work(*)
             integer,   intent(out)   :: IQ(*), iwork(*), info
         end subroutine dbdsdc
+
+        ! ── ddisna + balancing/back-transform ────────────────────────
+        subroutine ddisna(job, m, n, D, sep, info)
+            import :: ep
+            character, intent(in)  :: job
+            integer,   intent(in)  :: m, n
+            real(ep),  intent(in)  :: D(*)
+            real(ep),  intent(out) :: sep(*)
+            integer,   intent(out) :: info
+        end subroutine ddisna
+
+        subroutine dgebal(job, n, A, lda, ilo, ihi, scale, info)
+            import :: ep
+            character, intent(in)    :: job
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ilo, ihi
+            real(ep),  intent(out)   :: scale(*)
+            integer,   intent(out)   :: info
+        end subroutine dgebal
+
+        subroutine zgebal(job, n, A, lda, ilo, ihi, scale, info)
+            import :: ep
+            character,   intent(in)    :: job
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ilo, ihi
+            real(ep),    intent(out)   :: scale(*)
+            integer,     intent(out)   :: info
+        end subroutine zgebal
+
+        subroutine dgebak(job, side, n, ilo, ihi, scale, m, V, ldv, info)
+            import :: ep
+            character, intent(in)    :: job, side
+            integer,   intent(in)    :: n, ilo, ihi, m, ldv
+            real(ep),  intent(in)    :: scale(*)
+            real(ep),  intent(inout) :: V(ldv,*)
+            integer,   intent(out)   :: info
+        end subroutine dgebak
+
+        subroutine zgebak(job, side, n, ilo, ihi, scale, m, V, ldv, info)
+            import :: ep
+            character,   intent(in)    :: job, side
+            integer,     intent(in)    :: n, ilo, ihi, m, ldv
+            real(ep),    intent(in)    :: scale(*)
+            complex(ep), intent(inout) :: V(ldv,*)
+            integer,     intent(out)   :: info
+        end subroutine zgebak
     end interface
 
 end module ref_quad_lapack
