@@ -22,7 +22,7 @@
 
 #:def IMPORT_C()
 #:if target == 'multifloats'
-            import :: cmplx64x2
+            import :: cmplx64x2, real64x2
 #:elif target == 'kind16'
             import :: ep
 #:endif
@@ -171,6 +171,13 @@ module target_lapack
     public :: target_dtgsyl, target_ztgsyl
     public :: target_dggglm, target_zggglm
     public :: target_dgglse, target_zgglse
+    ! Phase L5 — Modern least-squares + Jacobi SVD.
+    public :: target_dgelsd, target_zgelsd
+    public :: target_dgelss, target_zgelss
+    public :: target_dgelsy, target_zgelsy
+    public :: target_dgelst, target_zgelst
+    public :: target_dgejsv, target_zgejsv
+    public :: target_dgesvj, target_zgesvj
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -3930,6 +3937,133 @@ $:IMPORT_C()
             ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
             ${target_complex}$, intent(out)   :: x(*), work(*)
             integer,   intent(out)   :: info
+        end subroutine
+
+        ! Phase L5 — Modern LS + Jacobi SVD.
+        subroutine ${R}$gelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                              work, lwork, iwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(in)    :: rcond
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: S(*), work(*)
+            integer,   intent(out)   :: rank, iwork(*), info
+        end subroutine
+
+        subroutine ${C}$gelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                              work, lwork, rwork, iwork, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$,    intent(in)    :: rcond
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$,    intent(out)   :: S(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,     intent(out)   :: rank, iwork(*), info
+        end subroutine
+
+        subroutine ${R}$gelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                              work, lwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(in)    :: rcond
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: S(*), work(*)
+            integer,   intent(out)   :: rank, info
+        end subroutine
+
+        subroutine ${C}$gelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                              work, lwork, rwork, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$,    intent(in)    :: rcond
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$,    intent(out)   :: S(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,     intent(out)   :: rank, info
+        end subroutine
+
+        subroutine ${R}$gelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, &
+                              work, lwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(in)    :: rcond
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(inout) :: jpvt(*)
+            integer,   intent(out)   :: rank, info
+        end subroutine
+
+        subroutine ${C}$gelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, &
+                              work, lwork, rwork, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$,    intent(in)    :: rcond
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: rwork(*)
+            integer,     intent(inout) :: jpvt(*)
+            integer,     intent(out)   :: rank, info
+        end subroutine
+
+        subroutine ${R}$gelst(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$gelst(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$gejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                              sva, U, ldu, V, ldv, work, lwork, iwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+            integer,   intent(in)    :: m, n, lda, ldu, ldv, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: sva(*), U(ldu,*), V(ldv,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$gejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                              sva, U, ldu, V, ldv, cwork, lwork, rwork, lrwork, &
+                              iwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+            integer,     intent(in)    :: m, n, lda, ldu, ldv, lwork, lrwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_real}$,    intent(out)   :: sva(*), rwork(*)
+            ${target_complex}$, intent(out)   :: U(ldu,*), V(ldv,*), cwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$gesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                              work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: joba, jobu, jobv
+            integer,   intent(in)    :: m, n, lda, mv, ldv, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), V(ldv,*), work(*)
+            ${target_real}$, intent(out)   :: sva(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$gesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                              cwork, lwork, rwork, lrwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: joba, jobu, jobv
+            integer,     intent(in)    :: m, n, lda, mv, ldv, lwork, lrwork
+            ${target_complex}$, intent(inout) :: A(lda,*), V(ldv,*), cwork(*)
+            ${target_real}$,    intent(inout) :: rwork(*)
+            ${target_real}$,    intent(out)   :: sva(*)
+            integer,     intent(out)   :: info
         end subroutine
     end interface
 
@@ -11105,6 +11239,265 @@ $:CPACK_INV('zsptri', C + 'sptri')
         call ${C}$tgevc(side, howmny, select, n, St, lds, Pt, ldp, &
                         vlt, ldvl, vrt, ldvr, mm, m, work, rwork, info)
         vl(1:ldvl,1:mm) = t2q_c(vlt); vr(1:ldvr,1:mm) = t2q_c(vrt)
+    end subroutine
+
+    ! ── Phase L5 — Modern least-squares + Jacobi SVD ─────────────────
+    subroutine target_dgelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, info)
+        integer,  intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep), intent(in)    :: rcond
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep), intent(out)   :: S(*)
+        integer,  intent(out)   :: rank, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), St(:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, iwopt(1), liwork
+        allocate(At(lda,n), Bt(ldb,nrhs), St(min(m,n)))
+        allocate(iwork(1))   ! resized after query
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:nrhs))
+        call ${R}$gelsd(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        wopt, -1, iwopt, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); liwork = max(1, iwopt(1))
+        deallocate(iwork); allocate(work(lwork), iwork(liwork))
+        call ${R}$gelsd(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        work, lwork, iwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:nrhs) = t2q_r(Bt)
+        S(1:min(m,n)) = t2q_r(St)
+    end subroutine
+
+    subroutine target_zgelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, info)
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),    intent(in)    :: rcond
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),    intent(out)   :: S(*)
+        integer,     intent(out)   :: rank, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$,    allocatable :: St(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, iwopt(1), liwork, lrwork
+        allocate(At(lda,n), Bt(ldb,nrhs), St(min(m,n)))
+        allocate(iwork(1), rwork(1))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:nrhs))
+        ! ZGELSD's workspace query writes RWORK(1) and IWORK(1) too.
+        call ${C}$gelsd(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        wopt, -1, rwopt, iwopt, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        deallocate(iwork, rwork)
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$gelsd(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        work, lwork, rwork, iwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:nrhs) = t2q_c(Bt)
+        S(1:min(m,n)) = t2q_r(St)
+    end subroutine
+
+    subroutine target_dgelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, info)
+        integer,  intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep), intent(in)    :: rcond
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep), intent(out)   :: S(*)
+        integer,  intent(out)   :: rank, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), St(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs), St(min(m,n)))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:nrhs))
+        call ${R}$gelss(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gelss(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:nrhs) = t2q_r(Bt)
+        S(1:min(m,n)) = t2q_r(St)
+    end subroutine
+
+    subroutine target_zgelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, info)
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),    intent(in)    :: rcond
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),    intent(out)   :: S(*)
+        integer,     intent(out)   :: rank, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$,    allocatable :: St(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs), St(min(m,n)), rwork(5*min(m,n)))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:nrhs))
+        call ${C}$gelss(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gelss(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        work, lwork, rwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:nrhs) = t2q_c(Bt)
+        S(1:min(m,n)) = t2q_r(St)
+    end subroutine
+
+    subroutine target_dgelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, info)
+        integer,  intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep), intent(in)    :: rcond
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,  intent(inout) :: jpvt(*)
+        integer,  intent(out)   :: rank, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:nrhs))
+        call ${R}$gelsy(m, n, nrhs, At, lda, Bt, ldb, jpvt, q2t_r(rcond), rank, &
+                        wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gelsy(m, n, nrhs, At, lda, Bt, ldb, jpvt, q2t_r(rcond), rank, &
+                        work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_zgelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, info)
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),    intent(in)    :: rcond
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(inout) :: jpvt(*)
+        integer,     intent(out)   :: rank, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs), rwork(2*n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:nrhs))
+        call ${C}$gelsy(m, n, nrhs, At, lda, Bt, ldb, jpvt, q2t_r(rcond), rank, &
+                        wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gelsy(m, n, nrhs, At, lda, Bt, ldb, jpvt, q2t_r(rcond), rank, &
+                        work, lwork, rwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dgelst(trans, m, n, nrhs, A, lda, B, ldb, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:nrhs))
+        call ${R}$gelst(trans, m, n, nrhs, At, lda, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gelst(trans, m, n, nrhs, At, lda, Bt, ldb, work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_zgelst(trans, m, n, nrhs, A, lda, B, ldb, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:nrhs))
+        call ${C}$gelst(trans, m, n, nrhs, At, lda, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gelst(trans, m, n, nrhs, At, lda, Bt, ldb, work, lwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dgejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                             sva, U, ldu, V, ldv, info)
+        character, intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+        integer,   intent(in)    :: m, n, lda, ldu, ldv
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: sva(*), U(ldu,*), V(ldv,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), svat(:), Ut(:,:), Vt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        integer :: lwork, ucols, vcols
+        ! DGEJSV does not provide a workspace query; size pessimistically.
+        lwork = max(1, 7*n + 4*n*n + 6 + 2*max(m,n))
+        ucols = merge(m, n, jobu == 'F')
+        vcols = n
+        allocate(At(lda,n), svat(n), Ut(ldu,max(1,ucols)), Vt(ldv,max(1,vcols)))
+        allocate(work(lwork), iwork(max(1, m+3*n)))
+        At = q2t_r(A(1:lda,1:n))
+        call ${R}$gejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, At, lda, &
+                        svat, Ut, ldu, Vt, ldv, work, lwork, iwork, info)
+        A(1:lda,1:n) = t2q_r(At); sva(1:n) = t2q_r(svat)
+        if (jobu /= 'N') U(1:ldu,1:ucols) = t2q_r(Ut)
+        if (jobv /= 'N') V(1:ldv,1:vcols) = t2q_r(Vt)
+    end subroutine
+
+    subroutine target_zgejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                             sva, U, ldu, V, ldv, info)
+        character,   intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+        integer,     intent(in)    :: m, n, lda, ldu, ldv
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: sva(*)
+        complex(ep), intent(out)   :: U(ldu,*), V(ldv,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Ut(:,:), Vt(:,:), cwork(:)
+        ${target_real}$,    allocatable :: svat(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        integer :: lwork, lrwork, ucols, vcols
+        lwork  = max(2, 5*n + 2*n*n)
+        lrwork = max(7, n + 2*m)
+        ucols = merge(m, n, jobu == 'F')
+        vcols = n
+        allocate(At(lda,n), svat(n), Ut(ldu,max(1,ucols)), Vt(ldv,max(1,vcols)))
+        allocate(cwork(lwork), rwork(lrwork), iwork(max(1, m+3*n)))
+        At = q2t_c(A(1:lda,1:n))
+        call ${C}$gejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, At, lda, &
+                        svat, Ut, ldu, Vt, ldv, cwork, lwork, rwork, lrwork, &
+                        iwork, info)
+        A(1:lda,1:n) = t2q_c(At); sva(1:n) = t2q_r(svat)
+        if (jobu /= 'N') U(1:ldu,1:ucols) = t2q_c(Ut)
+        if (jobv /= 'N') V(1:ldv,1:vcols) = t2q_c(Vt)
+    end subroutine
+
+    subroutine target_dgesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                             ctol, info)
+        character, intent(in)    :: joba, jobu, jobv
+        integer,   intent(in)    :: m, n, lda, mv, ldv
+        real(ep),  intent(in)    :: ctol
+        real(ep),  intent(inout) :: A(lda,*), V(ldv,*)
+        real(ep),  intent(out)   :: sva(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Vt(:,:), svat(:), work(:)
+        integer :: lwork
+        lwork = max(6, m + n)
+        allocate(At(lda,n), Vt(ldv,n), svat(n), work(lwork))
+        At = q2t_r(A(1:lda,1:n)); Vt = q2t_r(V(1:ldv,1:n))
+        ! DGESVJ uses work(1) as input "ctol" hint (0 → routine's default).
+        work(1) = q2t_r(ctol)
+        call ${R}$gesvj(joba, jobu, jobv, m, n, At, lda, svat, mv, Vt, ldv, &
+                        work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); V(1:ldv,1:n) = t2q_r(Vt)
+        sva(1:n) = t2q_r(svat)
+    end subroutine
+
+    subroutine target_zgesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                             ctol, info)
+        character,   intent(in)    :: joba, jobu, jobv
+        integer,     intent(in)    :: m, n, lda, mv, ldv
+        real(ep),    intent(in)    :: ctol
+        complex(ep), intent(inout) :: A(lda,*), V(ldv,*)
+        real(ep),    intent(out)   :: sva(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Vt(:,:), cwork(:)
+        ${target_real}$,    allocatable :: svat(:), rwork(:)
+        integer :: lwork, lrwork
+        lwork  = max(6, m + n)
+        lrwork = max(6, n)
+        allocate(At(lda,n), Vt(ldv,n), svat(n), cwork(lwork), rwork(lrwork))
+        At = q2t_c(A(1:lda,1:n)); Vt = q2t_c(V(1:ldv,1:n))
+        rwork(1) = q2t_r(ctol)
+        call ${C}$gesvj(joba, jobu, jobv, m, n, At, lda, svat, mv, Vt, ldv, &
+                        cwork, lwork, rwork, lrwork, info)
+        A(1:lda,1:n) = t2q_c(At); V(1:ldv,1:n) = t2q_c(Vt)
+        sva(1:n) = t2q_r(svat)
     end subroutine
 
 end module target_lapack

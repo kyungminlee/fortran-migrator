@@ -5,7 +5,31 @@ Issues observed while adding LAPACK tests that need fixes outside
 specific routines blocked, the file(s) involved, and what would have
 to change.
 
-## Phases L5..L23 — not yet started
+## Phase L5 — *gesvj returns Infinity on multifloats target only
+
+`tests/lapack/svd/test_dgesvj.f90` and `test_zgesvj.f90` pass on
+`kind16` and `kind10` but fail on `multifloats` — the target's
+`tgesvj`/`vgesvj` returns `Infinity` for all singular values while
+the quad reference returns sensible values. Other Jacobi-SVD routines
+(`dgejsv`/`zgejsv`) pass on all targets.
+
+Hypothesis: the migrated `t/vgesvj` may mishandle the default
+convergence-tolerance path (`ctol=0` → routine selects own threshold)
+in the `real64x2` arithmetic — possibly in a `LAMCH`-like inquiry or
+in an internal `MAX/MIN` call that returns NaN/Infinity for the dd type.
+
+To reproduce:
+```bash
+cd /home/kyungminlee/Code/fortran-migrator/src
+uv run python -m pyengine stage /tmp/stg-mf --target multifloats --libraries blas lapack
+cmake -S /tmp/stg-mf -B /tmp/stg-mf/build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/stg-mf/build -j8 --target test_dgesvj test_zgesvj
+/tmp/stg-mf/build/tests/lapack/test_dgesvj
+```
+
+Tests left in place per the failing-test-stays-visible convention.
+
+## Phases L6..L23 — not yet started
 
 Remaining phases per `~/.claude/plans/start-a-project-to-stateless-bumblebee.md`:
 

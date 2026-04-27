@@ -3775,6 +3775,132 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: x(*), work(*)
             integer,     intent(out)   :: info
         end subroutine zgglse
+
+        subroutine dgelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                          work, lwork, iwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep), intent(in)    :: rcond
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: S(*), work(*)
+            integer,  intent(out)   :: rank, iwork(*), info
+        end subroutine dgelsd
+
+        subroutine zgelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                          work, lwork, rwork, iwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),    intent(in)    :: rcond
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: S(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: rank, iwork(*), info
+        end subroutine zgelsd
+
+        subroutine dgelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                          work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep), intent(in)    :: rcond
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: S(*), work(*)
+            integer,  intent(out)   :: rank, info
+        end subroutine dgelss
+
+        subroutine zgelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                          work, lwork, rwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),    intent(in)    :: rcond
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: S(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: rank, info
+        end subroutine zgelss
+
+        subroutine dgelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, &
+                          work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep), intent(in)    :: rcond
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(inout) :: jpvt(*)
+            integer,  intent(out)   :: rank, info
+        end subroutine dgelsy
+
+        subroutine zgelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, &
+                          work, lwork, rwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),    intent(in)    :: rcond
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(inout) :: jpvt(*)
+            integer,     intent(out)   :: rank, info
+        end subroutine zgelsy
+
+        subroutine dgelst(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgelst
+
+        subroutine zgelst(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgelst
+
+        subroutine dgejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                          sva, U, ldu, V, ldv, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+            integer,   intent(in)    :: m, n, lda, ldu, ldv, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: sva(*), U(ldu,*), V(ldv,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgejsv
+
+        subroutine zgejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                          sva, U, ldu, V, ldv, cwork, lwork, rwork, lrwork, &
+                          iwork, info)
+            import :: ep
+            character,   intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+            integer,     intent(in)    :: m, n, lda, ldu, ldv, lwork, lrwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: sva(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), V(ldv,*), cwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zgejsv
+
+        subroutine dgesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: joba, jobu, jobv
+            integer,   intent(in)    :: m, n, lda, mv, ldv, lwork
+            real(ep),  intent(inout) :: A(lda,*), V(ldv,*), work(*)
+            real(ep),  intent(out)   :: sva(*)
+            integer,   intent(out)   :: info
+        end subroutine dgesvj
+
+        subroutine zgesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                          cwork, lwork, rwork, lrwork, info)
+            import :: ep
+            character,   intent(in)    :: joba, jobu, jobv
+            integer,     intent(in)    :: m, n, lda, mv, ldv, lwork, lrwork
+            complex(ep), intent(inout) :: A(lda,*), V(ldv,*), cwork(*)
+            real(ep),    intent(inout) :: rwork(*)
+            real(ep),    intent(out)   :: sva(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvj
     end interface
 
 end module ref_quad_lapack
