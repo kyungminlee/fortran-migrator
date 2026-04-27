@@ -49,6 +49,7 @@ module target_scalapack
     public :: target_name, target_eps
     public :: target_pdgesv, target_pdgetrf, target_pdgetrs
     public :: target_pdpotrf, target_pdpotrs
+    public :: target_pddtsv
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -135,6 +136,20 @@ $:IMPORT_R()
             integer,   intent(out)   :: info
             ${target_real}$, intent(in)    :: A(*)
             ${target_real}$, intent(inout) :: B(*)
+        end subroutine
+
+        ! 1D-distributed tridiagonal solver. DESCA / DESCB use the
+        ! 1D descriptor format (DTYPE=501); the BLACS context inside
+        ! must be a 1xNPROCS or NPROCSx1 grid. DL/D/DU are aligned
+        ! diagonal vectors, length DESCA(NB_=4) per process.
+        subroutine ${R}$dtsv(n, nrhs, dl, d, du, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: n, nrhs, ja, ib, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: dl(*), d(*), du(*), B(*)
+            ${target_real}$, intent(out)   :: work(*)
         end subroutine
 
         subroutine ${R}$geqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)
@@ -999,6 +1014,33 @@ contains
             A(1:na) = t2q_r(At)
             tau(1:ntau) = t2q_r(tau_t)
         end if
+    end subroutine
+
+    subroutine target_pddtsv(n, nrhs, dl, d, du, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+        ! Tridiagonal-solve wrapper. dl/d/du are local slices of the
+        ! three diagonals; sizes are NB per process (descriptor field
+        ! 4). B is a 2D-cyclic-by-rows array of NRHS columns. WORK is
+        ! pre-sized by the caller.
+        integer,  intent(in)    :: n, nrhs, ja, ib, lwork
+        integer,  intent(in)    :: desca(*), descb(*)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: dl(*), d(*), du(*), B(*)
+        real(ep), intent(out)   :: work(*)
+        integer :: nv, nb, lwt, ldb, locm_b
+        ${target_real}$, allocatable :: dlt(:), dt(:), dut(:), Bt(:), work_t(:)
+        nb = desca(4)
+        nv = nb
+        ldb = descb(6)
+        locm_b = nb
+        lwt = max(1, lwork)
+        allocate(dlt(nv), dt(nv), dut(nv), Bt(ldb * nrhs), work_t(lwt))
+        dlt = q2t_r(dl(1:nv)); dt = q2t_r(d(1:nv)); dut = q2t_r(du(1:nv))
+        Bt = q2t_r(B(1:ldb * nrhs))
+        call ${R}$dtsv(n, nrhs, dlt, dt, dut, ja, desca, &
+                        Bt, ib, descb, work_t, lwt, info)
+        dl(1:nv) = t2q_r(dlt); d(1:nv) = t2q_r(dt); du(1:nv) = t2q_r(dut)
+        B(1:ldb * nrhs) = t2q_r(Bt)
     end subroutine
 
     subroutine target_pdgeqr2(m, n, A, ia, ja, desca, tau, work, lwork, info)
