@@ -53,6 +53,7 @@ module target_scalapack
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgels
     public :: target_pdposv, target_pdpotri, target_pdgetri
+    public :: target_pdgebrd
     public :: target_pdsyev, target_pdsyevd
     public :: target_pdgesvd
     public :: target_pdlange
@@ -62,6 +63,7 @@ module target_scalapack
     public :: target_pzheevd
     public :: target_pzgelqf, target_pzunglq, target_pzunmlq
     public :: target_pzgels
+    public :: target_pzgebrd
     public :: target_pzposv, target_pzpotrf, target_pzpotri
     public :: target_pzgetrf, target_pzgetri
 
@@ -234,6 +236,16 @@ $:IMPORT_R()
             integer, intent(out)   :: iwork(*)
             ${target_real}$, intent(inout) :: A(*)
             ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${R}$gebrd(m, n, A, ia, ja, desca, d, e, tauq, taup, &
+                              work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: d(*), e(*), tauq(*), taup(*), work(*)
         end subroutine
 
         subroutine ${R}$syev(jobz, uplo, n, A, ia, ja, desca, w, &
@@ -435,6 +447,17 @@ $:IMPORT_C()
             integer, intent(out)   :: iwork(*)
             ${target_complex}$, intent(inout) :: A(*)
             ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$gebrd(m, n, A, ia, ja, desca, d, e, tauq, taup, &
+                              work, lwork, info)
+$:IMPORT_RC()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_real}$,    intent(out)   :: d(*), e(*)
+            ${target_complex}$, intent(out)   :: tauq(*), taup(*), work(*)
         end subroutine
 
         subroutine ${C}$heev(jobz, uplo, n, A, ia, ja, desca, w, &
@@ -822,6 +845,44 @@ contains
             call ${R}$getri(n, At, ia, ja, desca, ipiv, work_t, lwt, &
                              iwork, liwork, info)
             A(1:na) = t2q_r(At)
+        end if
+    end subroutine
+
+    subroutine target_pdgebrd(m, n, A, ia, ja, desca, d, e, tauq, taup, &
+                              work, lwork, info)
+        integer,  intent(in)    :: m, n, ia, ja, lwork
+        integer,  intent(in)    :: desca(9)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*)
+        real(ep), intent(out)   :: d(*), e(*), tauq(*), taup(*), work(*)
+        integer :: na, nd, ne, ntauq, ntaup, lwt
+        ${target_real}$, allocatable :: At(:), dt(:), et(:), tq(:), tp(:), work_t(:)
+        na = nloc(desca)
+        if (m >= n) then
+            nd = max(1, loccols(desca))
+            ne = max(1, locrows(desca))
+            ntauq = max(1, loccols(desca))
+            ntaup = max(1, locrows(desca))
+        else
+            nd = max(1, locrows(desca))
+            ne = max(1, loccols(desca))
+            ntauq = max(1, loccols(desca))
+            ntaup = max(1, locrows(desca))
+        end if
+        if (lwork == -1) then
+            allocate(At(max(1,na)), dt(nd), et(ne), tq(ntauq), tp(ntaup), work_t(1))
+            call ${R}$gebrd(m, n, At, ia, ja, desca, dt, et, tq, tp, &
+                             work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), dt(nd), et(ne), tq(ntauq), tp(ntaup), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$gebrd(m, n, At, ia, ja, desca, dt, et, tq, tp, &
+                             work_t, lwt, info)
+            A(1:na) = t2q_r(At)
+            d(1:nd) = t2q_r(dt); e(1:ne) = t2q_r(et)
+            tauq(1:ntauq) = t2q_r(tq); taup(1:ntaup) = t2q_r(tp)
         end if
     end subroutine
 
@@ -1262,6 +1323,44 @@ contains
             call ${C}$getri(n, At, ia, ja, desca, ipiv, work_t, lwt, &
                              iwork, liwork, info)
             A(1:na) = t2q_c(At)
+        end if
+    end subroutine
+
+    subroutine target_pzgebrd(m, n, A, ia, ja, desca, d, e, tauq, taup, &
+                              work, lwork, info)
+        integer,     intent(in)    :: m, n, ia, ja, lwork
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        real(ep),    intent(out)   :: d(*), e(*)
+        complex(ep), intent(out)   :: tauq(*), taup(*), work(*)
+        integer :: na, nd, ne, ntauq, ntaup, lwt
+        ${target_complex}$, allocatable :: At(:), tq(:), tp(:), work_t(:)
+        ${target_real}$,    allocatable :: dt(:), et(:)
+        na = nloc(desca)
+        if (m >= n) then
+            nd = max(1, loccols(desca))
+            ne = max(1, locrows(desca))
+        else
+            nd = max(1, locrows(desca))
+            ne = max(1, loccols(desca))
+        end if
+        ntauq = max(1, loccols(desca))
+        ntaup = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), dt(nd), et(ne), tq(ntauq), tp(ntaup), work_t(1))
+            call ${C}$gebrd(m, n, At, ia, ja, desca, dt, et, tq, tp, &
+                             work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), dt(nd), et(ne), tq(ntauq), tp(ntaup), work_t(lwt))
+            At = q2t_c(A(1:na))
+            call ${C}$gebrd(m, n, At, ia, ja, desca, dt, et, tq, tp, &
+                             work_t, lwt, info)
+            A(1:na) = t2q_c(At)
+            d(1:nd) = t2q_r(dt); e(1:ne) = t2q_r(et)
+            tauq(1:ntauq) = t2q_c(tq); taup(1:ntaup) = t2q_c(tp)
         end if
     end subroutine
 
