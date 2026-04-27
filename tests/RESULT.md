@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -104,7 +104,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgbrfs | 19.04 | exact | 31.68 |
 | ✓ | dgbrfsx | — | — | — |
 | ✓ | dgbsv | 18.91 | exact | 31.60 |
-| ✓ | dgbsvx | — | — | — |
+| ✓ | dgbsvx | 18.65 | exact | 31.83 |
 | ✓ | dgbsvxx | — | — | — |
 |  | dgbtf2 | — | — | — |
 | ✓ | dgbtrf | 19.02 | exact | 31.77 |
@@ -162,7 +162,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgesvdq | — | — | — |
 | ✓ | dgesvdx | — | — | — |
 | ✓ | dgesvj | — | — | — |
-| ✓ | dgesvx | — | — | — |
+| ✓ | dgesvx | 18.69 | exact | 31.37 |
 | ✓ | dgesvxx | — | — | — |
 |  | dgetc2 | — | — | — |
 |  | dgetf2 | — | — | — |
@@ -170,7 +170,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dgetrf2 | — | — | — |
 | ✓ | dgetri | 18.21 | exact | 31.08 |
 | ✓ | dgetrs | 17.63 | exact | 30.21 |
-| ✓ | dgetsls | — | — | — |
+| ✓ | dgetsls | 18.23 | exact | 30.95 |
 | ✓ | dgetsqrhrt | — | — | — |
 | ✓ | dggbak | exact | exact | exact |
 | ✓ | dggbal | exact | exact | exact |
@@ -420,7 +420,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dpbrfs | 18.95 | exact | 31.78 |
 | ✓ | dpbstf | — | — | — |
 | ✓ | dpbsv | 18.77 | exact | 31.32 |
-| ✓ | dpbsvx | — | — | — |
+| ✓ | dpbsvx | 18.80 | exact | 31.61 |
 |  | dpbtf2 | — | — | — |
 | ✓ | dpbtrf | 19.16 | exact | 31.63 |
 | ✓ | dpbtrs | 18.78 | exact | 31.08 |
@@ -433,7 +433,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dporfs | 18.95 | exact | 31.75 |
 | ✓ | dporfsx | — | — | — |
 | ✓ | dposv | 18.28 | exact | 30.96 |
-| ✓ | dposvx | — | — | — |
+| ✓ | dposvx | 18.72 | exact | 31.68 |
 | ✓ | dposvxx | — | — | — |
 |  | dpotf2 | — | — | — |
 | ✓ | dpotrf | 18.39 | 33.88 | 31.48 |
@@ -444,7 +444,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dppequ | 19.10 | exact | 31.32 |
 | ✓ | dpprfs | 19.06 | exact | 31.80 |
 | ✓ | dppsv | 18.48 | exact | 31.11 |
-| ✓ | dppsvx | — | — | — |
+| ✓ | dppsvx | 18.31 | exact | 31.12 |
 | ✓ | dpptrf | 19.17 | exact | 31.70 |
 | ✓ | dpptri | 18.45 | exact | 31.26 |
 | ✓ | dpptrs | 18.47 | exact | 31.20 |
@@ -526,7 +526,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dsysv_aa_2stage | — | — | — |
 | ✓ | dsysv_rk | — | — | — |
 | ✓ | dsysv_rook | — | — | — |
-| ✓ | dsysvx | — | — | — |
+| ✓ | dsysvx | 18.53 | exact | 31.51 |
 | ✓ | dsysvxx | — | — | — |
 | ✓ | dsyswapr | — | — | — |
 |  | dsytd2 | — | — | — |
@@ -608,7 +608,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgbrfs | 18.82 | exact | 31.65 |
 | ✓ | zgbrfsx | — | — | — |
 | ✓ | zgbsv | 18.90 | exact | 31.43 |
-| ✓ | zgbsvx | — | — | — |
+| ✓ | zgbsvx | 18.77 | exact | 31.60 |
 | ✓ | zgbsvxx | — | — | — |
 |  | zgbtf2 | — | — | — |
 | ✓ | zgbtrf | 19.07 | exact | 31.88 |
@@ -666,7 +666,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgesvdq | — | — | — |
 | ✓ | zgesvdx | — | — | — |
 | ✓ | zgesvj | — | — | — |
-| ✓ | zgesvx | — | — | — |
+| ✓ | zgesvx | 18.39 | exact | 31.22 |
 | ✓ | zgesvxx | — | — | — |
 |  | zgetc2 | — | — | — |
 |  | zgetf2 | — | — | — |
@@ -674,7 +674,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zgetrf2 | — | — | — |
 | ✓ | zgetri | 18.30 | exact | 31.12 |
 | ✓ | zgetrs | 17.80 | exact | 30.44 |
-| ✓ | zgetsls | — | — | — |
+| ✓ | zgetsls | 18.32 | exact | 31.12 |
 | ✓ | zgetsqrhrt | — | — | — |
 | ✓ | zggbak | exact | exact | exact |
 | ✓ | zggbal | exact | exact | exact |
@@ -738,7 +738,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhesv_aa_2stage | — | — | — |
 | ✓ | zhesv_rk | — | — | — |
 | ✓ | zhesv_rook | — | — | — |
-| ✓ | zhesvx | — | — | — |
+| ✓ | zhesvx | 18.92 | exact | 31.64 |
 | ✓ | zhesvxx | — | — | — |
 | ✓ | zheswapr | — | — | — |
 |  | zhetd2 | — | — | — |
@@ -929,7 +929,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zpbrfs | 18.87 | exact | 31.85 |
 | ✓ | zpbstf | — | — | — |
 | ✓ | zpbsv | 18.79 | exact | 31.42 |
-| ✓ | zpbsvx | — | — | — |
+| ✓ | zpbsvx | 18.88 | exact | 31.37 |
 |  | zpbtf2 | — | — | — |
 | ✓ | zpbtrf | 19.09 | exact | 31.60 |
 | ✓ | zpbtrs | 18.71 | exact | 31.30 |
@@ -942,7 +942,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zporfs | 18.95 | exact | 31.39 |
 | ✓ | zporfsx | — | — | — |
 | ✓ | zposv | 18.44 | exact | 31.09 |
-| ✓ | zposvx | — | — | — |
+| ✓ | zposvx | 18.64 | exact | 31.37 |
 | ✓ | zposvxx | — | — | — |
 |  | zpotf2 | — | — | — |
 | ✓ | zpotrf | 18.66 | 33.62 | 31.45 |
@@ -953,7 +953,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zppequ | 19.08 | exact | 31.39 |
 | ✓ | zpprfs | 18.86 | exact | 31.48 |
 | ✓ | zppsv | 18.49 | exact | 31.17 |
-| ✓ | zppsvx | — | — | — |
+| ✓ | zppsvx | 18.61 | exact | 31.33 |
 | ✓ | zpptrf | 19.18 | exact | 31.81 |
 | ✓ | zpptri | 18.34 | exact | 31.14 |
 | ✓ | zpptrs | 18.50 | exact | 31.11 |
@@ -999,7 +999,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zsysv_aa_2stage | — | — | — |
 | ✓ | zsysv_rk | — | — | — |
 | ✓ | zsysv_rook | — | — | — |
-| ✓ | zsysvx | — | — | — |
+| ✓ | zsysvx | 18.64 | exact | 31.49 |
 | ✓ | zsysvxx | — | — | — |
 | ✓ | zsyswapr | — | — | — |
 |  | zsytf2 | — | — | — |
