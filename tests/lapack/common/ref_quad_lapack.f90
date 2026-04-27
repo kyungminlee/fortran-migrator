@@ -2594,6 +2594,29 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: taua(*), taub(*), work(*)
             integer,     intent(out)   :: info
         end subroutine zggrqf
+
+        ! ── Sylvester equation ───────────────────────────────────────
+        subroutine dtrsyl(trana, tranb, isgn, m, n, A, lda, B, ldb, C, ldc, &
+                          scale, info)
+            import :: ep
+            character, intent(in)    :: trana, tranb
+            integer,   intent(in)    :: isgn, m, n, lda, ldb, ldc
+            real(ep),  intent(in)    :: A(lda,*), B(ldb,*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: scale
+            integer,   intent(out)   :: info
+        end subroutine dtrsyl
+
+        subroutine ztrsyl(trana, tranb, isgn, m, n, A, lda, B, ldb, C, ldc, &
+                          scale, info)
+            import :: ep
+            character,   intent(in)    :: trana, tranb
+            integer,     intent(in)    :: isgn, m, n, lda, ldb, ldc
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            real(ep),    intent(out)   :: scale
+            integer,     intent(out)   :: info
+        end subroutine ztrsyl
     end interface
 
 end module ref_quad_lapack

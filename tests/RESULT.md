@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_264 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_266 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -588,7 +588,7 @@ _264 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dtrrfs | 18.71 | exact | 31.53 |
 | ✓ | dtrsen | — | — | — |
 | ✓ | dtrsna | — | — | — |
-| ✓ | dtrsyl | — | — | — |
+| ✓ | dtrsyl | 19.09 | exact | 31.55 |
 |  | dtrsyl3 | — | — | — |
 |  | dtrti2 | — | — | — |
 | ✓ | dtrtri | 18.47 | exact | 31.25 |
@@ -1057,7 +1057,7 @@ _264 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | ztrrfs | 18.84 | exact | 31.69 |
 | ✓ | ztrsen | — | — | — |
 | ✓ | ztrsna | — | — | — |
-| ✓ | ztrsyl | — | — | — |
+| ✓ | ztrsyl | 18.93 | exact | 31.69 |
 |  | ztrsyl3 | — | — | — |
 |  | ztrti2 | — | — | — |
 | ✓ | ztrtri | 18.32 | exact | 31.14 |
