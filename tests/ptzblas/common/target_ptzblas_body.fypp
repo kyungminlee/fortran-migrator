@@ -60,14 +60,14 @@ module target_ptzblas
 
     public :: target_name, target_eps
     public :: target_dvasum, target_dvvdot, target_dset, target_dascal
-    public :: target_dmmadd, target_dmmtadd
+    public :: target_dmmadd, target_dmmtadd, target_dmmcadd, target_dtzpadcpy
     public :: target_drshft, target_dcshft, target_dasqrtb
     public :: target_dtzpad, target_dtzscal
     public :: target_dagemv, target_dasymv, target_datrmv
     public :: target_dzvasum
     public :: target_zvvdotc, target_zvvdotu, target_zset
     public :: target_zhescal, target_ztzcnjg
-    public :: target_zmmadd, target_zmmtadd
+    public :: target_zmmadd, target_zmmtadd, target_zmmcadd, target_ztzpadcpy
     public :: target_ztzpad, target_ztzscal
     public :: target_zagemv, target_zahemv, target_zasymv, target_zatrmv
 
@@ -121,6 +121,21 @@ $:IMPORT_R()
 $:IMPORT_R()
             integer, intent(in)    :: m, n, lda, ldb
             ${target_real}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_real}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${R}$mmcadd(m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, lda, ldb
+            ${target_real}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_real}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${R}$tzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
+$:IMPORT_R()
+            character, intent(in) :: uplo, diag
+            integer,   intent(in) :: m, n, ioffd, lda, ldb
+            ${target_real}$, intent(in)    :: A(lda, *)
             ${target_real}$, intent(inout) :: B(ldb, *)
         end subroutine
 
@@ -244,6 +259,21 @@ $:IMPORT_C()
 $:IMPORT_C()
             integer, intent(in) :: m, n, lda, ldb
             ${target_complex}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_complex}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${C}$mmcadd(m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, lda, ldb
+            ${target_complex}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_complex}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${C}$tzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
+$:IMPORT_C()
+            character, intent(in) :: uplo, diag
+            integer,   intent(in) :: m, n, ioffd, lda, ldb
+            ${target_complex}$, intent(in)    :: A(lda, *)
             ${target_complex}$, intent(inout) :: B(ldb, *)
         end subroutine
 
@@ -399,6 +429,36 @@ contains
         At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:m))
         call ${R}$mmtadd(m, n, q2t_r(alpha), At, lda, q2t_r(beta), Bt, ldb)
         B(1:ldb, 1:m) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dmmcadd(m, n, alpha, A, lda, beta, B, ldb)
+        ! Real qmmcadd is bit-identical to qmmadd (the C variant only
+        ! diverges from the non-conjugate version in the complex
+        ! domain, where it conjugates A). Same shape conventions:
+        ! A and B are both M×N.
+        integer,  intent(in)    :: m, n, lda, ldb
+        real(ep), intent(in)    :: alpha, beta, A(lda, *)
+        real(ep), intent(inout) :: B(ldb, *)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$mmcadd(m, n, q2t_r(alpha), At, lda, q2t_r(beta), Bt, ldb)
+        B(1:ldb, 1:n) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dtzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
+        ! Trapezoidal pad-copy: copies the named triangle of A into B,
+        ! padding the off-triangle with zeros (or ones on the diagonal
+        ! if DIAG='U'). Reference is open-coded inline in the test.
+        character, intent(in)    :: uplo, diag
+        integer,   intent(in)    :: m, n, ioffd, lda, ldb
+        real(ep),  intent(in)    :: A(lda, *)
+        real(ep),  intent(inout) :: B(ldb, *)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$tzpadcpy(uplo, diag, m, n, ioffd, At, lda, Bt, ldb)
+        B(1:ldb, 1:n) = t2q_r(Bt)
     end subroutine
 
     subroutine target_drshft(m, n, offset, A, lda)
@@ -590,6 +650,30 @@ contains
         At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:m))
         call ${C}$mmtadd(m, n, q2t_c(alpha), At, lda, q2t_c(beta), Bt, ldb)
         B(1:ldb, 1:m) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zmmcadd(m, n, alpha, A, lda, beta, B, ldb)
+        ! Conjugate matrix add: B = alpha*conj(A) + beta*B.
+        integer,     intent(in)    :: m, n, lda, ldb
+        complex(ep), intent(in)    :: alpha, beta, A(lda, *)
+        complex(ep), intent(inout) :: B(ldb, *)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$mmcadd(m, n, q2t_c(alpha), At, lda, q2t_c(beta), Bt, ldb)
+        B(1:ldb, 1:n) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_ztzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
+        character,   intent(in)    :: uplo, diag
+        integer,     intent(in)    :: m, n, ioffd, lda, ldb
+        complex(ep), intent(in)    :: A(lda, *)
+        complex(ep), intent(inout) :: B(ldb, *)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$tzpadcpy(uplo, diag, m, n, ioffd, At, lda, Bt, ldb)
+        B(1:ldb, 1:n) = t2q_c(Bt)
     end subroutine
 
     subroutine target_ztzpad(uplo, herm, m, n, ioffd, alpha, beta, A, lda)
