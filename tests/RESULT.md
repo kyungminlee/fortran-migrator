@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_266 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_268 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -199,7 +199,7 @@ _266 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dgtts2 | — | — | — |
 | ✓ | dhgeqz | — | — | — |
 | ✓ | dhsein | — | — | — |
-| ✓ | dhseqr | — | — | — |
+| ✓ | dhseqr | 18.13 | exact | 30.00 |
 | ✓ | disnan | — | — | — |
 |  | dla_gbamv | — | — | — |
 |  | dla_gbrcond | — | — | — |
@@ -783,7 +783,7 @@ _266 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhptri | 17.16 | exact | 30.10 |
 | ✓ | zhptrs | 17.26 | exact | 30.20 |
 | ✓ | zhsein | — | — | — |
-| ✓ | zhseqr | — | — | — |
+| ✓ | zhseqr | 17.56 | exact | 29.86 |
 |  | zla_gbamv | — | — | — |
 |  | zla_gbrcond_c | — | — | — |
 |  | zla_gbrcond_x | — | — | — |

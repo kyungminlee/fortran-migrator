@@ -2617,6 +2617,27 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: scale
             integer,     intent(out)   :: info
         end subroutine ztrsyl
+
+        ! ── Hessenberg Schur factorization ───────────────────────────
+        subroutine dhseqr(job, compz, n, ilo, ihi, H, ldh, WR, WI, Z, ldz, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: job, compz
+            integer,   intent(in)    :: n, ilo, ihi, ldh, ldz, lwork
+            real(ep),  intent(inout) :: H(ldh,*), Z(ldz,*)
+            real(ep),  intent(out)   :: WR(*), WI(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dhseqr
+
+        subroutine zhseqr(job, compz, n, ilo, ihi, H, ldh, W, Z, ldz, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: job, compz
+            integer,     intent(in)    :: n, ilo, ihi, ldh, ldz, lwork
+            complex(ep), intent(inout) :: H(ldh,*), Z(ldz,*)
+            complex(ep), intent(out)   :: W(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhseqr
     end interface
 
 end module ref_quad_lapack
