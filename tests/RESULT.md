@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_121 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_133 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -607,12 +607,12 @@ _121 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgbequb | — | — | — |
 | ✓ | zgbrfs | — | — | — |
 | ✓ | zgbrfsx | — | — | — |
-| ✓ | zgbsv | — | — | — |
+| ✓ | zgbsv | 18.90 | exact | 31.43 |
 | ✓ | zgbsvx | — | — | — |
 | ✓ | zgbsvxx | — | — | — |
 |  | zgbtf2 | — | — | — |
-| ✓ | zgbtrf | — | — | — |
-| ✓ | zgbtrs | — | — | — |
+| ✓ | zgbtrf | 19.07 | exact | 31.88 |
+| ✓ | zgbtrs | 18.89 | exact | 31.39 |
 | ✓ | zgebak | — | — | — |
 | ✓ | zgebal | — | — | — |
 |  | zgebd2 | — | — | — |
@@ -696,10 +696,10 @@ _121 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zgsvj1 | — | — | — |
 | ✓ | zgtcon | — | — | — |
 | ✓ | zgtrfs | — | — | — |
-| ✓ | zgtsv | — | — | — |
+| ✓ | zgtsv | 18.97 | exact | 31.56 |
 | ✓ | zgtsvx | — | — | — |
-| ✓ | zgttrf | — | — | — |
-| ✓ | zgttrs | — | — | — |
+| ✓ | zgttrf | 19.37 | exact | 31.85 |
+| ✓ | zgttrs | 18.93 | exact | 31.57 |
 |  | zgtts2 | — | — | — |
 | ✓ | zhb2st_kernels | — | — | — |
 | ✓ | zhbev | 17.89 | exact | 30.22 |
@@ -928,11 +928,11 @@ _121 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zpbequ | — | — | — |
 | ✓ | zpbrfs | — | — | — |
 | ✓ | zpbstf | — | — | — |
-| ✓ | zpbsv | — | — | — |
+| ✓ | zpbsv | 18.79 | exact | 31.42 |
 | ✓ | zpbsvx | — | — | — |
 |  | zpbtf2 | — | — | — |
-| ✓ | zpbtrf | — | — | — |
-| ✓ | zpbtrs | — | — | — |
+| ✓ | zpbtrf | 19.09 | exact | 31.60 |
+| ✓ | zpbtrs | 18.71 | exact | 31.30 |
 | ✓ | zpftrf | — | — | — |
 | ✓ | zpftri | — | — | — |
 | ✓ | zpftrs | — | — | — |
@@ -962,10 +962,10 @@ _121 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zptcon | — | — | — |
 | ✓ | zpteqr | — | — | — |
 | ✓ | zptrfs | — | — | — |
-| ✓ | zptsv | — | — | — |
+| ✓ | zptsv | 19.06 | exact | 31.66 |
 | ✓ | zptsvx | — | — | — |
-| ✓ | zpttrf | — | — | — |
-| ✓ | zpttrs | — | — | — |
+| ✓ | zpttrf | 19.07 | exact | 31.76 |
+| ✓ | zpttrs | 18.95 | exact | 31.52 |
 |  | zptts2 | — | — | — |
 | ✓ | zrot | — | — | — |
 | ✓ | zrscl | — | — | — |

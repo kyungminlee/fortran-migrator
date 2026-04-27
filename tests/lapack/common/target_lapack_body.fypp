@@ -85,6 +85,10 @@ module target_lapack
     public :: target_zhptrf, target_zhptrs, target_zhpsv, target_zhptri
     public :: target_zsptrf, target_zsptrs, target_zspsv, target_zsptri
     public :: target_zpptrf, target_zpptrs, target_zppsv, target_zpptri
+    public :: target_zgbtrf, target_zgbtrs, target_zgbsv
+    public :: target_zpbtrf, target_zpbtrs, target_zpbsv
+    public :: target_zgttrf, target_zgttrs, target_zgtsv
+    public :: target_zpttrf, target_zpttrs, target_zptsv
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -1251,6 +1255,107 @@ $:IMPORT_C()
             character, intent(in) :: uplo
             integer,   intent(in) :: n
             ${target_complex}$, intent(inout) :: AP(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 11 — complex banded / tridiagonal ──────────────────
+        subroutine ${C}$gbtrf(m, n, kl, ku, AB, ldab, ipiv, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, kl, ku, ldab
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${C}$gbtrs(trans, n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: trans
+            integer,   intent(in) :: n, kl, ku, nrhs, ldab, ldb
+            ${target_complex}$, intent(in)    :: AB(ldab,*)
+            integer,            intent(in)    :: ipiv(*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gbsv(n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+$:IMPORT_C()
+            integer, intent(in) :: n, kl, ku, nrhs, ldab, ldb
+            ${target_complex}$, intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${C}$pbtrf(uplo, n, kd, AB, ldab, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, kd, ldab
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$pbtrs(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, kd, nrhs, ldab, ldb
+            ${target_complex}$, intent(in)    :: AB(ldab,*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$pbsv(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, kd, nrhs, ldab, ldb
+            ${target_complex}$, intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gttrf(n, dl, d, du, du2, ipiv, info)
+$:IMPORT_C()
+            integer, intent(in) :: n
+            ${target_complex}$, intent(inout) :: dl(*), d(*), du(*)
+            ${target_complex}$, intent(out)   :: du2(*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${C}$gttrs(trans, n, nrhs, dl, d, du, du2, ipiv, B, ldb, info)
+$:IMPORT_C()
+            character, intent(in) :: trans
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_complex}$, intent(in)    :: dl(*), d(*), du(*), du2(*)
+            integer,            intent(in)    :: ipiv(*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gtsv(n, nrhs, dl, d, du, B, ldb, info)
+$:IMPORT_C()
+            integer, intent(in) :: n, nrhs, ldb
+            ${target_complex}$, intent(inout) :: dl(*), d(*), du(*), B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$pttrf(n, d, e, info)
+$:IMPORT_RC()
+            integer, intent(in) :: n
+            ${target_real}$,    intent(inout) :: d(*)
+            ${target_complex}$, intent(inout) :: e(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$pttrs(uplo, n, nrhs, d, e, B, ldb, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_real}$,    intent(in)    :: d(*)
+            ${target_complex}$, intent(in)    :: e(*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ptsv(n, nrhs, d, e, B, ldb, info)
+$:IMPORT_RC()
+            integer, intent(in) :: n, nrhs, ldb
+            ${target_real}$,    intent(inout) :: d(*)
+            ${target_complex}$, intent(inout) :: e(*), B(ldb,*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -3462,6 +3567,167 @@ $:CPACK_INV('zsptri', C + 'sptri')
         APt = q2t_c(AP(1:np))
         call ${C}$pptri(uplo, n, APt, info)
         AP(1:np) = t2q_c(APt)
+    end subroutine
+
+    ! ── Phase 11 wrappers ────────────────────────────────────────────
+    subroutine target_zgbtrf(m, n, kl, ku, AB, ldab, ipiv, info)
+        integer,     intent(in)    :: m, n, kl, ku, ldab
+        complex(ep), intent(inout) :: AB(ldab,*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: ABt(:,:)
+        allocate(ABt(ldab, n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$gbtrf(m, n, kl, ku, ABt, ldab, ipiv, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+    end subroutine
+
+    subroutine target_zgbtrs(trans, n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+        complex(ep), intent(in)    :: AB(ldab,*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_c(AB(1:ldab, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$gbtrs(trans, n, kl, ku, nrhs, ABt, ldab, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zgbsv(n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+        integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+        complex(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_c(AB(1:ldab, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$gbsv(n, kl, ku, nrhs, ABt, ldab, ipiv, Bt, ldb, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zpbtrf(uplo, n, kd, AB, ldab, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, kd, ldab
+        complex(ep), intent(inout) :: AB(ldab,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:)
+        allocate(ABt(ldab, n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$pbtrf(uplo, n, kd, ABt, ldab, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+    end subroutine
+
+    subroutine target_zpbtrs(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+        complex(ep), intent(in)    :: AB(ldab,*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_c(AB(1:ldab, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$pbtrs(uplo, n, kd, nrhs, ABt, ldab, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zpbsv(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+        complex(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), Bt(:,:)
+        allocate(ABt(ldab, n), Bt(ldb, nrhs))
+        ABt = q2t_c(AB(1:ldab, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$pbsv(uplo, n, kd, nrhs, ABt, ldab, Bt, ldb, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zgttrf(n, dl, d, du, du2, ipiv, info)
+        integer,     intent(in)    :: n
+        complex(ep), intent(inout) :: dl(*), d(*), du(*)
+        complex(ep), intent(out)   :: du2(*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: dlt(:), dt(:), dut(:), du2t(:)
+        allocate(dlt(n-1), dt(n), dut(n-1), du2t(n-2))
+        dlt = q2t_c(dl(1:n-1)); dt = q2t_c(d(1:n)); dut = q2t_c(du(1:n-1))
+        call ${C}$gttrf(n, dlt, dt, dut, du2t, ipiv, info)
+        dl(1:n-1) = t2q_c(dlt); d(1:n) = t2q_c(dt); du(1:n-1) = t2q_c(dut)
+        du2(1:n-2) = t2q_c(du2t)
+    end subroutine
+
+    subroutine target_zgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, B, ldb, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: n, nrhs, ldb
+        complex(ep), intent(in)    :: dl(*), d(*), du(*), du2(*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: dlt(:), dt(:), dut(:), du2t(:), Bt(:,:)
+        allocate(dlt(n-1), dt(n), dut(n-1), du2t(n-2), Bt(ldb, nrhs))
+        dlt = q2t_c(dl(1:n-1)); dt = q2t_c(d(1:n)); dut = q2t_c(du(1:n-1))
+        du2t = q2t_c(du2(1:n-2)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$gttrs(trans, n, nrhs, dlt, dt, dut, du2t, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zgtsv(n, nrhs, dl, d, du, B, ldb, info)
+        integer,     intent(in)    :: n, nrhs, ldb
+        complex(ep), intent(inout) :: dl(*), d(*), du(*), B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: dlt(:), dt(:), dut(:), Bt(:,:)
+        allocate(dlt(n-1), dt(n), dut(n-1), Bt(ldb, nrhs))
+        dlt = q2t_c(dl(1:n-1)); dt = q2t_c(d(1:n)); dut = q2t_c(du(1:n-1))
+        Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$gtsv(n, nrhs, dlt, dt, dut, Bt, ldb, info)
+        dl(1:n-1) = t2q_c(dlt); d(1:n) = t2q_c(dt); du(1:n-1) = t2q_c(dut)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zpttrf(n, d, e, info)
+        integer,     intent(in)    :: n
+        real(ep),    intent(inout) :: d(*)
+        complex(ep), intent(inout) :: e(*)
+        integer,     intent(out)   :: info
+        ${target_real}$,    allocatable :: dt(:)
+        ${target_complex}$, allocatable :: et(:)
+        allocate(dt(n), et(n-1))
+        dt = q2t_r(d(1:n)); et = q2t_c(e(1:n-1))
+        call ${C}$pttrf(n, dt, et, info)
+        d(1:n)   = t2q_r(dt)
+        e(1:n-1) = t2q_c(et)
+    end subroutine
+
+    subroutine target_zpttrs(uplo, n, nrhs, d, e, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, ldb
+        real(ep),    intent(in)    :: d(*)
+        complex(ep), intent(in)    :: e(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_real}$,    allocatable :: dt(:)
+        ${target_complex}$, allocatable :: et(:), Bt(:,:)
+        allocate(dt(n), et(n-1), Bt(ldb, nrhs))
+        dt = q2t_r(d(1:n)); et = q2t_c(e(1:n-1)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$pttrs(uplo, n, nrhs, dt, et, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zptsv(n, nrhs, d, e, B, ldb, info)
+        integer,     intent(in)    :: n, nrhs, ldb
+        real(ep),    intent(inout) :: d(*)
+        complex(ep), intent(inout) :: e(*), B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_real}$,    allocatable :: dt(:)
+        ${target_complex}$, allocatable :: et(:), Bt(:,:)
+        allocate(dt(n), et(n-1), Bt(ldb, nrhs))
+        dt = q2t_r(d(1:n)); et = q2t_c(e(1:n-1)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$ptsv(n, nrhs, dt, et, Bt, ldb, info)
+        d(1:n)   = t2q_r(dt)
+        e(1:n-1) = t2q_c(et)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
     end subroutine
 
 end module target_lapack
