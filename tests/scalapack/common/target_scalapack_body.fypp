@@ -57,7 +57,7 @@ module target_scalapack
     public :: target_pdgehrd, target_pdormhr, target_pdgehd2
     public :: target_pdsytrd, target_pdsygst, target_pdormtr
     public :: target_pdgels
-    public :: target_pdposv, target_pdpotri, target_pdgetri
+    public :: target_pdposv, target_pdpotri, target_pdgetri, target_pdtrtri
     public :: target_pdgebrd
     public :: target_pdsyev, target_pdsyevd
     public :: target_pdgesvd
@@ -76,7 +76,7 @@ module target_scalapack
     public :: target_pzgels
     public :: target_pzgebrd
     public :: target_pzposv, target_pzpotrf, target_pzpotri
-    public :: target_pzgetrf, target_pzgetri
+    public :: target_pzgetrf, target_pzgetri, target_pztrtri
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -388,6 +388,15 @@ $:IMPORT_R()
         subroutine ${R}$potri(uplo, n, A, ia, ja, desca, info)
 $:IMPORT_R()
             character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+        end subroutine
+
+        subroutine ${R}$trtri(uplo, diag, n, A, ia, ja, desca, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo, diag
             integer,   intent(in)    :: n, ia, ja
             integer,   intent(in)    :: desca(9)
             integer,   intent(out)   :: info
@@ -762,6 +771,15 @@ $:IMPORT_C()
         subroutine ${C}$potri(uplo, n, A, ia, ja, desca, info)
 $:IMPORT_C()
             character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+        end subroutine
+
+        subroutine ${C}$trtri(uplo, diag, n, A, ia, ja, desca, info)
+$:IMPORT_C()
+            character, intent(in)    :: uplo, diag
             integer,   intent(in)    :: n, ia, ja
             integer,   intent(in)    :: desca(9)
             integer,   intent(out)   :: info
@@ -1565,6 +1583,21 @@ contains
         allocate(At(na))
         At = q2t_r(A(1:na))
         call ${R}$potri(uplo, n, At, ia, ja, desca, info)
+        A(1:na) = t2q_r(At)
+    end subroutine
+
+    subroutine target_pdtrtri(uplo, diag, n, A, ia, ja, desca, info)
+        character, intent(in)    :: uplo, diag
+        integer,   intent(in)    :: n, ia, ja
+        integer,   intent(in)    :: desca(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(inout) :: A(*)
+        integer :: na
+        ${target_real}$, allocatable :: At(:)
+        na = nloc(desca)
+        allocate(At(na))
+        At = q2t_r(A(1:na))
+        call ${R}$trtri(uplo, diag, n, At, ia, ja, desca, info)
         A(1:na) = t2q_r(At)
     end subroutine
 
@@ -2481,6 +2514,21 @@ contains
         allocate(At(na))
         At = q2t_c(A(1:na))
         call ${C}$potri(uplo, n, At, ia, ja, desca, info)
+        A(1:na) = t2q_c(At)
+    end subroutine
+
+    subroutine target_pztrtri(uplo, diag, n, A, ia, ja, desca, info)
+        character,   intent(in)    :: uplo, diag
+        integer,     intent(in)    :: n, ia, ja
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        integer :: na
+        ${target_complex}$, allocatable :: At(:)
+        na = nloc(desca)
+        allocate(At(na))
+        At = q2t_c(A(1:na))
+        call ${C}$trtri(uplo, diag, n, At, ia, ja, desca, info)
         A(1:na) = t2q_c(At)
     end subroutine
 

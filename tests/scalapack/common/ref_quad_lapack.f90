@@ -212,6 +212,14 @@ module ref_quad_lapack
             integer,   intent(out)   :: info
         end subroutine dpotri
 
+        subroutine dtrtri(uplo, diag, n, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo, diag
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dtrtri
+
         subroutine dgetri(n, A, lda, ipiv, work, lwork, info)
             import :: ep
             integer,  intent(in)    :: n, lda, lwork
@@ -438,6 +446,14 @@ module ref_quad_lapack
             complex(ep), intent(inout) :: A(lda,*)
             integer,     intent(out)   :: info
         end subroutine zpotri
+
+        subroutine ztrtri(uplo, diag, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo, diag
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine ztrtri
 
         subroutine zgetri(n, A, lda, ipiv, work, lwork, info)
             import :: ep
