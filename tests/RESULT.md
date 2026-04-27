@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_268 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_270 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -582,7 +582,7 @@ _268 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dtpttf | — | — | — |
 | ✓ | dtpttr | — | — | — |
 | ✓ | dtrcon | 19.22 | exact | 32.56 |
-| ✓ | dtrevc | — | — | — |
+| ✓ | dtrevc | 18.74 | exact | 31.44 |
 |  | dtrevc3 | — | — | — |
 | ✓ | dtrexc | — | — | — |
 | ✓ | dtrrfs | 18.71 | exact | 31.53 |
@@ -1051,7 +1051,7 @@ _268 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | ztpttf | — | — | — |
 | ✓ | ztpttr | — | — | — |
 | ✓ | ztrcon | 18.85 | exact | 31.24 |
-| ✓ | ztrevc | — | — | — |
+| ✓ | ztrevc | 18.50 | exact | 31.15 |
 |  | ztrevc3 | — | — | — |
 | ✓ | ztrexc | — | — | — |
 | ✓ | ztrrfs | 18.84 | exact | 31.69 |

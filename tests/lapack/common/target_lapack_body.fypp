@@ -128,6 +128,7 @@ module target_lapack
     public :: target_dggqrf, target_zggqrf, target_dggrqf, target_zggrqf
     public :: target_dtrsyl, target_ztrsyl
     public :: target_dhseqr, target_zhseqr
+    public :: target_dtrevc, target_ztrevc
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2746,6 +2747,33 @@ $:IMPORT_C()
             integer,   intent(in) :: n, ilo, ihi, ldh, ldz, lwork
             ${target_complex}$, intent(inout) :: H(ldh,*), Z(ldz,*)
             ${target_complex}$, intent(out)   :: W(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 33 — eigenvectors of (quasi-)triangular Schur form ─
+        subroutine ${R}$trevc(side, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                              mm, m, work, info)
+$:IMPORT_R()
+            character, intent(in) :: side, howmny
+            integer,   intent(in) :: n, ldt, ldvl, ldvr, mm
+            logical,   intent(inout) :: sel(*)
+            ${target_real}$, intent(in)    :: T(ldt,*)
+            ${target_real}$, intent(inout) :: VL(ldvl,*), VR(ldvr,*)
+            integer,   intent(out) :: m
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$trevc(side, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                              mm, m, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: side, howmny
+            integer,   intent(in) :: n, ldt, ldvl, ldvr, mm
+            logical,   intent(in)    :: sel(*)
+            ${target_complex}$, intent(inout) :: T(ldt,*), VL(ldvl,*), VR(ldvr,*)
+            integer,   intent(out) :: m
+            ${target_complex}$, intent(out) :: work(*)
+            ${target_real}$,    intent(out) :: rwork(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -7520,6 +7548,54 @@ $:CPACK_INV('zsptri', C + 'sptri')
         H(1:ldh, 1:n) = t2q_c(Ht)
         if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_c(Zt)
         W(1:n) = t2q_c(Wt)
+    end subroutine
+
+    ! ── Phase 33 wrappers ────────────────────────────────────────────
+    subroutine target_dtrevc(side, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                             mm, m, info)
+        character, intent(in)    :: side, howmny
+        integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm
+        logical,   intent(inout) :: sel(*)
+        real(ep),  intent(in)    :: T(ldt,*)
+        real(ep),  intent(inout) :: VL(ldvl,*), VR(ldvr,*)
+        integer,   intent(out)   :: m
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Tt(:,:), VLt(:,:), VRt(:,:), work(:)
+        allocate(Tt(ldt, n), VLt(ldvl, mm), VRt(ldvr, mm), work(3*n))
+        Tt = q2t_r(T(1:ldt, 1:n))
+        if (howmny == 'B' .or. howmny == 'b') then
+            VLt = q2t_r(VL(1:ldvl, 1:mm)); VRt = q2t_r(VR(1:ldvr, 1:mm))
+        end if
+        call ${R}$trevc(side, howmny, sel, n, Tt, ldt, VLt, ldvl, VRt, ldvr, &
+                       mm, m, work, info)
+        if (side == 'L' .or. side == 'l' .or. side == 'B' .or. side == 'b') &
+            VL(1:ldvl, 1:mm) = t2q_r(VLt)
+        if (side == 'R' .or. side == 'r' .or. side == 'B' .or. side == 'b') &
+            VR(1:ldvr, 1:mm) = t2q_r(VRt)
+    end subroutine
+
+    subroutine target_ztrevc(side, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                             mm, m, info)
+        character,   intent(in)    :: side, howmny
+        integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm
+        logical,     intent(in)    :: sel(*)
+        complex(ep), intent(inout) :: T(ldt,*), VL(ldvl,*), VR(ldvr,*)
+        integer,     intent(out)   :: m
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Tt(:,:), VLt(:,:), VRt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        allocate(Tt(ldt, n), VLt(ldvl, mm), VRt(ldvr, mm), work(2*n), rwork(n))
+        Tt = q2t_c(T(1:ldt, 1:n))
+        if (howmny == 'B' .or. howmny == 'b') then
+            VLt = q2t_c(VL(1:ldvl, 1:mm)); VRt = q2t_c(VR(1:ldvr, 1:mm))
+        end if
+        call ${C}$trevc(side, howmny, sel, n, Tt, ldt, VLt, ldvl, VRt, ldvr, &
+                       mm, m, work, rwork, info)
+        T(1:ldt, 1:n) = t2q_c(Tt)
+        if (side == 'L' .or. side == 'l' .or. side == 'B' .or. side == 'b') &
+            VL(1:ldvl, 1:mm) = t2q_c(VLt)
+        if (side == 'R' .or. side == 'r' .or. side == 'B' .or. side == 'b') &
+            VR(1:ldvr, 1:mm) = t2q_c(VRt)
     end subroutine
 
     subroutine target_dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, info)

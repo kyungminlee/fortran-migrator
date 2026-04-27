@@ -2638,6 +2638,33 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: W(*), work(*)
             integer,     intent(out)   :: info
         end subroutine zhseqr
+
+        ! ── Eigenvectors of (quasi-)triangular Schur form ────────────
+        subroutine dtrevc(side, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                          mm, m, work, info)
+            import :: ep
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm
+            logical,   intent(inout) :: sel(*)
+            real(ep),  intent(in)    :: T(ldt,*)
+            real(ep),  intent(inout) :: VL(ldvl,*), VR(ldvr,*)
+            integer,   intent(out)   :: m
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtrevc
+
+        subroutine ztrevc(side, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                          mm, m, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: side, howmny
+            integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm
+            logical,     intent(in)    :: sel(*)
+            complex(ep), intent(inout) :: T(ldt,*), VL(ldvl,*), VR(ldvr,*)
+            integer,     intent(out)   :: m
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine ztrevc
     end interface
 
 end module ref_quad_lapack
