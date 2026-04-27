@@ -114,6 +114,8 @@ module target_lapack
     public :: target_dgeequb, target_dgbequb, target_dpoequb, target_dsyequb
     public :: target_zgeequb, target_zgbequb, target_zpoequb, target_zsyequb, target_zheequb
     public :: target_dsytrd, target_zhetrd, target_dsptrd, target_zhptrd, target_dsbtrd, target_zhbtrd
+    public :: target_dorgtr, target_zungtr, target_dormtr, target_zunmtr
+    public :: target_dopgtr, target_zupgtr, target_dopmtr, target_zupmtr
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2212,6 +2214,85 @@ $:IMPORT_RC()
             integer,   intent(in) :: n, kd, ldab, ldq
             ${target_complex}$, intent(inout) :: AB(ldab,*), Q(ldq,*)
             ${target_real}$,    intent(out)   :: D(*), E(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 22 — orgtr/ungtr, ormtr/unmtr, opgtr/upgtr, opmtr/upmtr ──
+        subroutine ${R}$orgtr(uplo, n, A, lda, tau, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(in)    :: tau(*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ungtr(uplo, n, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(in)    :: tau(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$ormtr(side, uplo, trans, m, n, A, lda, tau, C, ldc, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: side, uplo, trans
+            integer,   intent(in) :: m, n, lda, ldc, lwork
+            ${target_real}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$unmtr(side, uplo, trans, m, n, A, lda, tau, C, ldc, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: side, uplo, trans
+            integer,   intent(in) :: m, n, lda, ldc, lwork
+            ${target_complex}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$opgtr(uplo, n, AP, tau, Q, ldq, work, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, ldq
+            ${target_real}$, intent(in)  :: AP(*), tau(*)
+            ${target_real}$, intent(out) :: Q(ldq,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$upgtr(uplo, n, AP, tau, Q, ldq, work, info)
+$:IMPORT_C()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, ldq
+            ${target_complex}$, intent(in)  :: AP(*), tau(*)
+            ${target_complex}$, intent(out) :: Q(ldq,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$opmtr(side, uplo, trans, m, n, AP, tau, C, ldc, work, info)
+$:IMPORT_R()
+            character, intent(in) :: side, uplo, trans
+            integer,   intent(in) :: m, n, ldc
+            ${target_real}$, intent(in)    :: AP(*), tau(*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$upmtr(side, uplo, trans, m, n, AP, tau, C, ldc, work, info)
+$:IMPORT_C()
+            character, intent(in) :: side, uplo, trans
+            integer,   intent(in) :: m, n, ldc
+            ${target_complex}$, intent(in)    :: AP(*), tau(*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
             ${target_complex}$, intent(out)   :: work(*)
             integer, intent(out) :: info
         end subroutine
@@ -6012,6 +6093,153 @@ $:CPACK_INV('zsptri', C + 'sptri')
         AB(1:ldab, 1:n) = t2q_c(ABt)
         if (vect /= 'N' .and. vect /= 'n') Q(1:ldq, 1:nq) = t2q_c(Qt)
         D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et)
+    end subroutine
+
+    ! ── Phase 22 wrappers ────────────────────────────────────────────
+    subroutine target_dorgtr(uplo, n, A, lda, tau, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(in)    :: tau(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(max(1,n-1)))
+        At = q2t_r(A(1:lda, 1:n)); taut = q2t_r(tau(1:max(1,n-1)))
+        call ${R}$orgtr(uplo, n, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$orgtr(uplo, n, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_zungtr(uplo, n, A, lda, tau, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(max(1,n-1)))
+        At = q2t_c(A(1:lda, 1:n)); taut = q2t_c(tau(1:max(1,n-1)))
+        call ${C}$ungtr(uplo, n, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$ungtr(uplo, n, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_dormtr(side, uplo, trans, m, n, A, lda, tau, C, ldc, info)
+        character, intent(in)    :: side, uplo, trans
+        integer,   intent(in)    :: m, n, lda, ldc
+        real(ep),  intent(in)    :: A(lda,*), tau(*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, nq, ntau
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        ntau = max(1, nq - 1)
+        allocate(At(lda, nq), taut(ntau), Ct(ldc, n))
+        At = q2t_r(A(1:lda, 1:nq)); taut = q2t_r(tau(1:ntau))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$ormtr(side, uplo, trans, m, n, At, lda, taut, Ct, ldc, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$ormtr(side, uplo, trans, m, n, At, lda, taut, Ct, ldc, work, lwork, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zunmtr(side, uplo, trans, m, n, A, lda, tau, C, ldc, info)
+        character,   intent(in)    :: side, uplo, trans
+        integer,     intent(in)    :: m, n, lda, ldc
+        complex(ep), intent(in)    :: A(lda,*), tau(*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, nq, ntau
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        ntau = max(1, nq - 1)
+        allocate(At(lda, nq), taut(ntau), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:nq)); taut = q2t_c(tau(1:ntau))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$unmtr(side, uplo, trans, m, n, At, lda, taut, Ct, ldc, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$unmtr(side, uplo, trans, m, n, At, lda, taut, Ct, ldc, work, lwork, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_dopgtr(uplo, n, AP, tau, Q, ldq, info)
+        character, intent(in)  :: uplo
+        integer,   intent(in)  :: n, ldq
+        real(ep),  intent(in)  :: AP(*), tau(*)
+        real(ep),  intent(out) :: Q(ldq,*)
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: APt(:), taut(:), Qt(:,:), work(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), taut(max(1,n-1)), Qt(ldq, n), work(max(1,n-1)))
+        APt = q2t_r(AP(1:np)); taut = q2t_r(tau(1:max(1,n-1)))
+        call ${R}$opgtr(uplo, n, APt, taut, Qt, ldq, work, info)
+        Q(1:ldq, 1:n) = t2q_r(Qt)
+    end subroutine
+
+    subroutine target_zupgtr(uplo, n, AP, tau, Q, ldq, info)
+        character,   intent(in)  :: uplo
+        integer,     intent(in)  :: n, ldq
+        complex(ep), intent(in)  :: AP(*), tau(*)
+        complex(ep), intent(out) :: Q(ldq,*)
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: APt(:), taut(:), Qt(:,:), work(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), taut(max(1,n-1)), Qt(ldq, n), work(max(1,n-1)))
+        APt = q2t_c(AP(1:np)); taut = q2t_c(tau(1:max(1,n-1)))
+        call ${C}$upgtr(uplo, n, APt, taut, Qt, ldq, work, info)
+        Q(1:ldq, 1:n) = t2q_c(Qt)
+    end subroutine
+
+    subroutine target_dopmtr(side, uplo, trans, m, n, AP, tau, C, ldc, info)
+        character, intent(in)    :: side, uplo, trans
+        integer,   intent(in)    :: m, n, ldc
+        real(ep),  intent(in)    :: AP(*), tau(*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), taut(:), Ct(:,:), work(:)
+        integer :: np, nq, ntau, lwork
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        np = nq*(nq+1)/2
+        ntau = max(1, nq - 1)
+        lwork = merge(n, m, side == 'L' .or. side == 'l')
+        allocate(APt(np), taut(ntau), Ct(ldc, n), work(max(1, lwork)))
+        APt = q2t_r(AP(1:np)); taut = q2t_r(tau(1:ntau))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$opmtr(side, uplo, trans, m, n, APt, taut, Ct, ldc, work, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zupmtr(side, uplo, trans, m, n, AP, tau, C, ldc, info)
+        character,   intent(in)    :: side, uplo, trans
+        integer,     intent(in)    :: m, n, ldc
+        complex(ep), intent(in)    :: AP(*), tau(*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: APt(:), taut(:), Ct(:,:), work(:)
+        integer :: np, nq, ntau, lwork
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        np = nq*(nq+1)/2
+        ntau = max(1, nq - 1)
+        lwork = merge(n, m, side == 'L' .or. side == 'l')
+        allocate(APt(np), taut(ntau), Ct(ldc, n), work(max(1, lwork)))
+        APt = q2t_c(AP(1:np)); taut = q2t_c(tau(1:ntau))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$upmtr(side, uplo, trans, m, n, APt, taut, Ct, ldc, work, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
     end subroutine
 
 end module target_lapack
