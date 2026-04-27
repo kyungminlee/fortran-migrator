@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_294 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_298 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -420,7 +420,7 @@ _294 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dpbrfs | 18.95 | exact | 31.78 |
 | ✓ | dpbstf | — | — | — |
 | ✓ | dpbsv | 18.77 | exact | 31.32 |
-| ✓ | dpbsvx | — | — | — |
+| ✓ | dpbsvx | 18.80 | exact | 31.61 |
 |  | dpbtf2 | — | — | — |
 | ✓ | dpbtrf | 19.16 | exact | 31.63 |
 | ✓ | dpbtrs | 18.78 | exact | 31.08 |
@@ -444,7 +444,7 @@ _294 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dppequ | 19.10 | exact | 31.32 |
 | ✓ | dpprfs | 19.06 | exact | 31.80 |
 | ✓ | dppsv | 18.48 | exact | 31.11 |
-| ✓ | dppsvx | — | — | — |
+| ✓ | dppsvx | 18.31 | exact | 31.12 |
 | ✓ | dpptrf | 19.17 | exact | 31.70 |
 | ✓ | dpptri | 18.45 | exact | 31.26 |
 | ✓ | dpptrs | 18.47 | exact | 31.20 |
@@ -929,7 +929,7 @@ _294 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zpbrfs | 18.87 | exact | 31.85 |
 | ✓ | zpbstf | — | — | — |
 | ✓ | zpbsv | 18.79 | exact | 31.42 |
-| ✓ | zpbsvx | — | — | — |
+| ✓ | zpbsvx | 18.88 | exact | 31.37 |
 |  | zpbtf2 | — | — | — |
 | ✓ | zpbtrf | 19.09 | exact | 31.60 |
 | ✓ | zpbtrs | 18.71 | exact | 31.30 |
@@ -953,7 +953,7 @@ _294 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zppequ | 19.08 | exact | 31.39 |
 | ✓ | zpprfs | 18.86 | exact | 31.48 |
 | ✓ | zppsv | 18.49 | exact | 31.17 |
-| ✓ | zppsvx | — | — | — |
+| ✓ | zppsvx | 18.61 | exact | 31.33 |
 | ✓ | zpptrf | 19.18 | exact | 31.81 |
 | ✓ | zpptri | 18.34 | exact | 31.14 |
 | ✓ | zpptrs | 18.50 | exact | 31.11 |

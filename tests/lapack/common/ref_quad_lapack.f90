@@ -2913,6 +2913,55 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
             integer,     intent(out)   :: info
         end subroutine zposvx
+
+        ! ── Banded/packed positive-definite expert solvers ───────────
+        subroutine dpbsvx(fact, uplo, n, kd, nrhs, AB, ldab, AFB, ldafb, equed, &
+                          S, B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldafb, ldb, ldx
+            real(ep),  intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*), S(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dpbsvx
+
+        subroutine zpbsvx(fact, uplo, n, kd, nrhs, AB, ldab, AFB, ldafb, equed, &
+                          S, B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldafb, ldb, ldx
+            complex(ep), intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zpbsvx
+
+        subroutine dppsvx(fact, uplo, n, nrhs, AP, AFP, equed, S, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(inout) :: AP(*), AFP(*), B(ldb,*), S(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dppsvx
+
+        subroutine zppsvx(fact, uplo, n, nrhs, AP, AFP, equed, S, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(inout) :: AP(*), AFP(*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zppsvx
     end interface
 
 end module ref_quad_lapack
