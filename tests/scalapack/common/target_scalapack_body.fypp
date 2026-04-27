@@ -53,6 +53,7 @@ module target_scalapack
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
     public :: target_pdgerqf, target_pdorgrq, target_pdormrq
+    public :: target_pdgeql2, target_pdgelq2, target_pdgerq2
     public :: target_pdgehrd, target_pdormhr, target_pdgehd2
     public :: target_pdsytrd, target_pdsygst, target_pdormtr
     public :: target_pdgels
@@ -68,6 +69,7 @@ module target_scalapack
     public :: target_pzgelqf, target_pzunglq, target_pzunmlq
     public :: target_pzgeqlf, target_pzungql, target_pzunmql
     public :: target_pzgerqf, target_pzungrq, target_pzunmrq
+    public :: target_pzgeql2, target_pzgelq2, target_pzgerq2
     public :: target_pzgehrd, target_pzunmhr, target_pzgehd2
     public :: target_pzhetrd
     public :: target_pzgels
@@ -206,6 +208,33 @@ $:IMPORT_R()
         end subroutine
 
         subroutine ${R}$geqlf(m, n, A, ia, ja, desca, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${R}$geql2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${R}$gelq2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${R}$gerq2(m, n, A, ia, ja, desca, tau, work, lwork, info)
 $:IMPORT_R()
             integer, intent(in)    :: m, n, ia, ja, lwork
             integer, intent(in)    :: desca(9)
@@ -529,6 +558,33 @@ $:IMPORT_C()
         end subroutine
 
         subroutine ${C}$geqlf(m, n, A, ia, ja, desca, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${C}$geql2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${C}$gelq2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${C}$gerq2(m, n, A, ia, ja, desca, tau, work, lwork, info)
 $:IMPORT_C()
             integer, intent(in)    :: m, n, ia, ja, lwork
             integer, intent(in)    :: desca(9)
@@ -1260,6 +1316,75 @@ contains
         end if
     end subroutine
 
+    subroutine target_pdgeql2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        integer,  intent(in)    :: m, n, ia, ja, lwork
+        integer,  intent(in)    :: desca(9)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*)
+        real(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_real}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${R}$geql2(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$geql2(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            A(1:na) = t2q_r(At)
+            tau(1:ntau) = t2q_r(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pdgelq2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        integer,  intent(in)    :: m, n, ia, ja, lwork
+        integer,  intent(in)    :: desca(9)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*)
+        real(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_real}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${R}$gelq2(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$gelq2(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            A(1:na) = t2q_r(At)
+            tau(1:ntau) = t2q_r(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pdgerq2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        integer,  intent(in)    :: m, n, ia, ja, lwork
+        integer,  intent(in)    :: desca(9)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*)
+        real(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_real}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${R}$gerq2(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$gerq2(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            A(1:na) = t2q_r(At)
+            tau(1:ntau) = t2q_r(tau_t)
+        end if
+    end subroutine
+
     subroutine target_pdgehd2(n, ilo, ihi, A, ia, ja, desca, tau, &
                               work, lwork, info)
         integer,  intent(in)    :: n, ilo, ihi, ia, ja, lwork
@@ -1964,6 +2089,75 @@ contains
             At = q2t_c(A(1:na))
             call ${C}$gehrd(n, ilo, ihi, At, ia, ja, desca, tau_t, &
                              work_t, lwt, info)
+            A(1:na) = t2q_c(At)
+            tau(1:ntau) = t2q_c(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pzgeql2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        integer,     intent(in)    :: m, n, ia, ja, lwork
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        complex(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_complex}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${C}$geql2(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_c(A(1:na))
+            call ${C}$geql2(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            A(1:na) = t2q_c(At)
+            tau(1:ntau) = t2q_c(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pzgelq2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        integer,     intent(in)    :: m, n, ia, ja, lwork
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        complex(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_complex}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${C}$gelq2(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_c(A(1:na))
+            call ${C}$gelq2(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            A(1:na) = t2q_c(At)
+            tau(1:ntau) = t2q_c(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pzgerq2(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        integer,     intent(in)    :: m, n, ia, ja, lwork
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        complex(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_complex}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${C}$gerq2(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_c(A(1:na))
+            call ${C}$gerq2(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
             A(1:na) = t2q_c(At)
             tau(1:ntau) = t2q_c(tau_t)
         end if
