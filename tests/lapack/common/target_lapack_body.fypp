@@ -127,6 +127,7 @@ module target_lapack
     public :: target_dgghrd, target_zgghrd
     public :: target_dggqrf, target_zggqrf, target_dggrqf, target_zggrqf
     public :: target_dtrsyl, target_ztrsyl
+    public :: target_dhseqr, target_zhseqr
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2724,6 +2725,27 @@ $:IMPORT_RC()
             ${target_complex}$, intent(in)    :: A(lda,*), B(ldb,*)
             ${target_complex}$, intent(inout) :: C(ldc,*)
             ${target_real}$,    intent(out)   :: scale
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 32 — Hessenberg Schur factorization ────────────────
+        subroutine ${R}$hseqr(job, compz, n, ilo, ihi, H, ldh, WR, WI, Z, ldz, &
+                              work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: job, compz
+            integer,   intent(in) :: n, ilo, ihi, ldh, ldz, lwork
+            ${target_real}$, intent(inout) :: H(ldh,*), Z(ldz,*)
+            ${target_real}$, intent(out)   :: WR(*), WI(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hseqr(job, compz, n, ilo, ihi, H, ldh, W, Z, ldz, &
+                              work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: job, compz
+            integer,   intent(in) :: n, ilo, ihi, ldh, ldz, lwork
+            ${target_complex}$, intent(inout) :: H(ldh,*), Z(ldz,*)
+            ${target_complex}$, intent(out)   :: W(*), work(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -7453,6 +7475,51 @@ $:CPACK_INV('zsptri', C + 'sptri')
         Ct = q2t_c(C(1:ldc, 1:n))
         call ${C}$trsyl(trana, tranb, isgn, m, n, At, lda, Bt, ldb, Ct, ldc, scalet, info)
         C(1:ldc, 1:n) = t2q_c(Ct); scale = t2q_r(scalet)
+    end subroutine
+
+    ! ── Phase 32 wrappers ────────────────────────────────────────────
+    subroutine target_dhseqr(job, compz, n, ilo, ihi, H, ldh, WR, WI, Z, ldz, info)
+        character, intent(in)    :: job, compz
+        integer,   intent(in)    :: n, ilo, ihi, ldh, ldz
+        real(ep),  intent(inout) :: H(ldh,*), Z(ldz,*)
+        real(ep),  intent(out)   :: WR(*), WI(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Ht(:,:), Zt(:,:), WRt(:), WIt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, nz
+        nz = merge(n, 1, compz == 'V' .or. compz == 'v' .or. compz == 'I' .or. compz == 'i')
+        allocate(Ht(ldh, n), Zt(ldz, nz), WRt(n), WIt(n))
+        Ht = q2t_r(H(1:ldh, 1:n))
+        if (compz == 'V' .or. compz == 'v') Zt = q2t_r(Z(1:ldz, 1:nz))
+        call ${R}$hseqr(job, compz, n, ilo, ihi, Ht, ldh, WRt, WIt, Zt, ldz, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$hseqr(job, compz, n, ilo, ihi, Ht, ldh, WRt, WIt, Zt, ldz, work, lwork, info)
+        H(1:ldh, 1:n) = t2q_r(Ht)
+        if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_r(Zt)
+        WR(1:n) = t2q_r(WRt); WI(1:n) = t2q_r(WIt)
+    end subroutine
+
+    subroutine target_zhseqr(job, compz, n, ilo, ihi, H, ldh, W, Z, ldz, info)
+        character,   intent(in)    :: job, compz
+        integer,     intent(in)    :: n, ilo, ihi, ldh, ldz
+        complex(ep), intent(inout) :: H(ldh,*), Z(ldz,*)
+        complex(ep), intent(out)   :: W(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Ht(:,:), Zt(:,:), Wt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, nz
+        nz = merge(n, 1, compz == 'V' .or. compz == 'v' .or. compz == 'I' .or. compz == 'i')
+        allocate(Ht(ldh, n), Zt(ldz, nz), Wt(n))
+        Ht = q2t_c(H(1:ldh, 1:n))
+        if (compz == 'V' .or. compz == 'v') Zt = q2t_c(Z(1:ldz, 1:nz))
+        call ${C}$hseqr(job, compz, n, ilo, ihi, Ht, ldh, Wt, Zt, ldz, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hseqr(job, compz, n, ilo, ihi, Ht, ldh, Wt, Zt, ldz, work, lwork, info)
+        H(1:ldh, 1:n) = t2q_c(Ht)
+        if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_c(Zt)
+        W(1:n) = t2q_c(Wt)
     end subroutine
 
     subroutine target_dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, info)
