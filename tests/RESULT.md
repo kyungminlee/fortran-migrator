@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_290 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -170,7 +170,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dgetrf2 | — | — | — |
 | ✓ | dgetri | 18.21 | exact | 31.08 |
 | ✓ | dgetrs | 17.63 | exact | 30.21 |
-| ✓ | dgetsls | — | — | — |
+| ✓ | dgetsls | 18.23 | exact | 30.95 |
 | ✓ | dgetsqrhrt | — | — | — |
 | ✓ | dggbak | exact | exact | exact |
 | ✓ | dggbal | exact | exact | exact |
@@ -674,7 +674,7 @@ _288 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zgetrf2 | — | — | — |
 | ✓ | zgetri | 18.30 | exact | 31.12 |
 | ✓ | zgetrs | 17.80 | exact | 30.44 |
-| ✓ | zgetsls | — | — | — |
+| ✓ | zgetsls | 18.32 | exact | 31.12 |
 | ✓ | zgetsqrhrt | — | — | — |
 | ✓ | zggbak | exact | exact | exact |
 | ✓ | zggbal | exact | exact | exact |

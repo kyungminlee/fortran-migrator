@@ -134,6 +134,7 @@ module target_lapack
     public :: target_dgemqr, target_zgemqr, target_dgemlq, target_zgemlq
     public :: target_dgeqrt, target_zgeqrt, target_dgelqt, target_zgelqt
     public :: target_dgemqrt, target_zgemqrt, target_dgemlqt, target_zgemlqt
+    public :: target_dgetsls, target_zgetsls
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2956,6 +2957,25 @@ $:IMPORT_C()
             integer,   intent(in) :: m, n, k, mb, ldv, ldt, ldc
             ${target_complex}$, intent(in)    :: V(ldv,*), T(ldt,*)
             ${target_complex}$, intent(inout) :: C(ldc,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 37 — tall-skinny least squares ─────────────────────
+        subroutine ${R}$getsls(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: trans
+            integer,   intent(in) :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$getsls(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: trans
+            integer,   intent(in) :: m, n, nrhs, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
             ${target_complex}$, intent(out)   :: work(*)
             integer, intent(out) :: info
         end subroutine
@@ -8143,6 +8163,41 @@ $:CPACK_INV('zsptri', C + 'sptri')
             U(1:ldu, 1:nU)   = t2q_r(Ut)
             VT(1:ldvt, 1:nVT) = t2q_r(VTt)
         end if
+    end subroutine
+
+    ! ── Phase 37 wrappers ────────────────────────────────────────────
+    subroutine target_dgetsls(trans, m, n, nrhs, A, lda, B, ldb, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$getsls(trans, m, n, nrhs, At, lda, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$getsls(trans, m, n, nrhs, At, lda, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_zgetsls(trans, m, n, nrhs, A, lda, B, ldb, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$getsls(trans, m, n, nrhs, At, lda, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$getsls(trans, m, n, nrhs, At, lda, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:nrhs) = t2q_c(Bt)
     end subroutine
 
 end module target_lapack

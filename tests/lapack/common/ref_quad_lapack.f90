@@ -2843,6 +2843,25 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zgemlqt
+
+        ! ── Tall-skinny least squares ────────────────────────────────
+        subroutine dgetsls(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgetsls
+
+        subroutine zgetsls(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgetsls
     end interface
 
 end module ref_quad_lapack
