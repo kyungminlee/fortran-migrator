@@ -2422,6 +2422,38 @@ module ref_quad_lapack
             real(ep),  intent(out) :: W(*), work(*)
             integer,   intent(out) :: iblock(*), isplit(*), iwork(*), info
         end subroutine dstebz
+
+        ! ── Bidiagonal SVD ───────────────────────────────────────────
+        subroutine dbdsqr(uplo, n, ncvt, nru, ncc, D, E, VT, ldvt, U, ldu, &
+                          C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ncvt, nru, ncc, ldvt, ldu, ldc
+            real(ep),  intent(inout) :: D(*), E(*), VT(ldvt,*), U(ldu,*), C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dbdsqr
+
+        subroutine zbdsqr(uplo, n, ncvt, nru, ncc, D, E, VT, ldvt, U, ldu, &
+                          C, ldc, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, ncvt, nru, ncc, ldvt, ldu, ldc
+            real(ep),    intent(inout) :: D(*), E(*)
+            complex(ep), intent(inout) :: VT(ldvt,*), U(ldu,*), C(ldc,*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zbdsqr
+
+        subroutine dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo, compq
+            integer,   intent(in)    :: n, ldu, ldvt
+            real(ep),  intent(inout) :: D(*), E(*)
+            real(ep),  intent(out)   :: U(ldu,*), VT(ldvt,*), Q(*), work(*)
+            integer,   intent(out)   :: IQ(*), iwork(*), info
+        end subroutine dbdsdc
     end interface
 
 end module ref_quad_lapack
