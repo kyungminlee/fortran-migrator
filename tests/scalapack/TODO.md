@@ -5,6 +5,27 @@ suite but cannot pass with the current toolchain. Each entry documents
 the symptom so a future pass can re-enable a test once the underlying
 issue is fixed outside `tests/scalapack/`.
 
+## pdsyevx / pzheevx (expert eigensolvers, RANGE selectors)
+
+- **Symptom**: Linking a `test_pdsyevx` driver fails with multiple
+  definitions of `pdlaiectb_` / `pdlaiectl_` between the migrated
+  `libqscalapack_c.a` archive members `pqlaiect.c.o` and
+  `pdlaiect.c.o`. Both compile units export the same C symbols even
+  though one is the migrated rename of the other.
+- **Diagnosis**: `pdlaiect.c` is a small C helper used by the
+  expert symmetric eigensolver paths. The migrator's prefix
+  classifier renames the file (`pq*`) but does not rename the
+  exported function symbols, so the un-migrated `pd*` and the
+  migrated `pq*` versions collide in the same archive.
+- **Action**: Re-enable `tests/scalapack/eigenvalue/test_pdsyevx.f90`
+  / `test_pzheevx.f90` once the migrator either drops the
+  un-migrated `pdlaiect.c.o` from `libqscalapack_c` or renames its
+  exported symbols. The wrappers (`target_pdsyevx`, `target_pzheevx`)
+  also have to come back: they were initially landed alongside the
+  test drivers, but the symbol clash poisons the link of *every*
+  test that pulls in `scalapack_test_target`, so they had to be
+  reverted out of the shared template.
+
 ## pxheev (complex Hermitian eigensolver, JOBZ='N' or 'V')
 
 - **Symptom**: A test driver of the same shape as `test_pdsyev.f90`,
