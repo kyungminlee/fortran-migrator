@@ -1338,6 +1338,116 @@ module ref_quad_lapack
             complex(ep), intent(inout) :: AP(*)
             integer,     intent(out)   :: info
         end subroutine ztptri
+
+        ! ── Phase 13 — condition number estimators ───────────────────
+        subroutine dgecon(norm, n, A, lda, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*), anorm
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dgecon
+
+        subroutine zgecon(norm, n, A, lda, anorm, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zgecon
+
+        subroutine dpocon(uplo, n, A, lda, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*), anorm
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dpocon
+
+        subroutine zpocon(uplo, n, A, lda, anorm, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zpocon
+
+        subroutine dgbcon(norm, n, kl, ku, AB, ldab, ipiv, anorm, rcond, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm
+            integer,   intent(in)  :: n, kl, ku, ldab
+            real(ep),  intent(in)  :: AB(ldab,*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dgbcon
+
+        subroutine zgbcon(norm, n, kl, ku, AB, ldab, ipiv, anorm, rcond, &
+                          work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm
+            integer,     intent(in)  :: n, kl, ku, ldab
+            complex(ep), intent(in)  :: AB(ldab,*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zgbcon
+
+        subroutine dgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: dl(*), d(*), du(*), du2(*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dgtcon
+
+        subroutine zgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: norm
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: dl(*), d(*), du(*), du2(*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zgtcon
+
+        subroutine dsycon(uplo, n, A, lda, ipiv, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dsycon
+
+        subroutine zhecon(uplo, n, A, lda, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zhecon
     end interface
 
 end module ref_quad_lapack

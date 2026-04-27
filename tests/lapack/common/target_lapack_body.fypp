@@ -92,6 +92,9 @@ module target_lapack
     public :: target_dtbtrs, target_ztbtrs
     public :: target_dtptrs, target_ztptrs
     public :: target_dtptri, target_ztptri
+    public :: target_dgecon, target_zgecon, target_dpocon, target_zpocon
+    public :: target_dgbcon, target_zgbcon, target_dgtcon, target_zgtcon
+    public :: target_dsycon, target_zhecon
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -1412,6 +1415,116 @@ $:IMPORT_C()
             character, intent(in) :: uplo, diag
             integer,   intent(in) :: n
             ${target_complex}$, intent(inout) :: AP(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 13 — condition estimators ──────────────────────────
+        subroutine ${R}$gecon(norm, n, A, lda, anorm, rcond, work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(in)  :: A(lda,*), anorm
+            ${target_real}$, intent(out) :: rcond, work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$gecon(norm, n, A, lda, anorm, rcond, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(in)  :: A(lda,*)
+            ${target_real}$,    intent(in)  :: anorm
+            ${target_real}$,    intent(out) :: rcond, rwork(*)
+            ${target_complex}$, intent(out) :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pocon(uplo, n, A, lda, anorm, rcond, work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(in)  :: A(lda,*), anorm
+            ${target_real}$, intent(out) :: rcond, work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$pocon(uplo, n, A, lda, anorm, rcond, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(in)  :: A(lda,*)
+            ${target_real}$,    intent(in)  :: anorm
+            ${target_real}$,    intent(out) :: rcond, rwork(*)
+            ${target_complex}$, intent(out) :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gbcon(norm, n, kl, ku, AB, ldab, ipiv, anorm, rcond, &
+                              work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, kl, ku, ldab
+            ${target_real}$, intent(in)  :: AB(ldab,*), anorm
+            integer,   intent(in)        :: ipiv(*)
+            ${target_real}$, intent(out) :: rcond, work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$gbcon(norm, n, kl, ku, AB, ldab, ipiv, anorm, rcond, &
+                              work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, kl, ku, ldab
+            ${target_complex}$, intent(in)  :: AB(ldab,*)
+            integer,            intent(in)  :: ipiv(*)
+            ${target_real}$,    intent(in)  :: anorm
+            ${target_real}$,    intent(out) :: rcond, rwork(*)
+            ${target_complex}$, intent(out) :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, &
+                              work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in)  :: dl(*), d(*), du(*), du2(*), anorm
+            integer,   intent(in)        :: ipiv(*)
+            ${target_real}$, intent(out) :: rcond, work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$gtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, work, info)
+$:IMPORT_RC()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n
+            ${target_complex}$, intent(in)  :: dl(*), d(*), du(*), du2(*)
+            integer,            intent(in)  :: ipiv(*)
+            ${target_real}$,    intent(in)  :: anorm
+            ${target_real}$,    intent(out) :: rcond
+            ${target_complex}$, intent(out) :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$sycon(uplo, n, A, lda, ipiv, anorm, rcond, work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(in)  :: A(lda,*), anorm
+            integer,   intent(in)        :: ipiv(*)
+            ${target_real}$, intent(out) :: rcond, work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$hecon(uplo, n, A, lda, ipiv, anorm, rcond, work, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda
+            ${target_complex}$, intent(in)  :: A(lda,*)
+            integer,            intent(in)  :: ipiv(*)
+            ${target_real}$,    intent(in)  :: anorm
+            ${target_real}$,    intent(out) :: rcond
+            ${target_complex}$, intent(out) :: work(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -3869,6 +3982,172 @@ $:CPACK_INV('zsptri', C + 'sptri')
         APt = q2t_c(AP(1:np))
         call ${C}$tptri(uplo, diag, n, APt, info)
         AP(1:np) = t2q_c(APt)
+    end subroutine
+
+    ! ── Phase 13 wrappers ────────────────────────────────────────────
+    subroutine target_dgecon(norm, n, A, lda, anorm, rcond, info)
+        character, intent(in)  :: norm
+        integer,   intent(in)  :: n, lda
+        real(ep),  intent(in)  :: A(lda,*), anorm
+        real(ep),  intent(out) :: rcond
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: At(:,:), work(:)
+        ${target_real}$ :: rct
+        integer, allocatable :: iwork(:)
+        allocate(At(lda, n), work(4*n), iwork(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gecon(norm, n, At, lda, q2t_r(anorm), rct, work, iwork, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_zgecon(norm, n, A, lda, anorm, rcond, info)
+        character,   intent(in)  :: norm
+        integer,     intent(in)  :: n, lda
+        complex(ep), intent(in)  :: A(lda,*)
+        real(ep),    intent(in)  :: anorm
+        real(ep),    intent(out) :: rcond
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_real}$ :: rct
+        allocate(At(lda, n), work(2*n), rwork(2*n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gecon(norm, n, At, lda, q2t_r(anorm), rct, work, rwork, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_dpocon(uplo, n, A, lda, anorm, rcond, info)
+        character, intent(in)  :: uplo
+        integer,   intent(in)  :: n, lda
+        real(ep),  intent(in)  :: A(lda,*), anorm
+        real(ep),  intent(out) :: rcond
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: At(:,:), work(:)
+        ${target_real}$ :: rct
+        integer, allocatable :: iwork(:)
+        allocate(At(lda, n), work(3*n), iwork(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$pocon(uplo, n, At, lda, q2t_r(anorm), rct, work, iwork, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_zpocon(uplo, n, A, lda, anorm, rcond, info)
+        character,   intent(in)  :: uplo
+        integer,     intent(in)  :: n, lda
+        complex(ep), intent(in)  :: A(lda,*)
+        real(ep),    intent(in)  :: anorm
+        real(ep),    intent(out) :: rcond
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_real}$ :: rct
+        allocate(At(lda, n), work(2*n), rwork(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$pocon(uplo, n, At, lda, q2t_r(anorm), rct, work, rwork, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_dgbcon(norm, n, kl, ku, AB, ldab, ipiv, anorm, rcond, info)
+        character, intent(in)  :: norm
+        integer,   intent(in)  :: n, kl, ku, ldab
+        real(ep),  intent(in)  :: AB(ldab,*), anorm
+        integer,   intent(in)  :: ipiv(*)
+        real(ep),  intent(out) :: rcond
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: ABt(:,:), work(:)
+        ${target_real}$ :: rct
+        integer, allocatable :: iwork(:)
+        allocate(ABt(ldab, n), work(3*n), iwork(n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$gbcon(norm, n, kl, ku, ABt, ldab, ipiv, q2t_r(anorm), rct, &
+                        work, iwork, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_zgbcon(norm, n, kl, ku, AB, ldab, ipiv, anorm, rcond, info)
+        character,   intent(in)  :: norm
+        integer,     intent(in)  :: n, kl, ku, ldab
+        complex(ep), intent(in)  :: AB(ldab,*)
+        integer,     intent(in)  :: ipiv(*)
+        real(ep),    intent(in)  :: anorm
+        real(ep),    intent(out) :: rcond
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: ABt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_real}$ :: rct
+        allocate(ABt(ldab, n), work(2*n), rwork(n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$gbcon(norm, n, kl, ku, ABt, ldab, ipiv, q2t_r(anorm), rct, &
+                        work, rwork, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_dgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, info)
+        character, intent(in)  :: norm
+        integer,   intent(in)  :: n
+        real(ep),  intent(in)  :: dl(*), d(*), du(*), du2(*), anorm
+        integer,   intent(in)  :: ipiv(*)
+        real(ep),  intent(out) :: rcond
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: dlt(:), dt(:), dut(:), du2t(:), work(:)
+        ${target_real}$ :: rct
+        integer, allocatable :: iwork(:)
+        allocate(dlt(n-1), dt(n), dut(n-1), du2t(n-2), work(2*n), iwork(n))
+        dlt = q2t_r(dl(1:n-1)); dt = q2t_r(d(1:n)); dut = q2t_r(du(1:n-1))
+        du2t = q2t_r(du2(1:n-2))
+        call ${R}$gtcon(norm, n, dlt, dt, dut, du2t, ipiv, q2t_r(anorm), rct, &
+                        work, iwork, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_zgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, info)
+        character,   intent(in)  :: norm
+        integer,     intent(in)  :: n
+        complex(ep), intent(in)  :: dl(*), d(*), du(*), du2(*)
+        integer,     intent(in)  :: ipiv(*)
+        real(ep),    intent(in)  :: anorm
+        real(ep),    intent(out) :: rcond
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: dlt(:), dt(:), dut(:), du2t(:), work(:)
+        ${target_real}$ :: rct
+        allocate(dlt(n-1), dt(n), dut(n-1), du2t(n-2), work(2*n))
+        dlt = q2t_c(dl(1:n-1)); dt = q2t_c(d(1:n)); dut = q2t_c(du(1:n-1))
+        du2t = q2t_c(du2(1:n-2))
+        call ${C}$gtcon(norm, n, dlt, dt, dut, du2t, ipiv, q2t_r(anorm), rct, &
+                        work, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_dsycon(uplo, n, A, lda, ipiv, anorm, rcond, info)
+        character, intent(in)  :: uplo
+        integer,   intent(in)  :: n, lda
+        real(ep),  intent(in)  :: A(lda,*), anorm
+        integer,   intent(in)  :: ipiv(*)
+        real(ep),  intent(out) :: rcond
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: At(:,:), work(:)
+        ${target_real}$ :: rct
+        integer, allocatable :: iwork(:)
+        allocate(At(lda, n), work(2*n), iwork(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$sycon(uplo, n, At, lda, ipiv, q2t_r(anorm), rct, work, iwork, info)
+        rcond = t2q_r(rct)
+    end subroutine
+
+    subroutine target_zhecon(uplo, n, A, lda, ipiv, anorm, rcond, info)
+        character,   intent(in)  :: uplo
+        integer,     intent(in)  :: n, lda
+        complex(ep), intent(in)  :: A(lda,*)
+        integer,     intent(in)  :: ipiv(*)
+        real(ep),    intent(in)  :: anorm
+        real(ep),    intent(out) :: rcond
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$ :: rct
+        allocate(At(lda, n), work(2*n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$hecon(uplo, n, At, lda, ipiv, q2t_r(anorm), rct, work, info)
+        rcond = t2q_r(rct)
     end subroutine
 
 end module target_lapack

@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_149 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -98,7 +98,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dbdsvdx | — | — | — |
 | ✓ | ddisna | — | — | — |
 | ✓ | dgbbrd | — | — | — |
-| ✓ | dgbcon | — | — | — |
+| ✓ | dgbcon | 18.95 | exact | 31.78 |
 | ✓ | dgbequ | — | — | — |
 | ✓ | dgbequb | — | — | — |
 | ✓ | dgbrfs | — | — | — |
@@ -113,7 +113,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgebal | — | — | — |
 |  | dgebd2 | — | — | — |
 | ✓ | dgebrd | — | — | — |
-| ✓ | dgecon | — | — | — |
+| ✓ | dgecon | 18.00 | exact | 30.41 |
 | ✓ | dgedmd | — | — | — |
 | ✓ | dgedmdq | — | — | — |
 | ✓ | dgeequ | — | — | — |
@@ -190,7 +190,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dggsvp3 | — | — | — |
 |  | dgsvj0 | — | — | — |
 |  | dgsvj1 | — | — | — |
-| ✓ | dgtcon | — | — | — |
+| ✓ | dgtcon | 18.76 | exact | 31.68 |
 | ✓ | dgtrfs | — | — | — |
 | ✓ | dgtsv | — | — | — |
 | ✓ | dgtsvx | — | — | — |
@@ -427,7 +427,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dpftrf | — | — | — |
 | ✓ | dpftri | — | — | — |
 | ✓ | dpftrs | — | — | — |
-| ✓ | dpocon | — | — | — |
+| ✓ | dpocon | 19.32 | exact | 31.46 |
 | ✓ | dpoequ | — | — | — |
 | ✓ | dpoequb | — | — | — |
 | ✓ | dporfs | — | — | — |
@@ -498,7 +498,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dstevd | 17.83 | exact | 30.02 |
 | ✓ | dstevr | 17.72 | exact | 30.13 |
 | ✓ | dstevx | 17.79 | exact | 29.97 |
-| ✓ | dsycon | — | — | — |
+| ✓ | dsycon | 16.95 | exact | 29.20 |
 |  | dsycon_3 | — | — | — |
 | ✓ | dsycon_rook | — | — | — |
 | ✓ | dsyconv | — | — | — |
@@ -602,7 +602,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zbdsqr | — | — | — |
 | ✓ | zdrscl | — | — | — |
 | ✓ | zgbbrd | — | — | — |
-| ✓ | zgbcon | — | — | — |
+| ✓ | zgbcon | 18.82 | exact | 32.26 |
 | ✓ | zgbequ | — | — | — |
 | ✓ | zgbequb | — | — | — |
 | ✓ | zgbrfs | — | — | — |
@@ -617,7 +617,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgebal | — | — | — |
 |  | zgebd2 | — | — | — |
 | ✓ | zgebrd | — | — | — |
-| ✓ | zgecon | — | — | — |
+| ✓ | zgecon | 17.80 | exact | 30.45 |
 | ✓ | zgedmd | — | — | — |
 | ✓ | zgedmdq | — | — | — |
 | ✓ | zgeequ | — | — | — |
@@ -694,7 +694,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zggsvp3 | — | — | — |
 |  | zgsvj0 | — | — | — |
 |  | zgsvj1 | — | — | — |
-| ✓ | zgtcon | — | — | — |
+| ✓ | zgtcon | 18.69 | exact | 32.01 |
 | ✓ | zgtrfs | — | — | — |
 | ✓ | zgtsv | 18.97 | exact | 31.56 |
 | ✓ | zgtsvx | — | — | — |
@@ -713,7 +713,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhbgvd | — | — | — |
 | ✓ | zhbgvx | — | — | — |
 | ✓ | zhbtrd | — | — | — |
-| ✓ | zhecon | — | — | — |
+| ✓ | zhecon | 14.60 | exact | 27.99 |
 |  | zhecon_3 | — | — | — |
 | ✓ | zhecon_rook | — | — | — |
 | ✓ | zheequb | — | — | — |
@@ -936,7 +936,7 @@ _139 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zpftrf | — | — | — |
 | ✓ | zpftri | — | — | — |
 | ✓ | zpftrs | — | — | — |
-| ✓ | zpocon | — | — | — |
+| ✓ | zpocon | 18.86 | exact | 31.54 |
 | ✓ | zpoequ | — | — | — |
 | ✓ | zpoequb | — | — | — |
 | ✓ | zporfs | — | — | — |
