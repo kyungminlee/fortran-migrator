@@ -290,6 +290,16 @@ module ref_quad_lapack
             integer,   intent(out)   :: info
         end subroutine dsyev
 
+        subroutine dsyevd(jobz, uplo, n, A, lda, w, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyevd
+
         subroutine zheev(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
             import :: ep
             character,   intent(in)    :: jobz, uplo

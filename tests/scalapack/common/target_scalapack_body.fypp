@@ -53,7 +53,7 @@ module target_scalapack
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgels
     public :: target_pdposv, target_pdpotri, target_pdgetri
-    public :: target_pdsyev
+    public :: target_pdsyev, target_pdsyevd
     public :: target_pdgesvd
     public :: target_pdlange
     public :: target_pdlacpy, target_pdlaset
@@ -242,6 +242,18 @@ $:IMPORT_R()
             integer,   intent(in)    :: n, ia, ja, iz, jz, lwork
             integer,   intent(in)    :: desca(9), descz(9)
             integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: w(*), Z(*), work(*)
+        end subroutine
+
+        subroutine ${R}$syevd(jobz, uplo, n, A, ia, ja, desca, w, &
+                              Z, iz, jz, descz, work, lwork, &
+                              iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ia, ja, iz, jz, lwork, liwork
+            integer,   intent(in)    :: desca(9), descz(9)
+            integer,   intent(out)   :: iwork(*), info
             ${target_real}$, intent(inout) :: A(*)
             ${target_real}$, intent(out)   :: w(*), Z(*), work(*)
         end subroutine
@@ -821,6 +833,36 @@ contains
             At = q2t_r(A(1:na))
             call ${R}$syev(jobz, uplo, n, At, ia, ja, desca, wt, &
                             Zt, iz, jz, descz, work_t, lwt, info)
+            w(1:n) = t2q_r(wt)
+            Z(1:nz) = t2q_r(Zt)
+        end if
+    end subroutine
+
+    subroutine target_pdsyevd(jobz, uplo, n, A, ia, ja, desca, w, &
+                              Z, iz, jz, descz, work, lwork, &
+                              iwork, liwork, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, ia, ja, iz, jz, lwork, liwork
+        integer,   intent(in)    :: desca(9), descz(9)
+        integer,   intent(out)   :: iwork(*), info
+        real(ep),  intent(inout) :: A(*)
+        real(ep),  intent(out)   :: w(*), Z(*), work(*)
+        integer :: na, nz, lwt
+        ${target_real}$, allocatable :: At(:), Zt(:), wt(:), work_t(:)
+        na = nloc(desca); nz = nloc(descz)
+        if (lwork == -1) then
+            allocate(At(1), Zt(1), wt(1), work_t(1))
+            call ${R}$syevd(jobz, uplo, n, At, ia, ja, desca, wt, &
+                             Zt, iz, jz, descz, work_t, -1, &
+                             iwork, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Zt(nz), wt(n), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$syevd(jobz, uplo, n, At, ia, ja, desca, wt, &
+                             Zt, iz, jz, descz, work_t, lwt, &
+                             iwork, liwork, info)
             w(1:n) = t2q_r(wt)
             Z(1:nz) = t2q_r(Zt)
         end if
