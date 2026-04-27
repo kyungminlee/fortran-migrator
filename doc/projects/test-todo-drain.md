@@ -22,7 +22,7 @@ Backing plan: `~/.claude/plans/start-a-project-to-stateless-bumblebee.md`.
 |----|--------|--------|----------|-----------|
 | UB-01 | merged | `fix/ub-01-F-glob` | Add `*.F` to PyEngine source globs in `cmd_stage`/`cmd_verify` | `nm liblapack_common-*.a \| grep iparam2stage_` shows `T` (defined) |
 | UB-06 | merged | `fix/ub-06-reflapack-F-glob` | Add `*.F` to `tests/lapack/reflapack/CMakeLists.txt` glob + EXCLUDE regex | `nm libreflapack_quad.a \| grep iparam2stage_` shows `T` (defined) |
-| UB-02 | pending (depends on UB-01) | `fix/ub-02-multifloats-F-param-ordering` | Multifloats `.F` migration places `PARAMETER` lines above `IMPLICIT NONE` | `gfortran -c tsytrd_sb2st.F` clean |
+| UB-02 | merged | `fix/ub-02-multifloats-F-param-ordering` | Multifloats `.F` migration places `PARAMETER` lines above `IMPLICIT NONE` | `gfortran -c tsytrd_sb2st.F` clean |
 | UB-03 | pending (depends on A+B) | `fix/ub-03-2stage-segfault` OR `doc/ub-03-escalation` | 2-stage segfault in `__GI___libc_free` under `-freal-8-real-16` | `valgrind ctest -R '_2stage'` zero invalid frees |
 | UB-04 | pending | `fix/ub-04-cmplx16-locals` | C migrator `cmplx16` alias not applied to local decls; `PB_Cconjg` hardcoded `(double*)` casts | `ctest -R '^pblas_test_pzher2k$'` rel-err ≤ 64·8·k·eps on kind16 |
 | UB-05 | pending | `fix/ub-05-extern-c-body-wrap` | Multifloats PBLAS `extern "C"` doesn't propagate to per-file `<name>_.c` defs | `nm libqpblas.a \| grep ' T pdgemm_'` un-mangled |
@@ -90,3 +90,42 @@ nm /tmp/stg-k16-ub06/build/tests/lapack/reflapack/libreflapack_quad.a \
 remaining blockers are UB-02 (multifloats `.F` PARAMETER ordering for
 the migrated side) and UB-03 (quad-promoted reference segfault at
 runtime). Either can be tackled next.
+
+## UB-02 — merged
+
+**What**: when migrating capital-F preprocessed Fortran (e.g.
+`dsytrd_sb2st.F`, `zhetrd_hb2st.F`) to the multifloats target, the
+PARAMETER-conversion anchor walker in `insert_use_multifloats` stopped
+at the `#if defined(_OPENMP)` directive sitting between the USE clause
+and the IMPLICIT NONE line. It treated `#if` as the first executable
+statement and inserted the converted `PARAMETER` assignments above
+`IMPLICIT NONE`. gfortran then rejected the file with `Unexpected
+IMPLICIT NONE statement`.
+
+**How**: extended the decl-block walker in
+`src/pyengine/fortran_migrator.py` (the `insert_use_multifloats`
+function) to skip lines starting with `#`. The body of the `#if/#endif`
+block in this position is itself decl-only (`use omp_lib`) and is
+already matched by the existing `USE` keyword check, so just skipping
+the directive markers is sufficient. Regression test
+`test_param_assignment_lands_below_implicit_none_with_openmp_directive`
+in `src/tests/test_multifloats_transforms.py` covers a synthetic
+fixture with the same OPENMP-guard pattern and asserts ordering.
+
+**Verify**:
+
+```bash
+uv run pytest src/tests/test_multifloats_transforms.py -k 'openmp_directive' -v
+rm -rf /tmp/stg-mf-ub02
+uv run python -m pyengine stage /tmp/stg-mf-ub02 --target multifloats --libraries blas lapack
+cmake -S /tmp/stg-mf-ub02 -B /tmp/stg-mf-ub02/build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/stg-mf-ub02/build -j8 --target tlapack
+nm /tmp/stg-mf-ub02/build/libtlapack-*.a | awk '/^[0-9a-f]+ T (tsytrd_sb2st_|vhetrd_hb2st_)$/'
+nm /tmp/stg-mf-ub02/build/liblapack_common-*.a | awk '/^[0-9a-f]+ T iparam2stage_$/'
+# All three symbols print as T (defined).
+```
+
+**Note**: with UB-01 + UB-02 + UB-06 merged, 2-stage routines now
+compile and link on all three targets. The remaining blocker for
+runtime is UB-03 (quad-promoted reference segfault under
+`-freal-8-real-16`).

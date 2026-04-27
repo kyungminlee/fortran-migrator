@@ -534,6 +534,83 @@ def test_end_to_end_fixed_form(mf):
     assert not _re.search(r'\bONE\b', body)
 
 
+# Capital-F preprocessed Fortran (e.g. iparam2stage.F, dsytrd_sb2st.F) has
+# a ``#if defined(_OPENMP) / use omp_lib / #endif`` block sitting between
+# the USE clause and the IMPLICIT NONE line. The PARAMETER-conversion
+# anchor walker MUST skip those preprocessor directives — otherwise it
+# treats ``#if`` as the first executable line, inserts the converted
+# assignments above IMPLICIT NONE, and gfortran rejects the result with
+# ``Unexpected IMPLICIT NONE statement``.
+SYNTHETIC_LAPACK_F_OPENMP = """\
+      SUBROUTINE FOO(N, X)
+#if defined(_OPENMP)
+      use omp_lib
+#endif
+      IMPLICIT NONE
+*     .. Scalar Arguments ..
+      INTEGER N
+*     ..
+*     .. Array Arguments ..
+      DOUBLE PRECISION X(*)
+*     ..
+*     .. Parameters ..
+      DOUBLE PRECISION ONE, ZERO
+      PARAMETER (ONE=1.0D+0, ZERO=0.0D+0)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I
+*     ..
+      DO 10 I = 1, N
+          X(I) = ZERO
+   10 CONTINUE
+      RETURN
+      END
+"""
+
+
+def test_param_assignment_lands_below_implicit_none_with_openmp_directive(mf):
+    """Regression for the .F PARAMETER-ordering bug (UB-02): in the
+    presence of a ``#if defined(_OPENMP) / use omp_lib / #endif`` block
+    between USE and IMPLICIT NONE, the converted PARAMETER assignments
+    must be inserted AFTER IMPLICIT NONE and the type declarations,
+    not above them."""
+    out = migrate_fixed_form(SYNTHETIC_LAPACK_F_OPENMP, {}, mf)
+
+    lines = out.splitlines()
+
+    def first_index(predicate):
+        for idx, line in enumerate(lines):
+            if predicate(line):
+                return idx
+        return -1
+
+    implicit_idx = first_index(lambda l: l.lstrip().upper().startswith('IMPLICIT NONE'))
+    # Match either a literal assignment (``ONE = real64x2(...)``) or the
+    # known-constant rename (``DD_ONE = ...``); the migrator may emit
+    # either depending on whether the constant is in its known table.
+    assignment_idx = first_index(
+        lambda l: l.lstrip().startswith(('ONE =', 'ZERO =', 'DD_ONE =', 'DD_ZERO ='))
+    )
+    openmp_if_idx = first_index(lambda l: l.lstrip().startswith('#if defined(_OPENMP)'))
+    openmp_endif_idx = first_index(lambda l: l.lstrip().startswith('#endif'))
+
+    assert implicit_idx >= 0, 'IMPLICIT NONE missing from output'
+    assert openmp_if_idx >= 0, '#if defined(_OPENMP) directive was dropped'
+    assert openmp_endif_idx >= 0, '#endif directive was dropped'
+    # The directive block must remain intact and ABOVE IMPLICIT NONE
+    # (Fortran allows USE + #if-guarded USE before IMPLICIT NONE).
+    assert openmp_if_idx < implicit_idx
+    assert openmp_endif_idx < implicit_idx
+    # The converted assignment(s) — if emitted at all — must land below
+    # IMPLICIT NONE. ZERO is a known constant that may be dropped; ONE
+    # is unknown and survives as an assignment in fixed-form.
+    if assignment_idx >= 0:
+        assert assignment_idx > implicit_idx, (
+            f'PARAMETER assignment at line {assignment_idx} '
+            f'must come AFTER IMPLICIT NONE at line {implicit_idx}'
+        )
+
+
 def test_equivalence_no_diagnostic_after_sequence(mf, capsys):
     """The mock multifloats module now declares both real64x2 and
     cmplx64x2 with the SEQUENCE attribute, so EQUIVALENCE on

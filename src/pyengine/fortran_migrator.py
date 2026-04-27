@@ -1977,6 +1977,20 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
                     # marker is legal at any column).
                     if stripped.startswith('!'):
                         k += 1; continue
+                    # Preprocessor directives (``#if defined(_OPENMP)`` /
+                    # ``#endif`` / ``#include``) appear inside the decl
+                    # block in capital-F sources (e.g. dsytrd_sb2st.F has
+                    # ``#if defined(_OPENMP) / use omp_lib / #endif``
+                    # between the USE clause and IMPLICIT NONE). Without
+                    # this, the walker would stop at the ``#if`` line
+                    # — treating it as an executable — and insert the
+                    # PARAMETER assignments above IMPLICIT NONE, which
+                    # gfortran rejects as ``Unexpected IMPLICIT NONE
+                    # statement``. The body of ``#if/#endif`` blocks in
+                    # this position is itself decl-only (``use omp_lib``)
+                    # so skipping the directive markers is enough.
+                    if stripped.startswith('#'):
+                        k += 1; continue
                     if is_continuation_line(raw):
                         k += 1; continue
                     l = stripped.upper()
