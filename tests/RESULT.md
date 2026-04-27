@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_175 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_181 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -442,7 +442,7 @@ _175 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dpotrs | 18.38 | exact | 31.18 |
 | ✓ | dppcon | 18.79 | exact | 31.39 |
 | ✓ | dppequ | — | — | — |
-| ✓ | dpprfs | — | — | — |
+| ✓ | dpprfs | 19.06 | exact | 31.80 |
 | ✓ | dppsv | 18.48 | exact | 31.11 |
 | ✓ | dppsvx | — | — | — |
 | ✓ | dpptrf | 19.17 | exact | 31.70 |
@@ -480,7 +480,7 @@ _175 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dspgv | — | — | — |
 | ✓ | dspgvd | — | — | — |
 | ✓ | dspgvx | — | — | — |
-| ✓ | dsprfs | — | — | — |
+| ✓ | dsprfs | 18.01 | exact | 30.74 |
 | ✓ | dspsv | 17.20 | exact | 30.16 |
 | ✓ | dspsvx | — | — | — |
 | ✓ | dsptrd | — | — | — |
@@ -519,7 +519,7 @@ _175 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dsygv_2stage | — | — | — |
 | ✓ | dsygvd | — | — | — |
 | ✓ | dsygvx | — | — | — |
-| ✓ | dsyrfs | — | — | — |
+| ✓ | dsyrfs | 17.64 | exact | 30.58 |
 | ✓ | dsyrfsx | — | — | — |
 | ✓ | dsysv | 18.35 | exact | 31.19 |
 | ✓ | dsysv_aa | — | — | — |
@@ -731,7 +731,7 @@ _175 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhegv_2stage | — | — | — |
 | ✓ | zhegvd | — | — | — |
 | ✓ | zhegvx | — | — | — |
-| ✓ | zherfs | — | — | — |
+| ✓ | zherfs | 18.07 | exact | 30.68 |
 | ✓ | zherfsx | — | — | — |
 | ✓ | zhesv | 18.36 | exact | 31.13 |
 | ✓ | zhesv_aa | — | — | — |
@@ -951,7 +951,7 @@ _175 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zpotrs | 18.48 | exact | 31.22 |
 | ✓ | zppcon | 18.80 | exact | 31.68 |
 | ✓ | zppequ | — | — | — |
-| ✓ | zpprfs | — | — | — |
+| ✓ | zpprfs | 18.86 | exact | 31.48 |
 | ✓ | zppsv | 18.49 | exact | 31.17 |
 | ✓ | zppsvx | — | — | — |
 | ✓ | zpptrf | 19.18 | exact | 31.81 |
@@ -972,7 +972,7 @@ _175 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zspcon | 17.79 | exact | 30.84 |
 | ✓ | zspmv | — | — | — |
 | ✓ | zspr | — | — | — |
-| ✓ | zsprfs | — | — | — |
+| ✓ | zsprfs | 18.19 | exact | 30.93 |
 | ✓ | zspsv | 17.31 | exact | 29.79 |
 | ✓ | zspsvx | — | — | — |
 | ✓ | zsptrf | 17.40 | exact | 30.20 |

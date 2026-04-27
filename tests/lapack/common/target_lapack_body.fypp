@@ -103,6 +103,9 @@ module target_lapack
     public :: target_dgerfs, target_zgerfs, target_dporfs, target_zporfs
     public :: target_dgbrfs, target_zgbrfs, target_dpbrfs, target_zpbrfs
     public :: target_dgtrfs, target_zgtrfs, target_dptrfs, target_zptrfs
+    public :: target_dsyrfs, target_zsyrfs, target_zherfs
+    public :: target_dsprfs, target_zsprfs
+    public :: target_dpprfs, target_zpprfs
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -1827,6 +1830,93 @@ $:IMPORT_RC()
             integer,   intent(in) :: n, nrhs, ldb, ldx
             ${target_real}$,    intent(in)    :: d(*), df(*)
             ${target_complex}$, intent(in)    :: e(*), ef(*), B(ldb,*)
+            ${target_complex}$, intent(inout) :: X(ldx,*)
+            ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 17 — sym/Herm + packed refinement ──────────────────
+        subroutine ${R}$syrfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                              X, ldx, ferr, berr, work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, lda, ldaf, ldb, ldx
+            ${target_real}$, intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,   intent(in)          :: ipiv(*)
+            ${target_real}$, intent(inout) :: X(ldx,*)
+            ${target_real}$, intent(out)   :: ferr(*), berr(*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$syrfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                              X, ldx, ferr, berr, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, lda, ldaf, ldb, ldx
+            ${target_complex}$, intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,            intent(in)    :: ipiv(*)
+            ${target_complex}$, intent(inout) :: X(ldx,*)
+            ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$herfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                              X, ldx, ferr, berr, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, lda, ldaf, ldb, ldx
+            ${target_complex}$, intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,            intent(in)    :: ipiv(*)
+            ${target_complex}$, intent(inout) :: X(ldx,*)
+            ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$sprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                              ferr, berr, work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb, ldx
+            ${target_real}$, intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            integer,   intent(in)          :: ipiv(*)
+            ${target_real}$, intent(inout) :: X(ldx,*)
+            ${target_real}$, intent(out)   :: ferr(*), berr(*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$sprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                              ferr, berr, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb, ldx
+            ${target_complex}$, intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            integer,            intent(in)    :: ipiv(*)
+            ${target_complex}$, intent(inout) :: X(ldx,*)
+            ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pprfs(uplo, n, nrhs, AP, AFP, B, ldb, X, ldx, &
+                              ferr, berr, work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb, ldx
+            ${target_real}$, intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            ${target_real}$, intent(inout) :: X(ldx,*)
+            ${target_real}$, intent(out)   :: ferr(*), berr(*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$pprfs(uplo, n, nrhs, AP, AFP, B, ldb, X, ldx, &
+                              ferr, berr, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb, ldx
+            ${target_complex}$, intent(in)    :: AP(*), AFP(*), B(ldb,*)
             ${target_complex}$, intent(inout) :: X(ldx,*)
             ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
             ${target_complex}$, intent(out)   :: work(*)
@@ -4963,6 +5053,163 @@ $:CPACK_INV('zsptri', C + 'sptri')
         Bt = q2t_c(B(1:ldb, 1:nrhs)); Xt = q2t_c(X(1:ldx, 1:nrhs))
         call ${C}$ptrfs(uplo, n, nrhs, dt, et, dft, eft, Bt, ldb, Xt, ldx, &
                         ferrt, berrt, work, rwork, info)
+        X(1:ldx, 1:nrhs) = t2q_c(Xt)
+        ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    ! ── Phase 17 wrappers ────────────────────────────────────────────
+    subroutine target_dsyrfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                             X, ldx, ferr, berr, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+        real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+        integer,   intent(in)    :: ipiv(*)
+        real(ep),  intent(inout) :: X(ldx,*)
+        real(ep),  intent(out)   :: ferr(*), berr(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), AFt(:,:), Bt(:,:), Xt(:,:), &
+                                         work(:), ferrt(:), berrt(:)
+        integer, allocatable :: iwork(:)
+        allocate(At(lda, n), AFt(ldaf, n), Bt(ldb, nrhs), Xt(ldx, nrhs), &
+                 work(3*n), iwork(n), ferrt(nrhs), berrt(nrhs))
+        At = q2t_r(A(1:lda, 1:n)); AFt = q2t_r(AF(1:ldaf, 1:n))
+        Bt = q2t_r(B(1:ldb, 1:nrhs)); Xt = q2t_r(X(1:ldx, 1:nrhs))
+        call ${R}$syrfs(uplo, n, nrhs, At, lda, AFt, ldaf, ipiv, Bt, ldb, &
+                        Xt, ldx, ferrt, berrt, work, iwork, info)
+        X(1:ldx, 1:nrhs) = t2q_r(Xt)
+        ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    subroutine target_zsyrfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                             X, ldx, ferr, berr, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+        complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: X(ldx,*)
+        real(ep),    intent(out)   :: ferr(*), berr(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), AFt(:,:), Bt(:,:), Xt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:), ferrt(:), berrt(:)
+        allocate(At(lda, n), AFt(ldaf, n), Bt(ldb, nrhs), Xt(ldx, nrhs), &
+                 work(2*n), rwork(n), ferrt(nrhs), berrt(nrhs))
+        At = q2t_c(A(1:lda, 1:n)); AFt = q2t_c(AF(1:ldaf, 1:n))
+        Bt = q2t_c(B(1:ldb, 1:nrhs)); Xt = q2t_c(X(1:ldx, 1:nrhs))
+        call ${C}$syrfs(uplo, n, nrhs, At, lda, AFt, ldaf, ipiv, Bt, ldb, &
+                        Xt, ldx, ferrt, berrt, work, rwork, info)
+        X(1:ldx, 1:nrhs) = t2q_c(Xt)
+        ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    subroutine target_zherfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                             X, ldx, ferr, berr, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+        complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: X(ldx,*)
+        real(ep),    intent(out)   :: ferr(*), berr(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), AFt(:,:), Bt(:,:), Xt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:), ferrt(:), berrt(:)
+        allocate(At(lda, n), AFt(ldaf, n), Bt(ldb, nrhs), Xt(ldx, nrhs), &
+                 work(2*n), rwork(n), ferrt(nrhs), berrt(nrhs))
+        At = q2t_c(A(1:lda, 1:n)); AFt = q2t_c(AF(1:ldaf, 1:n))
+        Bt = q2t_c(B(1:ldb, 1:nrhs)); Xt = q2t_c(X(1:ldx, 1:nrhs))
+        call ${C}$herfs(uplo, n, nrhs, At, lda, AFt, ldaf, ipiv, Bt, ldb, &
+                        Xt, ldx, ferrt, berrt, work, rwork, info)
+        X(1:ldx, 1:nrhs) = t2q_c(Xt)
+        ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    subroutine target_dsprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                             ferr, berr, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, ldb, ldx
+        real(ep),  intent(in)    :: AP(*), AFP(*), B(ldb,*)
+        integer,   intent(in)    :: ipiv(*)
+        real(ep),  intent(inout) :: X(ldx,*)
+        real(ep),  intent(out)   :: ferr(*), berr(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), AFPt(:), Bt(:,:), Xt(:,:), &
+                                         work(:), ferrt(:), berrt(:)
+        integer, allocatable :: iwork(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), AFPt(np), Bt(ldb, nrhs), Xt(ldx, nrhs), &
+                 work(3*n), iwork(n), ferrt(nrhs), berrt(nrhs))
+        APt = q2t_r(AP(1:np)); AFPt = q2t_r(AFP(1:np))
+        Bt = q2t_r(B(1:ldb, 1:nrhs)); Xt = q2t_r(X(1:ldx, 1:nrhs))
+        call ${R}$sprfs(uplo, n, nrhs, APt, AFPt, ipiv, Bt, ldb, &
+                        Xt, ldx, ferrt, berrt, work, iwork, info)
+        X(1:ldx, 1:nrhs) = t2q_r(Xt)
+        ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    subroutine target_zsprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                             ferr, berr, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, ldb, ldx
+        complex(ep), intent(in)    :: AP(*), AFP(*), B(ldb,*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: X(ldx,*)
+        real(ep),    intent(out)   :: ferr(*), berr(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: APt(:), AFPt(:), Bt(:,:), Xt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:), ferrt(:), berrt(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), AFPt(np), Bt(ldb, nrhs), Xt(ldx, nrhs), &
+                 work(2*n), rwork(n), ferrt(nrhs), berrt(nrhs))
+        APt = q2t_c(AP(1:np)); AFPt = q2t_c(AFP(1:np))
+        Bt = q2t_c(B(1:ldb, 1:nrhs)); Xt = q2t_c(X(1:ldx, 1:nrhs))
+        call ${C}$sprfs(uplo, n, nrhs, APt, AFPt, ipiv, Bt, ldb, &
+                        Xt, ldx, ferrt, berrt, work, rwork, info)
+        X(1:ldx, 1:nrhs) = t2q_c(Xt)
+        ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    subroutine target_dpprfs(uplo, n, nrhs, AP, AFP, B, ldb, X, ldx, &
+                             ferr, berr, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, ldb, ldx
+        real(ep),  intent(in)    :: AP(*), AFP(*), B(ldb,*)
+        real(ep),  intent(inout) :: X(ldx,*)
+        real(ep),  intent(out)   :: ferr(*), berr(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), AFPt(:), Bt(:,:), Xt(:,:), &
+                                         work(:), ferrt(:), berrt(:)
+        integer, allocatable :: iwork(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), AFPt(np), Bt(ldb, nrhs), Xt(ldx, nrhs), &
+                 work(3*n), iwork(n), ferrt(nrhs), berrt(nrhs))
+        APt = q2t_r(AP(1:np)); AFPt = q2t_r(AFP(1:np))
+        Bt = q2t_r(B(1:ldb, 1:nrhs)); Xt = q2t_r(X(1:ldx, 1:nrhs))
+        call ${R}$pprfs(uplo, n, nrhs, APt, AFPt, Bt, ldb, &
+                        Xt, ldx, ferrt, berrt, work, iwork, info)
+        X(1:ldx, 1:nrhs) = t2q_r(Xt)
+        ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    subroutine target_zpprfs(uplo, n, nrhs, AP, AFP, B, ldb, X, ldx, &
+                             ferr, berr, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, ldb, ldx
+        complex(ep), intent(in)    :: AP(*), AFP(*), B(ldb,*)
+        complex(ep), intent(inout) :: X(ldx,*)
+        real(ep),    intent(out)   :: ferr(*), berr(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: APt(:), AFPt(:), Bt(:,:), Xt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:), ferrt(:), berrt(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), AFPt(np), Bt(ldb, nrhs), Xt(ldx, nrhs), &
+                 work(2*n), rwork(n), ferrt(nrhs), berrt(nrhs))
+        APt = q2t_c(AP(1:np)); AFPt = q2t_c(AFP(1:np))
+        Bt = q2t_c(B(1:ldb, 1:nrhs)); Xt = q2t_c(X(1:ldx, 1:nrhs))
+        call ${C}$pprfs(uplo, n, nrhs, APt, AFPt, Bt, ldb, &
+                        Xt, ldx, ferrt, berrt, work, rwork, info)
         X(1:ldx, 1:nrhs) = t2q_c(Xt)
         ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
     end subroutine
