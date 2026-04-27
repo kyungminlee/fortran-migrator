@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_105 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -140,7 +140,7 @@ _93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | dgemqr | — | — | — |
 | ✓ | dgemqrt | — | — | — |
 |  | dgeql2 | — | — | — |
-| ✓ | dgeqlf | — | — | — |
+| ✓ | dgeqlf | 18.18 | exact | 31.01 |
 | ✓ | dgeqp3 | 18.88 | exact | 31.45 |
 | ✓ | dgeqp3rk | — | — | — |
 | ✓ | dgeqr | — | — | — |
@@ -154,7 +154,7 @@ _93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | dgerfs | — | — | — |
 | ✓ | dgerfsx | — | — | — |
 |  | dgerq2 | — | — | — |
-| ✓ | dgerqf | — | — | — |
+| ✓ | dgerqf | 17.98 | exact | 30.84 |
 |  | dgesc2 | — | — | — |
 | ✓ | dgesdd | 17.60 | 32.45 | 29.91 |
 | ✓ | dgesv | 17.49 | exact | 29.82 |
@@ -393,10 +393,10 @@ _93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | dorghr | 17.74 | exact | 30.25 |
 |  | dorgl2 | — | — | — |
 | ✓ | dorglq | 18.19 | exact | 31.11 |
-| ✓ | dorgql | — | — | — |
+| ✓ | dorgql | 18.22 | exact | 31.00 |
 | ✓ | dorgqr | 18.19 | exact | 30.88 |
 |  | dorgr2 | — | — | — |
-| ✓ | dorgrq | — | — | — |
+| ✓ | dorgrq | 18.23 | exact | 30.86 |
 | ✓ | dorgtr | — | — | — |
 | ✓ | dorgtsqr | — | — | — |
 | ✓ | dorgtsqr_row | — | — | — |
@@ -408,11 +408,11 @@ _93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | dormhr | — | — | — |
 |  | dorml2 | — | — | — |
 | ✓ | dormlq | — | — | — |
-| ✓ | dormql | — | — | — |
+| ✓ | dormql | 18.54 | exact | 31.21 |
 | ✓ | dormqr | 18.40 | exact | 31.11 |
 |  | dormr2 | — | — | — |
 |  | dormr3 | — | — | — |
-| ✓ | dormrq | — | — | — |
+| ✓ | dormrq | 18.52 | exact | 31.15 |
 | ✓ | dormrz | — | — | — |
 | ✓ | dormtr | — | — | — |
 | ✓ | dpbcon | — | — | — |
@@ -644,7 +644,7 @@ _93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | zgemqr | — | — | — |
 | ✓ | zgemqrt | — | — | — |
 |  | zgeql2 | — | — | — |
-| ✓ | zgeqlf | — | — | — |
+| ✓ | zgeqlf | 18.55 | exact | 31.05 |
 | ✓ | zgeqp3 | 18.93 | exact | 31.48 |
 | ✓ | zgeqp3rk | — | — | — |
 | ✓ | zgeqr | — | — | — |
@@ -658,7 +658,7 @@ _93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | zgerfs | — | — | — |
 | ✓ | zgerfsx | — | — | — |
 |  | zgerq2 | — | — | — |
-| ✓ | zgerqf | — | — | — |
+| ✓ | zgerqf | 18.16 | exact | 30.63 |
 |  | zgesc2 | — | — | — |
 | ✓ | zgesdd | 17.73 | 32.52 | 29.96 |
 | ✓ | zgesv | 17.31 | exact | 30.17 |
@@ -1080,10 +1080,10 @@ _93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | zunghr | 17.76 | exact | 30.58 |
 |  | zungl2 | — | — | — |
 | ✓ | zunglq | 18.20 | exact | 30.81 |
-| ✓ | zungql | — | — | — |
+| ✓ | zungql | 18.10 | exact | 30.79 |
 | ✓ | zungqr | 18.15 | exact | 30.89 |
 |  | zungr2 | — | — | — |
-| ✓ | zungrq | — | — | — |
+| ✓ | zungrq | 18.16 | exact | 30.90 |
 | ✓ | zungtr | — | — | — |
 | ✓ | zungtsqr | — | — | — |
 | ✓ | zungtsqr_row | — | — | — |
@@ -1095,11 +1095,11 @@ _93 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (
 | ✓ | zunmhr | — | — | — |
 |  | zunml2 | — | — | — |
 | ✓ | zunmlq | — | — | — |
-| ✓ | zunmql | — | — | — |
+| ✓ | zunmql | 18.56 | exact | 31.18 |
 | ✓ | zunmqr | 18.54 | exact | 31.28 |
 |  | zunmr2 | — | — | — |
 |  | zunmr3 | — | — | — |
-| ✓ | zunmrq | — | — | — |
+| ✓ | zunmrq | 18.50 | exact | 31.34 |
 | ✓ | zunmrz | — | — | — |
 | ✓ | zunmtr | — | — | — |
 | ✓ | zupgtr | — | — | — |
