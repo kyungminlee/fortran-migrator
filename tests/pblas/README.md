@@ -82,29 +82,57 @@ tests/pblas/
 ├── target_kind10/target_pblas.f90
 ├── target_kind16/target_pblas.f90
 ├── target_multifloats/target_pblas.f90
-├── level1/                       ← 8 Level 1 PBLAS tests
+├── level1/                       ← 18 Level 1 PBLAS tests
 │   ├── test_pddot.f90            ← scalar out
 │   ├── test_pdnrm2.f90
 │   ├── test_pdasum.f90
+│   ├── test_pdamax.f90           ← (amax,indx) tuple out
 │   ├── test_pdscal.f90           ← in-place vector
 │   ├── test_pdaxpy.f90
 │   ├── test_pdcopy.f90           ← out-of-place vector
+│   ├── test_pdswap.f90
+│   ├── test_pdzasum.f90          ← mixed real-from-complex
+│   ├── test_pdznrm2.f90          ← mixed real-from-complex
 │   ├── test_pzdotc.f90           ← complex
-│   └── test_pzaxpy.f90
-├── level2/                       ← 5 Level 2 PBLAS tests
+│   ├── test_pzdotu.f90
+│   ├── test_pzaxpy.f90
+│   ├── test_pzcopy.f90
+│   ├── test_pzswap.f90
+│   ├── test_pzscal.f90
+│   ├── test_pzdscal.f90          ← mixed complex-with-real-scalar
+│   └── test_pzamax.f90
+├── level2/                       ← 15 Level 2 PBLAS tests
 │   ├── test_pdgemv.f90
 │   ├── test_pdger.f90            ← rank-1 update
 │   ├── test_pdsymv.f90
+│   ├── test_pdsyr.f90            ← symmetric rank-1
+│   ├── test_pdsyr2.f90           ← symmetric rank-2
+│   ├── test_pdtrmv.f90
 │   ├── test_pdtrsv.f90           ← triangular solve (diag-dominant)
-│   └── test_pzgemv.f90
-└── level3/                       ← 7 Level 3 PBLAS tests
+│   ├── test_pzgemv.f90
+│   ├── test_pzhemv.f90           ← Hermitian mat-vec
+│   ├── test_pzgerc.f90           ← conjugated rank-1
+│   ├── test_pzgeru.f90           ← unconjugated rank-1
+│   ├── test_pzher.f90            ← Hermitian rank-1 (alpha real)
+│   ├── test_pzher2.f90           ← Hermitian rank-2 (alpha complex)
+│   ├── test_pztrmv.f90
+│   └── test_pztrsv.f90           ← complex tri solve (diag-dominant)
+└── level3/                       ← 15 Level 3 PBLAS tests
     ├── test_pdgemm.f90
     ├── test_pdsymm.f90
     ├── test_pdsyrk.f90
+    ├── test_pdsyr2k.f90
     ├── test_pdtrmm.f90
     ├── test_pdtrsm.f90
     ├── test_pzgemm.f90
-    └── test_pzherk.f90
+    ├── test_pzhemm.f90
+    ├── test_pzsymm.f90
+    ├── test_pzsyrk.f90
+    ├── test_pzsyr2k.f90
+    ├── test_pzherk.f90
+    ├── test_pzher2k.f90
+    ├── test_pztrmm.f90
+    └── test_pztrsm.f90
 ```
 
 
@@ -132,12 +160,20 @@ end module
 The migrated name scheme (scalapack-style single-character slot
 substitution):
 
-| original | kind10   | kind16   | multifloats |
-|----------|----------|----------|-------------|
-| `pdgemm` | `pegemm` | `pqgemm` | `pddgemm`   |
-| `pddot`  | `pedot`  | `pqdot`  | `pdddot`    |
-| `pzgemm` | `pygemm` | `pxgemm` | `pzzgemm`   |
-| `pzherk` | `pyherk` | `pxherk` | `pzzherk`   |
+| original   | kind10     | kind16     | multifloats   |
+|------------|------------|------------|---------------|
+| `pdgemm`   | `pegemm`   | `pqgemm`   | `pddgemm`     |
+| `pddot`    | `pedot`    | `pqdot`    | `pdddot`      |
+| `pzgemm`   | `pygemm`   | `pxgemm`   | `pzzgemm`     |
+| `pzherk`   | `pyherk`   | `pxherk`   | `pzzherk`     |
+| `pdzasum`  | `peyasum`  | `pqxasum`  | `ptvasum`     |
+| `pdznrm2`  | `peynrm2`  | `pqxnrm2`  | `ptvnrm2`     |
+| `pzdscal`  | `pyescal`  | `pxqscal`  | `pvtscal`     |
+
+The mixed-precision rows (last three) substitute both the real and
+complex slots independently. `target_pblas_body.fypp` derives those
+prefixes from `prefix_real` / `prefix_complex` automatically — the
+per-target shim files only need to set the two single-letter prefixes.
 
 
 ## Running
@@ -187,8 +223,8 @@ distributed algorithm differs from serial BLAS only in associativity.
 
 ## Adding a new test
 
-For a PBLAS routine `pxroutine` already wrapped in every
-`target_<target>/target_pblas.f90` and declared in
+For a PBLAS routine `pxroutine` already wrapped in
+`common/target_pblas_body.fypp` and declared in
 `common/ref_quad_blas.f90`:
 
 1. Drop a new program into the appropriate `level{1,2,3}/` directory
@@ -201,12 +237,21 @@ For a PBLAS routine `pxroutine` already wrapped in every
 For a routine **not** yet declared:
 1. Add an explicit interface to `common/ref_quad_blas.f90` for the
    corresponding serial reference routine.
-2. Add wrappers to *every* `target_<target>/target_pblas.f90` —
-   signature is uniformly REAL(KIND=16) / COMPLEX(KIND=16) on the
-   outside.
+2. Add an abstract interface and a concrete `target_p<routine>`
+   wrapper inside `common/target_pblas_body.fypp` (one fypp file
+   shared across all targets) — signature is uniformly
+   REAL(KIND=16) / COMPLEX(KIND=16) on the outside; the body uses
+   `q2t_r` / `q2t_c` to convert into the target's native type before
+   the migrated PBLAS call. For mixed-precision routines (`pdz*` or
+   `pzd*`) use `${RC}$` / `${CR}$` instead of `${R}$` / `${C}$`.
+3. Export the new wrapper from the `public ::` list at the top of
+   the same fypp file.
 
 
 ## Open issues
+
+See `TODO.md` for follow-ups whose fix lies outside the
+`tests/pblas/` subtree.
 
 ### Multifloats PBLAS C linkage
 

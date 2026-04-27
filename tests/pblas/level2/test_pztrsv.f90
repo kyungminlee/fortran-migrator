@@ -1,14 +1,14 @@
-program test_pdtrsv
+program test_pztrsv
     use prec_kinds,    only: ep
-    use compare,       only: max_rel_err_vec
+    use compare,       only: max_rel_err_vec_z
     use pblas_prec_report,   only: report_init, report_case, report_finalize
-    use pblas_ref_quad_blas, only: dtrsv
+    use pblas_ref_quad_blas, only: ztrsv
     use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
                              my_nprow, my_npcol, my_row, my_col, &
                              numroc_local, descinit_local, g2l
-    use pblas_distrib, only: gen_distrib_matrix, gen_distrib_vector, &
-                             gather_vector
-    use target_pblas,  only: target_name, target_eps, target_pdtrsv
+    use pblas_distrib, only: gen_distrib_matrix_z, gen_distrib_vector_z, &
+                             gather_vector_z
+    use target_pblas,  only: target_name, target_eps, target_pztrsv
     implicit none
 
     integer, parameter :: ns(*) = [32, 80, 160]
@@ -17,25 +17,22 @@ program test_pdtrsv
     integer :: locm_a, locn_a, locn_x, lld_a, lld_x
     integer :: desca(9), descx(9)
     integer :: owner_r, owner_c, il, jl
-    real(ep) :: bump
-    real(ep), allocatable :: A_loc(:,:), x_loc(:)
-    real(ep), allocatable :: A_glob(:,:), x_glob(:), x_got(:), x_ref(:)
+    complex(ep) :: bump
+    complex(ep), allocatable :: A_loc(:,:), x_loc(:)
+    complex(ep), allocatable :: A_glob(:,:), x_glob(:), x_got(:), x_ref(:)
     real(ep) :: err, tol
     character(len=32) :: label
 
     call grid_init()
-    call report_init('pdtrsv', target_name, my_rank)
+    call report_init('pztrsv', target_name, my_rank)
 
     do i = 1, size(ns)
         n = ns(i)
-        call gen_distrib_matrix(n, n, mb, mb, A_loc, A_glob, seed = 3101 + 19 * i)
-        call gen_distrib_vector(n, mb, x_loc, x_glob, seed = 3111 + 19 * i)
+        call gen_distrib_matrix_z(n, n, mb, mb, A_loc, A_glob, seed = 6001 + 19 * i)
+        call gen_distrib_vector_z(n, mb, x_loc, x_glob, seed = 6011 + 19 * i)
 
-        ! Make A strongly diagonally-dominant so the solve is well
-        ! conditioned: update diagonal in both global and local copies
-        ! in sync. Every rank executes the loop (A_glob is mirrored);
-        ! the local-copy write is gated by ownership.
-        bump = real(n, ep)
+        ! Diagonally-dominant A so the triangular solve is well-conditioned.
+        bump = cmplx(real(n, ep), 0.0_ep, ep)
         do j = 1, n
             A_glob(j, j) = A_glob(j, j) + bump
             call g2l(j, mb, my_nprow, owner_r, il)
@@ -52,16 +49,16 @@ program test_pdtrsv
         call descinit_local(desca, n, n, mb, mb, 0, 0, my_context, lld_a, info)
         call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
 
-        call target_pdtrsv('U', 'N', 'N', n, A_loc, 1, 1, desca, &
+        call target_pztrsv('U', 'N', 'N', n, A_loc, 1, 1, desca, &
                            x_loc, 1, 1, descx, 1)
-        call gather_vector(n, mb, x_loc, x_got)
+        call gather_vector_z(n, mb, x_loc, x_got)
 
         if (my_rank == 0) then
             allocate(x_ref(n))
             x_ref = x_glob
-            call dtrsv('U', 'N', 'N', n, A_glob, n, x_ref, 1)
-            err = max_rel_err_vec(x_got, x_ref)
-            tol = 64.0_ep * real(n, ep) * target_eps
+            call ztrsv('U', 'N', 'N', n, A_glob, n, x_ref, 1)
+            err = max_rel_err_vec_z(x_got, x_ref)
+            tol = 64.0_ep * 8.0_ep * real(n, ep) * target_eps
             write(label, '(a,i0)') 'n=', n
             call report_case(trim(label), err, tol)
             deallocate(x_ref, x_got)
@@ -71,4 +68,4 @@ program test_pdtrsv
 
     call report_finalize()
     call grid_exit()
-end program test_pdtrsv
+end program test_pztrsv
