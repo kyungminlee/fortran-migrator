@@ -1,5 +1,31 @@
 # tests/blacs — Outstanding Work
 
+## MPI sandbox caveat
+
+In this sandbox `mpiexec -n N <prog>` spawns **N unconnected MPI worlds**
+— each rank sees `MPI_Comm_size = 1`, BLACS reports a 1×1 grid, and
+`blacs_gridinit` returns each process its own private context.
+
+Consequence: every BLACS comm test except `test_grid_info` either
+emits `skipped_grid_1x1` (the explicit early-return path in p2p tests
+like `test_qgesd2d`, `test_qtrsd2d`, `test_xgesd2d`, `test_igesd2d`)
+or trivially passes on a 1-element communicator (broadcast/reduce
+tests where rank (0,0) writes and verifies its own buffer with no
+peer involved). **No real signal in this sandbox** — the assertions
+are correct but unexercised.
+
+The tests are correctly written for a real 2×2 grid and *will*
+exercise actual inter-rank communication when run on a properly
+configured MPI deployment (where Hydra/PMI can connect ranks).
+Confirm the sandbox behavior with:
+
+```
+mpiexec -n 4 /tmp/staging-kind16/build/tests/blacs/test_qgesd2d
+```
+
+— output shows 4 separate `skipped_grid_1x1` lines, one per
+unconnected world.
+
 ## Environment caveat: MPICH singleton fallback under sandboxed bash
 
 In the sandbox where these tests were authored, `mpiexec -n 4 <prog>`

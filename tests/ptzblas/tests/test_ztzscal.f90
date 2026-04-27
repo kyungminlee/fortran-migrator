@@ -8,25 +8,26 @@ program test_ztzscal
     implicit none
 
     integer, parameter :: m = 24, n = 24
-    character(len=1), parameter :: uplo_set(*) = ['L', 'U']
-    integer :: i
+    character(len=1), parameter :: uplo_set(*)  = ['L','U','L','U','L','U']
+    integer,          parameter :: ioffd_set(*) = [0, 0, 2, 2, -3, -3]
+    integer :: i, ioffd
     character :: uplo
     complex(ep), allocatable :: A_got(:,:), A_ref(:,:)
     complex(ep) :: alpha
     real(ep) :: err, tol
-    character(len=32) :: label
+    character(len=48) :: label
 
     call report_init('ztzscal', target_name, 0)
     do i = 1, size(uplo_set)
-        uplo = uplo_set(i)
+        uplo = uplo_set(i); ioffd = ioffd_set(i)
         call gen_matrix_complex(m, n, A_got, seed = 3400 + 5 * i)
         A_ref = A_got
         alpha = cmplx(0.6_ep + 0.1_ep * real(i, ep), 0.2_ep, ep)
-        call target_ztzscal(uplo, m, n, 0, alpha, A_got, m)
-        call ref_ztzscal(uplo, m, n, 0, alpha, A_ref)
+        call target_ztzscal(uplo, m, n, ioffd, alpha, A_got, m)
+        call ref_ztzscal(uplo, m, n, ioffd, alpha, A_ref)
         err = max_rel_err_mat_z(A_got, A_ref)
         tol = 8.0_ep * target_eps
-        write(label, '(a,a)') 'uplo=', uplo
+        write(label, '(a,a,a,i0)') 'uplo=', uplo, ',ioffd=', ioffd
         call report_case(trim(label), err, tol)
         deallocate(A_got, A_ref)
     end do

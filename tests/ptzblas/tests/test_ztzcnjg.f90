@@ -8,25 +8,26 @@ program test_ztzcnjg
     implicit none
 
     integer, parameter :: m = 20, n = 20
-    character(len=1), parameter :: uplo_set(*) = ['L', 'U']
-    integer :: i
+    character(len=1), parameter :: uplo_set(*)  = ['L','U','L','U','L','U']
+    integer,          parameter :: ioffd_set(*) = [0, 0, 2, 2, -3, -3]
+    integer :: i, ioffd
     character :: uplo
     complex(ep), allocatable :: A_got(:,:), A_ref(:,:)
     complex(ep) :: alpha
     real(ep) :: err, tol
-    character(len=32) :: label
+    character(len=48) :: label
 
     call report_init('ztzcnjg', target_name, 0)
     do i = 1, size(uplo_set)
-        uplo = uplo_set(i)
+        uplo = uplo_set(i); ioffd = ioffd_set(i)
         call gen_matrix_complex(m, n, A_got, seed = 2800 + 5 * i)
         A_ref = A_got
         alpha = cmplx(0.7_ep + 0.1_ep * real(i, ep), 0.3_ep, ep)
-        call target_ztzcnjg(uplo, m, n, 0, alpha, A_got, m)
-        call ref_ztzcnjg(uplo, m, n, 0, alpha, A_ref)
+        call target_ztzcnjg(uplo, m, n, ioffd, alpha, A_got, m)
+        call ref_ztzcnjg(uplo, m, n, ioffd, alpha, A_ref)
         err = max_rel_err_mat_z(A_got, A_ref)
         tol = 8.0_ep * target_eps
-        write(label, '(a,a)') 'uplo=', uplo
+        write(label, '(a,a,a,i0)') 'uplo=', uplo, ',ioffd=', ioffd
         call report_case(trim(label), err, tol)
         deallocate(A_got, A_ref)
     end do

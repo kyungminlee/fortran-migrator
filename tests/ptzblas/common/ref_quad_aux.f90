@@ -50,40 +50,62 @@ contains
     end subroutine ref_dascal
 
     ! ── Hermitian scaling: A := alpha*A; zero imag of diagonal ──────
+    ! Mirrors upstream PTZBLAS/zhescal.f.  ALPHA==1: only zero imag part
+    ! of the diagonal (rest of A untouched).  ALPHA==0: delegate to
+    ! ztzpad(UPLO,'N',...,ZERO,ZERO).  Otherwise: scale trapezoid by
+    ! ALPHA (real) and force imag(diagonal)=0.
     subroutine ref_zhescal(uplo, m, n, ioffd, alpha, A)
         character,   intent(in)    :: uplo
         integer,     intent(in)    :: m, n, ioffd
         real(ep),    intent(in)    :: alpha
         complex(ep), intent(inout) :: A(:,:)
-        integer :: i, j, mn
-        ! Scale the trapezoidal half (semantics same as tzscal),
-        ! then zero the imaginary part of the IOFFD diagonal.
-        if (uplo == 'L' .or. uplo == 'l') then
-            do j = 1, n
-                do i = max(1, j + ioffd), m
-                    A(i, j) = alpha * A(i, j)
+        integer     :: j, jtmp, mn
+        complex(ep) :: zalpha, zzero
+        if (m <= 0 .or. n <= 0) return
+        zzero = cmplx(0.0_ep, 0.0_ep, ep)
+        if (alpha == 1.0_ep) then
+            if (uplo == 'L' .or. uplo == 'l' .or. &
+                uplo == 'U' .or. uplo == 'u' .or. &
+                uplo == 'D' .or. uplo == 'd') then
+                do j = max(0, -ioffd) + 1, min(m - ioffd, n)
+                    jtmp = j + ioffd
+                    A(jtmp, j) = cmplx(real(A(jtmp, j), ep), 0.0_ep, ep)
                 end do
+            end if
+            return
+        else if (alpha == 0.0_ep) then
+            call ref_ztzpad(uplo, 'N', m, n, ioffd, zzero, zzero, A)
+            return
+        end if
+        zalpha = cmplx(alpha, 0.0_ep, ep)
+        ! General path: scale the slice, with imag(diagonal) forced to 0.
+        if (uplo == 'L' .or. uplo == 'l') then
+            mn = max(0, -ioffd)
+            do j = 1, min(mn, n)
+                A(1:m, j) = zalpha * A(1:m, j)
+            end do
+            do j = mn + 1, min(m - ioffd, n)
+                jtmp = j + ioffd
+                A(jtmp, j) = cmplx(alpha * real(A(jtmp, j), ep), 0.0_ep, ep)
+                if (m > jtmp) A(jtmp+1:m, j) = zalpha * A(jtmp+1:m, j)
             end do
         else if (uplo == 'U' .or. uplo == 'u') then
-            do j = 1, n
-                do i = 1, min(m, j + ioffd)
-                    A(i, j) = alpha * A(i, j)
-                end do
+            mn = min(m - ioffd, n)
+            do j = max(0, -ioffd) + 1, mn
+                jtmp = j + ioffd
+                if (jtmp > 1) A(1:jtmp-1, j) = zalpha * A(1:jtmp-1, j)
+                A(jtmp, j) = cmplx(alpha * real(A(jtmp, j), ep), 0.0_ep, ep)
+            end do
+            do j = max(0, mn) + 1, n
+                A(1:m, j) = zalpha * A(1:m, j)
+            end do
+        else if (uplo == 'D' .or. uplo == 'd') then
+            do j = max(0, -ioffd) + 1, min(m - ioffd, n)
+                jtmp = j + ioffd
+                A(jtmp, j) = cmplx(alpha * real(A(jtmp, j), ep), 0.0_ep, ep)
             end do
         else
-            A = alpha * A
-        end if
-        ! Zero imaginary part on the IOFFD diagonal.
-        if (ioffd >= 0) then
-            mn = min(m, n - ioffd)
-            do i = 1, mn
-                A(i, i + ioffd) = cmplx(real(A(i, i + ioffd), ep), 0.0_ep, ep)
-            end do
-        else
-            mn = min(m + ioffd, n)
-            do i = 1, mn
-                A(i - ioffd, i) = cmplx(real(A(i - ioffd, i), ep), 0.0_ep, ep)
-            end do
+            A(1:m, 1:n) = zalpha * A(1:m, 1:n)
         end if
     end subroutine ref_zhescal
 
@@ -218,103 +240,198 @@ contains
     end subroutine ref_dasqrtb
 
     ! ── Trapezoidal pad: diag := beta, offdiag := alpha ────────────
+    ! Mirrors upstream PTZBLAS/dtzpad.f exactly: a "full-fill" pass for
+    ! columns where the trapezoid covers the entire column, then a
+    ! "diagonal + strict-trapezoid" pass for the remaining columns.
+    ! Note: upstream dtzpad has no UPLO='D' branch (real type, no imag
+    ! to zero); leave that case as a no-op to match.
     subroutine ref_dtzpad(uplo, herm, m, n, ioffd, alpha, beta, A)
         character, intent(in)    :: uplo, herm
         integer,   intent(in)    :: m, n, ioffd
         real(ep),  intent(in)    :: alpha, beta
         real(ep),  intent(inout) :: A(:,:)
-        integer  :: i, j, mn
+        integer  :: i, j, jtmp, mn
         logical  :: zero_imag
+        if (m <= 0 .or. n <= 0) return
         zero_imag = (herm == 'Z' .or. herm == 'z')
         if (uplo == 'L' .or. uplo == 'l') then
-            do j = 1, n
-                do i = max(1, j + ioffd) + 1, m
+            mn = max(0, -ioffd)
+            ! Full-fill leading columns (entire trapezoid covers column).
+            do j = 1, min(mn, n)
+                do i = 1, m
                     A(i, j) = alpha
                 end do
             end do
+            ! Diagonal + strict-lower for remaining columns.
+            if (zero_imag) then
+                do j = mn + 1, min(m - ioffd, n)
+                    jtmp = j + ioffd
+                    do i = jtmp + 1, m
+                        A(i, j) = alpha
+                    end do
+                end do
+            else
+                do j = mn + 1, min(m - ioffd, n)
+                    jtmp = j + ioffd
+                    A(jtmp, j) = beta
+                    do i = jtmp + 1, m
+                        A(i, j) = alpha
+                    end do
+                end do
+            end if
         else if (uplo == 'U' .or. uplo == 'u') then
-            do j = 1, n
-                do i = 1, min(m, j + ioffd) - 1
+            mn = min(m - ioffd, n)
+            if (zero_imag) then
+                do j = max(0, -ioffd) + 1, mn
+                    jtmp = j + ioffd
+                    do i = 1, jtmp - 1
+                        A(i, j) = alpha
+                    end do
+                end do
+            else
+                do j = max(0, -ioffd) + 1, mn
+                    jtmp = j + ioffd
+                    do i = 1, jtmp - 1
+                        A(i, j) = alpha
+                    end do
+                    A(jtmp, j) = beta
+                end do
+            end if
+            ! Trailing columns: entire column is in upper trapezoid.
+            do j = max(0, mn) + 1, n
+                do i = 1, m
                     A(i, j) = alpha
                 end do
             end do
         end if
-        ! Diagonal: set to beta unless HERM=='Z' (real type → no-op for imag).
-        if (.not. zero_imag) then
-            if (ioffd >= 0) then
-                mn = min(m, n - ioffd)
-                do i = 1, mn
-                    A(i, i + ioffd) = beta
-                end do
-            else
-                mn = min(m + ioffd, n)
-                do i = 1, mn
-                    A(i - ioffd, i) = beta
-                end do
+        ! UPLO='D' for real: upstream dtzpad branch sets diagonal to beta
+        ! when HERM is not 'Z' (and is unsupported for HERM='Z' since real
+        ! has no imag).  Mirror that.
+        if (uplo == 'D' .or. uplo == 'd') then
+            if (.not. zero_imag) then
+                if (ioffd < m .and. ioffd > -n) then
+                    do j = max(0, -ioffd) + 1, min(m - ioffd, n)
+                        A(j + ioffd, j) = beta
+                    end do
+                end if
             end if
         end if
     end subroutine ref_dtzpad
 
+    ! Mirrors upstream PTZBLAS/ztzpad.f exactly, including UPLO='D'.
     subroutine ref_ztzpad(uplo, herm, m, n, ioffd, alpha, beta, A)
         character,   intent(in)    :: uplo, herm
         integer,     intent(in)    :: m, n, ioffd
         complex(ep), intent(in)    :: alpha, beta
         complex(ep), intent(inout) :: A(:,:)
-        integer :: i, j, mn
+        integer :: i, j, jtmp, mn
         logical :: zero_imag
+        if (m <= 0 .or. n <= 0) return
         zero_imag = (herm == 'Z' .or. herm == 'z')
         if (uplo == 'L' .or. uplo == 'l') then
-            do j = 1, n
-                do i = max(1, j + ioffd) + 1, m
+            mn = max(0, -ioffd)
+            do j = 1, min(mn, n)
+                do i = 1, m
                     A(i, j) = alpha
                 end do
             end do
+            if (zero_imag) then
+                do j = mn + 1, min(m - ioffd, n)
+                    jtmp = j + ioffd
+                    A(jtmp, j) = cmplx(real(A(jtmp, j), ep), 0.0_ep, ep)
+                    do i = jtmp + 1, m
+                        A(i, j) = alpha
+                    end do
+                end do
+            else
+                do j = mn + 1, min(m - ioffd, n)
+                    jtmp = j + ioffd
+                    A(jtmp, j) = beta
+                    do i = jtmp + 1, m
+                        A(i, j) = alpha
+                    end do
+                end do
+            end if
         else if (uplo == 'U' .or. uplo == 'u') then
-            do j = 1, n
-                do i = 1, min(m, j + ioffd) - 1
+            mn = min(m - ioffd, n)
+            if (zero_imag) then
+                do j = max(0, -ioffd) + 1, mn
+                    jtmp = j + ioffd
+                    do i = 1, jtmp - 1
+                        A(i, j) = alpha
+                    end do
+                    A(jtmp, j) = cmplx(real(A(jtmp, j), ep), 0.0_ep, ep)
+                end do
+            else
+                do j = max(0, -ioffd) + 1, mn
+                    jtmp = j + ioffd
+                    do i = 1, jtmp - 1
+                        A(i, j) = alpha
+                    end do
+                    A(jtmp, j) = beta
+                end do
+            end if
+            do j = max(0, mn) + 1, n
+                do i = 1, m
                     A(i, j) = alpha
                 end do
             end do
-        end if
-        if (ioffd >= 0) then
-            mn = min(m, n - ioffd)
-            do i = 1, mn
+        else if (uplo == 'D' .or. uplo == 'd') then
+            ! Diagonal-only set (or zero-imag of diagonal).
+            if (ioffd < m .and. ioffd > -n) then
                 if (zero_imag) then
-                    A(i, i + ioffd) = cmplx(real(A(i, i + ioffd), ep), 0.0_ep, ep)
+                    do j = max(0, -ioffd) + 1, min(m - ioffd, n)
+                        jtmp = j + ioffd
+                        A(jtmp, j) = cmplx(real(A(jtmp, j), ep), 0.0_ep, ep)
+                    end do
                 else
-                    A(i, i + ioffd) = beta
+                    do j = max(0, -ioffd) + 1, min(m - ioffd, n)
+                        A(j + ioffd, j) = beta
+                    end do
                 end if
-            end do
-        else
-            mn = min(m + ioffd, n)
-            do i = 1, mn
-                if (zero_imag) then
-                    A(i - ioffd, i) = cmplx(real(A(i - ioffd, i), ep), 0.0_ep, ep)
-                else
-                    A(i - ioffd, i) = beta
-                end if
-            end do
+            end if
         end if
     end subroutine ref_ztzpad
 
     ! ── Trapezoidal scaling A := alpha * A on UPLO/IOFFD slice ─────
+    ! Mirrors upstream PTZBLAS/dtzscal.f (and ztzscal.f).
     subroutine ref_dtzscal(uplo, m, n, ioffd, alpha, A)
         character, intent(in)    :: uplo
         integer,   intent(in)    :: m, n, ioffd
         real(ep),  intent(in)    :: alpha
         real(ep),  intent(inout) :: A(:,:)
-        integer :: i, j
+        integer :: i, j, jtmp, mn
+        if (m <= 0 .or. n <= 0) return
         if (uplo == 'L' .or. uplo == 'l') then
-            do j = 1, n
-                do i = max(1, j + ioffd), m
+            mn = max(0, -ioffd)
+            do j = 1, min(mn, n)
+                do i = 1, m
+                    A(i, j) = alpha * A(i, j)
+                end do
+            end do
+            do j = mn + 1, min(m - ioffd, n)
+                jtmp = j + ioffd
+                do i = jtmp, m
                     A(i, j) = alpha * A(i, j)
                 end do
             end do
         else if (uplo == 'U' .or. uplo == 'u') then
-            do j = 1, n
-                do i = 1, min(m, j + ioffd)
+            mn = min(m - ioffd, n)
+            do j = max(0, -ioffd) + 1, mn
+                jtmp = j + ioffd
+                do i = 1, jtmp
                     A(i, j) = alpha * A(i, j)
                 end do
+            end do
+            do j = max(0, mn) + 1, n
+                do i = 1, m
+                    A(i, j) = alpha * A(i, j)
+                end do
+            end do
+        else if (uplo == 'D' .or. uplo == 'd') then
+            do j = max(0, -ioffd) + 1, min(m - ioffd, n)
+                jtmp = j + ioffd
+                A(jtmp, j) = alpha * A(jtmp, j)
             end do
         else
             A(1:m, 1:n) = alpha * A(1:m, 1:n)
@@ -326,18 +443,38 @@ contains
         integer,     intent(in)    :: m, n, ioffd
         complex(ep), intent(in)    :: alpha
         complex(ep), intent(inout) :: A(:,:)
-        integer :: i, j
+        integer :: i, j, jtmp, mn
+        if (m <= 0 .or. n <= 0) return
         if (uplo == 'L' .or. uplo == 'l') then
-            do j = 1, n
-                do i = max(1, j + ioffd), m
+            mn = max(0, -ioffd)
+            do j = 1, min(mn, n)
+                do i = 1, m
+                    A(i, j) = alpha * A(i, j)
+                end do
+            end do
+            do j = mn + 1, min(m - ioffd, n)
+                jtmp = j + ioffd
+                do i = jtmp, m
                     A(i, j) = alpha * A(i, j)
                 end do
             end do
         else if (uplo == 'U' .or. uplo == 'u') then
-            do j = 1, n
-                do i = 1, min(m, j + ioffd)
+            mn = min(m - ioffd, n)
+            do j = max(0, -ioffd) + 1, mn
+                jtmp = j + ioffd
+                do i = 1, jtmp
                     A(i, j) = alpha * A(i, j)
                 end do
+            end do
+            do j = max(0, mn) + 1, n
+                do i = 1, m
+                    A(i, j) = alpha * A(i, j)
+                end do
+            end do
+        else if (uplo == 'D' .or. uplo == 'd') then
+            do j = max(0, -ioffd) + 1, min(m - ioffd, n)
+                jtmp = j + ioffd
+                A(jtmp, j) = alpha * A(jtmp, j)
             end do
         else
             A(1:m, 1:n) = alpha * A(1:m, 1:n)
@@ -345,23 +482,42 @@ contains
     end subroutine ref_ztzscal
 
     ! ── Trapezoidal conjugate-and-scale A := alpha*conj(A) ─────────
+    ! Mirrors upstream PTZBLAS/ztzcnjg.f.
     subroutine ref_ztzcnjg(uplo, m, n, ioffd, alpha, A)
         character,   intent(in)    :: uplo
         integer,     intent(in)    :: m, n, ioffd
         complex(ep), intent(in)    :: alpha
         complex(ep), intent(inout) :: A(:,:)
-        integer :: i, j
+        integer :: i, j, jtmp, mn
+        if (m <= 0 .or. n <= 0) return
         if (uplo == 'L' .or. uplo == 'l') then
-            do j = 1, n
-                do i = max(1, j + ioffd), m
+            mn = max(0, -ioffd)
+            do j = 1, min(mn, n)
+                do i = 1, m
+                    A(i, j) = alpha * conjg(A(i, j))
+                end do
+            end do
+            do j = mn + 1, min(m - ioffd, n)
+                do i = j + ioffd, m
                     A(i, j) = alpha * conjg(A(i, j))
                 end do
             end do
         else if (uplo == 'U' .or. uplo == 'u') then
-            do j = 1, n
-                do i = 1, min(m, j + ioffd)
+            mn = min(m - ioffd, n)
+            do j = max(0, -ioffd) + 1, mn
+                do i = 1, j + ioffd
                     A(i, j) = alpha * conjg(A(i, j))
                 end do
+            end do
+            do j = max(0, mn) + 1, n
+                do i = 1, m
+                    A(i, j) = alpha * conjg(A(i, j))
+                end do
+            end do
+        else if (uplo == 'D' .or. uplo == 'd') then
+            do j = max(0, -ioffd) + 1, min(m - ioffd, n)
+                jtmp = j + ioffd
+                A(jtmp, j) = alpha * conjg(A(jtmp, j))
             end do
         else
             A(1:m, 1:n) = alpha * conjg(A(1:m, 1:n))
