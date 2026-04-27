@@ -129,6 +129,7 @@ module target_lapack
     public :: target_dtrsyl, target_ztrsyl
     public :: target_dhseqr, target_zhseqr
     public :: target_dtrevc, target_ztrevc
+    public :: target_dggev, target_zggev
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2774,6 +2775,30 @@ $:IMPORT_RC()
             integer,   intent(out) :: m
             ${target_complex}$, intent(out) :: work(*)
             ${target_real}$,    intent(out) :: rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 34 — generalized non-symmetric eigenvalue ──────────
+        subroutine ${R}$ggev(jobvl, jobvr, n, A, lda, B, ldb, alphar, alphai, beta, &
+                             VL, ldvl, VR, ldvr, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobvl, jobvr
+            integer,   intent(in) :: n, lda, ldb, ldvl, ldvr, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: alphar(*), alphai(*), beta(*)
+            ${target_real}$, intent(out)   :: VL(ldvl,*), VR(ldvr,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ggev(jobvl, jobvr, n, A, lda, B, ldb, alpha, beta, &
+                             VL, ldvl, VR, ldvr, work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: jobvl, jobvr
+            integer,   intent(in) :: n, lda, ldb, ldvl, ldvr, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: alpha(*), beta(*)
+            ${target_complex}$, intent(out)   :: VL(ldvl,*), VR(ldvr,*), work(*)
+            ${target_real}$,    intent(out)   :: rwork(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -7596,6 +7621,66 @@ $:CPACK_INV('zsptri', C + 'sptri')
             VL(1:ldvl, 1:mm) = t2q_c(VLt)
         if (side == 'R' .or. side == 'r' .or. side == 'B' .or. side == 'b') &
             VR(1:ldvr, 1:mm) = t2q_c(VRt)
+    end subroutine
+
+    ! ── Phase 34 wrappers ────────────────────────────────────────────
+    subroutine target_dggev(jobvl, jobvr, n, A, lda, B, ldb, alphar, alphai, beta, &
+                            VL, ldvl, VR, ldvr, info)
+        character, intent(in)    :: jobvl, jobvr
+        integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+        real(ep),  intent(out)   :: VL(ldvl,*), VR(ldvr,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), VLt(:,:), VRt(:,:), &
+                                        art(:), ait(:), bet(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, nVL, nVR
+        nVL = merge(n, 1, jobvl == 'V' .or. jobvl == 'v')
+        nVR = merge(n, 1, jobvr == 'V' .or. jobvr == 'v')
+        allocate(At(lda, n), Bt(ldb, n), VLt(ldvl, nVL), VRt(ldvr, nVR), &
+                 art(n), ait(n), bet(n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$ggev(jobvl, jobvr, n, At, lda, Bt, ldb, art, ait, bet, &
+                      VLt, ldvl, VRt, ldvr, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$ggev(jobvl, jobvr, n, At, lda, Bt, ldb, art, ait, bet, &
+                      VLt, ldvl, VRt, ldvr, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+        alphar(1:n) = t2q_r(art); alphai(1:n) = t2q_r(ait); beta(1:n) = t2q_r(bet)
+        if (jobvl == 'V' .or. jobvl == 'v') VL(1:ldvl, 1:nVL) = t2q_r(VLt)
+        if (jobvr == 'V' .or. jobvr == 'v') VR(1:ldvr, 1:nVR) = t2q_r(VRt)
+    end subroutine
+
+    subroutine target_zggev(jobvl, jobvr, n, A, lda, B, ldb, alpha, beta, &
+                            VL, ldvl, VR, ldvr, info)
+        character,   intent(in)    :: jobvl, jobvr
+        integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        complex(ep), intent(out)   :: alpha(*), beta(*)
+        complex(ep), intent(out)   :: VL(ldvl,*), VR(ldvr,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), VLt(:,:), VRt(:,:), &
+                                           alt(:), bet(:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, nVL, nVR
+        nVL = merge(n, 1, jobvl == 'V' .or. jobvl == 'v')
+        nVR = merge(n, 1, jobvr == 'V' .or. jobvr == 'v')
+        allocate(At(lda, n), Bt(ldb, n), VLt(ldvl, nVL), VRt(ldvr, nVR), &
+                 alt(n), bet(n), rwork(8*n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$ggev(jobvl, jobvr, n, At, lda, Bt, ldb, alt, bet, &
+                      VLt, ldvl, VRt, ldvr, wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$ggev(jobvl, jobvr, n, At, lda, Bt, ldb, alt, bet, &
+                      VLt, ldvl, VRt, ldvr, work, lwork, rwork, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
+        alpha(1:n) = t2q_c(alt); beta(1:n) = t2q_c(bet)
+        if (jobvl == 'V' .or. jobvl == 'v') VL(1:ldvl, 1:nVL) = t2q_c(VLt)
+        if (jobvr == 'V' .or. jobvr == 'v') VR(1:ldvr, 1:nVR) = t2q_c(VRt)
     end subroutine
 
     subroutine target_dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, info)
