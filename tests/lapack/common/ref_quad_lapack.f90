@@ -1745,6 +1745,93 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zptrfs
+
+        ! ── Phase 17 — sym/Herm + packed refinement ──────────────────
+        subroutine dsyrfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyrfs
+
+        subroutine zsyrfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyrfs
+
+        subroutine zherfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zherfs
+
+        subroutine dsprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsprfs
+
+        subroutine zsprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsprfs
+
+        subroutine dpprfs(uplo, n, nrhs, AP, AFP, B, ldb, X, ldx, &
+                          ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dpprfs
+
+        subroutine zpprfs(uplo, n, nrhs, AP, AFP, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zpprfs
     end interface
 
 end module ref_quad_lapack
