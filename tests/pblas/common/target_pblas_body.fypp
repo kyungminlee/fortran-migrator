@@ -75,6 +75,8 @@ module target_pblas
     public :: target_pzherk, target_pzher2k
     public :: target_pzsyrk, target_pzsyr2k
     public :: target_pztrmm, target_pztrsm
+    public :: target_pdgeadd, target_pdtran, target_pdtradd
+    public :: target_pzgeadd, target_pztranc, target_pztranu, target_pztradd
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -531,6 +533,75 @@ $:IMPORT_C()
             integer,   intent(in) :: desca(9), descb(9)
             ${target_complex}$, intent(in)    :: alpha, A(*)
             ${target_complex}$, intent(inout) :: B(*)
+        end subroutine
+
+        ! Auxiliary additions: pdgeadd / pdtran / pdtradd (real),
+        ! pzgeadd / pztranc / pztranu / pztradd (complex).
+        subroutine ${R}$geadd(trans, m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+$:IMPORT_R()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, ia, ja, ic, jc
+            integer,   intent(in)    :: desca(9), descc(9)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*)
+            ${target_real}$, intent(inout) :: C(*)
+        end subroutine
+
+        subroutine ${R}$tran(m, n, alpha, A, ia, ja, desca, &
+                             beta, C, ic, jc, descc)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, ia, ja, ic, jc
+            integer, intent(in)    :: desca(9), descc(9)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*)
+            ${target_real}$, intent(inout) :: C(*)
+        end subroutine
+
+        subroutine ${R}$tradd(uplo, trans, m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+$:IMPORT_R()
+            character, intent(in)    :: uplo, trans
+            integer,   intent(in)    :: m, n, ia, ja, ic, jc
+            integer,   intent(in)    :: desca(9), descc(9)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*)
+            ${target_real}$, intent(inout) :: C(*)
+        end subroutine
+
+        subroutine ${C}$geadd(trans, m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+$:IMPORT_C()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, ia, ja, ic, jc
+            integer,   intent(in)    :: desca(9), descc(9)
+            ${target_complex}$, intent(in)    :: alpha, beta, A(*)
+            ${target_complex}$, intent(inout) :: C(*)
+        end subroutine
+
+        subroutine ${C}$tranc(m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+$:IMPORT_C()
+            integer, intent(in)    :: m, n, ia, ja, ic, jc
+            integer, intent(in)    :: desca(9), descc(9)
+            ${target_complex}$, intent(in)    :: alpha, beta, A(*)
+            ${target_complex}$, intent(inout) :: C(*)
+        end subroutine
+
+        subroutine ${C}$tranu(m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+$:IMPORT_C()
+            integer, intent(in)    :: m, n, ia, ja, ic, jc
+            integer, intent(in)    :: desca(9), descc(9)
+            ${target_complex}$, intent(in)    :: alpha, beta, A(*)
+            ${target_complex}$, intent(inout) :: C(*)
+        end subroutine
+
+        subroutine ${C}$tradd(uplo, trans, m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+$:IMPORT_C()
+            character, intent(in)    :: uplo, trans
+            integer,   intent(in)    :: m, n, ia, ja, ic, jc
+            integer,   intent(in)    :: desca(9), descc(9)
+            ${target_complex}$, intent(in)    :: alpha, beta, A(*)
+            ${target_complex}$, intent(inout) :: C(*)
         end subroutine
     end interface
 
@@ -1346,6 +1417,124 @@ contains
         call ${C}$trsm(side, uplo, trans, diag, m, n, q2t_c(alpha), &
                         At, ia, ja, desca, Bt, ib, jb, descb)
         B(1:nb) = t2q_c(Bt)
+    end subroutine
+
+    ! ── Auxiliary — real ─────────────────────────────────────────────
+    subroutine target_pdgeadd(trans, m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: m, n, ia, ja, ic, jc
+        integer,   intent(in)    :: desca(9), descc(9)
+        real(ep),  intent(in)    :: alpha, beta, A(*)
+        real(ep),  intent(inout) :: C(*)
+        integer :: na, nc
+        ${target_real}$, allocatable :: At(:), Ct(:)
+        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        allocate(At(na), Ct(nc))
+        At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
+        call ${R}$geadd(trans, m, n, q2t_r(alpha), At, ia, ja, desca, &
+                         q2t_r(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_pdtran(m, n, alpha, A, ia, ja, desca, &
+                             beta, C, ic, jc, descc)
+        integer,  intent(in)    :: m, n, ia, ja, ic, jc
+        integer,  intent(in)    :: desca(9), descc(9)
+        real(ep), intent(in)    :: alpha, beta, A(*)
+        real(ep), intent(inout) :: C(*)
+        integer :: na, nc
+        ${target_real}$, allocatable :: At(:), Ct(:)
+        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        allocate(At(na), Ct(nc))
+        At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
+        call ${R}$tran(m, n, q2t_r(alpha), At, ia, ja, desca, &
+                        q2t_r(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_pdtradd(uplo, trans, m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+        character, intent(in)    :: uplo, trans
+        integer,   intent(in)    :: m, n, ia, ja, ic, jc
+        integer,   intent(in)    :: desca(9), descc(9)
+        real(ep),  intent(in)    :: alpha, beta, A(*)
+        real(ep),  intent(inout) :: C(*)
+        integer :: na, nc
+        ${target_real}$, allocatable :: At(:), Ct(:)
+        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        allocate(At(na), Ct(nc))
+        At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
+        call ${R}$tradd(uplo, trans, m, n, q2t_r(alpha), At, ia, ja, desca, &
+                         q2t_r(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_r(Ct)
+    end subroutine
+
+    ! ── Auxiliary — complex ──────────────────────────────────────────
+    subroutine target_pzgeadd(trans, m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: m, n, ia, ja, ic, jc
+        integer,     intent(in)    :: desca(9), descc(9)
+        complex(ep), intent(in)    :: alpha, beta, A(*)
+        complex(ep), intent(inout) :: C(*)
+        integer :: na, nc
+        ${target_complex}$, allocatable :: At(:), Ct(:)
+        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        allocate(At(na), Ct(nc))
+        At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
+        call ${C}$geadd(trans, m, n, q2t_c(alpha), At, ia, ja, desca, &
+                         q2t_c(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_pztranc(m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+        integer,     intent(in)    :: m, n, ia, ja, ic, jc
+        integer,     intent(in)    :: desca(9), descc(9)
+        complex(ep), intent(in)    :: alpha, beta, A(*)
+        complex(ep), intent(inout) :: C(*)
+        integer :: na, nc
+        ${target_complex}$, allocatable :: At(:), Ct(:)
+        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        allocate(At(na), Ct(nc))
+        At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
+        call ${C}$tranc(m, n, q2t_c(alpha), At, ia, ja, desca, &
+                         q2t_c(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_pztranu(m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+        integer,     intent(in)    :: m, n, ia, ja, ic, jc
+        integer,     intent(in)    :: desca(9), descc(9)
+        complex(ep), intent(in)    :: alpha, beta, A(*)
+        complex(ep), intent(inout) :: C(*)
+        integer :: na, nc
+        ${target_complex}$, allocatable :: At(:), Ct(:)
+        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        allocate(At(na), Ct(nc))
+        At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
+        call ${C}$tranu(m, n, q2t_c(alpha), At, ia, ja, desca, &
+                         q2t_c(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_pztradd(uplo, trans, m, n, alpha, A, ia, ja, desca, &
+                              beta, C, ic, jc, descc)
+        character,   intent(in)    :: uplo, trans
+        integer,     intent(in)    :: m, n, ia, ja, ic, jc
+        integer,     intent(in)    :: desca(9), descc(9)
+        complex(ep), intent(in)    :: alpha, beta, A(*)
+        complex(ep), intent(inout) :: C(*)
+        integer :: na, nc
+        ${target_complex}$, allocatable :: At(:), Ct(:)
+        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        allocate(At(na), Ct(nc))
+        At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
+        call ${C}$tradd(uplo, trans, m, n, q2t_c(alpha), At, ia, ja, desca, &
+                         q2t_c(beta), Ct, ic, jc, descc)
+        C(1:nc) = t2q_c(Ct)
     end subroutine
 
 end module target_pblas
