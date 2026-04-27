@@ -2561,6 +2561,39 @@ module ref_quad_lapack
             complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
             integer,     intent(out)   :: info
         end subroutine zgghrd
+
+        ! ── Generalized QR / RQ factorizations ───────────────────────
+        subroutine dggqrf(n, m, p, A, lda, taua, B, ldb, taub, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, m, p, lda, ldb, lwork
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dggqrf
+
+        subroutine zggqrf(n, m, p, A, lda, taua, B, ldb, taub, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, m, p, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggqrf
+
+        subroutine dggrqf(m, p, n, A, lda, taua, B, ldb, taub, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, p, n, lda, ldb, lwork
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dggrqf
+
+        subroutine zggrqf(m, p, n, A, lda, taua, B, ldb, taub, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, p, n, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggrqf
     end interface
 
 end module ref_quad_lapack

@@ -125,6 +125,7 @@ module target_lapack
     public :: target_ddisna, target_dgebal, target_zgebal, target_dgebak, target_zgebak
     public :: target_dggbal, target_zggbal, target_dggbak, target_zggbak
     public :: target_dgghrd, target_zgghrd
+    public :: target_dggqrf, target_zggqrf, target_dggrqf, target_zggrqf
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2666,6 +2667,39 @@ $:IMPORT_C()
             character, intent(in) :: compq, compz
             integer,   intent(in) :: n, ilo, ihi, lda, ldb, ldq, ldz
             ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 30 — generalized QR / RQ factorizations ────────────
+        subroutine ${R}$ggqrf(n, m, p, A, lda, taua, B, ldb, taub, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in) :: n, m, p, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: taua(*), taub(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ggqrf(n, m, p, A, lda, taua, B, ldb, taub, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: n, m, p, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: taua(*), taub(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$ggrqf(m, p, n, A, lda, taua, B, ldb, taub, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, p, n, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: taua(*), taub(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ggrqf(m, p, n, A, lda, taua, B, ldb, taub, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in) :: m, p, n, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: taua(*), taub(*), work(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -7287,6 +7321,79 @@ $:CPACK_INV('zsptri', C + 'sptri')
         A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
         if (compq /= 'N' .and. compq /= 'n') Q(1:ldq, 1:nq) = t2q_c(Qt)
         if (compz /= 'N' .and. compz /= 'n') Z(1:ldz, 1:nz) = t2q_c(Zt)
+    end subroutine
+
+    ! ── Phase 30 wrappers ────────────────────────────────────────────
+    subroutine target_dggqrf(n, m, p, A, lda, taua, B, ldb, taub, info)
+        integer,  intent(in)    :: n, m, p, lda, ldb
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep), intent(out)   :: taua(*), taub(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), tauat(:), taubt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, m), Bt(ldb, p), tauat(min(n,m)), taubt(min(n,p)))
+        At = q2t_r(A(1:lda, 1:m)); Bt = q2t_r(B(1:ldb, 1:p))
+        call ${R}$ggqrf(n, m, p, At, lda, tauat, Bt, ldb, taubt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$ggqrf(n, m, p, At, lda, tauat, Bt, ldb, taubt, work, lwork, info)
+        A(1:lda, 1:m) = t2q_r(At); B(1:ldb, 1:p) = t2q_r(Bt)
+        taua(1:min(n,m)) = t2q_r(tauat); taub(1:min(n,p)) = t2q_r(taubt)
+    end subroutine
+
+    subroutine target_zggqrf(n, m, p, A, lda, taua, B, ldb, taub, info)
+        integer,     intent(in)    :: n, m, p, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        complex(ep), intent(out)   :: taua(*), taub(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), tauat(:), taubt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, m), Bt(ldb, p), tauat(min(n,m)), taubt(min(n,p)))
+        At = q2t_c(A(1:lda, 1:m)); Bt = q2t_c(B(1:ldb, 1:p))
+        call ${C}$ggqrf(n, m, p, At, lda, tauat, Bt, ldb, taubt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$ggqrf(n, m, p, At, lda, tauat, Bt, ldb, taubt, work, lwork, info)
+        A(1:lda, 1:m) = t2q_c(At); B(1:ldb, 1:p) = t2q_c(Bt)
+        taua(1:min(n,m)) = t2q_c(tauat); taub(1:min(n,p)) = t2q_c(taubt)
+    end subroutine
+
+    subroutine target_dggrqf(m, p, n, A, lda, taua, B, ldb, taub, info)
+        integer,  intent(in)    :: m, p, n, lda, ldb
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep), intent(out)   :: taua(*), taub(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), tauat(:), taubt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, n), tauat(min(m,n)), taubt(min(p,n)))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$ggrqf(m, p, n, At, lda, tauat, Bt, ldb, taubt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$ggrqf(m, p, n, At, lda, tauat, Bt, ldb, taubt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+        taua(1:min(m,n)) = t2q_r(tauat); taub(1:min(p,n)) = t2q_r(taubt)
+    end subroutine
+
+    subroutine target_zggrqf(m, p, n, A, lda, taua, B, ldb, taub, info)
+        integer,     intent(in)    :: m, p, n, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        complex(ep), intent(out)   :: taua(*), taub(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), tauat(:), taubt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, n), tauat(min(m,n)), taubt(min(p,n)))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$ggrqf(m, p, n, At, lda, tauat, Bt, ldb, taubt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$ggrqf(m, p, n, At, lda, tauat, Bt, ldb, taubt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
+        taua(1:min(m,n)) = t2q_c(tauat); taub(1:min(p,n)) = t2q_c(taubt)
     end subroutine
 
     subroutine target_dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, info)
