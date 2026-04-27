@@ -126,6 +126,7 @@ module target_lapack
     public :: target_dggbal, target_zggbal, target_dggbak, target_zggbak
     public :: target_dgghrd, target_zgghrd
     public :: target_dggqrf, target_zggqrf, target_dggrqf, target_zggrqf
+    public :: target_dtrsyl, target_ztrsyl
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2700,6 +2701,29 @@ $:IMPORT_C()
             integer, intent(in) :: m, p, n, lda, ldb, lwork
             ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
             ${target_complex}$, intent(out)   :: taua(*), taub(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 31 — Sylvester equation ────────────────────────────
+        subroutine ${R}$trsyl(trana, tranb, isgn, m, n, A, lda, B, ldb, C, ldc, &
+                              scale, info)
+$:IMPORT_R()
+            character, intent(in) :: trana, tranb
+            integer,   intent(in) :: isgn, m, n, lda, ldb, ldc
+            ${target_real}$, intent(in)    :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: scale
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$trsyl(trana, tranb, isgn, m, n, A, lda, B, ldb, C, ldc, &
+                              scale, info)
+$:IMPORT_RC()
+            character, intent(in) :: trana, tranb
+            integer,   intent(in) :: isgn, m, n, lda, ldb, ldc
+            ${target_complex}$, intent(in)    :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+            ${target_real}$,    intent(out)   :: scale
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -7394,6 +7418,41 @@ $:CPACK_INV('zsptri', C + 'sptri')
         call ${C}$ggrqf(m, p, n, At, lda, tauat, Bt, ldb, taubt, work, lwork, info)
         A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
         taua(1:min(m,n)) = t2q_c(tauat); taub(1:min(p,n)) = t2q_c(taubt)
+    end subroutine
+
+    ! ── Phase 31 wrappers ────────────────────────────────────────────
+    subroutine target_dtrsyl(trana, tranb, isgn, m, n, A, lda, B, ldb, C, ldc, &
+                             scale, info)
+        character, intent(in)    :: trana, tranb
+        integer,   intent(in)    :: isgn, m, n, lda, ldb, ldc
+        real(ep),  intent(in)    :: A(lda,*), B(ldb,*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        real(ep),  intent(out)   :: scale
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:)
+        ${target_real}$ :: scalet
+        allocate(At(lda, m), Bt(ldb, n), Ct(ldc, n))
+        At = q2t_r(A(1:lda, 1:m)); Bt = q2t_r(B(1:ldb, 1:n))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$trsyl(trana, tranb, isgn, m, n, At, lda, Bt, ldb, Ct, ldc, scalet, info)
+        C(1:ldc, 1:n) = t2q_r(Ct); scale = t2q_r(scalet)
+    end subroutine
+
+    subroutine target_ztrsyl(trana, tranb, isgn, m, n, A, lda, B, ldb, C, ldc, &
+                             scale, info)
+        character,   intent(in)    :: trana, tranb
+        integer,     intent(in)    :: isgn, m, n, lda, ldb, ldc
+        complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        real(ep),    intent(out)   :: scale
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:)
+        ${target_real}$ :: scalet
+        allocate(At(lda, m), Bt(ldb, n), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:m)); Bt = q2t_c(B(1:ldb, 1:n))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$trsyl(trana, tranb, isgn, m, n, At, lda, Bt, ldb, Ct, ldc, scalet, info)
+        C(1:ldc, 1:n) = t2q_c(Ct); scale = t2q_r(scalet)
     end subroutine
 
     subroutine target_dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, info)
