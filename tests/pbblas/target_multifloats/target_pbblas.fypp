@@ -1,0 +1,8 @@
+#:set target         = 'multifloats'
+#:set target_name    = 'multifloats'
+#:set target_eps     = 'real(2.0_8**(-104), ep)'
+#:set target_real    = 'type(real64x2)'
+#:set target_complex = 'type(cmplx64x2)'
+#:set prefix_real    = 't'
+#:set prefix_complex = 'v'
+#:include 'target_pbblas_body.fypp'
