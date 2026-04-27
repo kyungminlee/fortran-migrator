@@ -51,6 +51,7 @@ module target_scalapack
     public :: target_pdpotrf, target_pdpotrs
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
+    public :: target_pdgels
     public :: target_pdsyev
     public :: target_pdgesvd
     public :: target_pdlange
@@ -58,6 +59,7 @@ module target_scalapack
     public :: target_pzgesv, target_pzgeqrf, target_pzheev
     public :: target_pzgeqr2, target_pzungqr, target_pzunmqr
     public :: target_pzgelqf, target_pzunglq, target_pzunmlq
+    public :: target_pzgels
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -189,6 +191,17 @@ $:IMPORT_R()
             ${target_real}$, intent(out)   :: work(*)
         end subroutine
 
+        subroutine ${R}$gels(trans, m, n, nrhs, A, ia, ja, desca, &
+                             B, ib, jb, descb, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, ia, ja, ib, jb, lwork
+            integer,   intent(in)    :: desca(9), descb(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*), B(*)
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
         subroutine ${R}$syev(jobz, uplo, n, A, ia, ja, desca, w, &
                              Z, iz, jz, descz, work, lwork, info)
 $:IMPORT_R()
@@ -317,6 +330,17 @@ $:IMPORT_C()
             integer,   intent(out)   :: info
             ${target_complex}$, intent(in)    :: A(*), tau(*)
             ${target_complex}$, intent(inout) :: C(*)
+            ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$gels(trans, m, n, nrhs, A, ia, ja, desca, &
+                             B, ib, jb, descb, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, ia, ja, ib, jb, lwork
+            integer,   intent(in)    :: desca(9), descb(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*), B(*)
             ${target_complex}$, intent(out)   :: work(*)
         end subroutine
 
@@ -608,6 +632,32 @@ contains
             call ${R}$ormlq(side, trans, m, n, k, At, ia, ja, desca, tau_t, &
                              Ct, ic, jc, descc, work_t, lwt, info)
             C(1:nc) = t2q_r(Ct)
+        end if
+    end subroutine
+
+    subroutine target_pdgels(trans, m, n, nrhs, A, ia, ja, desca, &
+                             B, ib, jb, descb, work, lwork, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: m, n, nrhs, ia, ja, ib, jb, lwork
+        integer,   intent(in)    :: desca(9), descb(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(inout) :: A(*), B(*)
+        real(ep),  intent(out)   :: work(*)
+        integer :: na, nb, lwt
+        ${target_real}$, allocatable :: At(:), Bt(:), work_t(:)
+        na = nloc(desca); nb = nloc(descb)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Bt(max(1,nb)), work_t(1))
+            call ${R}$gels(trans, m, n, nrhs, At, ia, ja, desca, &
+                            Bt, ib, jb, descb, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Bt(nb), work_t(lwt))
+            At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
+            call ${R}$gels(trans, m, n, nrhs, At, ia, ja, desca, &
+                            Bt, ib, jb, descb, work_t, lwt, info)
+            A(1:na) = t2q_r(At); B(1:nb) = t2q_r(Bt)
         end if
     end subroutine
 
@@ -905,6 +955,32 @@ contains
             call ${C}$unmlq(side, trans, m, n, k, At, ia, ja, desca, tau_t, &
                              Ct, ic, jc, descc, work_t, lwt, info)
             C(1:nc) = t2q_c(Ct)
+        end if
+    end subroutine
+
+    subroutine target_pzgels(trans, m, n, nrhs, A, ia, ja, desca, &
+                             B, ib, jb, descb, work, lwork, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: m, n, nrhs, ia, ja, ib, jb, lwork
+        integer,     intent(in)    :: desca(9), descb(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*), B(*)
+        complex(ep), intent(out)   :: work(*)
+        integer :: na, nb, lwt
+        ${target_complex}$, allocatable :: At(:), Bt(:), work_t(:)
+        na = nloc(desca); nb = nloc(descb)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Bt(max(1,nb)), work_t(1))
+            call ${C}$gels(trans, m, n, nrhs, At, ia, ja, desca, &
+                            Bt, ib, jb, descb, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Bt(nb), work_t(lwt))
+            At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
+            call ${C}$gels(trans, m, n, nrhs, At, ia, ja, desca, &
+                            Bt, ib, jb, descb, work_t, lwt, info)
+            A(1:na) = t2q_c(At); B(1:nb) = t2q_c(Bt)
         end if
     end subroutine
 

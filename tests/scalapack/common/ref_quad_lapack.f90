@@ -130,6 +130,16 @@ module ref_quad_lapack
             integer,   intent(out)   :: info
         end subroutine dormlq
 
+        subroutine dgels(trans, m, n, nrhs, A, lda, B, ldb, &
+                         work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgels
+
         ! ── QR factorization — complex ───────────────────────────────
         subroutine zgeqrf(m, n, A, lda, tau, work, lwork, info)
             import :: ep
@@ -194,6 +204,16 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zunmlq
+
+        subroutine zgels(trans, m, n, nrhs, A, lda, B, ldb, &
+                         work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgels
 
         ! ── Symmetric / Hermitian eigenvalue ─────────────────────────
         subroutine dsyev(jobz, uplo, n, A, lda, w, work, lwork, info)
