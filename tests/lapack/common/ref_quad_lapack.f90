@@ -2962,6 +2962,71 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
             integer,     intent(out)   :: info
         end subroutine zppsvx
+
+        ! ── Banded general / symmetric / Hermitian expert solvers ────
+        subroutine dgbsvx(fact, trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, ipiv, &
+                          equed, R, C, B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx
+            real(ep),  intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*), R(*), C(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgbsvx
+
+        subroutine zgbsvx(fact, trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, ipiv, &
+                          equed, R, C, B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx
+            complex(ep), intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),    intent(inout) :: R(*), C(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbsvx
+
+        subroutine dsysvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, lwork
+            real(ep),  intent(inout) :: AF(ldaf,*)
+            real(ep),  intent(in)    :: A(lda,*), B(ldb,*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsysvx
+
+        subroutine zsysvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, lwork
+            complex(ep), intent(inout) :: AF(ldaf,*)
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zsysvx
+
+        subroutine zhesvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, lwork
+            complex(ep), intent(inout) :: AF(ldaf,*)
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhesvx
     end interface
 
 end module ref_quad_lapack

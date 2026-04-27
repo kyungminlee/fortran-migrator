@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_298 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -104,7 +104,7 @@ _298 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgbrfs | 19.04 | exact | 31.68 |
 | ✓ | dgbrfsx | — | — | — |
 | ✓ | dgbsv | 18.91 | exact | 31.60 |
-| ✓ | dgbsvx | — | — | — |
+| ✓ | dgbsvx | 18.65 | exact | 31.83 |
 | ✓ | dgbsvxx | — | — | — |
 |  | dgbtf2 | — | — | — |
 | ✓ | dgbtrf | 19.02 | exact | 31.77 |
@@ -526,7 +526,7 @@ _298 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dsysv_aa_2stage | — | — | — |
 | ✓ | dsysv_rk | — | — | — |
 | ✓ | dsysv_rook | — | — | — |
-| ✓ | dsysvx | — | — | — |
+| ✓ | dsysvx | 18.53 | exact | 31.51 |
 | ✓ | dsysvxx | — | — | — |
 | ✓ | dsyswapr | — | — | — |
 |  | dsytd2 | — | — | — |
@@ -608,7 +608,7 @@ _298 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgbrfs | 18.82 | exact | 31.65 |
 | ✓ | zgbrfsx | — | — | — |
 | ✓ | zgbsv | 18.90 | exact | 31.43 |
-| ✓ | zgbsvx | — | — | — |
+| ✓ | zgbsvx | 18.77 | exact | 31.60 |
 | ✓ | zgbsvxx | — | — | — |
 |  | zgbtf2 | — | — | — |
 | ✓ | zgbtrf | 19.07 | exact | 31.88 |
@@ -738,7 +738,7 @@ _298 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhesv_aa_2stage | — | — | — |
 | ✓ | zhesv_rk | — | — | — |
 | ✓ | zhesv_rook | — | — | — |
-| ✓ | zhesvx | — | — | — |
+| ✓ | zhesvx | 18.92 | exact | 31.64 |
 | ✓ | zhesvxx | — | — | — |
 | ✓ | zheswapr | — | — | — |
 |  | zhetd2 | — | — | — |
@@ -999,7 +999,7 @@ _298 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zsysv_aa_2stage | — | — | — |
 | ✓ | zsysv_rk | — | — | — |
 | ✓ | zsysv_rook | — | — | — |
-| ✓ | zsysvx | — | — | — |
+| ✓ | zsysvx | 18.64 | exact | 31.49 |
 | ✓ | zsysvxx | — | — | — |
 | ✓ | zsyswapr | — | — | — |
 |  | zsytf2 | — | — | — |
