@@ -40,7 +40,7 @@ module target_lapack
     use prec_kinds, only: ep
     use target_conv, only: q2t_r, t2q_r, q2t_c, t2q_c
 #:if target == 'multifloats'
-    use multifloats, only: real64x2, cmplx64x2
+    use multifloats, only: real64x2, cmplx64x2, operator(==)
 #:endif
     implicit none
     private

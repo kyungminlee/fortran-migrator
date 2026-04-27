@@ -5,19 +5,6 @@ Issues observed while adding LAPACK tests that need fixes outside
 specific routines blocked, the file(s) involved, and what would have
 to change.
 
-## Phase L4 — partial: infrastructure landed, 12 tests still to write
-
-L4 ref interfaces (in `common/ref_quad_lapack.f90`) and target wrappers
-(in `common/target_lapack_body.fypp`) are in place for all 14 routines:
-
-- `dtgexc/ztgexc, dtgsen/ztgsen, dtgsna/ztgsna, dtgsja/ztgsja,`
-  `dtgsyl/ztgsyl, dggglm/zggglm, dgglse/zgglse`
-
-Tests so far: `test_dtgexc.f90`, `test_ztgexc.f90`. Remaining 12 tests
-need to be written. Pattern: each routine needs a generalized Schur
-form / constrained-LS setup; follow `test_dtgexc.f90` for the Schur
-family and write a fresh setup for `dggglm/dgglse` (constrained LS).
-
 ## Phases L5..L23 — not yet started
 
 Remaining phases per `~/.claude/plans/start-a-project-to-stateless-bumblebee.md`:
