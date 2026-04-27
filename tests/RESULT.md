@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_224 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_230 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -112,7 +112,7 @@ _224 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgebak | — | — | — |
 | ✓ | dgebal | — | — | — |
 |  | dgebd2 | — | — | — |
-| ✓ | dgebrd | — | — | — |
+| ✓ | dgebrd | 17.34 | exact | 30.48 |
 | ✓ | dgecon | 18.00 | exact | 30.41 |
 | ✓ | dgedmd | — | — | — |
 | ✓ | dgedmdq | — | — | — |
@@ -389,7 +389,7 @@ _224 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dorcsd2by1 | — | — | — |
 | ✓ | dorg2l | — | — | — |
 | ✓ | dorg2r | — | — | — |
-| ✓ | dorgbr | — | — | — |
+| ✓ | dorgbr | 18.64 | exact | 31.35 |
 | ✓ | dorghr | 17.74 | exact | 30.25 |
 |  | dorgl2 | — | — | — |
 | ✓ | dorglq | 18.19 | exact | 31.11 |
@@ -404,7 +404,7 @@ _224 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dorm22 | — | — | — |
 | ✓ | dorm2l | — | — | — |
 | ✓ | dorm2r | — | — | — |
-| ✓ | dormbr | — | — | — |
+| ✓ | dormbr | 18.60 | exact | 31.44 |
 | ✓ | dormhr | — | — | — |
 |  | dorml2 | — | — | — |
 | ✓ | dormlq | — | — | — |
@@ -616,7 +616,7 @@ _224 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgebak | — | — | — |
 | ✓ | zgebal | — | — | — |
 |  | zgebd2 | — | — | — |
-| ✓ | zgebrd | — | — | — |
+| ✓ | zgebrd | 17.31 | exact | 30.53 |
 | ✓ | zgecon | 17.80 | exact | 30.45 |
 | ✓ | zgedmd | — | — | — |
 | ✓ | zgedmdq | — | — | — |
@@ -1076,7 +1076,7 @@ _224 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zuncsd2by1 | — | — | — |
 | ✓ | zung2l | — | — | — |
 | ✓ | zung2r | — | — | — |
-| ✓ | zungbr | — | — | — |
+| ✓ | zungbr | 18.50 | exact | 31.33 |
 | ✓ | zunghr | 17.76 | exact | 30.58 |
 |  | zungl2 | — | — | — |
 | ✓ | zunglq | 18.20 | exact | 30.81 |
@@ -1091,7 +1091,7 @@ _224 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zunm22 | — | — | — |
 | ✓ | zunm2l | — | — | — |
 | ✓ | zunm2r | — | — | — |
-| ✓ | zunmbr | — | — | — |
+| ✓ | zunmbr | 18.55 | exact | 31.47 |
 | ✓ | zunmhr | — | — | — |
 |  | zunml2 | — | — | — |
 | ✓ | zunmlq | — | — | — |

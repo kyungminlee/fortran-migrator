@@ -116,6 +116,7 @@ module target_lapack
     public :: target_dsytrd, target_zhetrd, target_dsptrd, target_zhptrd, target_dsbtrd, target_zhbtrd
     public :: target_dorgtr, target_zungtr, target_dormtr, target_zunmtr
     public :: target_dopgtr, target_zupgtr, target_dopmtr, target_zupmtr
+    public :: target_dgebrd, target_zgebrd, target_dorgbr, target_zungbr, target_dormbr, target_zunmbr
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2292,6 +2293,66 @@ $:IMPORT_C()
             character, intent(in) :: side, uplo, trans
             integer,   intent(in) :: m, n, ldc
             ${target_complex}$, intent(in)    :: AP(*), tau(*)
+            ${target_complex}$, intent(inout) :: C(ldc,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 23 — bidiagonal reduction ─────────────────────────
+        subroutine ${R}$gebrd(m, n, A, lda, D, E, tauq, taup, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in) :: m, n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: D(*), E(*), tauq(*), taup(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$gebrd(m, n, A, lda, D, E, tauq, taup, work, lwork, info)
+$:IMPORT_RC()
+            integer, intent(in) :: m, n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_real}$,    intent(out)   :: D(*), E(*)
+            ${target_complex}$, intent(out)   :: tauq(*), taup(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$orgbr(vect, m, n, k, A, lda, tau, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: vect
+            integer,   intent(in) :: m, n, k, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(in)    :: tau(*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$ungbr(vect, m, n, k, A, lda, tau, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: vect
+            integer,   intent(in) :: m, n, k, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(in)    :: tau(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$ormbr(vect, side, trans, m, n, k, A, lda, tau, C, ldc, &
+                              work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: vect, side, trans
+            integer,   intent(in) :: m, n, k, lda, ldc, lwork
+            ${target_real}$, intent(in)    :: A(lda,*), tau(*)
+            ${target_real}$, intent(inout) :: C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$unmbr(vect, side, trans, m, n, k, A, lda, tau, C, ldc, &
+                              work, lwork, info)
+$:IMPORT_C()
+            character, intent(in) :: vect, side, trans
+            integer,   intent(in) :: m, n, k, lda, ldc, lwork
+            ${target_complex}$, intent(in)    :: A(lda,*), tau(*)
             ${target_complex}$, intent(inout) :: C(ldc,*)
             ${target_complex}$, intent(out)   :: work(*)
             integer, intent(out) :: info
@@ -6239,6 +6300,129 @@ $:CPACK_INV('zsptri', C + 'sptri')
         APt = q2t_c(AP(1:np)); taut = q2t_c(tau(1:ntau))
         Ct = q2t_c(C(1:ldc, 1:n))
         call ${C}$upmtr(side, uplo, trans, m, n, APt, taut, Ct, ldc, work, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    ! ── Phase 23 wrappers ────────────────────────────────────────────
+    subroutine target_dgebrd(m, n, A, lda, D, E, tauq, taup, info)
+        integer,  intent(in)    :: m, n, lda
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: D(*), E(*), tauq(*), taup(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Dt(:), Et(:), tauqt(:), taupt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, mn, nE
+        mn = min(m, n); nE = max(1, mn - 1)
+        allocate(At(lda, n), Dt(mn), Et(nE), tauqt(mn), taupt(mn))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gebrd(m, n, At, lda, Dt, Et, tauqt, taupt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$gebrd(m, n, At, lda, Dt, Et, tauqt, taupt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        D(1:mn) = t2q_r(Dt); E(1:nE) = t2q_r(Et)
+        tauq(1:mn) = t2q_r(tauqt); taup(1:mn) = t2q_r(taupt)
+    end subroutine
+
+    subroutine target_zgebrd(m, n, A, lda, D, E, tauq, taup, info)
+        integer,     intent(in)    :: m, n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: D(*), E(*)
+        complex(ep), intent(out)   :: tauq(*), taup(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), tauqt(:), taupt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$,    allocatable :: Dt(:), Et(:)
+        integer :: lwork, mn, nE
+        mn = min(m, n); nE = max(1, mn - 1)
+        allocate(At(lda, n), Dt(mn), Et(nE), tauqt(mn), taupt(mn))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gebrd(m, n, At, lda, Dt, Et, tauqt, taupt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$gebrd(m, n, At, lda, Dt, Et, tauqt, taupt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        D(1:mn) = t2q_r(Dt); E(1:nE) = t2q_r(Et)
+        tauq(1:mn) = t2q_c(tauqt); taup(1:mn) = t2q_c(taupt)
+    end subroutine
+
+    subroutine target_dorgbr(vect, m, n, k, A, lda, tau, info)
+        character, intent(in)    :: vect
+        integer,   intent(in)    :: m, n, k, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(in)    :: tau(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, ntau
+        ntau = merge(min(m, k), min(n, k), vect == 'Q' .or. vect == 'q')
+        allocate(At(lda, n), taut(max(1, ntau)))
+        At = q2t_r(A(1:lda, 1:n)); taut = q2t_r(tau(1:max(1, ntau)))
+        call ${R}$orgbr(vect, m, n, k, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$orgbr(vect, m, n, k, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_zungbr(vect, m, n, k, A, lda, tau, info)
+        character,   intent(in)    :: vect
+        integer,     intent(in)    :: m, n, k, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, ntau
+        ntau = merge(min(m, k), min(n, k), vect == 'Q' .or. vect == 'q')
+        allocate(At(lda, n), taut(max(1, ntau)))
+        At = q2t_c(A(1:lda, 1:n)); taut = q2t_c(tau(1:max(1, ntau)))
+        call ${C}$ungbr(vect, m, n, k, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$ungbr(vect, m, n, k, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_dormbr(vect, side, trans, m, n, k, A, lda, tau, C, ldc, info)
+        character, intent(in)    :: vect, side, trans
+        integer,   intent(in)    :: m, n, k, lda, ldc
+        real(ep),  intent(in)    :: A(lda,*), tau(*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, nq, ncolA
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        ncolA = merge(nq, k, vect == 'Q' .or. vect == 'q')
+        allocate(At(lda, ncolA), taut(min(nq, k)), Ct(ldc, n))
+        At = q2t_r(A(1:lda, 1:ncolA)); taut = q2t_r(tau(1:min(nq, k)))
+        Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$ormbr(vect, side, trans, m, n, k, At, lda, taut, Ct, ldc, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$ormbr(vect, side, trans, m, n, k, At, lda, taut, Ct, ldc, work, lwork, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zunmbr(vect, side, trans, m, n, k, A, lda, tau, C, ldc, info)
+        character,   intent(in)    :: vect, side, trans
+        integer,     intent(in)    :: m, n, k, lda, ldc
+        complex(ep), intent(in)    :: A(lda,*), tau(*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), Ct(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, nq, ncolA
+        nq = merge(m, n, side == 'L' .or. side == 'l')
+        ncolA = merge(nq, k, vect == 'Q' .or. vect == 'q')
+        allocate(At(lda, ncolA), taut(min(nq, k)), Ct(ldc, n))
+        At = q2t_c(A(1:lda, 1:ncolA)); taut = q2t_c(tau(1:min(nq, k)))
+        Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$unmbr(vect, side, trans, m, n, k, At, lda, taut, Ct, ldc, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$unmbr(vect, side, trans, m, n, k, At, lda, taut, Ct, ldc, work, lwork, info)
         C(1:ldc, 1:n) = t2q_c(Ct)
     end subroutine
 
