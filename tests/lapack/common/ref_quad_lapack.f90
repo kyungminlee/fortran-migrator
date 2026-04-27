@@ -2689,6 +2689,83 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: rwork(*)
             integer,     intent(out)   :: info
         end subroutine zggev
+
+        ! ── Modern (LAPACK 3.7+) blocked QR/LQ ───────────────────────
+        subroutine dgeqr(m, n, A, lda, T, tsize, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, tsize, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqr
+
+        subroutine zgeqr(m, n, A, lda, T, tsize, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, tsize, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqr
+
+        subroutine dgelq(m, n, A, lda, T, tsize, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, tsize, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgelq
+
+        subroutine zgelq(m, n, A, lda, T, tsize, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, tsize, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgelq
+
+        subroutine dgemqr(side, trans, m, n, k, A, lda, T, tsize, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, tsize, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), T(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgemqr
+
+        subroutine zgemqr(side, trans, m, n, k, A, lda, T, tsize, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, tsize, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), T(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgemqr
+
+        subroutine dgemlq(side, trans, m, n, k, A, lda, T, tsize, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, tsize, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), T(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgemlq
+
+        subroutine zgemlq(side, trans, m, n, k, A, lda, T, tsize, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, tsize, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), T(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgemlq
     end interface
 
 end module ref_quad_lapack

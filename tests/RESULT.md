@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_272 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_280 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -125,7 +125,7 @@ _272 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dgehd2 | — | — | — |
 | ✓ | dgehrd | 17.33 | exact | 29.77 |
 | ✓ | dgejsv | — | — | — |
-| ✓ | dgelq | — | — | — |
+| ✓ | dgelq | 18.74 | exact | 31.46 |
 |  | dgelq2 | — | — | — |
 | ✓ | dgelqf | 18.92 | exact | 31.47 |
 | ✓ | dgelqt | — | — | — |
@@ -135,15 +135,15 @@ _272 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgelss | — | — | — |
 | ✓ | dgelst | — | — | — |
 | ✓ | dgelsy | — | — | — |
-| ✓ | dgemlq | — | — | — |
+| ✓ | dgemlq | 18.82 | exact | 31.48 |
 | ✓ | dgemlqt | — | — | — |
-| ✓ | dgemqr | — | — | — |
+| ✓ | dgemqr | 18.63 | exact | 31.38 |
 | ✓ | dgemqrt | — | — | — |
 |  | dgeql2 | — | — | — |
 | ✓ | dgeqlf | 18.18 | exact | 31.01 |
 | ✓ | dgeqp3 | 18.88 | exact | 31.45 |
 | ✓ | dgeqp3rk | — | — | — |
-| ✓ | dgeqr | — | — | — |
+| ✓ | dgeqr | 18.97 | exact | 31.58 |
 |  | dgeqr2 | — | — | — |
 | ✓ | dgeqr2p | — | — | — |
 | ✓ | dgeqrf | 18.44 | exact | 31.32 |
@@ -629,7 +629,7 @@ _272 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zgehd2 | — | — | — |
 | ✓ | zgehrd | 17.35 | exact | 30.31 |
 | ✓ | zgejsv | — | — | — |
-| ✓ | zgelq | — | — | — |
+| ✓ | zgelq | 18.79 | exact | 31.62 |
 |  | zgelq2 | — | — | — |
 | ✓ | zgelqf | 18.67 | exact | 31.43 |
 | ✓ | zgelqt | — | — | — |
@@ -639,15 +639,15 @@ _272 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgelss | — | — | — |
 | ✓ | zgelst | — | — | — |
 | ✓ | zgelsy | — | — | — |
-| ✓ | zgemlq | — | — | — |
+| ✓ | zgemlq | 18.65 | exact | 31.41 |
 | ✓ | zgemlqt | — | — | — |
-| ✓ | zgemqr | — | — | — |
+| ✓ | zgemqr | 18.72 | exact | 31.43 |
 | ✓ | zgemqrt | — | — | — |
 |  | zgeql2 | — | — | — |
 | ✓ | zgeqlf | 18.55 | exact | 31.05 |
 | ✓ | zgeqp3 | 18.93 | exact | 31.48 |
 | ✓ | zgeqp3rk | — | — | — |
-| ✓ | zgeqr | — | — | — |
+| ✓ | zgeqr | 18.84 | exact | 31.52 |
 |  | zgeqr2 | — | — | — |
 | ✓ | zgeqr2p | — | — | — |
 | ✓ | zgeqrf | 18.76 | exact | 31.35 |
