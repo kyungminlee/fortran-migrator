@@ -1184,6 +1184,107 @@ module ref_quad_lapack
             complex(ep), intent(inout) :: AP(*)
             integer,     intent(out)   :: info
         end subroutine zpptri
+
+        ! ── Phase 11 — complex banded / tridiagonal ──────────────────
+        subroutine zgbtrf(m, n, kl, ku, AB, ldab, ipiv, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, kl, ku, ldab
+            complex(ep), intent(inout) :: AB(ldab,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgbtrf
+
+        subroutine zgbtrs(trans, n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+            complex(ep), intent(in)    :: AB(ldab,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgbtrs
+
+        subroutine zgbsv(n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+            complex(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgbsv
+
+        subroutine zpbtrf(uplo, n, kd, AB, ldab, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, ldab
+            complex(ep), intent(inout) :: AB(ldab,*)
+            integer,     intent(out)   :: info
+        end subroutine zpbtrf
+
+        subroutine zpbtrs(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+            complex(ep), intent(in)    :: AB(ldab,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpbtrs
+
+        subroutine zpbsv(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+            complex(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpbsv
+
+        subroutine zgttrf(n, dl, d, du, du2, ipiv, info)
+            import :: ep
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: dl(*), d(*), du(*)
+            complex(ep), intent(out)   :: du2(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgttrf
+
+        subroutine zgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: dl(*), d(*), du(*), du2(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgttrs
+
+        subroutine zgtsv(n, nrhs, dl, d, du, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: dl(*), d(*), du(*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgtsv
+
+        subroutine zpttrf(n, d, e, info)
+            import :: ep
+            integer,     intent(in)    :: n
+            real(ep),    intent(inout) :: d(*)
+            complex(ep), intent(inout) :: e(*)
+            integer,     intent(out)   :: info
+        end subroutine zpttrf
+
+        subroutine zpttrs(uplo, n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            real(ep),    intent(in)    :: d(*)
+            complex(ep), intent(in)    :: e(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpttrs
+
+        subroutine zptsv(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, nrhs, ldb
+            real(ep),    intent(inout) :: d(*)
+            complex(ep), intent(inout) :: e(*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zptsv
     end interface
 
 end module ref_quad_lapack
