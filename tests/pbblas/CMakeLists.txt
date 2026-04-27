@@ -1,0 +1,131 @@
+# Differential precision tests for migrated PBBLAS.
+#
+# PBBLAS is the distributed PB-BLAS auxiliary helper layer used inside
+# PBLAS — Fortran with BLACS for the few routines that move data
+# between processes (pbdtran/pbdtrnv) and pure local arithmetic for
+# the rest (pbdmatadd/pbdvecadd).
+#
+# Each test program builds a small problem at REAL(KIND=16), runs on a
+# BLACS grid (default 2x2 → mpiexec -n 4), calls the migrated
+# q/e/dd-prefix entry point through a per-target wrapper, and either
+#   - verifies locally on each rank (matadd/vecadd: data is local), or
+#   - gathers the distributed result to rank 0 and compares against a
+#     serial reference (pbdtran).
+
+if(NOT HAVE_REAL16)
+    message(STATUS "tests/pbblas: skipping — HAVE_REAL16 is required")
+    return()
+endif()
+
+if(NOT MPI_Fortran_FOUND)
+    message(STATUS "tests/pbblas: skipping — MPI Fortran not found "
+                   "(required for BLACS grid init)")
+    return()
+endif()
+
+if(NOT TARGET refblas_quad)
+    message(STATUS "tests/pbblas: skipping — refblas_quad target not built "
+                   "(tests/blas must be staged alongside tests/pbblas)")
+    return()
+endif()
+
+if(NOT TARGET ${LIB_PREFIX}pbblas)
+    message(STATUS "tests/pbblas: skipping — ${LIB_PREFIX}pbblas not built")
+    return()
+endif()
+
+if(NOT TARGET ${LIB_PREFIX}blacs)
+    message(STATUS "tests/pbblas: skipping — ${LIB_PREFIX}blacs not built")
+    return()
+endif()
+
+# ── Common helper modules ───────────────────────────────────────────
+# We reuse pblas_grid / pblas_distrib byte-for-byte from tests/pblas;
+# the module names match those in tests/pblas (pblas_grid /
+# pblas_distrib) but the file content is identical, so when both
+# subtrees are staged the .mod produced is the same and there is no
+# collision in ${PROJECT_BINARY_DIR}/fmod (same convention as
+# prec_kinds across tests/blas, tests/ptzblas, tests/pblas, ...).
+add_library(pbblas_test_common STATIC
+    common/prec_kinds.f90
+    common/compare.f90
+    common/prec_report.f90
+    common/test_data.f90
+    common/ref_quad_blas.f90
+    common/pblas_grid.f90
+    common/pblas_distrib.f90
+    common/scalapack_tools.f90
+)
+fortran_module_layout(pbblas_test_common)
+target_link_libraries(pbblas_test_common PUBLIC
+    refblas_quad
+    ${LIB_PREFIX}blacs
+    MPI::MPI_Fortran
+)
+
+# ── Per-target wrapper module ───────────────────────────────────────
+set(_wrapper_dir ${CMAKE_CURRENT_SOURCE_DIR}/target_${TARGET_NAME})
+if(NOT IS_DIRECTORY ${_wrapper_dir})
+    message(STATUS "tests/pbblas: no wrapper for target '${TARGET_NAME}' "
+                   "at ${_wrapper_dir} — skipping")
+    return()
+endif()
+
+add_fypp_source(_pbblas_wrapper_src
+    ${_wrapper_dir}/target_pbblas.fypp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+add_library(pbblas_test_target STATIC ${_pbblas_wrapper_src})
+fortran_module_layout(pbblas_test_target)
+target_link_libraries(pbblas_test_target PUBLIC
+    pbblas_test_common
+    target_conv
+    ${LIB_PREFIX}pbblas
+)
+if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
+    target_link_libraries(pbblas_test_target PUBLIC multifloatsf)
+endif()
+
+# ── Test executables ────────────────────────────────────────────────
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
+
+# Default 4 ranks → 2×2 grid. Override at configure time:
+# -DPBBLAS_TEST_NPROC=<count>.
+set(PBBLAS_TEST_NPROC 4 CACHE STRING
+    "MPI process count for tests/pbblas (default 4 → 2x2 grid)")
+
+function(add_pbblas_precision_test test_src)
+    get_filename_component(test_name ${test_src} NAME_WE)
+    add_executable(${test_name} ${test_src})
+    # Same -fno-lto rationale as tests/pblas: Ubuntu's default
+    # -flto=auto confuses the linker about which archive members
+    # satisfy which cross-archive references.
+    target_compile_options(${test_name} PRIVATE -fno-lto)
+    target_link_options(${test_name} PRIVATE -fno-lto)
+    # PBBLAS / PTZBLAS / BLACS / BLAS form a cyclic static-archive
+    # graph — pbblas references blacs (Cblacs_gridinfo / DGEBR2D-type
+    # comm primitives) and ptzblas/blas; ptzblas references blas.
+    # Wrap in LINK_GROUP(RESCAN) so the linker re-scans member
+    # archives until cross-references settle.
+    set(_pbblas_cycle
+        pbblas_test_target pbblas_test_common
+        ${LIB_PREFIX}pbblas ${LIB_PREFIX}ptzblas
+        ${LIB_PREFIX}blacs ${LIB_PREFIX}blas refblas_quad)
+    foreach(_common blas_common blacs_common ptzblas_common pbblas_common)
+        if(TARGET ${_common})
+            list(APPEND _pbblas_cycle ${_common})
+        endif()
+    endforeach()
+    target_link_libraries(${test_name} PRIVATE
+        "$<LINK_GROUP:RESCAN,${_pbblas_cycle}>")
+    add_test(NAME pbblas_${test_name}
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${PBBLAS_TEST_NPROC}
+                     ${MPIEXEC_PREFLAGS} $<TARGET_FILE:${test_name}> ${MPIEXEC_POSTFLAGS}
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
+endfunction()
+
+file(GLOB _tests CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_*.f90)
+foreach(_t ${_tests})
+    add_pbblas_precision_test(${_t})
+endforeach()
