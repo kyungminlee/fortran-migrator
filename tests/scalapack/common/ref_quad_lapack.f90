@@ -140,6 +140,31 @@ module ref_quad_lapack
             integer,   intent(out)   :: info
         end subroutine dgels
 
+        subroutine dposv(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dposv
+
+        subroutine dpotri(uplo, n, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dpotri
+
+        subroutine dgetri(n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, lda, lwork
+            integer,  intent(in)    :: ipiv(*)
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgetri
+
         ! ── QR factorization — complex ───────────────────────────────
         subroutine zgeqrf(m, n, A, lda, tau, work, lwork, info)
             import :: ep
@@ -214,6 +239,46 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zgels
+
+        subroutine zposv(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zposv
+
+        subroutine zpotrf(uplo, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotrf
+
+        subroutine zgetrf(m, n, A, lda, ipiv, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgetrf
+
+        subroutine zpotri(uplo, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotri
+
+        subroutine zgetri(n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, lda, lwork
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgetri
 
         ! ── Symmetric / Hermitian eigenvalue ─────────────────────────
         subroutine dsyev(jobz, uplo, n, A, lda, w, work, lwork, info)

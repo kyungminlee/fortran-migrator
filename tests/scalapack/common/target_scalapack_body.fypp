@@ -52,6 +52,7 @@ module target_scalapack
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgels
+    public :: target_pdposv, target_pdpotri, target_pdgetri
     public :: target_pdsyev
     public :: target_pdgesvd
     public :: target_pdlange
@@ -60,6 +61,8 @@ module target_scalapack
     public :: target_pzgeqr2, target_pzungqr, target_pzunmqr
     public :: target_pzgelqf, target_pzunglq, target_pzunmlq
     public :: target_pzgels
+    public :: target_pzposv, target_pzpotrf, target_pzpotri
+    public :: target_pzgetrf, target_pzgetri
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -202,6 +205,36 @@ $:IMPORT_R()
             ${target_real}$, intent(out)   :: work(*)
         end subroutine
 
+        subroutine ${R}$posv(uplo, n, nrhs, A, ia, ja, desca, &
+                             B, ib, jb, descb, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb
+            integer,   intent(in)    :: desca(9), descb(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*), B(*)
+        end subroutine
+
+        subroutine ${R}$potri(uplo, n, A, ia, ja, desca, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+        end subroutine
+
+        subroutine ${R}$getri(n, A, ia, ja, desca, ipiv, work, lwork, &
+                              iwork, liwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: n, ia, ja, lwork, liwork
+            integer, intent(in)    :: desca(9), ipiv(*)
+            integer, intent(out)   :: info
+            integer, intent(out)   :: iwork(*)
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
         subroutine ${R}$syev(jobz, uplo, n, A, ia, ja, desca, w, &
                              Z, iz, jz, descz, work, lwork, info)
 $:IMPORT_R()
@@ -341,6 +374,53 @@ $:IMPORT_C()
             integer,   intent(in)    :: desca(9), descb(9)
             integer,   intent(out)   :: info
             ${target_complex}$, intent(inout) :: A(*), B(*)
+            ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$posv(uplo, n, nrhs, A, ia, ja, desca, &
+                             B, ib, jb, descb, info)
+$:IMPORT_C()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb
+            integer,   intent(in)    :: desca(9), descb(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*), B(*)
+        end subroutine
+
+        subroutine ${C}$potrf(uplo, n, A, ia, ja, desca, info)
+$:IMPORT_C()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+        end subroutine
+
+        subroutine ${C}$getrf(m, n, A, ia, ja, desca, ipiv, info)
+$:IMPORT_C()
+            integer, intent(in)    :: m, n, ia, ja
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: ipiv(*), info
+            ${target_complex}$, intent(inout) :: A(*)
+        end subroutine
+
+        subroutine ${C}$potri(uplo, n, A, ia, ja, desca, info)
+$:IMPORT_C()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+        end subroutine
+
+        subroutine ${C}$getri(n, A, ia, ja, desca, ipiv, work, lwork, &
+                              iwork, liwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: n, ia, ja, lwork, liwork
+            integer, intent(in)    :: desca(9), ipiv(*)
+            integer, intent(out)   :: info
+            integer, intent(out)   :: iwork(*)
+            ${target_complex}$, intent(inout) :: A(*)
             ${target_complex}$, intent(out)   :: work(*)
         end subroutine
 
@@ -658,6 +738,64 @@ contains
             call ${R}$gels(trans, m, n, nrhs, At, ia, ja, desca, &
                             Bt, ib, jb, descb, work_t, lwt, info)
             A(1:na) = t2q_r(At); B(1:nb) = t2q_r(Bt)
+        end if
+    end subroutine
+
+    subroutine target_pdposv(uplo, n, nrhs, A, ia, ja, desca, &
+                             B, ib, jb, descb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb
+        integer,   intent(in)    :: desca(9), descb(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(inout) :: A(*), B(*)
+        integer :: na, nb
+        ${target_real}$, allocatable :: At(:), Bt(:)
+        na = nloc(desca); nb = nloc(descb)
+        allocate(At(na), Bt(nb))
+        At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
+        call ${R}$posv(uplo, n, nrhs, At, ia, ja, desca, &
+                        Bt, ib, jb, descb, info)
+        A(1:na) = t2q_r(At); B(1:nb) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_pdpotri(uplo, n, A, ia, ja, desca, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, ia, ja
+        integer,   intent(in)    :: desca(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(inout) :: A(*)
+        integer :: na
+        ${target_real}$, allocatable :: At(:)
+        na = nloc(desca)
+        allocate(At(na))
+        At = q2t_r(A(1:na))
+        call ${R}$potri(uplo, n, At, ia, ja, desca, info)
+        A(1:na) = t2q_r(At)
+    end subroutine
+
+    subroutine target_pdgetri(n, A, ia, ja, desca, ipiv, work, lwork, &
+                              iwork, liwork, info)
+        integer,  intent(in)    :: n, ia, ja, lwork, liwork
+        integer,  intent(in)    :: desca(9), ipiv(*)
+        integer,  intent(out)   :: info
+        integer,  intent(out)   :: iwork(*)
+        real(ep), intent(inout) :: A(*)
+        real(ep), intent(out)   :: work(*)
+        integer :: na, lwt
+        ${target_real}$, allocatable :: At(:), work_t(:)
+        na = nloc(desca)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), work_t(1))
+            call ${R}$getri(n, At, ia, ja, desca, ipiv, work_t, -1, &
+                             iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$getri(n, At, ia, ja, desca, ipiv, work_t, lwt, &
+                             iwork, liwork, info)
+            A(1:na) = t2q_r(At)
         end if
     end subroutine
 
@@ -981,6 +1119,93 @@ contains
             call ${C}$gels(trans, m, n, nrhs, At, ia, ja, desca, &
                             Bt, ib, jb, descb, work_t, lwt, info)
             A(1:na) = t2q_c(At); B(1:nb) = t2q_c(Bt)
+        end if
+    end subroutine
+
+    subroutine target_pzposv(uplo, n, nrhs, A, ia, ja, desca, &
+                             B, ib, jb, descb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, ia, ja, ib, jb
+        integer,     intent(in)    :: desca(9), descb(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*), B(*)
+        integer :: na, nb
+        ${target_complex}$, allocatable :: At(:), Bt(:)
+        na = nloc(desca); nb = nloc(descb)
+        allocate(At(na), Bt(nb))
+        At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
+        call ${C}$posv(uplo, n, nrhs, At, ia, ja, desca, &
+                        Bt, ib, jb, descb, info)
+        A(1:na) = t2q_c(At); B(1:nb) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_pzpotrf(uplo, n, A, ia, ja, desca, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, ia, ja
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        integer :: na
+        ${target_complex}$, allocatable :: At(:)
+        na = nloc(desca)
+        allocate(At(na))
+        At = q2t_c(A(1:na))
+        call ${C}$potrf(uplo, n, At, ia, ja, desca, info)
+        A(1:na) = t2q_c(At)
+    end subroutine
+
+    subroutine target_pzpotri(uplo, n, A, ia, ja, desca, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, ia, ja
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        integer :: na
+        ${target_complex}$, allocatable :: At(:)
+        na = nloc(desca)
+        allocate(At(na))
+        At = q2t_c(A(1:na))
+        call ${C}$potri(uplo, n, At, ia, ja, desca, info)
+        A(1:na) = t2q_c(At)
+    end subroutine
+
+    subroutine target_pzgetrf(m, n, A, ia, ja, desca, ipiv, info)
+        integer,     intent(in)    :: m, n, ia, ja
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: ipiv(*), info
+        complex(ep), intent(inout) :: A(*)
+        integer :: na
+        ${target_complex}$, allocatable :: At(:)
+        na = nloc(desca)
+        allocate(At(na))
+        At = q2t_c(A(1:na))
+        call ${C}$getrf(m, n, At, ia, ja, desca, ipiv, info)
+        A(1:na) = t2q_c(At)
+    end subroutine
+
+    subroutine target_pzgetri(n, A, ia, ja, desca, ipiv, work, lwork, &
+                              iwork, liwork, info)
+        integer,     intent(in)    :: n, ia, ja, lwork, liwork
+        integer,     intent(in)    :: desca(9), ipiv(*)
+        integer,     intent(out)   :: info
+        integer,     intent(out)   :: iwork(*)
+        complex(ep), intent(inout) :: A(*)
+        complex(ep), intent(out)   :: work(*)
+        integer :: na, lwt
+        ${target_complex}$, allocatable :: At(:), work_t(:)
+        na = nloc(desca)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), work_t(1))
+            call ${C}$getri(n, At, ia, ja, desca, ipiv, work_t, -1, &
+                             iwork, liwork, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), work_t(lwt))
+            At = q2t_c(A(1:na))
+            call ${C}$getri(n, At, ia, ja, desca, ipiv, work_t, lwt, &
+                             iwork, liwork, info)
+            A(1:na) = t2q_c(At)
         end if
     end subroutine
 
