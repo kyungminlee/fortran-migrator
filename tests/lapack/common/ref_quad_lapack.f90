@@ -3623,6 +3623,158 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             real(ep),    intent(out)   :: rwork(*)
         end subroutine ztgevc
+
+        ! ── Phase L4 — Generalized post-processing + constrained LS ──
+        subroutine dtgexc(wantq, wantz, n, A, lda, B, ldb, Q, ldq, Z, ldz, &
+                          ifst, ilst, work, lwork, info)
+            import :: ep
+            logical,   intent(in)    :: wantq, wantz
+            integer,   intent(in)    :: n, lda, ldb, ldq, ldz, lwork
+            integer,   intent(inout) :: ifst, ilst
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtgexc
+
+        subroutine ztgexc(wantq, wantz, n, A, lda, B, ldb, Q, ldq, Z, ldz, &
+                          ifst, ilst, info)
+            import :: ep
+            logical,     intent(in)    :: wantq, wantz
+            integer,     intent(in)    :: n, lda, ldb, ldq, ldz, ifst, ilst
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer,     intent(out)   :: info
+        end subroutine ztgexc
+
+        subroutine dtgsen(ijob, wantq, wantz, select, n, A, lda, B, ldb, &
+                          alphar, alphai, beta, Q, ldq, Z, ldz, m, pl, pr, &
+                          dif, work, lwork, iwork, liwork, info)
+            import :: ep
+            integer,   intent(in)    :: ijob, n, lda, ldb, ldq, ldz, lwork, liwork
+            logical,   intent(in)    :: wantq, wantz, select(*)
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*), pl, pr
+            real(ep),  intent(out)   :: dif(2), work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtgsen
+
+        subroutine ztgsen(ijob, wantq, wantz, select, n, A, lda, B, ldb, &
+                          alpha, beta, Q, ldq, Z, ldz, m, pl, pr, dif, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            integer,     intent(in)    :: ijob, n, lda, ldb, ldq, ldz, lwork, liwork
+            logical,     intent(in)    :: wantq, wantz, select(*)
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            complex(ep), intent(out)   :: alpha(*), beta(*), work(*)
+            real(ep),    intent(out)   :: pl, pr, dif(2)
+            integer,     intent(out)   :: m, iwork(*), info
+        end subroutine ztgsen
+
+        subroutine dtgsna(job, howmny, select, n, A, lda, B, ldb, vl, ldvl, &
+                          vr, ldvr, s, dif, mm, m, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: job, howmny
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, mm, lwork
+            logical,   intent(in)    :: select(*)
+            real(ep),  intent(in)    :: A(lda,*), B(ldb,*), vl(ldvl,*), vr(ldvr,*)
+            real(ep),  intent(out)   :: s(*), dif(*), work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtgsna
+
+        subroutine ztgsna(job, howmny, select, n, A, lda, B, ldb, vl, ldvl, &
+                          vr, ldvr, s, dif, mm, m, work, lwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: job, howmny
+            integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr, mm, lwork
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*), vl(ldvl,*), vr(ldvr,*)
+            real(ep),    intent(out)   :: s(*), dif(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: m, iwork(*), info
+        end subroutine ztgsna
+
+        subroutine dtgsja(jobu, jobv, jobq, m, p, n, k, l, A, lda, B, ldb, &
+                          tola, tolb, alpha, beta, U, ldu, V, ldv, Q, ldq, &
+                          work, ncycle, info)
+            import :: ep
+            character, intent(in)    :: jobu, jobv, jobq
+            integer,   intent(in)    :: m, p, n, k, l, lda, ldb, ldu, ldv, ldq
+            real(ep),  intent(in)    :: tola, tolb
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(inout) :: U(ldu,*), V(ldv,*), Q(ldq,*)
+            real(ep),  intent(out)   :: alpha(*), beta(*), work(*)
+            integer,   intent(out)   :: ncycle, info
+        end subroutine dtgsja
+
+        subroutine ztgsja(jobu, jobv, jobq, m, p, n, k, l, A, lda, B, ldb, &
+                          tola, tolb, alpha, beta, U, ldu, V, ldv, Q, ldq, &
+                          work, ncycle, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobv, jobq
+            integer,     intent(in)    :: m, p, n, k, l, lda, ldb, ldu, ldv, ldq
+            real(ep),    intent(in)    :: tola, tolb
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(inout) :: U(ldu,*), V(ldv,*), Q(ldq,*)
+            real(ep),    intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: ncycle, info
+        end subroutine ztgsja
+
+        subroutine dtgsyl(trans, ijob, m, n, A, lda, B, ldb, C, ldc, &
+                          D, ldd, E, lde, F, ldf, scale, dif, work, lwork, &
+                          iwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: ijob, m, n, lda, ldb, ldc, ldd, lde, ldf, lwork
+            real(ep),  intent(in)    :: A(lda,*), B(ldb,*), D(ldd,*), E(lde,*)
+            real(ep),  intent(inout) :: C(ldc,*), F(ldf,*)
+            real(ep),  intent(out)   :: scale, dif, work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dtgsyl
+
+        subroutine ztgsyl(trans, ijob, m, n, A, lda, B, ldb, C, ldc, &
+                          D, ldd, E, lde, F, ldf, scale, dif, work, lwork, &
+                          iwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: ijob, m, n, lda, ldb, ldc, ldd, lde, ldf, lwork
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*), D(ldd,*), E(lde,*)
+            complex(ep), intent(inout) :: C(ldc,*), F(ldf,*)
+            real(ep),    intent(out)   :: scale, dif
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine ztgsyl
+
+        subroutine dggglm(n, m, p, A, lda, B, ldb, d, x, y, work, lwork, info)
+            import :: ep
+            integer,   intent(in)    :: n, m, p, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), d(*)
+            real(ep),  intent(out)   :: x(*), y(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dggglm
+
+        subroutine zggglm(n, m, p, A, lda, B, ldb, d, x, y, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, m, p, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), d(*)
+            complex(ep), intent(out)   :: x(*), y(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggglm
+
+        subroutine dgglse(m, n, p, A, lda, B, ldb, c, d, x, work, lwork, info)
+            import :: ep
+            integer,   intent(in)    :: m, n, p, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
+            real(ep),  intent(out)   :: x(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgglse
+
+        subroutine zgglse(m, n, p, A, lda, B, ldb, c, d, x, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, p, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
+            complex(ep), intent(out)   :: x(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgglse
     end interface
 
 end module ref_quad_lapack

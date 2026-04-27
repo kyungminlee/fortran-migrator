@@ -5,6 +5,42 @@ Issues observed while adding LAPACK tests that need fixes outside
 specific routines blocked, the file(s) involved, and what would have
 to change.
 
+## Phase L4 — partial: infrastructure landed, 12 tests still to write
+
+L4 ref interfaces (in `common/ref_quad_lapack.f90`) and target wrappers
+(in `common/target_lapack_body.fypp`) are in place for all 14 routines:
+
+- `dtgexc/ztgexc, dtgsen/ztgsen, dtgsna/ztgsna, dtgsja/ztgsja,`
+  `dtgsyl/ztgsyl, dggglm/zggglm, dgglse/zgglse`
+
+Tests so far: `test_dtgexc.f90`, `test_ztgexc.f90`. Remaining 12 tests
+need to be written. Pattern: each routine needs a generalized Schur
+form / constrained-LS setup; follow `test_dtgexc.f90` for the Schur
+family and write a fresh setup for `dggglm/dgglse` (constrained LS).
+
+## Phases L5..L23 — not yet started
+
+Remaining phases per `~/.claude/plans/start-a-project-to-stateless-bumblebee.md`:
+
+  L5  Modern least-squares + Jacobi SVD (gelsd/gelss/gelsy/gelst/gejsv/gesvj)
+  L6+L7 Modern SVD + GSVD + CSD (gesvdq/gesvdx/bdsvdx/bbcsd/ggsvd3/ggsvp3/orcsd/orcsd2by1)
+  L8  Bunch-Kaufman variants — factorization (sytrf_rk/_rook/_aa/_aa_2stage/sytri_3/_rook/syconv*/syconvf*)
+  L9  Bunch-Kaufman variants — solve/inverse/cond (sytri/sytri2/sytri2x/sytrs2/sytrs_3/_aa/_aa_2stage/_rook/sycon_3/_rook)
+  L10 Bunch-Kaufman driver families (sysv_rk/_rook/_aa/_aa_2stage/sysvxx/syswapr)
+  L11 Pivoted Cholesky + RFP (pstrf/pbstf/pteqr/pftrf/pftri/pftrs/tftri/sfrk)
+  L12 Storage conversion RFP/tri/packed (tfttr/tfttp/tpttr/tpttf/trttp/trttf) — ship before L11
+  L13 Pentagonal QR/LQ (tpqrt/_2/tpmqrt/tplqt/_2/tpmlqt/tprfb)
+  L14 Householder reconstruction & TSQR (orhr_col/orgtsqr/_row/getsqrhrt/geqp3rk/tzrzf)
+  L15 CS decomposition (orbdb/_1/_2/_3/_4/_5/_6/orm22)
+  L16 Tridiagonal eigensolvers MRRR (stegr/stein/stemr)
+  L17 Expert drivers extra-precise XX (gesvxx/gbsvxx/posvxx/gerfsx/gbrfsx/porfsx/syrfsx/gtsvx)
+  L18 Auxiliary norm utilities (langb/langt/lanhs/lansb/lansf/lansp/lanst/lansy/lantb/lantp/lantr)
+  L19 Permutation/norm helpers (lapmr/lapmt/lapll/lacn2/lacon/lartg/lartgp/lartgs)
+  L20 Small public scalar utilities (lapy2/lapy3/ladiv/lamrg/larnv)
+  L21 Generalized symmetric/Hermitian glue (sbgst/spgst/sygst/sbgvx/spgvx/sygvx)
+  L22 Modern dynamic mode decomposition (gedmd/gedmdq)
+  L23 Audit / consolidation
+
 ## Phases L2 / L3 — \*geevx / \*ggev3 / \*ggevx family aborts
 
 The d/z `*geevx`, `*ggev3`, and `*ggevx` tests all abort with
