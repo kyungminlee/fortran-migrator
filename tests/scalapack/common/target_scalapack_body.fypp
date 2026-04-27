@@ -54,7 +54,7 @@ module target_scalapack
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
     public :: target_pdgerqf, target_pdorgrq, target_pdormrq
     public :: target_pdgehrd, target_pdormhr
-    public :: target_pdsytrd
+    public :: target_pdsytrd, target_pdsygst
     public :: target_pdgels
     public :: target_pdposv, target_pdpotri, target_pdgetri
     public :: target_pdgebrd
@@ -276,6 +276,18 @@ $:IMPORT_R()
             integer,   intent(out)   :: info
             ${target_real}$, intent(inout) :: A(*)
             ${target_real}$, intent(out)   :: d(*), e(*), tau(*), work(*)
+        end subroutine
+
+        subroutine ${R}$sygst(ibtype, uplo, n, A, ia, ja, desca, &
+                              B, ib, jb, descb, scale, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: ibtype, n, ia, ja, ib, jb
+            integer,   intent(in)    :: desca(9), descb(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(in)    :: B(*)
+            ${target_real}$, intent(out)   :: scale
         end subroutine
 
         subroutine ${R}$gehrd(n, ilo, ihi, A, ia, ja, desca, tau, &
@@ -1111,6 +1123,27 @@ contains
                              Ct, ic, jc, descc, work_t, lwt, info)
             C(1:nc) = t2q_r(Ct)
         end if
+    end subroutine
+
+    subroutine target_pdsygst(ibtype, uplo, n, A, ia, ja, desca, &
+                              B, ib, jb, descb, scale, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: ibtype, n, ia, ja, ib, jb
+        integer,   intent(in)    :: desca(9), descb(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(inout) :: A(*)
+        real(ep),  intent(in)    :: B(*)
+        real(ep),  intent(out)   :: scale
+        integer :: na, nb
+        ${target_real}$, allocatable :: At(:), Bt(:)
+        ${target_real}$ :: scale_t
+        na = nloc(desca); nb = nloc(descb)
+        allocate(At(na), Bt(nb))
+        At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
+        call ${R}$sygst(ibtype, uplo, n, At, ia, ja, desca, &
+                         Bt, ib, jb, descb, scale_t, info)
+        A(1:na) = t2q_r(At)
+        scale = t2q_r(scale_t)
     end subroutine
 
     subroutine target_pdsytrd(uplo, n, A, ia, ja, desca, d, e, tau, &

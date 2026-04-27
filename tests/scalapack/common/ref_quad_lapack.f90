@@ -246,6 +246,15 @@ module ref_quad_lapack
             integer,   intent(out)   :: info
         end subroutine dsytrd
 
+        subroutine dsygst(itype, uplo, n, A, lda, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: itype, n, lda, ldb
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(in)    :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsygst
+
         subroutine dormhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
                           C, ldc, work, lwork, info)
             import :: ep
