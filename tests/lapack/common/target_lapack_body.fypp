@@ -80,6 +80,8 @@ module target_lapack
     public :: target_zgeqlf, target_zungql, target_zunmql
     public :: target_dgerqf, target_dorgrq, target_dormrq
     public :: target_zgerqf, target_zungrq, target_zunmrq
+    public :: target_dsptrf, target_dsptrs, target_dspsv, target_dsptri
+    public :: target_dpptrf, target_dpptrs, target_dppsv, target_dpptri
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -1070,6 +1072,76 @@ $:IMPORT_C()
             ${target_complex}$, intent(in)    :: A(lda,*), tau(*)
             ${target_complex}$, intent(inout) :: C(ldc,*)
             ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 9 — real packed sym factor / solve / inverse ───────
+        subroutine ${R}$sptrf(uplo, n, AP, ipiv, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n
+            ${target_real}$, intent(inout) :: AP(*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${R}$sptrs(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_real}$, intent(in)    :: AP(*)
+            integer,   intent(in)          :: ipiv(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$spsv(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_real}$, intent(inout) :: AP(*), B(ldb,*)
+            integer, intent(out) :: ipiv(*), info
+        end subroutine
+
+        subroutine ${R}$sptri(uplo, n, AP, ipiv, work, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n
+            ${target_real}$, intent(inout) :: AP(*)
+            integer,   intent(in) :: ipiv(*)
+            ${target_real}$, intent(out) :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pptrf(uplo, n, AP, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n
+            ${target_real}$, intent(inout) :: AP(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pptrs(uplo, n, nrhs, AP, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_real}$, intent(in)    :: AP(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$ppsv(uplo, n, nrhs, AP, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ldb
+            ${target_real}$, intent(inout) :: AP(*), B(ldb,*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pptri(uplo, n, AP, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n
+            ${target_real}$, intent(inout) :: AP(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -3025,6 +3097,125 @@ contains
         call ${C}$unmrq(side, trans, m, n, k, At, lda, taut, Ct, ldc, &
                         work, lwork, info)
         C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    ! ── Phase 9 wrappers ─────────────────────────────────────────────
+    subroutine target_dsptrf(uplo, n, AP, ipiv, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n
+        real(ep),  intent(inout) :: AP(*)
+        integer,   intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: APt(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np))
+        APt = q2t_r(AP(1:np))
+        call ${R}$sptrf(uplo, n, APt, ipiv, info)
+        AP(1:np) = t2q_r(APt)
+    end subroutine
+
+    subroutine target_dsptrs(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, ldb
+        real(ep),  intent(in)    :: AP(*)
+        integer,   intent(in)    :: ipiv(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), Bt(:,:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), Bt(ldb, nrhs))
+        APt = q2t_r(AP(1:np)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$sptrs(uplo, n, nrhs, APt, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dspsv(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, ldb
+        real(ep),  intent(inout) :: AP(*), B(ldb,*)
+        integer,   intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: APt(:), Bt(:,:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), Bt(ldb, nrhs))
+        APt = q2t_r(AP(1:np)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$spsv(uplo, n, nrhs, APt, ipiv, Bt, ldb, info)
+        AP(1:np) = t2q_r(APt)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dsptri(uplo, n, AP, ipiv, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n
+        real(ep),  intent(inout) :: AP(*)
+        integer,   intent(in)    :: ipiv(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), work(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), work(n))
+        APt = q2t_r(AP(1:np))
+        call ${R}$sptri(uplo, n, APt, ipiv, work, info)
+        AP(1:np) = t2q_r(APt)
+    end subroutine
+
+    subroutine target_dpptrf(uplo, n, AP, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n
+        real(ep),  intent(inout) :: AP(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np))
+        APt = q2t_r(AP(1:np))
+        call ${R}$pptrf(uplo, n, APt, info)
+        AP(1:np) = t2q_r(APt)
+    end subroutine
+
+    subroutine target_dpptrs(uplo, n, nrhs, AP, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, ldb
+        real(ep),  intent(in)    :: AP(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), Bt(:,:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), Bt(ldb, nrhs))
+        APt = q2t_r(AP(1:np)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$pptrs(uplo, n, nrhs, APt, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dppsv(uplo, n, nrhs, AP, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, ldb
+        real(ep),  intent(inout) :: AP(*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), Bt(:,:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), Bt(ldb, nrhs))
+        APt = q2t_r(AP(1:np)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$ppsv(uplo, n, nrhs, APt, Bt, ldb, info)
+        AP(1:np) = t2q_r(APt)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dpptri(uplo, n, AP, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n
+        real(ep),  intent(inout) :: AP(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np))
+        APt = q2t_r(AP(1:np))
+        call ${R}$pptri(uplo, n, APt, info)
+        AP(1:np) = t2q_r(APt)
     end subroutine
 
 end module target_lapack

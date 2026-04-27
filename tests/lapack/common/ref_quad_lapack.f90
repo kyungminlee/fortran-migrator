@@ -1008,6 +1008,76 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zunmrq
+
+        ! ── Phase 9 — real packed sym factor / solve / inverse ───────
+        subroutine dsptrf(uplo, n, AP, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsptrf
+
+        subroutine dsptrs(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: AP(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsptrs
+
+        subroutine dspsv(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(inout) :: AP(*), B(ldb,*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dspsv
+
+        subroutine dsptri(uplo, n, AP, ipiv, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsptri
+
+        subroutine dpptrf(uplo, n, AP, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: info
+        end subroutine dpptrf
+
+        subroutine dpptrs(uplo, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: AP(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpptrs
+
+        subroutine dppsv(uplo, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(inout) :: AP(*), B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dppsv
+
+        subroutine dpptri(uplo, n, AP, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: info
+        end subroutine dpptri
     end interface
 
 end module ref_quad_lapack
