@@ -10,7 +10,12 @@
 ! (KIND=8), mismatching the promoted KIND=16 symbol. Always `use
 ! ref_quad_blas`.
 
-module ref_quad_blas
+! Module name is pblas_ref_quad_blas (not ref_quad_blas) to avoid
+! colliding with tests/blas/common/ref_quad_blas. Both targets write
+! their .mod files into the same ${PROJECT_BINARY_DIR}/fmod directory,
+! so the module names must differ — same convention as
+! pblas_prec_report vs prec_report.
+module pblas_ref_quad_blas
     use prec_kinds, only: ep
     implicit none
 
@@ -134,6 +139,40 @@ module ref_quad_blas
             complex(ep), intent(inout) :: x(*)
         end subroutine zscal
 
+        subroutine zdscal(n, alpha, x, incx)
+            import :: ep
+            integer,     intent(in)    :: n, incx
+            real(ep),    intent(in)    :: alpha
+            complex(ep), intent(inout) :: x(*)
+        end subroutine zdscal
+
+        subroutine zcopy(n, x, incx, y, incy)
+            import :: ep
+            integer,     intent(in)  :: n, incx, incy
+            complex(ep), intent(in)  :: x(*)
+            complex(ep), intent(out) :: y(*)
+        end subroutine zcopy
+
+        subroutine zswap(n, x, incx, y, incy)
+            import :: ep
+            integer,     intent(in)    :: n, incx, incy
+            complex(ep), intent(inout) :: x(*), y(*)
+        end subroutine zswap
+
+        function izamax(n, x, incx) result(r)
+            import :: ep
+            integer,     intent(in) :: n, incx
+            complex(ep), intent(in) :: x(*)
+            integer :: r
+        end function izamax
+
+        function dznrm2(n, x, incx) result(r)
+            import :: ep
+            integer,     intent(in) :: n, incx
+            complex(ep), intent(in) :: x(*)
+            real(ep) :: r
+        end function dznrm2
+
         ! ── Level 2 — real ───────────────────────────────────────────
         subroutine dgemv(trans, m, n, alpha, A, lda, x, incx, beta, y, incy)
             import :: ep
@@ -218,6 +257,22 @@ module ref_quad_blas
             real(ep),  intent(inout) :: x(*)
         end subroutine dtrsv
 
+        subroutine dsyr(uplo, n, alpha, x, incx, A, lda)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, incx, lda
+            real(ep),  intent(in)    :: alpha, x(*)
+            real(ep),  intent(inout) :: A(lda,*)
+        end subroutine dsyr
+
+        subroutine dsyr2(uplo, n, alpha, x, incx, y, incy, A, lda)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, incx, incy, lda
+            real(ep),  intent(in)    :: alpha, x(*), y(*)
+            real(ep),  intent(inout) :: A(lda,*)
+        end subroutine dsyr2
+
         ! ── Level 2 — complex ────────────────────────────────────────
         subroutine zgemv(trans, m, n, alpha, A, lda, x, incx, beta, y, incy)
             import :: ep
@@ -243,6 +298,46 @@ module ref_quad_blas
             complex(ep), intent(in)    :: alpha, x(*), y(*)
             complex(ep), intent(inout) :: A(lda,*)
         end subroutine zgerc
+
+        subroutine zgeru(m, n, alpha, x, incx, y, incy, A, lda)
+            import :: ep
+            integer,     intent(in)    :: m, n, incx, incy, lda
+            complex(ep), intent(in)    :: alpha, x(*), y(*)
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zgeru
+
+        subroutine zher(uplo, n, alpha, x, incx, A, lda)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, incx, lda
+            real(ep),    intent(in)    :: alpha
+            complex(ep), intent(in)    :: x(*)
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zher
+
+        subroutine zher2(uplo, n, alpha, x, incx, y, incy, A, lda)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, incx, incy, lda
+            complex(ep), intent(in)    :: alpha, x(*), y(*)
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zher2
+
+        subroutine ztrmv(uplo, trans, diag, n, A, lda, x, incx)
+            import :: ep
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, lda, incx
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: x(*)
+        end subroutine ztrmv
+
+        subroutine ztrsv(uplo, trans, diag, n, A, lda, x, incx)
+            import :: ep
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, lda, incx
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: x(*)
+        end subroutine ztrsv
 
         ! ── Level 3 — real ───────────────────────────────────────────
         subroutine dgemm(transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
@@ -335,6 +430,52 @@ module ref_quad_blas
             complex(ep), intent(in)    :: A(lda,*)
             complex(ep), intent(inout) :: B(ldb,*)
         end subroutine ztrsm
+
+        subroutine ztrmm(side, uplo, transa, diag, m, n, alpha, A, lda, B, ldb)
+            import :: ep
+            character,   intent(in)    :: side, uplo, transa, diag
+            integer,     intent(in)    :: m, n, lda, ldb
+            complex(ep), intent(in)    :: alpha
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+        end subroutine ztrmm
+
+        subroutine zsymm(side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc)
+            import :: ep
+            character,   intent(in)    :: side, uplo
+            integer,     intent(in)    :: m, n, lda, ldb, ldc
+            complex(ep), intent(in)    :: alpha, beta
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+        end subroutine zsymm
+
+        subroutine zsyrk(uplo, trans, n, k, alpha, A, lda, beta, C, ldc)
+            import :: ep
+            character,   intent(in)    :: uplo, trans
+            integer,     intent(in)    :: n, k, lda, ldc
+            complex(ep), intent(in)    :: alpha, beta
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+        end subroutine zsyrk
+
+        subroutine zsyr2k(uplo, trans, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+            import :: ep
+            character,   intent(in)    :: uplo, trans
+            integer,     intent(in)    :: n, k, lda, ldb, ldc
+            complex(ep), intent(in)    :: alpha, beta
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+        end subroutine zsyr2k
+
+        subroutine zher2k(uplo, trans, n, k, alpha, A, lda, B, ldb, beta, C, ldc)
+            import :: ep
+            character,   intent(in)    :: uplo, trans
+            integer,     intent(in)    :: n, k, lda, ldb, ldc
+            complex(ep), intent(in)    :: alpha
+            real(ep),    intent(in)    :: beta
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+        end subroutine zher2k
     end interface
 
-end module ref_quad_blas
+end module pblas_ref_quad_blas

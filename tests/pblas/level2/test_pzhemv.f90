@@ -1,14 +1,14 @@
-program test_pdsymv
+program test_pzhemv
     use prec_kinds,    only: ep
-    use compare,       only: max_rel_err_vec
+    use compare,       only: max_rel_err_vec_z
     use pblas_prec_report,   only: report_init, report_case, report_finalize
-    use pblas_ref_quad_blas, only: dsymv
+    use pblas_ref_quad_blas, only: zhemv
     use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
                              my_nprow, my_npcol, my_row, my_col, &
                              numroc_local, descinit_local
-    use pblas_distrib, only: gen_distrib_matrix, gen_distrib_vector, &
-                             gather_vector
-    use target_pblas,  only: target_name, target_eps, target_pdsymv
+    use pblas_distrib, only: gen_distrib_matrix_z, gen_distrib_vector_z, &
+                             gather_vector_z
+    use target_pblas,  only: target_name, target_eps, target_pzhemv
     implicit none
 
     integer, parameter :: ns(*) = [32, 80, 160]
@@ -16,22 +16,25 @@ program test_pdsymv
     integer :: i, n, info
     integer :: locm_a, locn_a, locn_x, lld_a, lld_x
     integer :: desca(9), descx(9), descy(9)
-    real(ep), allocatable :: A_loc(:,:), x_loc(:), y_loc(:)
-    real(ep), allocatable :: A_glob(:,:), x_glob(:), y_glob(:), y_got(:), y_ref(:)
-    real(ep) :: alpha, beta, err, tol
+    complex(ep), allocatable :: A_loc(:,:), x_loc(:), y_loc(:)
+    complex(ep), allocatable :: A_glob(:,:), x_glob(:), y_glob(:), &
+                                y_got(:), y_ref(:)
+    complex(ep) :: alpha, beta
+    real(ep) :: err, tol
     character(len=32) :: label
 
     call grid_init()
-    call report_init('pdsymv', target_name, my_rank)
+    call report_init('pzhemv', target_name, my_rank)
 
-    alpha = 0.6_ep; beta = 0.2_ep
+    alpha = cmplx(0.6_ep, 0.2_ep, ep); beta = cmplx(0.3_ep, -0.1_ep, ep)
     do i = 1, size(ns)
         n = ns(i)
-        ! A is symmetric: generate a general n×n matrix and let PBLAS
-        ! read the UPPER half. The reference dsymv also reads UPPER.
-        call gen_distrib_matrix(n, n, mb, mb, A_loc, A_glob, seed = 2101 + 17 * i)
-        call gen_distrib_vector(n, mb, x_loc, x_glob, seed = 2111 + 17 * i)
-        call gen_distrib_vector(n, mb, y_loc, y_glob, seed = 2121 + 17 * i)
+        ! A is Hermitian: PBLAS / zhemv read only the UPPER triangle and
+        ! treat the diagonal as real. The randomly-generated full A is
+        ! fine — both routines ignore the lower half identically.
+        call gen_distrib_matrix_z(n, n, mb, mb, A_loc, A_glob, seed = 5401 + 19 * i)
+        call gen_distrib_vector_z(n, mb, x_loc, x_glob, seed = 5411 + 19 * i)
+        call gen_distrib_vector_z(n, mb, y_loc, y_glob, seed = 5421 + 19 * i)
 
         locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
         locn_a = numroc_local(n, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
@@ -41,17 +44,17 @@ program test_pdsymv
         call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
         call descinit_local(descy, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
 
-        call target_pdsymv('U', n, alpha, A_loc, 1, 1, desca, &
+        call target_pzhemv('U', n, alpha, A_loc, 1, 1, desca, &
                            x_loc, 1, 1, descx, 1, beta, &
                            y_loc, 1, 1, descy, 1)
-        call gather_vector(n, mb, y_loc, y_got)
+        call gather_vector_z(n, mb, y_loc, y_got)
 
         if (my_rank == 0) then
             allocate(y_ref(n))
             y_ref = y_glob
-            call dsymv('U', n, alpha, A_glob, n, x_glob, 1, beta, y_ref, 1)
-            err = max_rel_err_vec(y_got, y_ref)
-            tol = 32.0_ep * 2.0_ep * real(n, ep) * target_eps
+            call zhemv('U', n, alpha, A_glob, n, x_glob, 1, beta, y_ref, 1)
+            err = max_rel_err_vec_z(y_got, y_ref)
+            tol = 32.0_ep * 8.0_ep * real(n, ep) * target_eps
             write(label, '(a,i0)') 'n=', n
             call report_case(trim(label), err, tol)
             deallocate(y_ref, y_got)
@@ -61,4 +64,4 @@ program test_pdsymv
 
     call report_finalize()
     call grid_exit()
-end program test_pdsymv
+end program test_pzhemv

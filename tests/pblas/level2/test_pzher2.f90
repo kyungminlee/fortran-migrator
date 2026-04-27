@@ -1,0 +1,63 @@
+program test_pzher2
+    use prec_kinds,    only: ep
+    use compare,       only: max_rel_err_mat_z
+    use pblas_prec_report,   only: report_init, report_case, report_finalize
+    use pblas_ref_quad_blas, only: zher2
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
+                             my_nprow, my_npcol, my_row, my_col, &
+                             numroc_local, descinit_local
+    use pblas_distrib, only: gen_distrib_matrix_z, gen_distrib_vector_z, &
+                             gather_matrix_z
+    use target_pblas,  only: target_name, target_eps, target_pzher2
+    implicit none
+
+    integer, parameter :: ns(*) = [32, 80, 160]
+    integer, parameter :: mb = 8
+    integer :: i, n, info
+    integer :: locm_a, locn_a, locn_x, lld_a, lld_x
+    integer :: desca(9), descx(9), descy(9)
+    complex(ep), allocatable :: A_loc(:,:), x_loc(:), y_loc(:)
+    complex(ep), allocatable :: A_glob(:,:), x_glob(:), y_glob(:), &
+                                A_got(:,:), A_ref(:,:)
+    complex(ep) :: alpha
+    real(ep) :: err, tol
+    character(len=32) :: label
+
+    call grid_init()
+    call report_init('pzher2', target_name, my_rank)
+
+    alpha = cmplx(0.4_ep, 0.2_ep, ep)
+    do i = 1, size(ns)
+        n = ns(i)
+        call gen_distrib_matrix_z(n, n, mb, mb, A_loc, A_glob, seed = 5801 + 19 * i)
+        call gen_distrib_vector_z(n, mb, x_loc, x_glob, seed = 5811 + 19 * i)
+        call gen_distrib_vector_z(n, mb, y_loc, y_glob, seed = 5821 + 19 * i)
+
+        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
+        locn_a = numroc_local(n, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
+        locn_x = numroc_local(n, mb, my_row, 0, my_nprow); lld_x = max(1, locn_x)
+
+        call descinit_local(desca, n, n, mb, mb, 0, 0, my_context, lld_a, info)
+        call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
+        call descinit_local(descy, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
+
+        call target_pzher2('U', n, alpha, x_loc, 1, 1, descx, 1, &
+                           y_loc, 1, 1, descy, 1, A_loc, 1, 1, desca)
+        call gather_matrix_z(n, n, mb, mb, A_loc, A_got)
+
+        if (my_rank == 0) then
+            allocate(A_ref(n, n))
+            A_ref = A_glob
+            call zher2('U', n, alpha, x_glob, 1, y_glob, 1, A_ref, n)
+            err = max_rel_err_mat_z(A_got, A_ref)
+            tol = 32.0_ep * 8.0_ep * target_eps
+            write(label, '(a,i0)') 'n=', n
+            call report_case(trim(label), err, tol)
+            deallocate(A_ref, A_got)
+        end if
+        deallocate(A_loc, x_loc, y_loc, A_glob, x_glob, y_glob)
+    end do
+
+    call report_finalize()
+    call grid_exit()
+end program test_pzher2
