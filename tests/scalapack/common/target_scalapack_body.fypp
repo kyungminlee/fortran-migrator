@@ -59,6 +59,7 @@ module target_scalapack
     public :: target_pdlacpy, target_pdlaset
     public :: target_pzgesv, target_pzgeqrf, target_pzheev
     public :: target_pzgeqr2, target_pzungqr, target_pzunmqr
+    public :: target_pzheevd
     public :: target_pzgelqf, target_pzunglq, target_pzunmlq
     public :: target_pzgels
     public :: target_pzposv, target_pzpotrf, target_pzpotri
@@ -443,6 +444,19 @@ $:IMPORT_RC()
             integer,   intent(in)    :: n, ia, ja, iz, jz, lwork, lrwork
             integer,   intent(in)    :: desca(9), descz(9)
             integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            ${target_complex}$, intent(out)   :: Z(*), work(*)
+        end subroutine
+
+        subroutine ${C}$heevd(jobz, uplo, n, A, ia, ja, desca, w, &
+                              Z, iz, jz, descz, work, lwork, rwork, lrwork, &
+                              iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ia, ja, iz, jz, lwork, lrwork, liwork
+            integer,   intent(in)    :: desca(9), descz(9)
+            integer,   intent(out)   :: iwork(*), info
             ${target_complex}$, intent(inout) :: A(*)
             ${target_real}$,    intent(out)   :: w(*), rwork(*)
             ${target_complex}$, intent(out)   :: Z(*), work(*)
@@ -1276,6 +1290,40 @@ contains
             At = q2t_c(A(1:na))
             call ${C}$heev(jobz, uplo, n, At, ia, ja, desca, wt, &
                             Zt, iz, jz, descz, work_t, lwt, rwork_t, lrwt, info)
+            w(1:n) = t2q_r(wt)
+            Z(1:nz) = t2q_c(Zt)
+        end if
+    end subroutine
+
+    subroutine target_pzheevd(jobz, uplo, n, A, ia, ja, desca, w, &
+                              Z, iz, jz, descz, work, lwork, rwork, lrwork, &
+                              iwork, liwork, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, ia, ja, iz, jz, lwork, lrwork, liwork
+        integer,     intent(in)    :: desca(9), descz(9)
+        integer,     intent(out)   :: iwork(*), info
+        complex(ep), intent(inout) :: A(*)
+        real(ep),    intent(out)   :: w(*), rwork(*)
+        complex(ep), intent(out)   :: Z(*), work(*)
+        integer :: na, nz, lwt, lrwt
+        ${target_complex}$, allocatable :: At(:), Zt(:), work_t(:)
+        ${target_real}$,    allocatable :: wt(:), rwork_t(:)
+        na = nloc(desca); nz = nloc(descz)
+        if (lwork == -1) then
+            allocate(At(1), Zt(1), wt(1), work_t(1), rwork_t(1))
+            call ${C}$heevd(jobz, uplo, n, At, ia, ja, desca, wt, &
+                             Zt, iz, jz, descz, work_t, -1, rwork_t, -1, &
+                             iwork, -1, info)
+            work(1)  = t2q_c(work_t(1))
+            rwork(1) = t2q_r(rwork_t(1))
+        else
+            lwt  = max(1, lwork)
+            lrwt = max(1, lrwork)
+            allocate(At(na), Zt(nz), wt(n), work_t(lwt), rwork_t(lrwt))
+            At = q2t_c(A(1:na))
+            call ${C}$heevd(jobz, uplo, n, At, ia, ja, desca, wt, &
+                             Zt, iz, jz, descz, work_t, lwt, rwork_t, lrwt, &
+                             iwork, liwork, info)
             w(1:n) = t2q_r(wt)
             Z(1:nz) = t2q_c(Zt)
         end if

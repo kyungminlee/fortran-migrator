@@ -310,6 +310,17 @@ module ref_quad_lapack
             integer,     intent(out)   :: info
         end subroutine zheev
 
+        subroutine zheevd(jobz, uplo, n, A, lda, w, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, lda, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zheevd
+
         ! ── SVD ──────────────────────────────────────────────────────
         subroutine dgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
                           work, lwork, info)
