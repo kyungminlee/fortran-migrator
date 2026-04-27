@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_290 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_294 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -162,7 +162,7 @@ _290 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgesvdq | — | — | — |
 | ✓ | dgesvdx | — | — | — |
 | ✓ | dgesvj | — | — | — |
-| ✓ | dgesvx | — | — | — |
+| ✓ | dgesvx | 18.69 | exact | 31.37 |
 | ✓ | dgesvxx | — | — | — |
 |  | dgetc2 | — | — | — |
 |  | dgetf2 | — | — | — |
@@ -433,7 +433,7 @@ _290 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dporfs | 18.95 | exact | 31.75 |
 | ✓ | dporfsx | — | — | — |
 | ✓ | dposv | 18.28 | exact | 30.96 |
-| ✓ | dposvx | — | — | — |
+| ✓ | dposvx | 18.72 | exact | 31.68 |
 | ✓ | dposvxx | — | — | — |
 |  | dpotf2 | — | — | — |
 | ✓ | dpotrf | 18.39 | 33.88 | 31.48 |
@@ -666,7 +666,7 @@ _290 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgesvdq | — | — | — |
 | ✓ | zgesvdx | — | — | — |
 | ✓ | zgesvj | — | — | — |
-| ✓ | zgesvx | — | — | — |
+| ✓ | zgesvx | 18.39 | exact | 31.22 |
 | ✓ | zgesvxx | — | — | — |
 |  | zgetc2 | — | — | — |
 |  | zgetf2 | — | — | — |
@@ -942,7 +942,7 @@ _290 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zporfs | 18.95 | exact | 31.39 |
 | ✓ | zporfsx | — | — | — |
 | ✓ | zposv | 18.44 | exact | 31.09 |
-| ✓ | zposvx | — | — | — |
+| ✓ | zposvx | 18.64 | exact | 31.37 |
 | ✓ | zposvxx | — | — | — |
 |  | zpotf2 | — | — | — |
 | ✓ | zpotrf | 18.66 | 33.62 | 31.45 |

@@ -2862,6 +2862,57 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zgetsls
+
+        ! ── Expert linear solvers (SVX) ──────────────────────────────
+        subroutine dgesvx(fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, &
+                          R, C, B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), R(*), C(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgesvx
+
+        subroutine zgesvx(fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, &
+                          R, C, B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: R(*), C(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvx
+
+        subroutine dposvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, equed, S, &
+                          B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), S(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dposvx
+
+        subroutine zposvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, equed, S, &
+                          B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zposvx
     end interface
 
 end module ref_quad_lapack
