@@ -2099,6 +2099,68 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
     return '\n'.join(result_lines)
 
 
+def _segment_fixed_form_statements(
+    physical: list[str],
+) -> list[tuple[str, list[str], list[str], str]]:
+    """Group physical fixed-form lines into logical statements.
+
+    Each entry is ``(kind, lines, terminators, joined)`` where ``kind`` is
+    ``'blank' | 'comment' | 'pp' | 'code'``. ``lines`` and ``terminators``
+    are aligned slices of ``physical`` (text without newline / the
+    original line terminator). For ``'code'`` statements with continuation
+    lines, ``joined`` is the head plus each continuation's column-7+
+    content concatenated with single spaces — this is what the per-line
+    transform passes operate on, so paren-walkers can match across the
+    physical line break. For other kinds, ``joined`` is the head text.
+    """
+    out: list[tuple[str, list[str], list[str], str]] = []
+    i = 0
+    while i < len(physical):
+        raw = physical[i]
+        if raw.endswith('\r\n'):
+            text, term = raw[:-2], '\r\n'
+        elif raw.endswith('\n') or raw.endswith('\r'):
+            text, term = raw[:-1], raw[-1]
+        else:
+            text, term = raw, ''
+        if not text.strip():
+            out.append(('blank', [text], [term], text))
+            i += 1
+            continue
+        if text[0] in 'Cc*!':
+            out.append(('comment', [text], [term], text))
+            i += 1
+            continue
+        if text.lstrip().startswith('#'):
+            out.append(('pp', [text], [term], text))
+            i += 1
+            continue
+        # Code head — absorb any immediately-following continuation lines.
+        lines = [text]
+        terms = [term]
+        joined = text
+        j = i + 1
+        while j < len(physical):
+            nxt = physical[j]
+            if nxt.endswith('\r\n'):
+                ntext, nterm = nxt[:-2], '\r\n'
+            elif nxt.endswith('\n') or nxt.endswith('\r'):
+                ntext, nterm = nxt[:-1], nxt[-1]
+            else:
+                ntext, nterm = nxt, ''
+            if (len(ntext) > 5 and ntext[:5].strip() == ''
+                    and ntext[5:6] not in (' ', '0', '\t', '')):
+                lines.append(ntext)
+                terms.append(nterm)
+                joined = joined + ' ' + ntext[6:]
+                j += 1
+            else:
+                break
+        out.append(('code', lines, terms, joined))
+        i = j
+    return out
+
+
 def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
     if not target_mode.is_kind_based:
         _warn_on_fp_equivalence(source, target_mode)
@@ -2112,35 +2174,49 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
     removed_known.update(dropped_d)
     source = _dedup_intrinsic_stmts(source, target_mode)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
-    lines = source.splitlines(keepends=True)
+    physical = source.splitlines(keepends=True)
+    statements = _segment_fixed_form_statements(physical)
     result = []
-    for line in lines:
-        stripped = line.rstrip('\n\r')
-        if not stripped: result.append(line); continue
-        nl = '\n' if line.endswith('\n') else ''
-        if is_comment_line(stripped):
-            stripped = replace_routine_names(stripped, rename_map)
-            stripped = replace_type_decls(stripped, target_mode)
-        else:
-            stripped = replace_type_decls(stripped, target_mode)
-            if not stripped:
-                # Declaration was entirely consumed by known-constant
-                # filtering — drop the line, including any newline.
-                continue
-            stripped = replace_standalone_real_complex(stripped, target_mode)
-            stripped = replace_literals(stripped, target_mode)
-            stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
-            stripped = replace_intrinsic_decls(stripped, target_mode)
-            stripped = replace_generic_conversions(stripped, target_mode)
-            stripped = replace_routine_names(stripped, rename_map)
-            stripped = replace_include_filenames(stripped, rename_map)
-            stripped = replace_xerbla_strings(stripped, rename_map)
-            stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
-            stripped = _rewrite_int_of_complex(stripped, complex_names)
-            stripped = _wrap_bare_complex_literals(stripped, target_mode)
-            stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
-            stripped = reformat_fixed_line(stripped)
-        result.append(stripped + nl)
+    for kind, lines, terms, joined in statements:
+        if kind == 'blank':
+            result.append(lines[0] + terms[0])
+            continue
+        if kind == 'pp':
+            result.append(lines[0] + terms[0])
+            continue
+        if kind == 'comment':
+            s = replace_routine_names(lines[0], rename_map)
+            s = replace_type_decls(s, target_mode)
+            result.append(s + terms[0])
+            continue
+        # 'code' — apply all per-line transforms to the joined logical
+        # line so paren-walking passes (e.g. replace_intrinsic_calls)
+        # can match calls that span fixed-form continuations. Single-
+        # physical-line statements have ``joined == lines[0]`` and pass
+        # through identically.
+        s = replace_type_decls(joined, target_mode)
+        if not s:
+            continue
+        s = replace_standalone_real_complex(s, target_mode)
+        s = replace_literals(s, target_mode)
+        s = replace_intrinsic_calls(s, target_mode, real_names=real_names)
+        s = replace_intrinsic_decls(s, target_mode)
+        s = replace_generic_conversions(s, target_mode)
+        s = replace_routine_names(s, rename_map)
+        s = replace_include_filenames(s, rename_map)
+        s = replace_xerbla_strings(s, rename_map)
+        s = replace_known_constants(s, target_mode, renames=removed_known)
+        s = _rewrite_int_of_complex(s, complex_names)
+        s = _wrap_bare_complex_literals(s, target_mode)
+        s = _unwrap_redundant_constructors(s, target_mode, real_names=real_names)
+        if len(lines) > 1 and s == joined:
+            # Multi-line statement, no transforms applied — emit the
+            # original physical lines verbatim to avoid reformat churn.
+            for line, term in zip(lines, terms):
+                result.append(line + term)
+            continue
+        s = reformat_fixed_line(s)
+        result.append(s + terms[0])
 
     source = ''.join(result)
     if not target_mode.is_kind_based:
