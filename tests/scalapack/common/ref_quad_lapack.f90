@@ -237,6 +237,15 @@ module ref_quad_lapack
             integer,  intent(out)   :: info
         end subroutine dgehrd
 
+        subroutine dsytrd(uplo, n, A, lda, d, e, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: d(*), e(*), tau(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrd
+
         subroutine dormhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
                           C, ldc, work, lwork, info)
             import :: ep
@@ -435,6 +444,16 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: tau(*), work(*)
             integer,     intent(out)   :: info
         end subroutine zgehrd
+
+        subroutine zhetrd(uplo, n, A, lda, d, e, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: d(*), e(*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrd
 
         subroutine zunmhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
                           C, ldc, work, lwork, info)

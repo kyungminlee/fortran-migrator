@@ -26,6 +26,20 @@ issue is fixed outside `tests/scalapack/`.
   test that pulls in `scalapack_test_target`, so they had to be
   reverted out of the shared template.
 
+## pxhetrd (complex Hermitian tridiagonal reduction)
+
+- **Symptom**: A `test_pzhetrd` driver returns matrix-element errors of
+  order 1 (`max_rel_err ~ 2.7-4.5`) on n in {32,64,96}, 2x2 grid,
+  mb=nb=8 — totally wrong output. The real-symmetric counterpart
+  `pdsytrd` passes to >32 digits on the same scaffold.
+- **Diagnosis**: `pxhetrd` is the Hermitian analog of `pdsytrd` and
+  is the back-end for `pxheev`. The same defect that makes `pxheev`
+  return garbage eigenvalues likely lives here at the reduction
+  level.
+- **Action**: Re-enable `tests/scalapack/factorization/test_pzhetrd.f90`
+  (wrapper `target_pzhetrd` is already in the template) when the
+  underlying `pxhetrd` Householder path is fixed upstream.
+
 ## pxheev (complex Hermitian eigensolver, JOBZ='N' or 'V')
 
 - **Symptom**: A test driver of the same shape as `test_pdsyev.f90`,

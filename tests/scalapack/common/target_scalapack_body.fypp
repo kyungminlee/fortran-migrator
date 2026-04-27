@@ -54,6 +54,7 @@ module target_scalapack
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
     public :: target_pdgerqf, target_pdorgrq, target_pdormrq
     public :: target_pdgehrd, target_pdormhr
+    public :: target_pdsytrd
     public :: target_pdgels
     public :: target_pdposv, target_pdpotri, target_pdgetri
     public :: target_pdgebrd
@@ -68,6 +69,7 @@ module target_scalapack
     public :: target_pzgeqlf, target_pzungql, target_pzunmql
     public :: target_pzgerqf, target_pzungrq, target_pzunmrq
     public :: target_pzgehrd, target_pzunmhr
+    public :: target_pzhetrd
     public :: target_pzgels
     public :: target_pzgebrd
     public :: target_pzposv, target_pzpotrf, target_pzpotri
@@ -263,6 +265,17 @@ $:IMPORT_R()
             ${target_real}$, intent(in)    :: A(*), tau(*)
             ${target_real}$, intent(inout) :: C(*)
             ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${R}$sytrd(uplo, n, A, ia, ja, desca, d, e, tau, &
+                              work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja, lwork
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: d(*), e(*), tau(*), work(*)
         end subroutine
 
         subroutine ${R}$gehrd(n, ilo, ihi, A, ia, ja, desca, tau, &
@@ -541,6 +554,18 @@ $:IMPORT_C()
             ${target_complex}$, intent(in)    :: A(*), tau(*)
             ${target_complex}$, intent(inout) :: C(*)
             ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$hetrd(uplo, n, A, ia, ja, desca, d, e, tau, &
+                              work, lwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja, lwork
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_real}$,    intent(out)   :: d(*), e(*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
         end subroutine
 
         subroutine ${C}$gehrd(n, ilo, ihi, A, ia, ja, desca, tau, &
@@ -1085,6 +1110,34 @@ contains
             call ${R}$ormrq(side, trans, m, n, k, At, ia, ja, desca, tau_t, &
                              Ct, ic, jc, descc, work_t, lwt, info)
             C(1:nc) = t2q_r(Ct)
+        end if
+    end subroutine
+
+    subroutine target_pdsytrd(uplo, n, A, ia, ja, desca, d, e, tau, &
+                              work, lwork, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, ia, ja, lwork
+        integer,   intent(in)    :: desca(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(inout) :: A(*)
+        real(ep),  intent(out)   :: d(*), e(*), tau(*), work(*)
+        integer :: na, nv, lwt
+        ${target_real}$, allocatable :: At(:), dt(:), et(:), tau_t(:), work_t(:)
+        na = nloc(desca); nv = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), dt(nv), et(nv), tau_t(nv), work_t(1))
+            call ${R}$sytrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
+                             work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), dt(nv), et(nv), tau_t(nv), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$sytrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
+                             work_t, lwt, info)
+            A(1:na) = t2q_r(At)
+            d(1:nv) = t2q_r(dt); e(1:nv) = t2q_r(et)
+            tau(1:nv) = t2q_r(tau_t)
         end if
     end subroutine
 
@@ -1738,6 +1791,36 @@ contains
             call ${C}$unmrq(side, trans, m, n, k, At, ia, ja, desca, tau_t, &
                              Ct, ic, jc, descc, work_t, lwt, info)
             C(1:nc) = t2q_c(Ct)
+        end if
+    end subroutine
+
+    subroutine target_pzhetrd(uplo, n, A, ia, ja, desca, d, e, tau, &
+                              work, lwork, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, ia, ja, lwork
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        real(ep),    intent(out)   :: d(*), e(*)
+        complex(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, nv, lwt
+        ${target_complex}$, allocatable :: At(:), tau_t(:), work_t(:)
+        ${target_real}$,    allocatable :: dt(:), et(:)
+        na = nloc(desca); nv = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), dt(nv), et(nv), tau_t(nv), work_t(1))
+            call ${C}$hetrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
+                             work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), dt(nv), et(nv), tau_t(nv), work_t(lwt))
+            At = q2t_c(A(1:na))
+            call ${C}$hetrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
+                             work_t, lwt, info)
+            A(1:na) = t2q_c(At)
+            d(1:nv) = t2q_r(dt); e(1:nv) = t2q_r(et)
+            tau(1:nv) = t2q_c(tau_t)
         end if
     end subroutine
 
