@@ -44,6 +44,13 @@ module ref_quad_blas
             integer :: r
         end function idamax
 
+        function izamax(n, x, incx) result(r)
+            import :: ep
+            integer,     intent(in) :: n, incx
+            complex(ep), intent(in) :: x(*)
+            integer :: r
+        end function izamax
+
         subroutine daxpy(n, alpha, x, incx, y, incy)
             import :: ep
             integer,  intent(in)    :: n, incx, incy

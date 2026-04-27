@@ -8,4 +8,5 @@
 #:set prefix_complex = 'v'
 #:set prefix_mixed   = 'tv'
 #:set prefix_idamax  = 'it'
+#:set prefix_izamax  = 'iv'
 #:include 'target_blas_body.fypp'

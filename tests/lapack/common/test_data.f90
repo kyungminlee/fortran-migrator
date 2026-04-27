@@ -5,7 +5,10 @@ module test_data
     public :: gen_vector_quad, gen_matrix_quad
     public :: gen_vector_complex, gen_matrix_complex
     public :: gen_spd_matrix_quad, gen_hermitian_matrix_quad
-    public :: gen_symmetric_matrix_quad
+    public :: gen_symmetric_matrix_quad, gen_hpd_matrix_quad
+    public :: pack_sym_band_quad, pack_herm_band_quad
+    public :: pack_sym_packed_quad, pack_herm_packed_quad
+    public :: gen_complex_symmetric_quad
 
 contains
 
@@ -110,5 +113,141 @@ contains
         allocate(A(n, n))
         A = 0.5_ep * (X + transpose(conjg(X)))
     end subroutine gen_hermitian_matrix_quad
+
+    ! Hermitian positive-definite: A = X*X^H + n*I.
+    subroutine gen_hpd_matrix_quad(n, A, seed)
+        integer,     intent(in)  :: n, seed
+        complex(ep), intent(out), allocatable :: A(:,:)
+        complex(ep), allocatable :: X(:,:)
+        integer :: i
+
+        call gen_matrix_complex(n, n, X, seed)
+        allocate(A(n, n))
+        A = matmul(X, transpose(conjg(X)))
+        do i = 1, n
+            A(i, i) = cmplx(real(A(i, i), ep) + real(n, ep), 0.0_ep, ep)
+        end do
+    end subroutine gen_hpd_matrix_quad
+
+    ! Complex symmetric (A = A^T, not Hermitian): A = (X + X^T)/2.
+    subroutine gen_complex_symmetric_quad(n, A, seed)
+        integer,     intent(in)  :: n, seed
+        complex(ep), intent(out), allocatable :: A(:,:)
+        complex(ep), allocatable :: X(:,:)
+
+        call gen_matrix_complex(n, n, X, seed)
+        allocate(A(n, n))
+        A = 0.5_ep * (X + transpose(X))
+    end subroutine gen_complex_symmetric_quad
+
+    ! Pack a symmetric matrix into LAPACK banded storage AB(kd+1, n).
+    ! Off-band entries of the source are first zeroed (so the dense
+    ! reference and the banded reference describe the same matrix).
+    subroutine pack_sym_band_quad(uplo, n, kd, A, AB)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, kd
+        real(ep),  intent(inout) :: A(n, n)
+        real(ep),  intent(out)   :: AB(kd+1, n)
+        integer :: i, j
+
+        do j = 1, n
+            do i = 1, n
+                if (abs(i - j) > kd) A(i, j) = 0.0_ep
+            end do
+        end do
+        AB = 0.0_ep
+        if (uplo == 'U' .or. uplo == 'u') then
+            do j = 1, n
+                do i = max(1, j - kd), j
+                    AB(kd + 1 + i - j, j) = A(i, j)
+                end do
+            end do
+        else
+            do j = 1, n
+                do i = j, min(n, j + kd)
+                    AB(1 + i - j, j) = A(i, j)
+                end do
+            end do
+        end if
+    end subroutine pack_sym_band_quad
+
+    subroutine pack_herm_band_quad(uplo, n, kd, A, AB)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, kd
+        complex(ep), intent(inout) :: A(n, n)
+        complex(ep), intent(out)   :: AB(kd+1, n)
+        integer :: i, j
+
+        do j = 1, n
+            do i = 1, n
+                if (abs(i - j) > kd) A(i, j) = (0.0_ep, 0.0_ep)
+            end do
+        end do
+        AB = (0.0_ep, 0.0_ep)
+        if (uplo == 'U' .or. uplo == 'u') then
+            do j = 1, n
+                do i = max(1, j - kd), j
+                    AB(kd + 1 + i - j, j) = A(i, j)
+                end do
+            end do
+        else
+            do j = 1, n
+                do i = j, min(n, j + kd)
+                    AB(1 + i - j, j) = A(i, j)
+                end do
+            end do
+        end if
+    end subroutine pack_herm_band_quad
+
+    ! Pack a symmetric matrix into LAPACK packed storage AP(n*(n+1)/2).
+    subroutine pack_sym_packed_quad(uplo, n, A, AP)
+        character, intent(in)  :: uplo
+        integer,   intent(in)  :: n
+        real(ep),  intent(in)  :: A(n, n)
+        real(ep),  intent(out) :: AP(*)
+        integer :: i, j, k
+
+        k = 0
+        if (uplo == 'U' .or. uplo == 'u') then
+            do j = 1, n
+                do i = 1, j
+                    k = k + 1
+                    AP(k) = A(i, j)
+                end do
+            end do
+        else
+            do j = 1, n
+                do i = j, n
+                    k = k + 1
+                    AP(k) = A(i, j)
+                end do
+            end do
+        end if
+    end subroutine pack_sym_packed_quad
+
+    subroutine pack_herm_packed_quad(uplo, n, A, AP)
+        character,   intent(in)  :: uplo
+        integer,     intent(in)  :: n
+        complex(ep), intent(in)  :: A(n, n)
+        complex(ep), intent(out) :: AP(*)
+        integer :: i, j, k
+
+        k = 0
+        if (uplo == 'U' .or. uplo == 'u') then
+            do j = 1, n
+                do i = 1, j
+                    k = k + 1
+                    AP(k) = A(i, j)
+                end do
+            end do
+        else
+            do j = 1, n
+                do i = j, n
+                    k = k + 1
+                    AP(k) = A(i, j)
+                end do
+            end do
+        end if
+    end subroutine pack_herm_packed_quad
 
 end module test_data
