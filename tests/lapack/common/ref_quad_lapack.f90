@@ -2257,6 +2257,47 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zunmbr
+
+        ! ── Generalized eigenvalue (packed / banded) ─────────────────
+        subroutine dspgv(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, ldz
+            real(ep),  intent(inout) :: AP(*), BP(*)
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dspgv
+
+        subroutine zhpgv(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, ldz
+            complex(ep), intent(inout) :: AP(*), BP(*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhpgv
+
+        subroutine dsbgv(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                         work, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldz
+            real(ep),  intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbgv
+
+        subroutine zhbgv(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                         work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldz
+            complex(ep), intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbgv
     end interface
 
 end module ref_quad_lapack

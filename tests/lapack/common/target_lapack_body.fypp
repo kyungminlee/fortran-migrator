@@ -117,6 +117,7 @@ module target_lapack
     public :: target_dorgtr, target_zungtr, target_dormtr, target_zunmtr
     public :: target_dopgtr, target_zupgtr, target_dopmtr, target_zupmtr
     public :: target_dgebrd, target_zgebrd, target_dorgbr, target_zungbr, target_dormbr, target_zunmbr
+    public :: target_dspgv, target_zhpgv, target_dsbgv, target_zhbgv
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2355,6 +2356,47 @@ $:IMPORT_C()
             ${target_complex}$, intent(in)    :: A(lda,*), tau(*)
             ${target_complex}$, intent(inout) :: C(ldc,*)
             ${target_complex}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 24 — packed/banded generalized eigenvalue ─────────
+        subroutine ${R}$spgv(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, ldz
+            ${target_real}$, intent(inout) :: AP(*), BP(*)
+            ${target_real}$, intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hpgv(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, ldz
+            ${target_complex}$, intent(inout) :: AP(*), BP(*)
+            ${target_real}$,    intent(out)   :: W(*), rwork(*)
+            ${target_complex}$, intent(out)   :: Z(ldz,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$sbgv(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                             work, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldz
+            ${target_real}$, intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            ${target_real}$, intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hbgv(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                             work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldz
+            ${target_complex}$, intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            ${target_real}$,    intent(out)   :: W(*), rwork(*)
+            ${target_complex}$, intent(out)   :: Z(ldz,*), work(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -6424,6 +6466,75 @@ $:CPACK_INV('zsptri', C + 'sptri')
         allocate(work(lwork))
         call ${C}$unmbr(vect, side, trans, m, n, k, At, lda, taut, Ct, ldc, work, lwork, info)
         C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
+    ! ── Phase 24 wrappers ────────────────────────────────────────────
+    subroutine target_dspgv(itype, jobz, uplo, n, AP, BP, W, Z, ldz, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: itype, n, ldz
+        real(ep),  intent(inout) :: AP(*), BP(*)
+        real(ep),  intent(out)   :: W(*), Z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), BPt(:), Wt(:), Zt(:,:), work(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), BPt(np), Wt(n), Zt(ldz, n), work(3*n))
+        APt = q2t_r(AP(1:np)); BPt = q2t_r(BP(1:np))
+        call ${R}$spgv(itype, jobz, uplo, n, APt, BPt, Wt, Zt, ldz, work, info)
+        AP(1:np) = t2q_r(APt); BP(1:np) = t2q_r(BPt)
+        W(1:n) = t2q_r(Wt)
+        if (jobz == 'V' .or. jobz == 'v') Z(1:ldz, 1:n) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zhpgv(itype, jobz, uplo, n, AP, BP, W, Z, ldz, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: itype, n, ldz
+        complex(ep), intent(inout) :: AP(*), BP(*)
+        real(ep),    intent(out)   :: W(*)
+        complex(ep), intent(out)   :: Z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: APt(:), BPt(:), Zt(:,:), work(:)
+        ${target_real}$,    allocatable :: Wt(:), rwork(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), BPt(np), Wt(n), Zt(ldz, n), work(max(1, 2*n-1)), rwork(max(1, 3*n-2)))
+        APt = q2t_c(AP(1:np)); BPt = q2t_c(BP(1:np))
+        call ${C}$hpgv(itype, jobz, uplo, n, APt, BPt, Wt, Zt, ldz, work, rwork, info)
+        AP(1:np) = t2q_c(APt); BP(1:np) = t2q_c(BPt)
+        W(1:n) = t2q_r(Wt)
+        if (jobz == 'V' .or. jobz == 'v') Z(1:ldz, 1:n) = t2q_c(Zt)
+    end subroutine
+
+    subroutine target_dsbgv(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldz
+        real(ep),  intent(inout) :: AB(ldab,*), BB(ldbb,*)
+        real(ep),  intent(out)   :: W(*), Z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), BBt(:,:), Wt(:), Zt(:,:), work(:)
+        allocate(ABt(ldab, n), BBt(ldbb, n), Wt(n), Zt(ldz, n), work(3*n))
+        ABt = q2t_r(AB(1:ldab, 1:n)); BBt = q2t_r(BB(1:ldbb, 1:n))
+        call ${R}$sbgv(jobz, uplo, n, ka, kb, ABt, ldab, BBt, ldbb, Wt, Zt, ldz, work, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt); BB(1:ldbb, 1:n) = t2q_r(BBt)
+        W(1:n) = t2q_r(Wt)
+        if (jobz == 'V' .or. jobz == 'v') Z(1:ldz, 1:n) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zhbgv(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldz
+        complex(ep), intent(inout) :: AB(ldab,*), BB(ldbb,*)
+        real(ep),    intent(out)   :: W(*)
+        complex(ep), intent(out)   :: Z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), BBt(:,:), Zt(:,:), work(:)
+        ${target_real}$,    allocatable :: Wt(:), rwork(:)
+        allocate(ABt(ldab, n), BBt(ldbb, n), Wt(n), Zt(ldz, n), work(n), rwork(3*n))
+        ABt = q2t_c(AB(1:ldab, 1:n)); BBt = q2t_c(BB(1:ldbb, 1:n))
+        call ${C}$hbgv(jobz, uplo, n, ka, kb, ABt, ldab, BBt, ldbb, Wt, Zt, ldz, work, rwork, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt); BB(1:ldbb, 1:n) = t2q_c(BBt)
+        W(1:n) = t2q_r(Wt)
+        if (jobz == 'V' .or. jobz == 'v') Z(1:ldz, 1:n) = t2q_c(Zt)
     end subroutine
 
 end module target_lapack
