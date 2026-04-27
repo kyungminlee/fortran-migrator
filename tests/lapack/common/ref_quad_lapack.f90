@@ -1646,6 +1646,105 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zporfs
+
+        ! ── Phase 16 — banded / tridiag refinement ───────────────────
+        subroutine dgbrfs(trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, ipiv, &
+                          B, ldb, X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx
+            real(ep),  intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgbrfs
+
+        subroutine zgbrfs(trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, ipiv, &
+                          B, ldb, X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx
+            complex(ep), intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbrfs
+
+        subroutine dpbrfs(uplo, n, kd, nrhs, AB, ldab, AFB, ldafb, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldafb, ldb, ldx
+            real(ep),  intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dpbrfs
+
+        subroutine zpbrfs(uplo, n, kd, nrhs, AB, ldab, AFB, ldafb, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldafb, ldb, ldx
+            complex(ep), intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zpbrfs
+
+        subroutine dgtrfs(trans, n, nrhs, dl, d, du, dlf, df, duf, du2, ipiv, &
+                          B, ldb, X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: dl(*), d(*), du(*), dlf(*), df(*), duf(*), du2(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(in)    :: B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgtrfs
+
+        subroutine zgtrfs(trans, n, nrhs, dl, d, du, dlf, df, duf, du2, ipiv, &
+                          B, ldb, X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: dl(*), d(*), du(*), dlf(*), df(*), duf(*), du2(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgtrfs
+
+        subroutine dptrfs(n, nrhs, d, e, df, ef, B, ldb, X, ldx, &
+                          ferr, berr, work, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb, ldx
+            real(ep), intent(in)    :: d(*), e(*), df(*), ef(*), B(ldb,*)
+            real(ep), intent(inout) :: X(ldx,*)
+            real(ep), intent(out)   :: ferr(*), berr(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dptrfs
+
+        subroutine zptrfs(uplo, n, nrhs, d, e, df, ef, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),    intent(in)    :: d(*), df(*)
+            complex(ep), intent(in)    :: e(*), ef(*), B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zptrfs
     end interface
 
 end module ref_quad_lapack
