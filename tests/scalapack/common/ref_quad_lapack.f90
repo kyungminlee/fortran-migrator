@@ -64,6 +64,13 @@ module ref_quad_lapack
             integer,  intent(out)   :: info
         end subroutine dgtsv
 
+        subroutine dptsv(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb
+            real(ep), intent(inout) :: d(*), e(*), B(ldb,*)
+            integer,  intent(out)   :: info
+        end subroutine dptsv
+
         ! ── Linear solve — complex ───────────────────────────────────
         subroutine zgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
             import :: ep

@@ -49,7 +49,7 @@ module target_scalapack
     public :: target_name, target_eps
     public :: target_pdgesv, target_pdgetrf, target_pdgetrs
     public :: target_pdpotrf, target_pdpotrs
-    public :: target_pddtsv
+    public :: target_pddtsv, target_pdptsv
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -149,6 +149,16 @@ $:IMPORT_R()
             integer, intent(in)    :: desca(*), descb(*)
             integer, intent(out)   :: info
             ${target_real}$, intent(inout) :: dl(*), d(*), du(*), B(*)
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${R}$ptsv(n, nrhs, d, e, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: n, nrhs, ja, ib, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: d(*), e(*), B(*)
             ${target_real}$, intent(out)   :: work(*)
         end subroutine
 
@@ -1014,6 +1024,31 @@ contains
             A(1:na) = t2q_r(At)
             tau(1:ntau) = t2q_r(tau_t)
         end if
+    end subroutine
+
+    subroutine target_pdptsv(n, nrhs, d, e, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+        ! Positive-definite tridiagonal solver. D is the diagonal, E
+        ! is the off-diagonal (sub-diagonal — both halves are equal
+        ! in symmetric tridiagonal).
+        integer,  intent(in)    :: n, nrhs, ja, ib, lwork
+        integer,  intent(in)    :: desca(*), descb(*)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: d(*), e(*), B(*)
+        real(ep), intent(out)   :: work(*)
+        integer :: nv, nb, lwt, ldb
+        ${target_real}$, allocatable :: dt(:), et(:), Bt(:), work_t(:)
+        nb = desca(4)
+        nv = nb
+        ldb = descb(6)
+        lwt = max(1, lwork)
+        allocate(dt(nv), et(nv), Bt(ldb * nrhs), work_t(lwt))
+        dt = q2t_r(d(1:nv)); et = q2t_r(e(1:nv))
+        Bt = q2t_r(B(1:ldb * nrhs))
+        call ${R}$ptsv(n, nrhs, dt, et, ja, desca, &
+                        Bt, ib, descb, work_t, lwt, info)
+        d(1:nv) = t2q_r(dt); e(1:nv) = t2q_r(et)
+        B(1:ldb * nrhs) = t2q_r(Bt)
     end subroutine
 
     subroutine target_pddtsv(n, nrhs, dl, d, du, ja, desca, &
