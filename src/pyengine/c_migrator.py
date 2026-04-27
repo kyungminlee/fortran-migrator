@@ -467,6 +467,7 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                         classification: SymbolClassification | None = None,
                         rename_map: dict[str, str] | None = None,
                         c_type_aliases: list[dict] | None = None,
+                        c_pointer_cast_aliases: list[dict] | None = None,
                         header_patches: list[dict] | None = None,
                         overrides: list[tuple[Path, str]] | None = None,
                         extra_c_dirs: list[Path] | None = None,
@@ -502,6 +503,7 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             src_dir, output_dir, target_mode, copy_originals,
             classification, rename_map,
             c_type_aliases=c_type_aliases,
+            c_pointer_cast_aliases=c_pointer_cast_aliases,
             header_patches=header_patches,
             extra_c_dirs=extra_c_dirs,
             skip_files=skip_files,
@@ -735,6 +737,34 @@ def _expand_template(s: str, template_vars: dict[str, str]) -> str:
 _PBLAS_COST_LOCAL = (
     r'ABest|ACest|BCest|ABestL|ABestR|Best|tmp\d+'
 )
+
+
+def _apply_aliases_to_original(text: str, template_vars: dict[str, str],
+                                c_type_aliases: list[dict] | None,
+                                c_pointer_cast_aliases: list[dict] | None) -> str:
+    """Apply recipe-declared aliases to a copy-original C source.
+
+    Limited to (a) type-name aliases (e.g. ``cmplx16`` → ``cmplxQ``) and
+    (b) pointer-cast aliases (e.g. ``(double*)`` → ``(quad*)``). Does
+    NOT apply the broad ``double``/``float`` → ``REAL_TYPE`` substitution
+    that :func:`_apply_c_type_subs` performs because copy-originals
+    frequently contain precision-dispatch logic — e.g. ``PB_Cconjg``
+    switches on ``TYPE->type`` and uses ``(double*)`` casts in the
+    DCPLX/DREAL branches and ``(float*)`` casts in the SCPLX/SREAL
+    branches. The bare ``double`` / ``float`` keywords inside those
+    branches must stay so the dispatch stays well-formed; only the
+    cast-stride needs upgrading so the kind16 (cmplxQ, 32-byte) target
+    receives a 16-byte stride per real component instead of 8.
+    """
+    for rule in c_type_aliases or []:
+        target = _expand_template(rule['to'], template_vars)
+        for src in rule['from']:
+            text = re.sub(r'\b' + re.escape(src) + r'\b', target, text)
+    for rule in c_pointer_cast_aliases or []:
+        target = _expand_template(rule['to'], template_vars)
+        for src in rule['from']:
+            text = text.replace(src, target)
+    return text
 
 
 def _apply_c_type_subs(text: str, template_vars: dict[str, str],
@@ -1044,6 +1074,7 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                                  classification: SymbolClassification,
                                  rename_map: dict[str, str],
                                  c_type_aliases: list[dict] | None = None,
+                                 c_pointer_cast_aliases: list[dict] | None = None,
                                  header_patches: list[dict] | None = None,
                                  extra_c_dirs: list[Path] | None = None,
                                  skip_files: set[str] | None = None,
@@ -1104,6 +1135,9 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                 if f.suffix.lower() == '.c':
                     text = _resolve_stdc_ifdefs(text)
                     text = _convert_kr_to_ansi(text)
+                    text = _apply_aliases_to_original(
+                        text, template_vars, c_type_aliases,
+                        c_pointer_cast_aliases)
                 (output_dir / f.name).write_text(text)
 
     # Apply recipe-declared header patches to the copied originals so

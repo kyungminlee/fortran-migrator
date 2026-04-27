@@ -47,6 +47,20 @@ c_type_aliases:
   - from: [cmplx, cmplx16]
     to: 'cmplx{RPU}'
 
+# PB_Cconjg.c (and similar precision-independent dispatchers like
+# PB_Ctzhemm / PB_Ctzher2k) carry hardcoded ``(double*)`` and
+# ``(float*)`` pointer casts that step through scalar buffers in
+# 8-byte / 4-byte strides. On extended-precision targets the buffer
+# elements are wider (16-byte quad on kind16, 12-byte extended on
+# kind10, 16-byte float64x2_t on multifloats), so the strides must
+# match — otherwise PB_Cconjg's DCPLX branch copies only 16 of 32
+# bytes from a kind16 cmplxQ, leaving the high half garbage and
+# corrupting any caller that uses the conjugated alpha
+# (``pzher2k`` rank-2k surfaces this with max-rel-err ≈ 1.0).
+c_pointer_cast_aliases:
+  - from: ['(double*)', '(float*)']
+    to: '({REAL_TYPE}*)'
+
 header_patches:
   # Multifloats: PBLAS .c sources are compiled as C++ (for operator
   # overloading on float64x2). Without ``extern "C"`` wrappers, the

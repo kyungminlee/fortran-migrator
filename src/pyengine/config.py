@@ -86,6 +86,17 @@ class RecipeConfig:
     # migrator's template_vars (``{REAL_TYPE}``, ``{COMPLEX_TYPE}``,
     # ``{C_REAL_TYPE}``, ``{RP}``, ``{CP}``, ``{RPU}``, ``{CPU}``).
     c_type_aliases: list[dict] = field(default_factory=list)
+    # Pointer-cast aliases applied to copy-original C sources (those
+    # that are precision-independent dispatchers, e.g. PB_Cconjg.c uses
+    # ``((double*)CALPHA)[REAL_PART] = …`` switched on TYPE->type).
+    # Each entry has ``from`` (list of full cast strings like
+    # ``(double*)``) and ``to`` (the replacement, with template
+    # substitution). Distinct from ``c_type_aliases`` because the
+    # broad ``double → REAL_TYPE`` substitution would clobber the
+    # SCPLX/DCPLX dispatch labels in those originals; pointer-cast
+    # rewriting is needed for the kind-correct stride but the bare
+    # ``double``/``float`` keywords must stay.
+    c_pointer_cast_aliases: list[dict] = field(default_factory=list)
     # Insert new content into migrated headers after a literal anchor
     # line. Each entry: ``{'file': <relative path under source_dir>,
     # 'after': <anchor line>, 'insert': <text>}``. Used to define
@@ -213,6 +224,7 @@ def load_recipe(recipe_path: Path,
                              for p in (data.get('extra_migrate_files') or [])],
         c_return_types=list(data.get('c_return_types', [])),
         c_type_aliases=list(data.get('c_type_aliases', [])),
+        c_pointer_cast_aliases=list(data.get('c_pointer_cast_aliases', [])),
         header_patches=list(data.get('header_patches', [])),
         overrides=dict(data.get('overrides') or {}),
         recipe_dir=recipe_path.parent,

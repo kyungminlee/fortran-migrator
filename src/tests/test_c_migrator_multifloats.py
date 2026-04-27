@@ -19,6 +19,7 @@ import pytest
 from pyengine.target_mode import load_target
 from pyengine.c_migrator import (
     _build_sub_vars,
+    _apply_aliases_to_original,
     _apply_overrides,
     _build_rename_regex,
     _make_rename_substituter,
@@ -299,3 +300,77 @@ def test_rename_substituter_does_not_match_inside_longer_identifier():
 
     assert pattern.sub(sub, 'pdger_') == 'pdger_'    # untouched
     assert pattern.sub(sub, 'dger_') == 'ddger_'
+
+
+# ---------------------------------------------------------------------------
+# _apply_aliases_to_original — copy-original alias / pointer-cast pass (UB-04)
+# ---------------------------------------------------------------------------
+
+
+def test_aliases_to_original_renames_local_decl():
+    """Regression for UB-04: a precision-independent dispatcher like
+    PB_Ctzher2k declares ``cmplx16 Calph16;`` as a local. The
+    copy-originals path must apply ``c_type_aliases`` so the local
+    declaration becomes ``cmplxQ Calph16;`` on the kind16 target —
+    otherwise PB_Cconjg writes only 16 of 32 bytes into the buffer
+    and the conjugated alpha is corrupted."""
+    src = textwrap.dedent("""\
+        void PB_Ctzher2k(...) {
+            cmplx16 Calph16;
+            int i;
+        }
+    """)
+    template_vars = {'REAL_TYPE': 'quad', 'RPU': 'Q'}
+    aliases = [{'from': ['cmplx', 'cmplx16'], 'to': 'cmplx{RPU}'}]
+    out = _apply_aliases_to_original(src, template_vars, aliases, None)
+    assert 'cmplxQ Calph16;' in out
+    assert 'cmplx16' not in out
+
+
+def test_aliases_to_original_pointer_cast_replacement():
+    """Regression for UB-04: PB_Cconjg.c uses ``((double*)CALPHA)`` and
+    ``((float*)CALPHA)`` to step through scalar buffers in 8-byte and
+    4-byte strides. The copy-originals path must rewrite the casts so
+    a kind16 cmplxQ buffer (32 bytes total, 16 bytes per real component)
+    is stepped in 16-byte strides."""
+    src = textwrap.dedent("""\
+        case DCPLX:
+            ((double*)(CALPHA))[REAL_PART] =  ((double*)(ALPHA))[REAL_PART];
+            ((double*)(CALPHA))[IMAG_PART] = -((double*)(ALPHA))[IMAG_PART];
+            break;
+        case SCPLX:
+            ((float*)(CALPHA))[REAL_PART]  =  ((float*)(ALPHA))[REAL_PART];
+            ((float*)(CALPHA))[IMAG_PART]  = -((float*)(ALPHA))[IMAG_PART];
+            break;
+    """)
+    template_vars = {'REAL_TYPE': 'quad', 'RPU': 'Q'}
+    cast_aliases = [{'from': ['(double*)', '(float*)'], 'to': '({REAL_TYPE}*)'}]
+    out = _apply_aliases_to_original(src, template_vars, None, cast_aliases)
+    assert '(quad*)' in out
+    assert '(double*)' not in out
+    assert '(float*)' not in out
+    # The bare ``DCPLX``/``SCPLX`` dispatch labels must NOT be touched —
+    # they are enum constants, not types. The function deliberately
+    # avoids the broad ``double``/``float`` substitution for this reason.
+    assert 'case DCPLX:' in out
+    assert 'case SCPLX:' in out
+
+
+def test_aliases_to_original_does_not_promote_bare_double_keyword():
+    """The copy-originals pass must NOT do the broad ``double`` →
+    ``REAL_TYPE`` substitution. A precision-independent dispatcher may
+    have a literal ``double`` type that is part of the dispatch logic
+    (e.g. ``case DREAL: double_field = ...``); the broad sub would
+    wrongly turn it into ``quad`` on kind16, breaking SCPLX/DCPLX
+    discrimination."""
+    src = 'double tmp; float other;\n'
+    template_vars = {'REAL_TYPE': 'quad', 'RPU': 'Q'}
+    out = _apply_aliases_to_original(src, template_vars, None, None)
+    # No aliases configured → text unchanged.
+    assert out == src
+
+
+def test_aliases_to_original_no_aliases_is_identity():
+    src = 'cmplx16 X; ((double*)P)[0] = 0.0;\n'
+    out = _apply_aliases_to_original(src, {}, None, None)
+    assert out == src
