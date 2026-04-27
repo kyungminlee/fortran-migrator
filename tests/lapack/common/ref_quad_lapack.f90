@@ -1982,6 +1982,84 @@ module ref_quad_lapack
             real(ep),    intent(out) :: S(*), scond, amax
             integer,     intent(out) :: info
         end subroutine zpbequ
+
+        ! ── Improved equilibration (equb) ────────────────────────────
+        subroutine dgeequb(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,  intent(in)  :: m, n, lda
+            real(ep), intent(in)  :: A(lda,*)
+            real(ep), intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,  intent(out) :: info
+        end subroutine dgeequb
+
+        subroutine dgbequb(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,  intent(in)  :: m, n, kl, ku, ldab
+            real(ep), intent(in)  :: AB(ldab,*)
+            real(ep), intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,  intent(out) :: info
+        end subroutine dgbequb
+
+        subroutine dpoequb(n, A, lda, S, scond, amax, info)
+            import :: ep
+            integer,  intent(in)  :: n, lda
+            real(ep), intent(in)  :: A(lda,*)
+            real(ep), intent(out) :: S(*), scond, amax
+            integer,  intent(out) :: info
+        end subroutine dpoequb
+
+        subroutine dsyequb(uplo, n, A, lda, S, scond, amax, work, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*)
+            real(ep),  intent(out) :: S(*), scond, amax, work(*)
+            integer,   intent(out) :: info
+        end subroutine dsyequb
+
+        subroutine zgeequb(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,     intent(in)  :: m, n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,     intent(out) :: info
+        end subroutine zgeequb
+
+        subroutine zgbequb(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,     intent(in)  :: m, n, kl, ku, ldab
+            complex(ep), intent(in)  :: AB(ldab,*)
+            real(ep),    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,     intent(out) :: info
+        end subroutine zgbequb
+
+        subroutine zpoequb(n, A, lda, S, scond, amax, info)
+            import :: ep
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            integer,     intent(out) :: info
+        end subroutine zpoequb
+
+        subroutine zsyequb(uplo, n, A, lda, S, scond, amax, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zsyequb
+
+        subroutine zheequb(uplo, n, A, lda, S, scond, amax, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zheequb
     end interface
 
 end module ref_quad_lapack
