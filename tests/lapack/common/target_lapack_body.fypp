@@ -121,6 +121,7 @@ module target_lapack
     public :: target_dsygvd, target_zhegvd, target_dspgvd, target_zhpgvd, target_dsbgvd, target_zhbgvd
     public :: target_dsterf, target_dsteqr, target_zsteqr
     public :: target_dstedc, target_zstedc, target_dstebz
+    public :: target_dbdsqr, target_zbdsqr, target_dbdsdc
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2524,6 +2525,38 @@ $:IMPORT_R()
             integer,   intent(out) :: m, nsplit
             ${target_real}$, intent(out) :: W(*), work(*)
             integer,   intent(out) :: iblock(*), isplit(*), iwork(*), info
+        end subroutine
+
+        ! ── Phase 27 — bidiagonal SVD ────────────────────────────────
+        subroutine ${R}$bdsqr(uplo, n, ncvt, nru, ncc, D, E, VT, ldvt, U, ldu, &
+                              C, ldc, work, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, ncvt, nru, ncc, ldvt, ldu, ldc
+            ${target_real}$, intent(inout) :: D(*), E(*), VT(ldvt,*), U(ldu,*), C(ldc,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$bdsqr(uplo, n, ncvt, nru, ncc, D, E, VT, ldvt, U, ldu, &
+                              C, ldc, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, ncvt, nru, ncc, ldvt, ldu, ldc
+            ${target_real}$,    intent(inout) :: D(*), E(*)
+            ${target_complex}$, intent(inout) :: VT(ldvt,*), U(ldu,*), C(ldc,*)
+            ${target_real}$,    intent(out)   :: rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$bdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, &
+                              work, iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo, compq
+            integer,   intent(in) :: n, ldu, ldvt
+            ${target_real}$, intent(inout) :: D(*), E(*)
+            ${target_real}$, intent(out)   :: U(ldu,*), VT(ldvt,*), Q(*), work(*)
+            integer, intent(out) :: IQ(*), iwork(*), info
         end subroutine
     end interface
 
@@ -6922,6 +6955,85 @@ $:CPACK_INV('zsptri', C + 'sptri')
                        q2t_r(abstol), Dt, Et, m, nsplit, Wt, iblock, isplit, &
                        work, iworkt, info)
         W(1:n) = t2q_r(Wt)
+    end subroutine
+
+    ! ── Phase 27 wrappers ────────────────────────────────────────────
+    subroutine target_dbdsqr(uplo, n, ncvt, nru, ncc, D, E, VT, ldvt, U, ldu, &
+                             C, ldc, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, ncvt, nru, ncc, ldvt, ldu, ldc
+        real(ep),  intent(inout) :: D(*), E(*), VT(ldvt,*), U(ldu,*), C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Dt(:), Et(:), VTt(:,:), Ut(:,:), Ct(:,:), work(:)
+        integer :: nVT, nU, nC
+        nVT = max(1, ncvt); nU = max(1, nru); nC = max(1, ncc)
+        allocate(Dt(n), Et(max(1, n - 1)), VTt(ldvt, nVT), Ut(ldu, n), &
+                 Ct(ldc, nC), work(4*n))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        if (ncvt > 0) VTt = q2t_r(VT(1:ldvt, 1:nVT))
+        if (nru  > 0) Ut  = q2t_r(U(1:ldu, 1:n))
+        if (ncc  > 0) Ct  = q2t_r(C(1:ldc, 1:nC))
+        call ${R}$bdsqr(uplo, n, ncvt, nru, ncc, Dt, Et, VTt, ldvt, Ut, ldu, &
+                       Ct, ldc, work, info)
+        D(1:n) = t2q_r(Dt); E(1:max(1, n - 1)) = t2q_r(Et)
+        if (ncvt > 0) VT(1:ldvt, 1:nVT) = t2q_r(VTt)
+        if (nru  > 0) U(1:ldu, 1:n)     = t2q_r(Ut)
+        if (ncc  > 0) C(1:ldc, 1:nC)    = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zbdsqr(uplo, n, ncvt, nru, ncc, D, E, VT, ldvt, U, ldu, &
+                             C, ldc, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, ncvt, nru, ncc, ldvt, ldu, ldc
+        real(ep),    intent(inout) :: D(*), E(*)
+        complex(ep), intent(inout) :: VT(ldvt,*), U(ldu,*), C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_real}$,    allocatable :: Dt(:), Et(:), rwork(:)
+        ${target_complex}$, allocatable :: VTt(:,:), Ut(:,:), Ct(:,:)
+        integer :: nVT, nU, nC
+        nVT = max(1, ncvt); nU = max(1, nru); nC = max(1, ncc)
+        allocate(Dt(n), Et(max(1, n - 1)), VTt(ldvt, nVT), Ut(ldu, n), &
+                 Ct(ldc, nC), rwork(4*n))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        if (ncvt > 0) VTt = q2t_c(VT(1:ldvt, 1:nVT))
+        if (nru  > 0) Ut  = q2t_c(U(1:ldu, 1:n))
+        if (ncc  > 0) Ct  = q2t_c(C(1:ldc, 1:nC))
+        call ${C}$bdsqr(uplo, n, ncvt, nru, ncc, Dt, Et, VTt, ldvt, Ut, ldu, &
+                       Ct, ldc, rwork, info)
+        D(1:n) = t2q_r(Dt); E(1:max(1, n - 1)) = t2q_r(Et)
+        if (ncvt > 0) VT(1:ldvt, 1:nVT) = t2q_c(VTt)
+        if (nru  > 0) U(1:ldu, 1:n)     = t2q_c(Ut)
+        if (ncc  > 0) C(1:ldc, 1:nC)    = t2q_c(Ct)
+    end subroutine
+
+    subroutine target_dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, info)
+        character, intent(in)    :: uplo, compq
+        integer,   intent(in)    :: n, ldu, ldvt
+        real(ep),  intent(inout) :: D(*), E(*)
+        real(ep),  intent(out)   :: U(ldu,*), VT(ldvt,*), Q(*)
+        integer,   intent(out)   :: IQ(*), info
+        ${target_real}$, allocatable :: Dt(:), Et(:), Ut(:,:), VTt(:,:), Qt(:), work(:)
+        integer, allocatable :: iwork(:)
+        integer :: nU, nVT, lwork, lQ
+        nU  = merge(n, 1, compq == 'I' .or. compq == 'i' .or. compq == 'P' .or. compq == 'p')
+        nVT = nU
+        if (compq == 'N' .or. compq == 'n') then
+            lwork = 4*n; lQ = 1
+        else if (compq == 'P' .or. compq == 'p') then
+            lwork = 6*n; lQ = max(1, n*(11 + 2*int(log(real(n,ep))/log(2.0_ep))) )
+        else
+            lwork = 3*n*n + 4*n; lQ = 1
+        end if
+        allocate(Dt(n), Et(max(1, n - 1)), Ut(ldu, nU), VTt(ldvt, nVT), &
+                 Qt(lQ), work(lwork), iwork(8*n))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1, n - 1)))
+        call ${R}$bdsdc(uplo, compq, n, Dt, Et, Ut, ldu, VTt, ldvt, Qt, IQ, &
+                       work, iwork, info)
+        D(1:n) = t2q_r(Dt); E(1:max(1, n - 1)) = t2q_r(Et)
+        if (compq /= 'N' .and. compq /= 'n') then
+            U(1:ldu, 1:nU)   = t2q_r(Ut)
+            VT(1:ldvt, 1:nVT) = t2q_r(VTt)
+        end if
     end subroutine
 
 end module target_lapack

@@ -88,13 +88,13 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_246 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_249 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
 | ✓ | dbbcsd | — | — | — |
-| ✓ | dbdsdc | — | — | — |
-| ✓ | dbdsqr | — | — | — |
+| ✓ | dbdsdc | 18.48 | exact | 30.53 |
+| ✓ | dbdsqr | 18.50 | exact | 30.74 |
 | ✓ | dbdsvdx | — | — | — |
 | ✓ | ddisna | — | — | — |
 | ✓ | dgbbrd | — | — | — |
@@ -599,7 +599,7 @@ _246 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dzsum1 | — | — | — |
 |  | izmax1 | — | — | — |
 | ✓ | zbbcsd | — | — | — |
-| ✓ | zbdsqr | — | — | — |
+| ✓ | zbdsqr | 18.37 | exact | 30.76 |
 | ✓ | zdrscl | — | — | — |
 | ✓ | zgbbrd | — | — | — |
 | ✓ | zgbcon | 18.82 | exact | 32.26 |
