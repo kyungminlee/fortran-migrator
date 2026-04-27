@@ -25,7 +25,7 @@ Backing plan: `~/.claude/plans/start-a-project-to-stateless-bumblebee.md`.
 | UB-02 | merged | `fix/ub-02-multifloats-F-param-ordering` | Multifloats `.F` migration places `PARAMETER` lines above `IMPLICIT NONE` | `gfortran -c tsytrd_sb2st.F` clean |
 | UB-03 | pending (depends on A+B) | `fix/ub-03-2stage-segfault` OR `doc/ub-03-escalation` | 2-stage segfault in `__GI___libc_free` under `-freal-8-real-16` | `valgrind ctest -R '_2stage'` zero invalid frees |
 | UB-04 | merged | `fix/ub-04-cmplx16-locals` | C migrator `cmplx16` alias not applied to local decls; `PB_Cconjg` hardcoded `(double*)` casts | `ctest -R '^pblas_test_pzher2k$'` rel-err ≤ 64·8·k·eps on kind16 |
-| UB-05 | pending | `fix/ub-05-extern-c-body-wrap` | Multifloats PBLAS `extern "C"` doesn't propagate to per-file `<name>_.c` defs | `nm libqpblas.a \| grep ' T pdgemm_'` un-mangled |
+| UB-05 | merged (verified — no code change required) | n/a (verify-only) | Multifloats PBLAS `extern "C"` doesn't propagate to per-file `<name>_.c` defs | `nm libtpblas.a \| grep ' T pdgemm_'` un-mangled |
 
 ## UB-01 — merged
 
@@ -178,3 +178,64 @@ ctest --test-dir /tmp/stg-k16-ub04/build --output-on-failure
 **Note**: this fix touches recipe-driven C migration only — multifloats
 PBLAS still requires UB-05 (`extern "C"` body wrap) before its
 Fortran-callable entry points become reachable.
+
+## UB-04 — fixup (scoping)
+
+The first cut of UB-04 applied `c_type_aliases` and
+`c_pointer_cast_aliases` to **every** copy-original C source. That
+broke the multifloats build of precision-prefixed entry points
+(`pcamax_.c`, `pzgemm_.c`, …) because their original signatures
+declare `float* AMAX` / `double* AMAX` and the substituted casts
+yielded `float64x2`-typed RHS values that C++ refuses to assign
+to native scalar lvalues.
+
+Refined: in `src/pyengine/c_migrator.py`, scope the alias pass to
+either (a) precision-independent dispatchers (not in `rename_map`,
+applied on every target) or (b) precision-prefixed originals
+(in `rename_map`, applied **only** when `target_mode.is_kind_based`).
+On KIND targets the original `pdgemm_` / `pzgemm_` / `pcamax_` are
+still callable from `-freal-8-real-16`-promoted Fortran and must
+widen to match the quad-stride ABI. On multifloats those entry
+points are dead (callers route through cloned `ptgemm_` / `pvgemm_`)
+and their bodies must keep their native signatures so they compile
+as C++.
+
+Verified end-to-end: `tpblas` (multifloats) builds clean, `qpblas`
+(kind16) full ctest 109/109 passes.
+
+## UB-05 — merged (verified, no code change required)
+
+**What**: the TODO claimed multifloats PBLAS `<name>_.c` definitions
+got C++ name-mangled because `extern "C"` declared in
+`recipes/pblas.yaml` `header_patches` did not propagate to per-file
+definitions.
+
+**Investigation outcome (Step 1 of the plan): the wrap is already
+present and correct.** The migrator's existing header-patch
+machinery emits `#ifdef __cplusplus extern "C" { #endif` brackets
+around each generated `<name>_.c` (lines 19-20 and 496-497 in a
+freshly staged `pdgemm_.c`). After the UB-04 fixup landed, building
+the multifloats `tpblas` target produced symbol exports for
+`pdgemm_`, `ptgemm_`, `pvgemm_`, and `pzgemm_` all as `T` (un-mangled
+Fortran-callable text symbols). No `_Z*pdgemm*` C++-mangled names
+appear.
+
+The 40+ multifloats PBLAS test skips noted in the original TODO are
+caused by the `tests/pblas/CMakeLists.txt` "return early when
+`C_AS_CXX` is on" guard — that is a tests/-tree edit out of scope
+for the migrator-only project here. UB-05 is closed at the
+symbol-table level; the test re-enable belongs to the next
+follow-up project that touches `tests/pblas/`.
+
+**Verify**:
+
+```bash
+rm -rf /tmp/stg-mf-ub05
+uv run python -m pyengine stage /tmp/stg-mf-ub05 --target multifloats \
+  --libraries blas blacs lapack ptzblas pbblas pblas
+grep -A1 "extern \"C\"" /tmp/stg-mf-ub05/pblas/src/pdgemm_.c | head -3
+cmake -S /tmp/stg-mf-ub05 -B /tmp/stg-mf-ub05/build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/stg-mf-ub05/build -j8 --target tpblas
+nm /tmp/stg-mf-ub05/build/libtpblas-*.a | awk '/^[0-9a-f]+ T (pdgemm_|ptgemm_|pvgemm_|pzgemm_)$/'
+# All four print as T (defined, un-mangled).
+```

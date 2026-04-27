@@ -1135,9 +1135,28 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                 if f.suffix.lower() == '.c':
                     text = _resolve_stdc_ifdefs(text)
                     text = _convert_kr_to_ansi(text)
-                    text = _apply_aliases_to_original(
-                        text, template_vars, c_type_aliases,
-                        c_pointer_cast_aliases)
+                    # Aliases (cmplx16 → cmplxQ, (double*) → (REAL_TYPE*))
+                    # apply to:
+                    #   (a) precision-independent dispatchers (not in
+                    #       rename_map, e.g. PB_Cconjg, PB_Ctzher2k) —
+                    #       on EVERY target, because cloned entry points
+                    #       call them and need the wider types.
+                    #   (b) precision-prefixed originals (in rename_map,
+                    #       e.g. pdgemm_, pcamax_, PB_Cdtypeset) — only on
+                    #       KIND-based targets, where -freal-8-real-16
+                    #       promotion means the original is still called
+                    #       with quad-stride args and its body must
+                    #       widen too. On multifloats targets the
+                    #       precision-prefixed originals are dead (callers
+                    #       route through clones) and their native
+                    #       double*/float* signatures must stay so the
+                    #       body still compiles as C++ (struct types
+                    #       cannot assign to native scalar lvalues).
+                    is_dispatcher = stem_upper not in rename_map
+                    if is_dispatcher or target_mode.is_kind_based:
+                        text = _apply_aliases_to_original(
+                            text, template_vars, c_type_aliases,
+                            c_pointer_cast_aliases)
                 (output_dir / f.name).write_text(text)
 
     # Apply recipe-declared header patches to the copied originals so
