@@ -229,6 +229,25 @@ module ref_quad_lapack
             integer,  intent(out)   :: info
         end subroutine dgebrd
 
+        subroutine dgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, ilo, ihi, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgehrd
+
+        subroutine dormhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, ilo, ihi, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormhr
+
         ! ── QR factorization — complex ───────────────────────────────
         subroutine zgeqrf(m, n, A, lda, tau, work, lwork, info)
             import :: ep
@@ -408,6 +427,25 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: tauq(*), taup(*), work(*)
             integer,     intent(out)   :: info
         end subroutine zgebrd
+
+        subroutine zgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, ilo, ihi, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgehrd
+
+        subroutine zunmhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, ilo, ihi, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmhr
 
         ! ── Symmetric / Hermitian eigenvalue ─────────────────────────
         subroutine dsyev(jobz, uplo, n, A, lda, w, work, lwork, info)
