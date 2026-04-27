@@ -5,6 +5,20 @@ Issues observed while adding LAPACK tests that need fixes outside
 specific routines blocked, the file(s) involved, and what would have
 to change.
 
+## Phases L2 / L3 — \*geevx / \*ggev3 / \*ggevx family aborts
+
+The d/z `*geevx`, `*ggev3`, and `*ggevx` tests all abort with
+`free(): invalid pointer` shortly after the workspace-correct call.
+Pattern is consistent across Phase L2 (L2 surfaced d/zgeevx) and
+Phase L3 (L3 added d/zggev3 and d/zggevx, same crash). Workspace
+queries return sensible LWORK; the crash happens during the second
+call (with allocated WORK) or just after deallocation. Likely a
+shared workspace-corruption bug in the migrated `q*ev[x]/q*v3`
+chain or in the wrapper itself.
+
+To reproduce: stage kind16 and run any of the failing tests
+directly — the abort happens immediately on the first iteration.
+
 ## Phase L2 — three test-side failures left in place
 
 Three new tests landed RED with Phase L2:
