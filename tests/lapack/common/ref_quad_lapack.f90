@@ -2060,6 +2060,64 @@ module ref_quad_lapack
             complex(ep), intent(out) :: work(*)
             integer,     intent(out) :: info
         end subroutine zheequb
+
+        ! ── Tridiagonal reduction ────────────────────────────────────
+        subroutine dsytrd(uplo, n, A, lda, D, E, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: D(*), E(*), tau(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrd
+
+        subroutine zhetrd(uplo, n, A, lda, D, E, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrd
+
+        subroutine dsptrd(uplo, n, AP, D, E, tau, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            real(ep),  intent(out)   :: D(*), E(*), tau(*)
+            integer,   intent(out)   :: info
+        end subroutine dsptrd
+
+        subroutine zhptrd(uplo, n, AP, D, E, tau, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: tau(*)
+            integer,     intent(out)   :: info
+        end subroutine zhptrd
+
+        subroutine dsbtrd(vect, uplo, n, kd, AB, ldab, D, E, Q, ldq, work, info)
+            import :: ep
+            character, intent(in)    :: vect, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq
+            real(ep),  intent(inout) :: AB(ldab,*), Q(ldq,*)
+            real(ep),  intent(out)   :: D(*), E(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbtrd
+
+        subroutine zhbtrd(vect, uplo, n, kd, AB, ldab, D, E, Q, ldq, work, info)
+            import :: ep
+            character,   intent(in)    :: vect, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldq
+            complex(ep), intent(inout) :: AB(ldab,*), Q(ldq,*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbtrd
     end interface
 
 end module ref_quad_lapack

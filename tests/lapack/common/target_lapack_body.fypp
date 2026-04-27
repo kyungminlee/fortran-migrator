@@ -113,6 +113,7 @@ module target_lapack
     public :: target_zgeequ, target_zgbequ, target_zpoequ, target_zppequ, target_zpbequ
     public :: target_dgeequb, target_dgbequb, target_dpoequb, target_dsyequb
     public :: target_zgeequb, target_zgbequb, target_zpoequb, target_zsyequb, target_zheequb
+    public :: target_dsytrd, target_zhetrd, target_dsptrd, target_zhptrd, target_dsbtrd, target_zhbtrd
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -2154,6 +2155,64 @@ $:IMPORT_RC()
             ${target_complex}$, intent(in)  :: A(lda,*)
             ${target_real}$,    intent(out) :: S(*), scond, amax
             ${target_complex}$, intent(out) :: work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase 21 — tridiagonal reduction ────────────────────────
+        subroutine ${R}$sytrd(uplo, n, A, lda, D, E, tau, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: D(*), E(*), tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hetrd(uplo, n, A, lda, D, E, tau, work, lwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_real}$,    intent(out)   :: D(*), E(*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$sptrd(uplo, n, AP, D, E, tau, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n
+            ${target_real}$, intent(inout) :: AP(*)
+            ${target_real}$, intent(out)   :: D(*), E(*), tau(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hptrd(uplo, n, AP, D, E, tau, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n
+            ${target_complex}$, intent(inout) :: AP(*)
+            ${target_real}$,    intent(out)   :: D(*), E(*)
+            ${target_complex}$, intent(out)   :: tau(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$sbtrd(vect, uplo, n, kd, AB, ldab, D, E, Q, ldq, work, info)
+$:IMPORT_R()
+            character, intent(in) :: vect, uplo
+            integer,   intent(in) :: n, kd, ldab, ldq
+            ${target_real}$, intent(inout) :: AB(ldab,*), Q(ldq,*)
+            ${target_real}$, intent(out)   :: D(*), E(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hbtrd(vect, uplo, n, kd, AB, ldab, D, E, Q, ldq, work, info)
+$:IMPORT_RC()
+            character, intent(in) :: vect, uplo
+            integer,   intent(in) :: n, kd, ldab, ldq
+            ${target_complex}$, intent(inout) :: AB(ldab,*), Q(ldq,*)
+            ${target_real}$,    intent(out)   :: D(*), E(*)
+            ${target_complex}$, intent(out)   :: work(*)
             integer, intent(out) :: info
         end subroutine
     end interface
@@ -5837,6 +5896,122 @@ $:CPACK_INV('zsptri', C + 'sptri')
         At = q2t_c(A(1:lda, 1:n))
         call ${C}$heequb(uplo, n, At, lda, St, sct, amt, work, info)
         S(1:n) = t2q_r(St); scond = t2q_r(sct); amax = t2q_r(amt)
+    end subroutine
+
+    ! ── Phase 21 wrappers ────────────────────────────────────────────
+    subroutine target_dsytrd(uplo, n, A, lda, D, E, tau, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: D(*), E(*), tau(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Dt(:), Et(:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Dt(n), Et(max(1,n-1)), taut(max(1,n-1)))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$sytrd(uplo, n, At, lda, Dt, Et, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sytrd(uplo, n, At, lda, Dt, Et, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et); tau(1:max(1,n-1)) = t2q_r(taut)
+    end subroutine
+
+    subroutine target_zhetrd(uplo, n, A, lda, D, E, tau, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: D(*), E(*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$,    allocatable :: Dt(:), Et(:)
+        integer :: lwork
+        allocate(At(lda, n), Dt(n), Et(max(1,n-1)), taut(max(1,n-1)))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$hetrd(uplo, n, At, lda, Dt, Et, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hetrd(uplo, n, At, lda, Dt, Et, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et); tau(1:max(1,n-1)) = t2q_c(taut)
+    end subroutine
+
+    subroutine target_dsptrd(uplo, n, AP, D, E, tau, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n
+        real(ep),  intent(inout) :: AP(*)
+        real(ep),  intent(out)   :: D(*), E(*), tau(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: APt(:), Dt(:), Et(:), taut(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), Dt(n), Et(max(1,n-1)), taut(max(1,n-1)))
+        APt = q2t_r(AP(1:np))
+        call ${R}$sptrd(uplo, n, APt, Dt, Et, taut, info)
+        AP(1:np) = t2q_r(APt)
+        D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et); tau(1:max(1,n-1)) = t2q_r(taut)
+    end subroutine
+
+    subroutine target_zhptrd(uplo, n, AP, D, E, tau, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n
+        complex(ep), intent(inout) :: AP(*)
+        real(ep),    intent(out)   :: D(*), E(*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: APt(:), taut(:)
+        ${target_real}$,    allocatable :: Dt(:), Et(:)
+        integer :: np
+        np = n*(n+1)/2
+        allocate(APt(np), Dt(n), Et(max(1,n-1)), taut(max(1,n-1)))
+        APt = q2t_c(AP(1:np))
+        call ${C}$hptrd(uplo, n, APt, Dt, Et, taut, info)
+        AP(1:np) = t2q_c(APt)
+        D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et); tau(1:max(1,n-1)) = t2q_c(taut)
+    end subroutine
+
+    subroutine target_dsbtrd(vect, uplo, n, kd, AB, ldab, D, E, Q, ldq, info)
+        character, intent(in)    :: vect, uplo
+        integer,   intent(in)    :: n, kd, ldab, ldq
+        real(ep),  intent(inout) :: AB(ldab,*), Q(ldq,*)
+        real(ep),  intent(out)   :: D(*), E(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), Qt(:,:), Dt(:), Et(:), work(:)
+        integer :: nq
+        nq = max(1, n)
+        allocate(ABt(ldab, n), Qt(ldq, nq), Dt(n), Et(max(1,n-1)), work(n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        if (vect == 'V' .or. vect == 'v' .or. vect == 'U' .or. vect == 'u') then
+            Qt = q2t_r(Q(1:ldq, 1:nq))
+        end if
+        call ${R}$sbtrd(vect, uplo, n, kd, ABt, ldab, Dt, Et, Qt, ldq, work, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+        if (vect /= 'N' .and. vect /= 'n') Q(1:ldq, 1:nq) = t2q_r(Qt)
+        D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et)
+    end subroutine
+
+    subroutine target_zhbtrd(vect, uplo, n, kd, AB, ldab, D, E, Q, ldq, info)
+        character,   intent(in)    :: vect, uplo
+        integer,     intent(in)    :: n, kd, ldab, ldq
+        complex(ep), intent(inout) :: AB(ldab,*), Q(ldq,*)
+        real(ep),    intent(out)   :: D(*), E(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), Qt(:,:), work(:)
+        ${target_real}$,    allocatable :: Dt(:), Et(:)
+        integer :: nq
+        nq = max(1, n)
+        allocate(ABt(ldab, n), Qt(ldq, nq), Dt(n), Et(max(1,n-1)), work(n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        if (vect == 'V' .or. vect == 'v' .or. vect == 'U' .or. vect == 'u') then
+            Qt = q2t_c(Q(1:ldq, 1:nq))
+        end if
+        call ${C}$hbtrd(vect, uplo, n, kd, ABt, ldab, Dt, Et, Qt, ldq, work, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        if (vect /= 'N' .and. vect /= 'n') Q(1:ldq, 1:nq) = t2q_c(Qt)
+        D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et)
     end subroutine
 
 end module target_lapack
