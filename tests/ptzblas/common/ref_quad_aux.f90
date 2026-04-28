@@ -12,8 +12,8 @@ module ptzblas_ref_quad_aux
     public :: ref_dset, ref_zset
     public :: ref_dascal
     public :: ref_zhescal
-    public :: ref_dmmadd, ref_dmmtadd
-    public :: ref_zmmadd, ref_zmmtadd
+    public :: ref_dmmadd, ref_dmmtadd, ref_dmmcadd, ref_dmmtcadd, ref_dtzpadcpy
+    public :: ref_zmmadd, ref_zmmtadd, ref_zmmcadd, ref_zmmtcadd, ref_ztzpadcpy
     public :: ref_drshft, ref_dcshft
     public :: ref_zrshft, ref_zcshft
     public :: ref_dasqrtb
@@ -144,6 +144,103 @@ contains
         complex(ep), intent(inout) :: B(:,:)
         B(1:n, 1:m) = alpha * transpose(A(1:m, 1:n)) + beta * B(1:n, 1:m)
     end subroutine ref_zmmtadd
+
+    ! qmmcadd: real domain — identical to qmmadd (the C only diverges
+    ! from qmmadd in the complex domain where it conjugates A).
+    subroutine ref_dmmcadd(m, n, alpha, A, beta, B)
+        integer,  intent(in)    :: m, n
+        real(ep), intent(in)    :: alpha, beta
+        real(ep), intent(in)    :: A(:,:)
+        real(ep), intent(inout) :: B(:,:)
+        B(1:m, 1:n) = alpha * A(1:m, 1:n) + beta * B(1:m, 1:n)
+    end subroutine ref_dmmcadd
+
+    ! xmmcadd: complex conjugate add. B := alpha*conj(A) + beta*B.
+    subroutine ref_zmmcadd(m, n, alpha, A, beta, B)
+        integer,     intent(in)    :: m, n
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(:,:)
+        complex(ep), intent(inout) :: B(:,:)
+        B(1:m, 1:n) = alpha * conjg(A(1:m, 1:n)) + beta * B(1:m, 1:n)
+    end subroutine ref_zmmcadd
+
+    ! qmmtcadd: real domain ≡ qmmtadd (no conjugation).
+    subroutine ref_dmmtcadd(m, n, alpha, A, beta, B)
+        integer,  intent(in)    :: m, n
+        real(ep), intent(in)    :: alpha, beta
+        real(ep), intent(in)    :: A(:,:)
+        real(ep), intent(inout) :: B(:,:)
+        B(1:n, 1:m) = alpha * transpose(A(1:m, 1:n)) + beta * B(1:n, 1:m)
+    end subroutine ref_dmmtcadd
+
+    ! xmmtcadd: B := alpha*conj(A^T) + beta*B.
+    subroutine ref_zmmtcadd(m, n, alpha, A, beta, B)
+        integer,     intent(in)    :: m, n
+        complex(ep), intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(:,:)
+        complex(ep), intent(inout) :: B(:,:)
+        B(1:n, 1:m) = alpha * conjg(transpose(A(1:m, 1:n))) + beta * B(1:n, 1:m)
+    end subroutine ref_zmmtcadd
+
+    ! qtzpadcpy / xtzpadcpy: trapezoidal pad-copy. The named triangle
+    ! of A (shifted by IOFFD) is copied into B; the off-triangle of B
+    ! is padded with zeros. DIAG='U' overrides the diagonal of B with
+    ! ones; DIAG='N' copies A's diagonal.
+    subroutine ref_dtzpadcpy(uplo, diag, m, n, ioffd, A, B)
+        character, intent(in)    :: uplo, diag
+        integer,   intent(in)    :: m, n, ioffd
+        real(ep),  intent(in)    :: A(:,:)
+        real(ep),  intent(inout) :: B(:,:)
+        integer :: i, j
+        B(1:m, 1:n) = 0.0_ep
+        if (uplo == 'L' .or. uplo == 'l') then
+            do j = 1, n
+                do i = max(1, j - ioffd), m
+                    B(i, j) = A(i, j)
+                end do
+            end do
+        else
+            do j = 1, n
+                do i = 1, min(m, j - ioffd)
+                    B(i, j) = A(i, j)
+                end do
+            end do
+        end if
+        if (diag == 'U' .or. diag == 'u') then
+            do j = 1, n
+                i = j - ioffd
+                if (i >= 1 .and. i <= m) B(i, j) = 1.0_ep
+            end do
+        end if
+    end subroutine ref_dtzpadcpy
+
+    subroutine ref_ztzpadcpy(uplo, diag, m, n, ioffd, A, B)
+        character,   intent(in)    :: uplo, diag
+        integer,     intent(in)    :: m, n, ioffd
+        complex(ep), intent(in)    :: A(:,:)
+        complex(ep), intent(inout) :: B(:,:)
+        integer :: i, j
+        B(1:m, 1:n) = (0.0_ep, 0.0_ep)
+        if (uplo == 'L' .or. uplo == 'l') then
+            do j = 1, n
+                do i = max(1, j - ioffd), m
+                    B(i, j) = A(i, j)
+                end do
+            end do
+        else
+            do j = 1, n
+                do i = 1, min(m, j - ioffd)
+                    B(i, j) = A(i, j)
+                end do
+            end do
+        end if
+        if (diag == 'U' .or. diag == 'u') then
+            do j = 1, n
+                i = j - ioffd
+                if (i >= 1 .and. i <= m) B(i, j) = (1.0_ep, 0.0_ep)
+            end do
+        end if
+    end subroutine ref_ztzpadcpy
 
     ! ── Row / column shift (NOT circular — upstream q[r|c]shft simply
     !    copies the leading m×n block by `offset` rows / columns and

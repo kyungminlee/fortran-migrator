@@ -1,0 +1,7 @@
+#:set target         = 'multifloats'
+#:set target_name    = 'multifloats'
+#:set target_real    = 'type(real64x2)'
+#:set target_complex = 'type(cmplx64x2)'
+#:set prefix_real    = 'm'
+#:set prefix_complex = 'w'
+#:include 'target_blacs_body.fypp'

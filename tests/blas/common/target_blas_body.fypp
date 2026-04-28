@@ -6,12 +6,12 @@
 #!   target_eps      Fortran expression giving the target's epsilon as REAL(KIND=ep)
 #!   target_real     Fortran type-spec for the target's real type (e.g. 'real(10)', 'type(real64x2)')
 #!   target_complex  Fortran type-spec for the target's complex type
-#!   prefix_real     migrated entry-point prefix for the D family ('e' / 'q' / 't')
-#!   prefix_complex  migrated entry-point prefix for the Z family ('y' / 'x' / 'v')
+#!   prefix_real     migrated entry-point prefix for the D family ('e' / 'q' / 'm')
+#!   prefix_complex  migrated entry-point prefix for the Z family ('y' / 'x' / 'w')
 #!   prefix_mixed    migrated entry-point prefix for the DZ family (e.g. dzasum):
-#!                   'ey' / 'qx' / 'tv'
-#!   prefix_idamax   migrated prefix for the I family ('ie' / 'iq' / 'it') — combines I + R prefix
-#!   prefix_izamax   migrated prefix for the IC family ('iy' / 'ix' / 'iv') — combines I + C prefix
+#!                   'ey' / 'qx' / 'mw'
+#!   prefix_idamax   migrated prefix for the I family ('ie' / 'iq' / 'im') — combines I + R prefix
+#!   prefix_izamax   migrated prefix for the IC family ('iy' / 'ix' / 'iw') — combines I + C prefix
 #!
 #! Then `#:include 'target_blas_body.fypp'` to expand into a full
 #! `module target_blas` definition.

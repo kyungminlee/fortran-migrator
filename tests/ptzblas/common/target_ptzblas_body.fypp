@@ -60,14 +60,16 @@ module target_ptzblas
 
     public :: target_name, target_eps
     public :: target_dvasum, target_dvvdot, target_dset, target_dascal
-    public :: target_dmmadd, target_dmmtadd
+    public :: target_dmmadd, target_dmmtadd, target_dmmcadd, target_dmmtcadd
+    public :: target_dtzpadcpy
     public :: target_drshft, target_dcshft, target_dasqrtb
     public :: target_dtzpad, target_dtzscal
     public :: target_dagemv, target_dasymv, target_datrmv
     public :: target_dzvasum
     public :: target_zvvdotc, target_zvvdotu, target_zset
     public :: target_zhescal, target_ztzcnjg
-    public :: target_zmmadd, target_zmmtadd
+    public :: target_zmmadd, target_zmmtadd, target_zmmcadd, target_zmmtcadd
+    public :: target_ztzpadcpy
     public :: target_ztzpad, target_ztzscal
     public :: target_zagemv, target_zahemv, target_zasymv, target_zatrmv
 
@@ -87,7 +89,12 @@ $:IMPORT_R()
 $:IMPORT_R()
             integer, intent(in)  :: n, incx, incy
             ${target_real}$, intent(in)  :: x(*), y(*)
-            ${target_real}$, intent(out) :: dot
+            ! NOTE: vvdot accumulates (DOT = DOT + sum(X*Y)), so the
+            ! interface must declare DOT as intent(inout). With
+            ! intent(out) here, gfortran is permitted to elide any
+            ! caller-side initialisation as dead store, which surfaces
+            ! as NaN under -O on kind10 (kind16 happened to be lucky).
+            ${target_real}$, intent(inout) :: dot
         end subroutine
 
         subroutine ${R}$set(n, alpha, x, incx)
@@ -116,6 +123,28 @@ $:IMPORT_R()
 $:IMPORT_R()
             integer, intent(in)    :: m, n, lda, ldb
             ${target_real}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_real}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${R}$mmcadd(m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, lda, ldb
+            ${target_real}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_real}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${R}$mmtcadd(m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, lda, ldb
+            ${target_real}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_real}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${R}$tzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
+$:IMPORT_R()
+            character, intent(in) :: uplo, diag
+            integer,   intent(in) :: m, n, ioffd, lda, ldb
+            ${target_real}$, intent(in)    :: A(lda, *)
             ${target_real}$, intent(inout) :: B(ldb, *)
         end subroutine
 
@@ -178,26 +207,30 @@ $:IMPORT_R()
         end subroutine
 
         ! ── Mixed: real-from-complex |x|-sum ─────────────────────────
+        ! Accumulator: intent(inout) so the wrapper's r=0 init isn't
+        ! elided.
         subroutine ${RC}$vasum(n, asum, x, incx)
 $:IMPORT_RC()
             integer, intent(in) :: n, incx
-            ${target_complex}$, intent(in)  :: x(*)
-            ${target_real}$,    intent(out) :: asum
+            ${target_complex}$, intent(in)    :: x(*)
+            ${target_real}$,    intent(inout) :: asum
         end subroutine
 
         ! ── Complex Level-1-style ────────────────────────────────────
+        ! Same accumulator semantics: intent(inout) so the wrapper's
+        ! r = 0 init isn't elided.
         subroutine ${C}$vvdotc(n, dot, x, incx, y, incy)
 $:IMPORT_C()
             integer, intent(in) :: n, incx, incy
-            ${target_complex}$, intent(in)  :: x(*), y(*)
-            ${target_complex}$, intent(out) :: dot
+            ${target_complex}$, intent(in)    :: x(*), y(*)
+            ${target_complex}$, intent(inout) :: dot
         end subroutine
 
         subroutine ${C}$vvdotu(n, dot, x, incx, y, incy)
 $:IMPORT_C()
             integer, intent(in) :: n, incx, incy
-            ${target_complex}$, intent(in)  :: x(*), y(*)
-            ${target_complex}$, intent(out) :: dot
+            ${target_complex}$, intent(in)    :: x(*), y(*)
+            ${target_complex}$, intent(inout) :: dot
         end subroutine
 
         subroutine ${C}$set(n, alpha, x, incx)
@@ -235,6 +268,28 @@ $:IMPORT_C()
 $:IMPORT_C()
             integer, intent(in) :: m, n, lda, ldb
             ${target_complex}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_complex}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${C}$mmcadd(m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, lda, ldb
+            ${target_complex}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_complex}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${C}$mmtcadd(m, n, alpha, A, lda, beta, B, ldb)
+$:IMPORT_C()
+            integer, intent(in) :: m, n, lda, ldb
+            ${target_complex}$, intent(in)    :: alpha, beta, A(lda, *)
+            ${target_complex}$, intent(inout) :: B(ldb, *)
+        end subroutine
+
+        subroutine ${C}$tzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
+$:IMPORT_C()
+            character, intent(in) :: uplo, diag
+            integer,   intent(in) :: m, n, ioffd, lda, ldb
+            ${target_complex}$, intent(in)    :: A(lda, *)
             ${target_complex}$, intent(inout) :: B(ldb, *)
         end subroutine
 
@@ -308,6 +363,12 @@ contains
     end subroutine
 
     subroutine target_dvvdot(n, dot, x, incx, y, incy)
+        ! The migrated *vvdot accumulates (DOT = DOT + sum(X*Y)), so
+        ! the target-type `r` must be initialized to zero before the
+        ! call. (Stack scalars are not zero-initialized; on kind10
+        ! the uninitialised path produces NaN — kind16 happened to
+        ! be lucky.) The wrapper only forwards a freshly-zeroed `dot`,
+        ! it does not preserve a caller-side accumulation.
         integer,  intent(in)  :: n, incx, incy
         real(ep), intent(in)  :: x(*), y(*)
         real(ep), intent(out) :: dot
@@ -317,6 +378,7 @@ contains
         nx = 1 + (n - 1) * abs(incx); ny = 1 + (n - 1) * abs(incy)
         allocate(xt(nx), yt(ny))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        r = q2t_r(0.0_ep)
         call ${R}$vvdot(n, r, xt, incx, yt, incy)
         dot = t2q_r(r)
     end subroutine
@@ -346,6 +408,8 @@ contains
     end subroutine
 
     subroutine target_dzvasum(n, asum, x, incx)
+        ! *vasum is also an accumulator — zero-init r before the call,
+        ! see target_dvvdot for the gory details.
         integer,     intent(in)  :: n, incx
         complex(ep), intent(in)  :: x(*)
         real(ep),    intent(out) :: asum
@@ -354,6 +418,7 @@ contains
         ${target_real}$ :: r
         nx = 1 + (n - 1) * abs(incx)
         allocate(xt(nx)); xt = q2t_c(x(1:nx))
+        r = q2t_r(0.0_ep)
         call ${RC}$vasum(n, r, xt, incx)
         asum = t2q_r(r)
     end subroutine
@@ -380,6 +445,49 @@ contains
         At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:m))
         call ${R}$mmtadd(m, n, q2t_r(alpha), At, lda, q2t_r(beta), Bt, ldb)
         B(1:ldb, 1:m) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dmmcadd(m, n, alpha, A, lda, beta, B, ldb)
+        ! Real qmmcadd is bit-identical to qmmadd (the C variant only
+        ! diverges from the non-conjugate version in the complex
+        ! domain, where it conjugates A). Same shape conventions:
+        ! A and B are both M×N.
+        integer,  intent(in)    :: m, n, lda, ldb
+        real(ep), intent(in)    :: alpha, beta, A(lda, *)
+        real(ep), intent(inout) :: B(ldb, *)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$mmcadd(m, n, q2t_r(alpha), At, lda, q2t_r(beta), Bt, ldb)
+        B(1:ldb, 1:n) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dmmtcadd(m, n, alpha, A, lda, beta, B, ldb)
+        ! Transposed conjugate add: A is M×N, B is N×M (same shape as
+        ! mmtadd). Real domain ≡ mmtadd (no conjugation).
+        integer,  intent(in)    :: m, n, lda, ldb
+        real(ep), intent(in)    :: alpha, beta, A(lda, *)
+        real(ep), intent(inout) :: B(ldb, *)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, m))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:m))
+        call ${R}$mmtcadd(m, n, q2t_r(alpha), At, lda, q2t_r(beta), Bt, ldb)
+        B(1:ldb, 1:m) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dtzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
+        ! Trapezoidal pad-copy: copies the named triangle of A into B,
+        ! padding the off-triangle with zeros (or ones on the diagonal
+        ! if DIAG='U'). Reference is open-coded inline in the test.
+        character, intent(in)    :: uplo, diag
+        integer,   intent(in)    :: m, n, ioffd, lda, ldb
+        real(ep),  intent(in)    :: A(lda, *)
+        real(ep),  intent(inout) :: B(ldb, *)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$tzpadcpy(uplo, diag, m, n, ioffd, At, lda, Bt, ldb)
+        B(1:ldb, 1:n) = t2q_r(Bt)
     end subroutine
 
     subroutine target_drshft(m, n, offset, A, lda)
@@ -485,6 +593,7 @@ contains
 
     ! ─── Complex Level-1-style ───────────────────────────────────────
     subroutine target_zvvdotc(n, dot, x, incx, y, incy)
+        ! Accumulator semantics: zero-init r before the call.
         integer,     intent(in)  :: n, incx, incy
         complex(ep), intent(in)  :: x(*), y(*)
         complex(ep), intent(out) :: dot
@@ -494,6 +603,7 @@ contains
         nx = 1 + (n - 1) * abs(incx); ny = 1 + (n - 1) * abs(incy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        r = q2t_c((0.0_ep, 0.0_ep))
         call ${C}$vvdotc(n, r, xt, incx, yt, incy)
         dot = t2q_c(r)
     end subroutine
@@ -508,6 +618,7 @@ contains
         nx = 1 + (n - 1) * abs(incx); ny = 1 + (n - 1) * abs(incy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
+        r = q2t_c((0.0_ep, 0.0_ep))
         call ${C}$vvdotu(n, r, xt, incx, yt, incy)
         dot = t2q_c(r)
     end subroutine
@@ -568,6 +679,43 @@ contains
         At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:m))
         call ${C}$mmtadd(m, n, q2t_c(alpha), At, lda, q2t_c(beta), Bt, ldb)
         B(1:ldb, 1:m) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zmmcadd(m, n, alpha, A, lda, beta, B, ldb)
+        ! Conjugate matrix add: B = alpha*conj(A) + beta*B.
+        integer,     intent(in)    :: m, n, lda, ldb
+        complex(ep), intent(in)    :: alpha, beta, A(lda, *)
+        complex(ep), intent(inout) :: B(ldb, *)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$mmcadd(m, n, q2t_c(alpha), At, lda, q2t_c(beta), Bt, ldb)
+        B(1:ldb, 1:n) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zmmtcadd(m, n, alpha, A, lda, beta, B, ldb)
+        ! Conjugate transposed add: B := alpha*conj(A^T) + beta*B.
+        ! A is M×N (lda ≥ M); B is N×M (ldb ≥ N).
+        integer,     intent(in)    :: m, n, lda, ldb
+        complex(ep), intent(in)    :: alpha, beta, A(lda, *)
+        complex(ep), intent(inout) :: B(ldb, *)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, m))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:m))
+        call ${C}$mmtcadd(m, n, q2t_c(alpha), At, lda, q2t_c(beta), Bt, ldb)
+        B(1:ldb, 1:m) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_ztzpadcpy(uplo, diag, m, n, ioffd, A, lda, B, ldb)
+        character,   intent(in)    :: uplo, diag
+        integer,     intent(in)    :: m, n, ioffd, lda, ldb
+        complex(ep), intent(in)    :: A(lda, *)
+        complex(ep), intent(inout) :: B(ldb, *)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda, n), Bt(ldb, n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$tzpadcpy(uplo, diag, m, n, ioffd, At, lda, Bt, ldb)
+        B(1:ldb, 1:n) = t2q_c(Bt)
     end subroutine
 
     subroutine target_ztzpad(uplo, herm, m, n, ioffd, alpha, beta, A, lda)

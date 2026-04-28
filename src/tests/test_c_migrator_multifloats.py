@@ -28,6 +28,15 @@ from pyengine.c_migrator import (
 )
 
 
+# Multifloats prefix letters, derived from the loaded target (so tests
+# don't have to be edited every time the prefix is changed).
+_MF = load_target('multifloats')
+_RP = _MF.prefix_map['R'].lower()       # real-prefix, lower
+_CP = _MF.prefix_map['C'].lower()       # complex-prefix, lower
+_RPU = _MF.prefix_map['R']              # real-prefix, upper
+_CPU = _MF.prefix_map['C']              # complex-prefix, upper
+
+
 # ---------------------------------------------------------------------------
 # _build_sub_vars
 # ---------------------------------------------------------------------------
@@ -43,10 +52,10 @@ def test_build_sub_vars_multifloats_struct_types():
     assert v['MPI_COMPLEX'] == 'MPI_COMPLEX128X2'
     assert v['MPI_SUM_REAL'] == 'MPI_DD_SUM'
     assert v['MPI_SUM_COMPLEX'] == 'MPI_ZZ_SUM'
-    assert v['RP'] == 't'
-    assert v['CP'] == 'v'
-    assert v['RPU'] == 'T'
-    assert v['CPU'] == 'V'
+    assert v['RP'] == _RP
+    assert v['CP'] == _CP
+    assert v['RPU'] == _RPU
+    assert v['CPU'] == _CPU
 
 
 def test_build_sub_vars_kind16_unchanged():
@@ -101,7 +110,7 @@ def test_blacs_real_clone_multifloats(tmp_path):
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
-    assert new_name == 'BI_tvvsum.c'
+    assert new_name == f'BI_{_RP}vvsum.c'
     assert 'float64x2 *v1' in text
     assert 'float64x2 *v2' in text
     assert 'MPI_FLOAT64X2' in text
@@ -110,8 +119,8 @@ def test_blacs_real_clone_multifloats(tmp_path):
     assert 'MPI_DD_SUM' in text
     assert 'MPI_SUM,' not in text  # the old constant is gone
     # Routine name renames cover both Cd* and BI_d* prefixes
-    assert 'Ctgebs2d_aux' in text
-    assert 'BI_tMPI_sum' in text
+    assert f'C{_RP}gebs2d_aux' in text
+    assert f'BI_{_RP}MPI_sum' in text
 
 
 def test_blacs_real_clone_kind16_still_uses_mpi_sum(tmp_path):
@@ -159,14 +168,14 @@ def test_blacs_complex_clone_multifloats(tmp_path):
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
-    assert new_name == 'BI_vvvsum.c'
+    assert new_name == f'BI_{_CP}vvsum.c'
     assert 'complex64x2 *v1' in text
     assert 'float64x2 *r1' in text
     assert 'MPI_COMPLEX128X2' in text
     # Complex files use the zz reduction op
     assert 'MPI_ZZ_SUM' in text
     assert 'MPI_SUM,' not in text
-    assert 'Cvgebs2d_aux' in text
+    assert f'C{_CP}gebs2d_aux' in text
 
 
 # ---------------------------------------------------------------------------
@@ -198,11 +207,11 @@ def test_patch_bdef_header_multifloats_includes_mfc_header(tmp_path):
     assert '__float128' not in out
     assert 'typedef __float128' not in out
     # Forward decls for the BI_*mvcopy/vmcopy helpers still present
-    assert 'BI_tmvcopy' in out
-    assert 'BI_tvmcopy' in out
+    assert f'BI_{_RP}mvcopy' in out
+    assert f'BI_{_RP}vmcopy' in out
     # Name-mangling defines for the dd/zz prefixes
-    assert 'tgamn2d_' in out
-    assert 'vgamn2d_' in out
+    assert f'{_RP}gamn2d_' in out
+    assert f'{_CP}gamn2d_' in out
 
 
 def test_patch_bdef_header_kind16_emits_legacy_typedef(tmp_path):
@@ -228,20 +237,21 @@ def test_apply_overrides_overwrites_clone(tmp_path):
     src_dir = tmp_path / 'src'
     src_dir.mkdir()
 
+    name = f'BI_{_RP}vvsum.c'
     # Pre-existing clone (e.g. produced by the regex pass) -- will be
     # overwritten.
-    (output_dir / 'BI_tvvsum.c').write_text('// clone produced by regex\n')
+    (output_dir / name).write_text('// clone produced by regex\n')
 
     # Hand-written override.
-    override_text = '// hand-written override\nvoid BI_tvvsum(...) {}\n'
-    (src_dir / 'BI_tvvsum.c').write_text(override_text)
+    override_text = f'// hand-written override\nvoid BI_{_RP}vvsum(...) {{}}\n'
+    (src_dir / name).write_text(override_text)
 
     applied = _apply_overrides(
         output_dir,
-        [(src_dir / 'BI_tvvsum.c', 'BI_tvvsum.c')],
+        [(src_dir / name, name)],
     )
-    assert applied == ['BI_tvvsum.c']
-    assert (output_dir / 'BI_tvvsum.c').read_text() == override_text
+    assert applied == [name]
+    assert (output_dir / name).read_text() == override_text
 
 
 def test_apply_overrides_missing_source_raises(tmp_path):
@@ -250,7 +260,7 @@ def test_apply_overrides_missing_source_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         _apply_overrides(
             output_dir,
-            [(tmp_path / 'does_not_exist.c', 'BI_tvvsum.c')],
+            [(tmp_path / 'does_not_exist.c', f'BI_{_RP}vvsum.c')],
         )
 
 

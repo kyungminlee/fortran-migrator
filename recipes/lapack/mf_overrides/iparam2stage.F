@@ -261,13 +261,13 @@
 *        those prefixes back to the canonical S/D/C/Z so the
 *        precision check below accepts them and the SUBNAM(1:1)+
 *        'GEQRF' construction at the bottom dispatches via ILAENV.
-*        Real prefixes:    Q (kind16), E (kind10), T (multifloats) -> D
-*        Complex prefixes: X (kind16), Y (kind10), V (multifloats) -> Z
+*        Real prefixes:    Q (kind16), E (kind10), M (multifloats) -> D
+*        Complex prefixes: X (kind16), Y (kind10), W (multifloats) -> Z
 *
-         IF( PREC.EQ.'Q' .OR. PREC.EQ.'E' .OR. PREC.EQ.'T' ) THEN
+         IF( PREC.EQ.'Q' .OR. PREC.EQ.'E' .OR. PREC.EQ.'M' ) THEN
             PREC = 'D'
             SUBNAM( 1:1 ) = 'D'
-         ELSE IF( PREC.EQ.'X' .OR. PREC.EQ.'Y' .OR. PREC.EQ.'V' ) THEN
+         ELSE IF( PREC.EQ.'X' .OR. PREC.EQ.'Y' .OR. PREC.EQ.'W' ) THEN
             PREC = 'Z'
             SUBNAM( 1:1 ) = 'Z'
          END IF

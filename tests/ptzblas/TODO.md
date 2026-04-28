@@ -2,20 +2,6 @@
 
 ## Coverage gaps
 
-- No tests yet for kind10 / multifloats targets — wrappers (`target_kind10`,
-  `target_multifloats`) are present but have not been built. Verify by
-  staging with `--target kind10` or `--target multifloats` and running
-  `ctest -R '^ptzblas_'`.
-- Routines present in upstream PTZBLAS but not yet exercised:
-  `qmmcadd`, `qmmtcadd`, `xmmcadd`, `xmmtcadd` (mostly identical to
-  the non-`c` variants in the real domain; trivial to add when needed),
-  `qtzpadcpy`, `xtzpadcpy` (copy-and-pad — needs an extra B operand).
-- `drshft` / `dcshft` are tested with positive offsets only. Add a
-  negative-offset case once the corresponding shape conventions are
-  confirmed.
-- `dtzpad` / `ztzpad` exercise IOFFD = 0 only. Off-diagonal cases
-  (positive/negative IOFFD, with `M ≠ N`) would be valuable for
-  catching index-arithmetic bugs in the migrated code.
 - Mixed-precision routine `qxvasum` is wired up via the wrapper's
   `target_dzvasum` and tested. There is no analogous `xqvasum` in the
   source set, so no symmetric test was written.

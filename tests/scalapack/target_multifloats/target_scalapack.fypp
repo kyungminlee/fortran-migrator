@@ -3,6 +3,6 @@
 #:set target_eps     = 'real(2.0_8**(-104), ep)'
 #:set target_real    = 'type(real64x2)'
 #:set target_complex = 'type(cmplx64x2)'
-#:set prefix_real    = 'pt'
-#:set prefix_complex = 'pv'
+#:set prefix_real    = 'pm'
+#:set prefix_complex = 'pw'
 #:include 'target_scalapack_body.fypp'

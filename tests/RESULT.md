@@ -88,7 +88,7 @@ _75 of 75 migrated entries have a dedicated test driver. 75 are user-facing (✓
 
 ## LAPACK
 
-_303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_423 of 1012 migrated entries have a dedicated test driver. 579 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -118,23 +118,23 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgedmdq | — | — | — |
 | ✓ | dgeequ | 18.99 | exact | 31.60 |
 | ✓ | dgeequb | exact | exact | exact |
-| ✓ | dgees | — | — | — |
-| ✓ | dgeesx | — | — | — |
+| ✓ | dgees | 17.88 | exact | 29.95 |
+| ✓ | dgeesx | 17.83 | exact | 29.84 |
 | ✓ | dgeev | 17.15 | exact | 29.73 |
-| ✓ | dgeevx | — | — | — |
+| ✓ | dgeevx | 17.65 | exact | 30.05 |
 |  | dgehd2 | — | — | — |
 | ✓ | dgehrd | 17.33 | exact | 29.77 |
-| ✓ | dgejsv | — | — | — |
+| ✓ | dgejsv | 18.66 | exact | — |
 | ✓ | dgelq | 18.74 | exact | 31.46 |
 |  | dgelq2 | — | — | — |
 | ✓ | dgelqf | 18.92 | exact | 31.47 |
 | ✓ | dgelqt | 18.64 | exact | 31.46 |
 |  | dgelqt3 | — | — | — |
 | ✓ | dgels | 18.49 | exact | 31.14 |
-| ✓ | dgelsd | — | — | — |
-| ✓ | dgelss | — | — | — |
-| ✓ | dgelst | — | — | — |
-| ✓ | dgelsy | — | — | — |
+| ✓ | dgelsd | 17.89 | exact | 30.72 |
+| ✓ | dgelss | 18.19 | exact | 30.49 |
+| ✓ | dgelst | 18.35 | exact | 30.97 |
+| ✓ | dgelsy | 18.56 | exact | 30.92 |
 | ✓ | dgemlq | 18.82 | exact | 31.48 |
 | ✓ | dgemlqt | 18.77 | exact | 31.40 |
 | ✓ | dgemqr | 18.63 | exact | 31.38 |
@@ -161,7 +161,7 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgesvd | 17.54 | 32.29 | 29.67 |
 | ✓ | dgesvdq | — | — | — |
 | ✓ | dgesvdx | — | — | — |
-| ✓ | dgesvj | — | — | — |
+| ✓ | dgesvj | 18.27 | exact | — |
 | ✓ | dgesvx | 18.69 | exact | 31.37 |
 | ✓ | dgesvxx | — | — | — |
 |  | dgetc2 | — | — | — |
@@ -174,16 +174,16 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgetsqrhrt | — | — | — |
 | ✓ | dggbak | exact | exact | exact |
 | ✓ | dggbal | exact | exact | exact |
-| ✓ | dgges | — | — | — |
-|  | dgges3 | — | — | — |
-| ✓ | dggesx | — | — | — |
+| ✓ | dgges | 17.07 | exact | 29.72 |
+|  | dgges3 | 17.85 | 32.49 | 30.67 |
+| ✓ | dggesx | 17.07 | exact | 30.30 |
 | ✓ | dggev | 17.53 | exact | 30.41 |
-|  | dggev3 | — | — | — |
-| ✓ | dggevx | — | — | — |
-| ✓ | dggglm | — | — | — |
+|  | dggev3 | 15.82 | 31.37 | 29.46 |
+| ✓ | dggevx | 16.65 | exact | 29.27 |
+| ✓ | dggglm | 18.33 | exact | 30.99 |
 |  | dgghd3 | — | — | — |
 | ✓ | dgghrd | 17.39 | exact | 29.60 |
-| ✓ | dgglse | — | — | — |
+| ✓ | dgglse | 18.36 | exact | 30.89 |
 | ✓ | dggqrf | 18.14 | exact | 30.99 |
 | ✓ | dggrqf | 17.85 | exact | 30.47 |
 |  | dggsvd3 | — | — | — |
@@ -197,8 +197,8 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgttrf | 19.35 | exact | 31.87 |
 | ✓ | dgttrs | 19.04 | exact | 31.63 |
 |  | dgtts2 | — | — | — |
-| ✓ | dhgeqz | — | — | — |
-| ✓ | dhsein | — | — | — |
+| ✓ | dhgeqz | 18.40 | exact | 30.88 |
+| ✓ | dhsein | 18.93 | 32.31 | 31.31 |
 | ✓ | dhseqr | 18.13 | exact | 30.00 |
 | ✓ | disnan | — | — | — |
 |  | dla_gbamv | — | — | — |
@@ -220,10 +220,10 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dla_wwaddw | — | — | — |
 |  | dlabad | — | — | — |
 |  | dlabrd | — | — | — |
-|  | dlacn2 | — | — | — |
+|  | dlacn2 | exact | exact | exact |
 |  | dlacon | — | — | — |
 |  | dlacpy | exact | exact | exact |
-|  | dladiv | — | — | — |
+|  | dladiv | 19.27 | exact | 32.50 |
 |  | dlae2 | — | — | — |
 |  | dlaebz | — | — | — |
 |  | dlaed0 | — | — | — |
@@ -254,30 +254,30 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dlals0 | — | — | — |
 |  | dlalsa | — | — | — |
 |  | dlalsd | — | — | — |
-|  | dlamrg | — | — | — |
+|  | dlamrg | exact | exact | exact |
 |  | dlamswlq | — | — | — |
 |  | dlamtsqr | — | — | — |
 |  | dlaneg | — | — | — |
-|  | dlangb | — | — | — |
+|  | dlangb | 19.35 | exact | 32.19 |
 |  | dlange | 19.00 | exact | 31.96 |
-|  | dlangt | — | — | — |
-|  | dlanhs | — | — | — |
-|  | dlansb | — | — | — |
+|  | dlangt | 19.16 | exact | 31.90 |
+|  | dlanhs | 19.50 | exact | 32.22 |
+|  | dlansb | 19.78 | exact | 31.98 |
 |  | dlansf | — | — | — |
-|  | dlansp | — | — | — |
-|  | dlanst | — | — | — |
-|  | dlansy | — | — | — |
-|  | dlantb | — | — | — |
-|  | dlantp | — | — | — |
-|  | dlantr | — | — | — |
+|  | dlansp | 18.95 | exact | 31.61 |
+|  | dlanst | 19.07 | exact | 32.26 |
+|  | dlansy | 18.92 | exact | 31.76 |
+|  | dlantb | 19.06 | exact | 31.78 |
+|  | dlantp | 18.93 | exact | 31.98 |
+|  | dlantr | 19.03 | exact | 31.80 |
 |  | dlanv2 | — | — | — |
 |  | dlaorhr_col_getrfnp | — | — | — |
 |  | dlaorhr_col_getrfnp2 | — | — | — |
-|  | dlapll | — | — | — |
-|  | dlapmr | — | — | — |
-|  | dlapmt | — | — | — |
-|  | dlapy2 | — | — | — |
-|  | dlapy3 | — | — | — |
+|  | dlapll | 19.10 | exact | 31.50 |
+|  | dlapmr | exact | exact | exact |
+|  | dlapmt | exact | exact | exact |
+|  | dlapy2 | 19.35 | exact | 31.91 |
+|  | dlapy3 | 19.41 | exact | 31.90 |
 |  | dlaqgb | — | — | — |
 |  | dlaqge | — | — | — |
 |  | dlaqp2 | — | — | — |
@@ -313,7 +313,7 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dlarfy | — | — | — |
 |  | dlargv | — | — | — |
 |  | dlarmm | — | — | — |
-|  | dlarnv | — | — | — |
+|  | dlarnv | 18.68 | exact | 15.72 |
 |  | dlarra | — | — | — |
 |  | dlarrb | — | — | — |
 |  | dlarrc | — | — | — |
@@ -325,9 +325,9 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dlarrr | — | — | — |
 |  | dlarrv | — | — | — |
 |  | dlarscl2 | — | — | — |
-|  | dlartg | — | — | — |
-|  | dlartgp | — | — | — |
-|  | dlartgs | — | — | — |
+|  | dlartg | 19.29 | exact | 31.90 |
+|  | dlartgp | 19.29 | exact | 31.90 |
+|  | dlartgs | 19.04 | exact | 31.71 |
 |  | dlartv | — | — | — |
 |  | dlaruv | — | — | — |
 |  | dlarz | — | — | — |
@@ -461,25 +461,25 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | drscl | — | — | — |
 | ✓ | dsb2st_kernels | — | — | — |
 | ✓ | dsbev | 18.02 | 32.78 | 30.05 |
-| ✓ | dsbev_2stage | — | — | — |
+| ✓ | dsbev_2stage | 17.84 | exact | 30.26 |
 | ✓ | dsbevd | 17.95 | exact | 29.97 |
-| ✓ | dsbevd_2stage | — | — | — |
+| ✓ | dsbevd_2stage | 18.12 | exact | 30.25 |
 | ✓ | dsbevx | 17.89 | exact | 30.05 |
-| ✓ | dsbevx_2stage | — | — | — |
-| ✓ | dsbgst | — | — | — |
+| ✓ | dsbevx_2stage | 17.72 | exact | 30.19 |
+| ✓ | dsbgst | 18.14 | exact | 30.45 |
 | ✓ | dsbgv | 17.92 | exact | 30.21 |
 | ✓ | dsbgvd | 18.12 | exact | 30.01 |
-| ✓ | dsbgvx | — | — | — |
+| ✓ | dsbgvx | 18.39 | exact | 30.41 |
 | ✓ | dsbtrd | 16.27 | exact | 28.25 |
 | ✓ | dsfrk | — | — | — |
 | ✓ | dspcon | 16.41 | exact | 29.16 |
 | ✓ | dspev | 17.91 | exact | 30.15 |
 | ✓ | dspevd | 17.86 | exact | 30.18 |
 | ✓ | dspevx | 17.70 | exact | 30.31 |
-| ✓ | dspgst | — | — | — |
+| ✓ | dspgst | 18.54 | exact | 31.06 |
 | ✓ | dspgv | 17.87 | exact | 30.19 |
 | ✓ | dspgvd | 18.07 | exact | 30.47 |
-| ✓ | dspgvx | — | — | — |
+| ✓ | dspgvx | 18.39 | exact | 30.87 |
 | ✓ | dsprfs | 18.01 | exact | 30.74 |
 | ✓ | dspsv | 17.20 | exact | 30.16 |
 | ✓ | dspsvx | — | — | — |
@@ -506,19 +506,19 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dsyconvf_rook | — | — | — |
 | ✓ | dsyequb | 19.63 | exact | 32.67 |
 | ✓ | dsyev | 17.63 | 32.41 | 30.17 |
-| ✓ | dsyev_2stage | — | — | — |
+| ✓ | dsyev_2stage | 18.03 | exact | 30.18 |
 | ✓ | dsyevd | 18.17 | 32.81 | 30.54 |
-| ✓ | dsyevd_2stage | — | — | — |
+| ✓ | dsyevd_2stage | 17.94 | exact | 30.38 |
 | ✓ | dsyevr | 17.79 | 33.03 | 30.40 |
-| ✓ | dsyevr_2stage | — | — | — |
+| ✓ | dsyevr_2stage | 17.81 | exact | 30.25 |
 | ✓ | dsyevx | 18.14 | 32.63 | 30.40 |
-| ✓ | dsyevx_2stage | — | — | — |
+| ✓ | dsyevx_2stage | 17.96 | exact | 30.36 |
 |  | dsygs2 | — | — | — |
-| ✓ | dsygst | — | — | — |
+| ✓ | dsygst | 18.86 | exact | 31.70 |
 | ✓ | dsygv | 18.11 | 32.65 | 30.58 |
-| ✓ | dsygv_2stage | — | — | — |
+| ✓ | dsygv_2stage | 18.26 | exact | 30.37 |
 | ✓ | dsygvd | 18.03 | exact | 30.31 |
-| ✓ | dsygvx | — | — | — |
+| ✓ | dsygvx | 18.39 | 33.00 | 30.88 |
 | ✓ | dsyrfs | 17.64 | exact | 30.58 |
 | ✓ | dsyrfsx | — | — | — |
 | ✓ | dsysv | 18.35 | exact | 31.19 |
@@ -560,14 +560,14 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dtftri | — | — | — |
 | ✓ | dtfttp | — | — | — |
 | ✓ | dtfttr | — | — | — |
-| ✓ | dtgevc | — | — | — |
+| ✓ | dtgevc | 18.44 | exact | 31.26 |
 |  | dtgex2 | — | — | — |
-| ✓ | dtgexc | — | — | — |
-| ✓ | dtgsen | — | — | — |
-| ✓ | dtgsja | — | — | — |
-| ✓ | dtgsna | — | — | — |
+| ✓ | dtgexc | 18.75 | exact | 31.58 |
+| ✓ | dtgsen | 19.28 | exact | 32.35 |
+| ✓ | dtgsja | 18.10 | exact | 30.28 |
+| ✓ | dtgsna | 18.84 | exact | 31.63 |
 |  | dtgsy2 | — | — | — |
-| ✓ | dtgsyl | — | — | — |
+| ✓ | dtgsyl | 13.77 | 28.41 | 26.40 |
 | ✓ | dtpcon | 19.29 | exact | 31.71 |
 | ✓ | dtplqt | — | — | — |
 |  | dtplqt2 | — | — | — |
@@ -583,10 +583,10 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dtpttr | — | — | — |
 | ✓ | dtrcon | 19.22 | exact | 32.56 |
 | ✓ | dtrevc | 18.74 | exact | 31.44 |
-|  | dtrevc3 | — | — | — |
-| ✓ | dtrexc | — | — | — |
+|  | dtrevc3 | 18.50 | exact | 31.27 |
+| ✓ | dtrexc | 18.92 | exact | 31.12 |
 | ✓ | dtrrfs | 18.71 | exact | 31.53 |
-| ✓ | dtrsen | — | — | — |
+| ✓ | dtrsen | 19.42 | exact | 31.87 |
 | ✓ | dtrsna | — | — | — |
 | ✓ | dtrsyl | 19.09 | exact | 31.55 |
 |  | dtrsyl3 | — | — | — |
@@ -622,23 +622,23 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgedmdq | — | — | — |
 | ✓ | zgeequ | 19.01 | exact | 31.67 |
 | ✓ | zgeequb | exact | exact | exact |
-| ✓ | zgees | — | — | — |
-| ✓ | zgeesx | — | — | — |
+| ✓ | zgees | 17.60 | exact | 29.84 |
+| ✓ | zgeesx | 17.62 | exact | 29.75 |
 | ✓ | zgeev | 17.48 | exact | 29.64 |
-| ✓ | zgeevx | — | — | — |
+| ✓ | zgeevx | 17.83 | exact | 29.81 |
 |  | zgehd2 | — | — | — |
 | ✓ | zgehrd | 17.35 | exact | 30.31 |
-| ✓ | zgejsv | — | — | — |
+| ✓ | zgejsv | 18.48 | exact | — |
 | ✓ | zgelq | 18.79 | exact | 31.62 |
 |  | zgelq2 | — | — | — |
 | ✓ | zgelqf | 18.67 | exact | 31.43 |
 | ✓ | zgelqt | 18.69 | exact | 31.48 |
 |  | zgelqt3 | — | — | — |
 | ✓ | zgels | 18.06 | exact | 31.01 |
-| ✓ | zgelsd | — | — | — |
-| ✓ | zgelss | — | — | — |
-| ✓ | zgelst | — | — | — |
-| ✓ | zgelsy | — | — | — |
+| ✓ | zgelsd | 18.10 | exact | 30.53 |
+| ✓ | zgelss | 18.16 | exact | 30.47 |
+| ✓ | zgelst | 18.39 | exact | 30.98 |
+| ✓ | zgelsy | 18.40 | exact | 31.28 |
 | ✓ | zgemlq | 18.65 | exact | 31.41 |
 | ✓ | zgemlqt | 18.62 | exact | 31.45 |
 | ✓ | zgemqr | 18.72 | exact | 31.43 |
@@ -665,7 +665,7 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgesvd | 17.64 | 32.41 | 29.78 |
 | ✓ | zgesvdq | — | — | — |
 | ✓ | zgesvdx | — | — | — |
-| ✓ | zgesvj | — | — | — |
+| ✓ | zgesvj | 18.64 | exact | — |
 | ✓ | zgesvx | 18.39 | exact | 31.22 |
 | ✓ | zgesvxx | — | — | — |
 |  | zgetc2 | — | — | — |
@@ -678,16 +678,16 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgetsqrhrt | — | — | — |
 | ✓ | zggbak | exact | exact | exact |
 | ✓ | zggbal | exact | exact | exact |
-| ✓ | zgges | — | — | — |
-|  | zgges3 | — | — | — |
-| ✓ | zggesx | — | — | — |
+| ✓ | zgges | 17.84 | exact | 30.50 |
+|  | zgges3 | 18.14 | 32.76 | 30.64 |
+| ✓ | zggesx | 17.92 | exact | 30.68 |
 | ✓ | zggev | 17.53 | exact | 30.96 |
-|  | zggev3 | — | — | — |
-| ✓ | zggevx | — | — | — |
-| ✓ | zggglm | — | — | — |
+|  | zggev3 | 17.80 | 32.48 | 30.36 |
+| ✓ | zggevx | 17.38 | exact | 30.28 |
+| ✓ | zggglm | 18.08 | exact | 30.96 |
 |  | zgghd3 | — | — | — |
 | ✓ | zgghrd | 16.02 | exact | 28.59 |
-| ✓ | zgglse | — | — | — |
+| ✓ | zgglse | 18.21 | exact | 31.05 |
 | ✓ | zggqrf | 18.01 | exact | 30.97 |
 | ✓ | zggrqf | 18.17 | exact | 30.67 |
 |  | zggsvd3 | — | — | — |
@@ -703,34 +703,34 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zgtts2 | — | — | — |
 | ✓ | zhb2st_kernels | — | — | — |
 | ✓ | zhbev | 17.89 | exact | 30.22 |
-| ✓ | zhbev_2stage | — | — | — |
+| ✓ | zhbev_2stage | 17.95 | exact | 30.19 |
 | ✓ | zhbevd | 18.00 | exact | 30.15 |
-| ✓ | zhbevd_2stage | — | — | — |
+| ✓ | zhbevd_2stage | 18.05 | exact | 30.07 |
 | ✓ | zhbevx | 17.97 | exact | 30.10 |
-| ✓ | zhbevx_2stage | — | — | — |
-| ✓ | zhbgst | — | — | — |
+| ✓ | zhbevx_2stage | 17.87 | exact | 30.16 |
+| ✓ | zhbgst | 17.64 | exact | 30.62 |
 | ✓ | zhbgv | 17.89 | exact | 30.33 |
 | ✓ | zhbgvd | 17.93 | exact | 30.26 |
-| ✓ | zhbgvx | — | — | — |
+| ✓ | zhbgvx | 18.31 | exact | 31.07 |
 | ✓ | zhbtrd | 17.06 | exact | 29.62 |
 | ✓ | zhecon | 14.60 | exact | 27.99 |
 |  | zhecon_3 | — | — | — |
 | ✓ | zhecon_rook | — | — | — |
 | ✓ | zheequb | 19.68 | exact | 32.46 |
 | ✓ | zheev | 17.79 | 32.27 | 30.07 |
-| ✓ | zheev_2stage | — | — | — |
+| ✓ | zheev_2stage | 17.88 | exact | 30.16 |
 | ✓ | zheevd | 18.00 | 32.43 | 30.17 |
-| ✓ | zheevd_2stage | — | — | — |
+| ✓ | zheevd_2stage | 18.13 | exact | 30.33 |
 | ✓ | zheevr | 18.09 | 32.86 | 30.60 |
-| ✓ | zheevr_2stage | — | — | — |
+| ✓ | zheevr_2stage | 17.90 | exact | 30.33 |
 | ✓ | zheevx | 18.20 | 33.16 | 30.39 |
-| ✓ | zheevx_2stage | — | — | — |
+| ✓ | zheevx_2stage | 18.13 | exact | 30.25 |
 |  | zhegs2 | — | — | — |
-| ✓ | zhegst | — | — | — |
+| ✓ | zhegst | 19.39 | exact | 32.05 |
 | ✓ | zhegv | 18.38 | 32.77 | 30.58 |
-| ✓ | zhegv_2stage | — | — | — |
+| ✓ | zhegv_2stage | 18.11 | exact | 30.31 |
 | ✓ | zhegvd | 17.93 | exact | 30.20 |
-| ✓ | zhegvx | — | — | — |
+| ✓ | zhegvx | 18.24 | 33.02 | 30.94 |
 | ✓ | zherfs | 18.07 | exact | 30.68 |
 | ✓ | zherfsx | — | — | — |
 | ✓ | zhesv | 18.36 | exact | 31.13 |
@@ -766,15 +766,15 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhetrs_aa_2stage | — | — | — |
 | ✓ | zhetrs_rook | — | — | — |
 | ✓ | zhfrk | — | — | — |
-| ✓ | zhgeqz | — | — | — |
+| ✓ | zhgeqz | 18.01 | exact | 30.75 |
 | ✓ | zhpcon | — | — | — |
 | ✓ | zhpev | 18.10 | exact | 30.36 |
 | ✓ | zhpevd | 17.91 | exact | 30.15 |
 | ✓ | zhpevx | 18.02 | exact | 30.17 |
-| ✓ | zhpgst | — | — | — |
+| ✓ | zhpgst | 18.35 | exact | 31.17 |
 | ✓ | zhpgv | 18.10 | exact | 30.54 |
 | ✓ | zhpgvd | 18.09 | exact | 30.39 |
-| ✓ | zhpgvx | — | — | — |
+| ✓ | zhpgvx | 18.31 | exact | 30.70 |
 | ✓ | zhprfs | — | — | — |
 | ✓ | zhpsv | 17.55 | exact | 30.27 |
 | ✓ | zhpsvx | — | — | — |
@@ -782,7 +782,7 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zhptrf | 17.30 | exact | 30.44 |
 | ✓ | zhptri | 17.16 | exact | 30.10 |
 | ✓ | zhptrs | 17.26 | exact | 30.20 |
-| ✓ | zhsein | — | — | — |
+| ✓ | zhsein | 19.27 | exact | 33.09 |
 | ✓ | zhseqr | 17.56 | exact | 29.86 |
 |  | zla_gbamv | — | — | — |
 |  | zla_gbrcond_c | — | — | — |
@@ -812,13 +812,13 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zla_wwaddw | — | — | — |
 |  | zlabrd | — | — | — |
 |  | zlacgv | — | — | — |
-|  | zlacn2 | — | — | — |
+|  | zlacn2 | 20.00 | exact | 31.84 |
 |  | zlacon | — | — | — |
 |  | zlacp2 | — | — | — |
 |  | zlacpy | exact | exact | exact |
 |  | zlacrm | — | — | — |
 |  | zlacrt | — | — | — |
-|  | zladiv | — | — | — |
+|  | zladiv | 19.27 | exact | 32.50 |
 |  | zlaed0 | — | — | — |
 |  | zlaed7 | — | — | — |
 |  | zlaed8 | — | — | — |
@@ -839,24 +839,24 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zlalsd | — | — | — |
 |  | zlamswlq | — | — | — |
 |  | zlamtsqr | — | — | — |
-|  | zlangb | — | — | — |
+|  | zlangb | 19.13 | exact | 31.84 |
 |  | zlange | 18.58 | exact | 31.43 |
-|  | zlangt | — | — | — |
-|  | zlanhb | — | — | — |
+|  | zlangt | 19.34 | exact | 31.56 |
+|  | zlanhb | 19.04 | exact | 32.07 |
 |  | zlanhe | 18.54 | exact | 31.38 |
 |  | zlanhf | — | — | — |
-|  | zlanhp | — | — | — |
-|  | zlanhs | — | — | — |
-|  | zlanht | — | — | — |
+|  | zlanhp | 18.82 | exact | 31.41 |
+|  | zlanhs | 19.00 | exact | 31.68 |
+|  | zlanht | 19.10 | exact | 31.85 |
 |  | zlansb | — | — | — |
 |  | zlansp | — | — | — |
 |  | zlansy | — | — | — |
-|  | zlantb | — | — | — |
-|  | zlantp | — | — | — |
-|  | zlantr | — | — | — |
-|  | zlapll | — | — | — |
-|  | zlapmr | — | — | — |
-|  | zlapmt | — | — | — |
+|  | zlantb | 18.95 | exact | 32.16 |
+|  | zlantp | 18.66 | exact | 31.49 |
+|  | zlantr | 18.74 | exact | 31.55 |
+|  | zlapll | 18.94 | exact | 31.30 |
+|  | zlapmr | exact | exact | exact |
+|  | zlapmt | exact | exact | exact |
 |  | zlaqgb | — | — | — |
 |  | zlaqge | — | — | — |
 |  | zlaqhb | — | — | — |
@@ -893,10 +893,10 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zlarfx | — | — | — |
 |  | zlarfy | — | — | — |
 |  | zlargv | — | — | — |
-|  | zlarnv | — | — | — |
+|  | zlarnv | 18.51 | exact | 15.61 |
 |  | zlarrv | — | — | — |
 |  | zlarscl2 | — | — | — |
-|  | zlartg | — | — | — |
+|  | zlartg | 19.05 | exact | 31.83 |
 |  | zlartv | — | — | — |
 |  | zlarz | — | — | — |
 |  | zlarzb | — | — | — |
@@ -1029,14 +1029,14 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | ztftri | — | — | — |
 | ✓ | ztfttp | — | — | — |
 | ✓ | ztfttr | — | — | — |
-| ✓ | ztgevc | — | — | — |
+| ✓ | ztgevc | 18.50 | exact | 30.86 |
 |  | ztgex2 | — | — | — |
-| ✓ | ztgexc | — | — | — |
-| ✓ | ztgsen | — | — | — |
-| ✓ | ztgsja | — | — | — |
-| ✓ | ztgsna | — | — | — |
+| ✓ | ztgexc | 19.17 | exact | 31.58 |
+| ✓ | ztgsen | 19.12 | exact | 32.42 |
+| ✓ | ztgsja | 17.88 | exact | 30.84 |
+| ✓ | ztgsna | 18.75 | exact | 31.56 |
 |  | ztgsy2 | — | — | — |
-| ✓ | ztgsyl | — | — | — |
+| ✓ | ztgsyl | 14.95 | 33.04 | 27.70 |
 | ✓ | ztpcon | 18.98 | exact | 31.39 |
 | ✓ | ztplqt | — | — | — |
 |  | ztplqt2 | — | — | — |
@@ -1052,10 +1052,10 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | ztpttr | — | — | — |
 | ✓ | ztrcon | 18.85 | exact | 31.24 |
 | ✓ | ztrevc | 18.50 | exact | 31.15 |
-|  | ztrevc3 | — | — | — |
-| ✓ | ztrexc | — | — | — |
+|  | ztrevc3 | 18.80 | exact | 31.44 |
+| ✓ | ztrexc | 19.42 | exact | 32.47 |
 | ✓ | ztrrfs | 18.84 | exact | 31.69 |
-| ✓ | ztrsen | — | — | — |
+| ✓ | ztrsen | 19.57 | exact | 32.60 |
 | ✓ | ztrsna | — | — | — |
 | ✓ | ztrsyl | 18.93 | exact | 31.69 |
 |  | ztrsyl3 | — | — | — |
@@ -1107,75 +1107,75 @@ _303 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 
 ## PBLAS
 
-_20 of 61 migrated entries have a dedicated test driver. 61 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_55 of 61 migrated entries have a dedicated test driver. 61 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
 | ✓ | pdagemv | — | — | — |
-| ✓ | pdamax | — | — | — |
+| ✓ | pdamax | exact | exact | exact |
 | ✓ | pdasum | exact | exact | exact |
 | ✓ | pdasymv | — | — | — |
 | ✓ | pdatrmv | — | — | — |
 | ✓ | pdaxpy | exact | exact | exact |
 | ✓ | pdcopy | exact | exact | exact |
 | ✓ | pddot | 17.74 | exact | 30.78 |
-| ✓ | pdgeadd | — | — | — |
-| ✓ | pdgemm | 18.56 | exact | 31.34 |
-| ✓ | pdgemv | 18.55 | exact | 31.44 |
+| ✓ | pdgeadd | 19.17 | exact | 31.82 |
+| ✓ | pdgemm | 18.56 | 33.49 | 31.34 |
+| ✓ | pdgemv | 18.39 | exact | 31.21 |
 | ✓ | pdger | 19.23 | exact | 31.83 |
 | ✓ | pdnrm2 | 18.88 | 31.57 | 31.02 |
 | ✓ | pdscal | exact | exact | exact |
-| ✓ | pdswap | — | — | — |
-| ✓ | pdsymm | 18.36 | 33.40 | 31.23 |
-| ✓ | pdsymv | 18.44 | 33.38 | 31.28 |
-| ✓ | pdsyr | — | — | — |
-| ✓ | pdsyr2 | — | — | — |
-| ✓ | pdsyr2k | — | — | — |
-| ✓ | pdsyrk | 18.40 | exact | 31.07 |
-| ✓ | pdtradd | — | — | — |
-| ✓ | pdtran | — | — | — |
-| ✓ | pdtrmm | 18.46 | exact | 31.33 |
-| ✓ | pdtrmv | — | — | — |
-| ✓ | pdtrsm | 18.13 | 33.05 | 30.99 |
-| ✓ | pdtrsv | 18.47 | 33.03 | 31.16 |
-| ✓ | pdzasum | — | — | — |
-| ✓ | pdznrm2 | — | — | — |
+| ✓ | pdswap | exact | exact | exact |
+| ✓ | pdsymm | 18.37 | 33.05 | 31.22 |
+| ✓ | pdsymv | 18.53 | 33.46 | 31.35 |
+| ✓ | pdsyr | 19.31 | exact | exact |
+| ✓ | pdsyr2 | 19.12 | exact | 31.90 |
+| ✓ | pdsyr2k | 18.37 | exact | 31.21 |
+| ✓ | pdsyrk | 18.52 | exact | 31.06 |
+| ✓ | pdtradd | 19.17 | exact | 31.81 |
+| ✓ | pdtran | 19.17 | exact | 31.82 |
+| ✓ | pdtrmm | 18.46 | 33.17 | 31.24 |
+| ✓ | pdtrmv | 18.37 | exact | 31.45 |
+| ✓ | pdtrsm | 18.08 | 32.56 | 30.87 |
+| ✓ | pdtrsv | 17.66 | 32.13 | 30.53 |
+| ✓ | pdzasum | 17.64 | exact | exact |
+| ✓ | pdznrm2 | 18.52 | 31.38 | 30.92 |
 | ✓ | pzagemv | — | — | — |
 | ✓ | pzahemv | — | — | — |
-| ✓ | pzamax | — | — | — |
+| ✓ | pzamax | exact | exact | exact |
 | ✓ | pzatrmv | — | — | — |
 | ✓ | pzaxpy | 19.32 | exact | 31.96 |
-| ✓ | pzcopy | — | — | — |
+| ✓ | pzcopy | exact | exact | exact |
 | ✓ | pzdotc | 17.82 | exact | 30.69 |
-| ✓ | pzdotu | — | — | — |
-| ✓ | pzdscal | — | — | — |
-| ✓ | pzgeadd | — | — | — |
-| ✓ | pzgemm | 18.56 | exact | 31.41 |
-| ✓ | pzgemv | 18.76 | exact | 31.38 |
-| ✓ | pzgerc | — | — | — |
-| ✓ | pzgeru | — | — | — |
-| ✓ | pzhemm | — | — | — |
-| ✓ | pzhemv | — | — | — |
-| ✓ | pzher | — | — | — |
-| ✓ | pzher2 | — | — | — |
-| ✓ | pzher2k | — | — | — |
-| ✓ | pzherk | 18.59 | exact | 31.19 |
-| ✓ | pzscal | — | — | — |
-| ✓ | pzswap | — | — | — |
-| ✓ | pzsymm | — | — | — |
-| ✓ | pzsyr2k | — | — | — |
-| ✓ | pzsyrk | — | — | — |
-| ✓ | pztradd | — | — | — |
-| ✓ | pztranc | — | — | — |
-| ✓ | pztranu | — | — | — |
-| ✓ | pztrmm | — | — | — |
-| ✓ | pztrmv | — | — | — |
-| ✓ | pztrsm | — | — | — |
-| ✓ | pztrsv | — | — | — |
+| ✓ | pzdotu | 18.36 | exact | 30.76 |
+| ✓ | pzdscal | exact | exact | exact |
+| ✓ | pzgeadd | 19.11 | exact | 31.69 |
+| ✓ | pzgemm | 18.56 | 33.48 | 31.41 |
+| ✓ | pzgemv | 18.37 | exact | 31.27 |
+| ✓ | pzgerc | 19.22 | exact | 31.96 |
+| ✓ | pzgeru | 19.24 | exact | 31.90 |
+| ✓ | pzhemm | 18.38 | 33.17 | 31.24 |
+| ✓ | pzhemv | 18.64 | 33.49 | 31.45 |
+| ✓ | pzher | 19.28 | exact | exact |
+| ✓ | pzher2 | 19.12 | exact | 31.85 |
+| ✓ | pzher2k | 18.27 | 33.10 | 31.22 |
+| ✓ | pzherk | 18.53 | exact | 31.09 |
+| ✓ | pzscal | exact | exact | exact |
+| ✓ | pzswap | exact | exact | exact |
+| ✓ | pzsymm | 18.40 | 33.17 | 31.20 |
+| ✓ | pzsyr2k | 18.44 | 33.20 | 31.17 |
+| ✓ | pzsyrk | 18.43 | 33.43 | 31.34 |
+| ✓ | pztradd | 19.00 | exact | 31.70 |
+| ✓ | pztranc | 19.12 | exact | 31.80 |
+| ✓ | pztranu | 18.99 | exact | 31.71 |
+| ✓ | pztrmm | 18.48 | 33.15 | 31.28 |
+| ✓ | pztrmv | 18.50 | exact | 31.31 |
+| ✓ | pztrsm | 17.88 | 32.15 | 30.62 |
+| ✓ | pztrsv | 17.95 | 32.88 | 30.77 |
 
 ## ScaLAPACK
 
-_11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_78 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -1186,37 +1186,37 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pddbtrf | — | — | — |
 | ✓ | pddbtrs | — | — | — |
 | ✓ | pddbtrsv | — | — | — |
-| ✓ | pddtsv | — | — | — |
+| ✓ | pddtsv | 19.12 | exact | 31.50 |
 | ✓ | pddttrf | — | — | — |
-| ✓ | pddttrs | — | — | — |
+| ✓ | pddttrs | 18.94 | exact | 31.52 |
 | ✓ | pddttrsv | — | — | — |
 | ✓ | pdgbsv | — | — | — |
 | ✓ | pdgbtrf | — | — | — |
 | ✓ | pdgbtrs | — | — | — |
 | ✓ | pdgebal | — | — | — |
 |  | pdgebd2 | — | — | — |
-| ✓ | pdgebrd | — | — | — |
+| ✓ | pdgebrd | 16.35 | 31.27 | 29.31 |
 | ✓ | pdgecon | — | — | — |
 | ✓ | pdgeequ | — | — | — |
-|  | pdgehd2 | — | — | — |
-| ✓ | pdgehrd | — | — | — |
-|  | pdgelq2 | — | — | — |
-| ✓ | pdgelqf | — | — | — |
-| ✓ | pdgels | — | — | — |
-|  | pdgeql2 | — | — | — |
-| ✓ | pdgeqlf | — | — | — |
+|  | pdgehd2 | 17.11 | 31.77 | 29.90 |
+| ✓ | pdgehrd | 16.67 | 31.70 | 29.44 |
+|  | pdgelq2 | 18.73 | 33.41 | 31.38 |
+| ✓ | pdgelqf | 18.62 | 33.27 | 31.38 |
+| ✓ | pdgels | 18.14 | 32.84 | 31.02 |
+|  | pdgeql2 | 18.63 | 33.34 | 31.34 |
+| ✓ | pdgeqlf | 18.66 | 33.37 | 31.36 |
 | ✓ | pdgeqpf | — | — | — |
-|  | pdgeqr2 | — | — | — |
+|  | pdgeqr2 | 18.67 | 33.30 | 31.31 |
 | ✓ | pdgeqrf | 18.68 | 33.29 | 31.27 |
 | ✓ | pdgerfs | — | — | — |
-|  | pdgerq2 | — | — | — |
-| ✓ | pdgerqf | — | — | — |
+|  | pdgerq2 | 18.73 | 33.42 | 31.42 |
+| ✓ | pdgerqf | 18.74 | 33.28 | 31.36 |
 | ✓ | pdgesv | 18.28 | 33.38 | 31.14 |
 | ✓ | pdgesvd | 17.99 | 32.37 | 29.80 |
 | ✓ | pdgesvx | — | — | — |
 |  | pdgetf2 | — | — | — |
 | ✓ | pdgetrf | 18.23 | exact | 31.17 |
-| ✓ | pdgetri | — | — | — |
+| ✓ | pdgetri | 18.11 | 33.55 | 31.07 |
 | ✓ | pdgetrs | 18.10 | 33.38 | 31.12 |
 | ✓ | pdggqrf | — | — | — |
 | ✓ | pdggrqf | — | — | — |
@@ -1241,8 +1241,8 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 |  | pdlamve | — | — | — |
 |  | pdlange | 18.90 | exact | 31.77 |
 |  | pdlanhs | — | — | — |
-|  | pdlansy | — | — | — |
-|  | pdlantr | — | — | — |
+|  | pdlansy | 18.94 | 33.50 | 31.50 |
+|  | pdlantr | 19.02 | exact | 31.68 |
 |  | pdlapiv | — | — | — |
 |  | pdlapv2 | — | — | — |
 |  | pdlaqge | — | — | — |
@@ -1279,24 +1279,24 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pdorg2l | — | — | — |
 | ✓ | pdorg2r | — | — | — |
 |  | pdorgl2 | — | — | — |
-| ✓ | pdorglq | — | — | — |
-| ✓ | pdorgql | — | — | — |
-| ✓ | pdorgqr | — | — | — |
+| ✓ | pdorglq | 18.07 | 32.83 | 30.88 |
+| ✓ | pdorgql | 18.22 | 32.79 | 30.88 |
+| ✓ | pdorgqr | 17.94 | 32.68 | 30.75 |
 |  | pdorgr2 | — | — | — |
-| ✓ | pdorgrq | — | — | — |
+| ✓ | pdorgrq | 18.15 | 32.81 | 30.78 |
 | ✓ | pdorm2l | — | — | — |
 | ✓ | pdorm2r | — | — | — |
 | ✓ | pdormbr | — | — | — |
-| ✓ | pdormhr | — | — | — |
+| ✓ | pdormhr | 17.02 | 31.65 | 29.49 |
 |  | pdorml2 | — | — | — |
-| ✓ | pdormlq | — | — | — |
-| ✓ | pdormql | — | — | — |
-| ✓ | pdormqr | — | — | — |
+| ✓ | pdormlq | 18.28 | 32.98 | 30.89 |
+| ✓ | pdormql | 18.37 | 32.93 | 31.00 |
+| ✓ | pdormqr | 18.13 | 33.01 | 31.02 |
 |  | pdormr2 | — | — | — |
 |  | pdormr3 | — | — | — |
-| ✓ | pdormrq | — | — | — |
+| ✓ | pdormrq | 18.29 | 33.06 | 31.03 |
 | ✓ | pdormrz | — | — | — |
-| ✓ | pdormtr | — | — | — |
+| ✓ | pdormtr | 14.37 | 27.48 | 26.10 |
 | ✓ | pdpbsv | — | — | — |
 | ✓ | pdpbtrf | — | — | — |
 | ✓ | pdpbtrs | — | — | — |
@@ -1304,13 +1304,13 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pdpocon | — | — | — |
 | ✓ | pdpoequ | — | — | — |
 | ✓ | pdporfs | — | — | — |
-| ✓ | pdposv | — | — | — |
+| ✓ | pdposv | 18.30 | 33.06 | 31.06 |
 | ✓ | pdposvx | — | — | — |
 |  | pdpotf2 | — | — | — |
 | ✓ | pdpotrf | 19.04 | 33.59 | 31.74 |
-| ✓ | pdpotri | — | — | — |
+| ✓ | pdpotri | 18.58 | 32.94 | 31.17 |
 | ✓ | pdpotrs | 18.28 | 33.29 | 31.11 |
-| ✓ | pdptsv | — | — | — |
+| ✓ | pdptsv | 18.96 | 33.84 | 31.61 |
 | ✓ | pdpttrf | — | — | — |
 | ✓ | pdpttrs | — | — | — |
 | ✓ | pdpttrsv | — | — | — |
@@ -1324,19 +1324,19 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pdsyevr | — | — | — |
 | ✓ | pdsyevx | — | — | — |
 |  | pdsygs2 | — | — | — |
-| ✓ | pdsygst | — | — | — |
+| ✓ | pdsygst | 18.27 | 32.89 | 31.12 |
 | ✓ | pdsygvx | — | — | — |
 | ✓ | pdsyngst | — | — | — |
 | ✓ | pdsyntrd | — | — | — |
 |  | pdsytd2 | — | — | — |
-| ✓ | pdsytrd | — | — | — |
+| ✓ | pdsytrd | 15.74 | 30.80 | 28.72 |
 | ✓ | pdsyttrd | — | — | — |
 | ✓ | pdtrcon | — | — | — |
 | ✓ | pdtrord | — | — | — |
 | ✓ | pdtrrfs | — | — | — |
 | ✓ | pdtrsen | — | — | — |
 |  | pdtrti2 | — | — | — |
-| ✓ | pdtrtri | — | — | — |
+| ✓ | pdtrtri | 18.38 | 32.96 | 30.93 |
 | ✓ | pdtrtrs | — | — | — |
 | ✓ | pdtzrzf | — | — | — |
 |  | pdzsum1 | — | — | — |
@@ -1345,40 +1345,40 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pzdbtrs | — | — | — |
 | ✓ | pzdbtrsv | — | — | — |
 | ✓ | pzdrscl | — | — | — |
-| ✓ | pzdtsv | — | — | — |
+| ✓ | pzdtsv | 18.84 | exact | 31.28 |
 | ✓ | pzdttrf | — | — | — |
-| ✓ | pzdttrs | — | — | — |
+| ✓ | pzdttrs | 18.74 | exact | 31.27 |
 | ✓ | pzdttrsv | — | — | — |
 | ✓ | pzgbsv | — | — | — |
 | ✓ | pzgbtrf | — | — | — |
 | ✓ | pzgbtrs | — | — | — |
 |  | pzgebd2 | — | — | — |
-| ✓ | pzgebrd | — | — | — |
+| ✓ | pzgebrd | 17.87 | 32.33 | 30.34 |
 | ✓ | pzgecon | — | — | — |
 | ✓ | pzgeequ | — | — | — |
-|  | pzgehd2 | — | — | — |
-| ✓ | pzgehrd | — | — | — |
-|  | pzgelq2 | — | — | — |
-| ✓ | pzgelqf | — | — | — |
-| ✓ | pzgels | — | — | — |
-|  | pzgeql2 | — | — | — |
-| ✓ | pzgeqlf | — | — | — |
+|  | pzgehd2 | 17.18 | 32.01 | 30.00 |
+| ✓ | pzgehrd | 17.29 | 32.13 | 30.27 |
+|  | pzgelq2 | 18.64 | 33.20 | 31.41 |
+| ✓ | pzgelqf | 18.63 | 33.18 | 31.34 |
+| ✓ | pzgels | 18.24 | 32.93 | 31.07 |
+|  | pzgeql2 | 18.54 | 33.30 | 31.19 |
+| ✓ | pzgeqlf | 18.57 | 33.27 | 31.24 |
 | ✓ | pzgeqpf | — | — | — |
-|  | pzgeqr2 | — | — | — |
-| ✓ | pzgeqrf | — | — | — |
+|  | pzgeqr2 | 18.63 | 33.31 | 31.33 |
+| ✓ | pzgeqrf | 18.59 | 33.29 | 31.33 |
 | ✓ | pzgerfs | — | — | — |
-|  | pzgerq2 | — | — | — |
-| ✓ | pzgerqf | — | — | — |
-| ✓ | pzgesv | — | — | — |
+|  | pzgerq2 | 18.59 | 33.19 | 31.39 |
+| ✓ | pzgerqf | 18.52 | 33.25 | 31.25 |
+| ✓ | pzgesv | 18.31 | 33.20 | 31.03 |
 | ✓ | pzgesvd | — | — | — |
 | ✓ | pzgesvx | — | — | — |
 |  | pzgetf2 | — | — | — |
-| ✓ | pzgetrf | — | — | — |
-| ✓ | pzgetri | — | — | — |
+| ✓ | pzgetrf | 18.35 | exact | 31.14 |
+| ✓ | pzgetri | 18.14 | 34.02 | 30.94 |
 | ✓ | pzgetrs | — | — | — |
 | ✓ | pzggqrf | — | — | — |
 | ✓ | pzggrqf | — | — | — |
-| ✓ | pzheev | — | — | — |
+| ✓ | pzheev | 17.59 | 32.13 | 30.05 |
 | ✓ | pzheevd | — | — | — |
 | ✓ | pzheevr | — | — | — |
 | ✓ | pzheevx | — | — | — |
@@ -1388,7 +1388,7 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pzhengst | — | — | — |
 | ✓ | pzhentrd | — | — | — |
 |  | pzhetd2 | — | — | — |
-| ✓ | pzhetrd | — | — | — |
+| ✓ | pzhetrd | 17.18 | 31.91 | 30.00 |
 | ✓ | pzhettrd | — | — | — |
 |  | pzlabrd | — | — | — |
 |  | pzlacgv | — | — | — |
@@ -1401,11 +1401,11 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 |  | pzlahqr | — | — | — |
 |  | pzlahrd | — | — | — |
 |  | pzlamr1d | — | — | — |
-|  | pzlange | — | — | — |
-|  | pzlanhe | — | — | — |
+|  | pzlange | 18.78 | exact | 31.38 |
+|  | pzlanhe | 18.47 | 33.36 | 31.28 |
 |  | pzlanhs | — | — | — |
 |  | pzlansy | — | — | — |
-|  | pzlantr | — | — | — |
+|  | pzlantr | 18.95 | 33.91 | 31.38 |
 |  | pzlapiv | — | — | — |
 |  | pzlapv2 | — | — | — |
 |  | pzlaqge | — | — | — |
@@ -1441,11 +1441,11 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pzpocon | — | — | — |
 | ✓ | pzpoequ | — | — | — |
 | ✓ | pzporfs | — | — | — |
-| ✓ | pzposv | — | — | — |
+| ✓ | pzposv | 18.32 | 33.28 | 31.12 |
 | ✓ | pzposvx | — | — | — |
 |  | pzpotf2 | — | — | — |
-| ✓ | pzpotrf | — | — | — |
-| ✓ | pzpotri | — | — | — |
+| ✓ | pzpotrf | 19.14 | 33.80 | 31.80 |
+| ✓ | pzpotri | 18.70 | 32.87 | 31.06 |
 | ✓ | pzpotrs | — | — | — |
 | ✓ | pzptsv | — | — | — |
 | ✓ | pzpttrf | — | — | — |
@@ -1456,27 +1456,27 @@ _11 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pztrevc | — | — | — |
 | ✓ | pztrrfs | — | — | — |
 |  | pztrti2 | — | — | — |
-| ✓ | pztrtri | — | — | — |
+| ✓ | pztrtri | 17.84 | 32.47 | 30.80 |
 | ✓ | pztrtrs | — | — | — |
 | ✓ | pztzrzf | — | — | — |
 | ✓ | pzung2l | — | — | — |
 | ✓ | pzung2r | — | — | — |
 |  | pzungl2 | — | — | — |
-| ✓ | pzunglq | — | — | — |
-| ✓ | pzungql | — | — | — |
-| ✓ | pzungqr | — | — | — |
+| ✓ | pzunglq | 18.13 | 32.75 | 30.65 |
+| ✓ | pzungql | 18.12 | 32.67 | 30.83 |
+| ✓ | pzungqr | 18.13 | 32.74 | 30.84 |
 |  | pzungr2 | — | — | — |
-| ✓ | pzungrq | — | — | — |
+| ✓ | pzungrq | 18.16 | 32.70 | 30.71 |
 | ✓ | pzunm2l | — | — | — |
 | ✓ | pzunm2r | — | — | — |
 | ✓ | pzunmbr | — | — | — |
-| ✓ | pzunmhr | — | — | — |
+| ✓ | pzunmhr | 17.03 | 31.29 | 29.40 |
 |  | pzunml2 | — | — | — |
-| ✓ | pzunmlq | — | — | — |
-| ✓ | pzunmql | — | — | — |
-| ✓ | pzunmqr | — | — | — |
+| ✓ | pzunmlq | 18.22 | 32.97 | 30.97 |
+| ✓ | pzunmql | 18.32 | 32.92 | 30.92 |
+| ✓ | pzunmqr | 18.24 | 32.93 | 30.90 |
 |  | pzunmr2 | — | — | — |
 |  | pzunmr3 | — | — | — |
-| ✓ | pzunmrq | — | — | — |
+| ✓ | pzunmrq | 18.33 | 32.89 | 31.06 |
 | ✓ | pzunmrz | — | — | — |
 | ✓ | pzunmtr | — | — | — |
