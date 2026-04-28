@@ -121,7 +121,7 @@ _423 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgees | 17.88 | exact | 29.95 |
 | ✓ | dgeesx | 17.83 | exact | 29.84 |
 | ✓ | dgeev | 17.15 | exact | 29.73 |
-| ✓ | dgeevx | — | exact | — |
+| ✓ | dgeevx | 17.65 | exact | 30.05 |
 |  | dgehd2 | — | — | — |
 | ✓ | dgehrd | 17.33 | exact | 29.77 |
 | ✓ | dgejsv | 18.66 | exact | — |
@@ -178,8 +178,8 @@ _423 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dgges3 | 17.85 | 32.49 | 30.67 |
 | ✓ | dggesx | 17.07 | exact | 30.30 |
 | ✓ | dggev | 17.53 | exact | 30.41 |
-|  | dggev3 | — | 31.37 | — |
-| ✓ | dggevx | — | exact | — |
+|  | dggev3 | 15.82 | 31.37 | 29.46 |
+| ✓ | dggevx | 16.65 | exact | 29.27 |
 | ✓ | dggglm | 18.33 | exact | 30.99 |
 |  | dgghd3 | — | — | — |
 | ✓ | dgghrd | 17.39 | exact | 29.60 |
@@ -198,7 +198,7 @@ _423 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | dgttrs | 19.04 | exact | 31.63 |
 |  | dgtts2 | — | — | — |
 | ✓ | dhgeqz | 18.40 | exact | 30.88 |
-| ✓ | dhsein | -0.30 ✗ | 32.31 | -0.30 ✗ |
+| ✓ | dhsein | 18.93 | 32.31 | 31.31 |
 | ✓ | dhseqr | 18.13 | exact | 30.00 |
 | ✓ | disnan | — | — | — |
 |  | dla_gbamv | — | — | — |
@@ -586,7 +586,7 @@ _423 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | dtrevc3 | 18.50 | exact | 31.27 |
 | ✓ | dtrexc | 18.92 | exact | 31.12 |
 | ✓ | dtrrfs | 18.71 | exact | 31.53 |
-| ✓ | dtrsen | — | exact | — |
+| ✓ | dtrsen | 19.42 | exact | 31.87 |
 | ✓ | dtrsna | — | — | — |
 | ✓ | dtrsyl | 19.09 | exact | 31.55 |
 |  | dtrsyl3 | — | — | — |
@@ -625,7 +625,7 @@ _423 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 | ✓ | zgees | 17.60 | exact | 29.84 |
 | ✓ | zgeesx | 17.62 | exact | 29.75 |
 | ✓ | zgeev | 17.48 | exact | 29.64 |
-| ✓ | zgeevx | — | exact | — |
+| ✓ | zgeevx | 17.83 | exact | 29.81 |
 |  | zgehd2 | — | — | — |
 | ✓ | zgehrd | 17.35 | exact | 30.31 |
 | ✓ | zgejsv | 18.48 | exact | — |
@@ -682,8 +682,8 @@ _423 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | zgges3 | 18.14 | 32.76 | 30.64 |
 | ✓ | zggesx | 17.92 | exact | 30.68 |
 | ✓ | zggev | 17.53 | exact | 30.96 |
-|  | zggev3 | — | 32.48 | — |
-| ✓ | zggevx | — | exact | — |
+|  | zggev3 | 17.80 | 32.48 | 30.36 |
+| ✓ | zggevx | 17.38 | exact | 30.28 |
 | ✓ | zggglm | 18.08 | exact | 30.96 |
 |  | zgghd3 | — | — | — |
 | ✓ | zgghrd | 16.02 | exact | 28.59 |
@@ -1055,7 +1055,7 @@ _423 of 1012 migrated entries have a dedicated test driver. 579 are user-facing 
 |  | ztrevc3 | 18.80 | exact | 31.44 |
 | ✓ | ztrexc | 19.42 | exact | 32.47 |
 | ✓ | ztrrfs | 18.84 | exact | 31.69 |
-| ✓ | ztrsen | — | exact | — |
+| ✓ | ztrsen | 19.57 | exact | 32.60 |
 | ✓ | ztrsna | — | — | — |
 | ✓ | ztrsyl | 18.93 | exact | 31.69 |
 |  | ztrsyl3 | — | — | — |
@@ -1175,7 +1175,7 @@ _55 of 61 migrated entries have a dedicated test driver. 61 are user-facing (✓
 
 ## ScaLAPACK
 
-_75 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_76 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -1345,7 +1345,7 @@ _75 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pzdbtrs | — | — | — |
 | ✓ | pzdbtrsv | — | — | — |
 | ✓ | pzdrscl | — | — | — |
-| ✓ | pzdtsv | — | — | — |
+| ✓ | pzdtsv | 18.84 | exact | 31.28 |
 | ✓ | pzdttrf | — | — | — |
 | ✓ | pzdttrs | — | — | — |
 | ✓ | pzdttrsv | — | — | — |
@@ -1373,12 +1373,12 @@ _75 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pzgesvd | — | — | — |
 | ✓ | pzgesvx | — | — | — |
 |  | pzgetf2 | — | — | — |
-| ✓ | pzgetrf | — | exact | — |
+| ✓ | pzgetrf | 18.35 | exact | 31.14 |
 | ✓ | pzgetri | 18.14 | 34.02 | 30.94 |
 | ✓ | pzgetrs | — | — | — |
 | ✓ | pzggqrf | — | — | — |
 | ✓ | pzggrqf | — | — | — |
-| ✓ | pzheev | — | 32.13 | — |
+| ✓ | pzheev | 17.59 | 32.13 | 30.05 |
 | ✓ | pzheevd | — | — | — |
 | ✓ | pzheevr | — | — | — |
 | ✓ | pzheevx | — | — | — |
@@ -1388,7 +1388,7 @@ _75 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pzhengst | — | — | — |
 | ✓ | pzhentrd | — | — | — |
 |  | pzhetd2 | — | — | — |
-| ✓ | pzhetrd | — | 31.91 | — |
+| ✓ | pzhetrd | 17.18 | 31.91 | 30.00 |
 | ✓ | pzhettrd | — | — | — |
 |  | pzlabrd | — | — | — |
 |  | pzlacgv | — | — | — |
@@ -1444,7 +1444,7 @@ _75 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pzposv | 18.32 | 33.28 | 31.12 |
 | ✓ | pzposvx | — | — | — |
 |  | pzpotf2 | — | — | — |
-| ✓ | pzpotrf | — | 33.80 | — |
+| ✓ | pzpotrf | 19.14 | 33.80 | 31.80 |
 | ✓ | pzpotri | 18.70 | 32.87 | 31.06 |
 | ✓ | pzpotrs | — | — | — |
 | ✓ | pzptsv | — | — | — |
@@ -1470,7 +1470,7 @@ _75 of 301 migrated entries have a dedicated test driver. 166 are user-facing (�
 | ✓ | pzunm2l | — | — | — |
 | ✓ | pzunm2r | — | — | — |
 | ✓ | pzunmbr | — | — | — |
-| ✓ | pzunmhr | — | 31.29 | — |
+| ✓ | pzunmhr | 17.03 | 31.29 | 29.40 |
 |  | pzunml2 | — | — | — |
 | ✓ | pzunmlq | 18.22 | 32.97 | 30.97 |
 | ✓ | pzunmql | 18.32 | 32.92 | 30.92 |
