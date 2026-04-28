@@ -147,6 +147,20 @@ module ref_quad_lapack
             integer,   intent(out)   :: iwork(*), info
         end subroutine dpocon
 
+        subroutine dstebz(range, order, n, vl, vu, il, iu, abstol, &
+                          d, e, m, nsplit, w, iblock, isplit, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)    :: range, order
+            integer,   intent(in)    :: n, il, iu
+            real(ep),  intent(in)    :: vl, vu, abstol, d(*), e(*)
+            integer,   intent(out)   :: m, nsplit
+            real(ep),  intent(out)   :: w(*)
+            integer,   intent(out)   :: iblock(*), isplit(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dstebz
+
         ! ── Linear solve — complex ───────────────────────────────────
         subroutine zgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
             import :: ep

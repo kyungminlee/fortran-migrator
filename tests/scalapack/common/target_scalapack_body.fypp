@@ -59,6 +59,7 @@ module target_scalapack
     public :: target_pdpbsv, target_pzpbsv
     public :: target_pdpbtrf, target_pdpbtrs, target_pzpbtrf, target_pzpbtrs
     public :: target_pdgecon, target_pdgeequ, target_pdpocon
+    public :: target_pdstein
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -516,6 +517,18 @@ $:IMPORT_R()
             ${target_real}$, intent(out) :: rcond
             ${target_real}$, intent(out) :: work(*)
             integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$stein(n, d, e, m, w, iblock, isplit, orfac, &
+                              Z, iz, jz, descZ, work, lwork, iwork, liwork, &
+                              ifail, iclustr, gap, info)
+$:IMPORT_R()
+            integer,   intent(in)  :: n, m, iz, jz, lwork, liwork
+            integer,   intent(in)  :: descZ(9), iblock(*), isplit(*)
+            ${target_real}$, intent(in)  :: d(*), e(*), w(*), orfac
+            ${target_real}$, intent(out) :: Z(*), work(*), gap(*)
+            integer,   intent(out) :: iwork(*), ifail(*), iclustr(*)
+            integer,   intent(out) :: info
         end subroutine
 
         subroutine ${R}$geqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)
@@ -2232,6 +2245,48 @@ contains
             call ${R}$pocon(uplo, n, At, ia, ja, desca, anorm_t, rcond_t, &
                              work_t, lwt, iwork, liwork, info)
             rcond = t2q_r(rcond_t)
+        end if
+    end subroutine
+
+    subroutine target_pdstein(n, d, e, m, w, iblock, isplit, orfac, &
+                               Z, iz, jz, descZ, work, lwork, iwork, liwork, &
+                               ifail, iclustr, gap, info)
+        ! ICLUSTR length 2*P; GAP length P (P = NPROW*NPCOL); IFAIL length N.
+        integer,   intent(in)    :: n, m, iz, jz, lwork, liwork
+        integer,   intent(in)    :: descZ(9), iblock(*), isplit(*)
+        real(ep),  intent(in)    :: d(*), e(*), w(*), orfac
+        real(ep),  intent(out)   :: Z(*), work(*), gap(*)
+        integer,   intent(out)   :: iwork(*), ifail(*), iclustr(*)
+        integer,   intent(out)   :: info
+        integer :: nz, lwt, np
+        ${target_real}$, allocatable :: dt(:), et(:), wt(:), Zt(:), work_t(:), gap_t(:)
+        ${target_real}$ :: orfac_t
+        nz = nloc(descZ)
+        block
+            integer :: nprow, npcol, myrow, mycol
+            call blacs_gridinfo(descZ(2), nprow, npcol, myrow, mycol)
+            np = max(1, nprow * npcol)
+        end block
+        if (lwork == -1) then
+            allocate(dt(max(1,n)), et(max(1,n)), wt(max(1,m)), &
+                     Zt(max(1,nz)), work_t(1), gap_t(np))
+            orfac_t = q2t_r(orfac)
+            call ${R}$stein(n, dt, et, m, wt, iblock, isplit, orfac_t, &
+                             Zt, iz, jz, descZ, work_t, -1, iwork, liwork, &
+                             ifail, iclustr, gap_t, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(dt(n), et(n), wt(m), Zt(max(1,nz)), work_t(lwt), &
+                     gap_t(np))
+            dt = q2t_r(d(1:n)); et = q2t_r(e(1:n))
+            wt = q2t_r(w(1:m))
+            orfac_t = q2t_r(orfac)
+            call ${R}$stein(n, dt, et, m, wt, iblock, isplit, orfac_t, &
+                             Zt, iz, jz, descZ, work_t, lwt, iwork, liwork, &
+                             ifail, iclustr, gap_t, info)
+            Z(1:nz) = t2q_r(Zt)
+            gap(1:np) = t2q_r(gap_t)
         end if
     end subroutine
 
