@@ -658,6 +658,17 @@ module ref_quad_lapack
             integer,   intent(out)   :: info
         end subroutine dgesvd
 
+        subroutine zgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                          work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobvt
+            integer,     intent(in)    :: m, n, lda, ldu, ldvt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: s(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), VT(ldvt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvd
+
         ! ── Auxiliary ────────────────────────────────────────────────
         function dlange(norm, m, n, A, lda, work) result(r)
             import :: ep

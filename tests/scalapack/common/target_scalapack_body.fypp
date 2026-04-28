@@ -71,7 +71,7 @@ module target_scalapack
     public :: target_pdposv, target_pdpotri, target_pdgetri, target_pdtrtri
     public :: target_pdgebrd
     public :: target_pdsyev, target_pdsyevd
-    public :: target_pdgesvd
+    public :: target_pdgesvd, target_pzgesvd
     public :: target_pdlange, target_pdlansy, target_pdlanhs, target_pdlantr
     public :: target_pzlange, target_pzlanhe, target_pzlanhs, target_pzlantr
     public :: target_pdlacpy, target_pdlaset
@@ -851,6 +851,19 @@ $:IMPORT_R()
             integer,   intent(out)   :: info
             ${target_real}$, intent(inout) :: A(*)
             ${target_real}$, intent(out)   :: s(*), U(*), VT(*), work(*)
+        end subroutine
+
+        subroutine ${C}$gesvd(jobu, jobvt, m, n, A, ia, ja, desca, s, &
+                              U, iu, ju, descu, VT, ivt, jvt, descvt, &
+                              work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobu, jobvt
+            integer,   intent(in)    :: m, n, ia, ja, iu, ju, ivt, jvt, lwork
+            integer,   intent(in)    :: desca(9), descu(9), descvt(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_real}$,    intent(out)   :: s(*), rwork(*)
+            ${target_complex}$, intent(out)   :: U(*), VT(*), work(*)
         end subroutine
 
         function ${R}$lange(norm, m, n, A, ia, ja, desca, work) result(r)
@@ -3040,6 +3053,43 @@ contains
             s(1:ns) = t2q_r(st)
             U(1:nu) = t2q_r(Ut)
             VT(1:nvt) = t2q_r(VTt)
+        end if
+    end subroutine
+
+    subroutine target_pzgesvd(jobu, jobvt, m, n, A, ia, ja, desca, s, &
+                              U, iu, ju, descu, VT, ivt, jvt, descvt, &
+                              work, lwork, rwork, info)
+        ! Complex SVD: S is real, U/VT/A are complex; RWORK is real
+        ! workspace for singular-value/rotation arrays.
+        character,   intent(in)    :: jobu, jobvt
+        integer,     intent(in)    :: m, n, ia, ja, iu, ju, ivt, jvt, lwork
+        integer,     intent(in)    :: desca(9), descu(9), descvt(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        real(ep),    intent(out)   :: s(*), rwork(*)
+        complex(ep), intent(out)   :: U(*), VT(*), work(*)
+        integer :: na, nu, nvt, ns, lwt
+        ${target_real}$,    allocatable :: st(:), rwork_t(:)
+        ${target_complex}$, allocatable :: At(:), Ut(:), VTt(:), work_t(:)
+        na = nloc(desca); nu = nloc(descu); nvt = nloc(descvt)
+        ns = min(m, n)
+        if (lwork == -1) then
+            allocate(At(1), Ut(1), VTt(1), st(1), work_t(1), rwork_t(1))
+            call ${C}$gesvd(jobu, jobvt, m, n, At, ia, ja, desca, st, &
+                             Ut, iu, ju, descu, VTt, ivt, jvt, descvt, &
+                             work_t, -1, rwork_t, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Ut(nu), VTt(nvt), st(ns), work_t(lwt), &
+                     rwork_t(max(1, 1 + 4 * max(m, n))))
+            At = q2t_c(A(1:na))
+            call ${C}$gesvd(jobu, jobvt, m, n, At, ia, ja, desca, st, &
+                             Ut, iu, ju, descu, VTt, ivt, jvt, descvt, &
+                             work_t, lwt, rwork_t, info)
+            s(1:ns) = t2q_r(st)
+            U(1:nu) = t2q_c(Ut)
+            VT(1:nvt) = t2q_c(VTt)
         end if
     end subroutine
 
