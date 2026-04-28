@@ -4,5 +4,5 @@
 #:set target_real    = 'type(real64x2)'
 #:set target_complex = 'type(cmplx64x2)'
 #:set prefix_real    = 'pt'
-#:set prefix_complex = 'pv'
+#:set prefix_complex    = 'pw'
 #:include 'target_pblas_body.fypp'
