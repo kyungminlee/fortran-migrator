@@ -78,6 +78,47 @@ module ref_quad_lapack
             integer,  intent(out)   :: info
         end subroutine dptsv
 
+        subroutine zptsv(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, nrhs, ldb
+            real(ep),    intent(inout) :: d(*)
+            complex(ep), intent(inout) :: e(*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zptsv
+
+        subroutine dpttrf(n, d, e, info)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(inout) :: d(*), e(*)
+            integer,  intent(out)   :: info
+        end subroutine dpttrf
+
+        subroutine dpttrs(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb
+            real(ep), intent(in)    :: d(*), e(*)
+            real(ep), intent(inout) :: B(ldb,*)
+            integer,  intent(out)   :: info
+        end subroutine dpttrs
+
+        subroutine zpttrf(n, d, e, info)
+            import :: ep
+            integer,     intent(in)    :: n
+            real(ep),    intent(inout) :: d(*)
+            complex(ep), intent(inout) :: e(*)
+            integer,     intent(out)   :: info
+        end subroutine zpttrf
+
+        subroutine zpttrs(uplo, n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            real(ep),    intent(in)    :: d(*)
+            complex(ep), intent(in)    :: e(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpttrs
+
         ! ── Linear solve — complex ───────────────────────────────────
         subroutine zgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
             import :: ep
