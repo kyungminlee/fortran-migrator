@@ -60,6 +60,7 @@ module target_scalapack
     public :: target_pdpbtrf, target_pdpbtrs, target_pzpbtrf, target_pzpbtrs
     public :: target_pdgecon, target_pdgeequ, target_pdpocon
     public :: target_pdstein
+    public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -529,6 +530,35 @@ $:IMPORT_R()
             ${target_real}$, intent(out) :: Z(*), work(*), gap(*)
             integer,   intent(out) :: iwork(*), ifail(*), iclustr(*)
             integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$syevr(jobz, range, uplo, n, A, ia, ja, desca, &
+                              vl, vu, il, iu, m, nz, w, Z, iz, jz, descZ, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)  :: jobz, range, uplo
+            integer,   intent(in)  :: n, ia, ja, il, iu, iz, jz, lwork, liwork
+            integer,   intent(in)  :: desca(9), descZ(9)
+            ${target_real}$, intent(in)    :: vl, vu
+            ${target_real}$, intent(inout) :: A(*)
+            integer,   intent(out) :: m, nz
+            ${target_real}$, intent(out)   :: w(*), Z(*), work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$heevr(jobz, range, uplo, n, A, ia, ja, desca, &
+                              vl, vu, il, iu, m, nz, w, Z, iz, jz, descZ, &
+                              work, lwork, rwork, lrwork, iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in)  :: jobz, range, uplo
+            integer,   intent(in)  :: n, ia, ja, il, iu, iz, jz, lwork, lrwork, liwork
+            integer,   intent(in)  :: desca(9), descZ(9)
+            ${target_real}$, intent(in)    :: vl, vu
+            ${target_complex}$, intent(inout) :: A(*)
+            integer,   intent(out) :: m, nz
+            ${target_real}$,    intent(out) :: w(*), rwork(*)
+            ${target_complex}$, intent(out) :: Z(*), work(*)
+            integer,   intent(out) :: iwork(*), info
         end subroutine
 
         subroutine ${R}$geqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)
@@ -2300,6 +2330,80 @@ contains
                              ifail, iclustr, gap_t, info)
             Z(1:nz) = t2q_r(Zt)
             gap(1:np) = t2q_r(gap_t)
+        end if
+    end subroutine
+
+    subroutine target_pdsyevr(jobz, range, uplo, n, A, ia, ja, desca, &
+                               vl, vu, il, iu, m, nz, w, Z, iz, jz, descZ, &
+                               work, lwork, iwork, liwork, info)
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, ia, ja, il, iu, iz, jz, lwork, liwork
+        integer,   intent(in)    :: desca(9), descZ(9)
+        real(ep),  intent(in)    :: vl, vu
+        real(ep),  intent(inout) :: A(*)
+        integer,   intent(out)   :: m, nz
+        real(ep),  intent(out)   :: w(*), Z(*), work(*)
+        integer,   intent(out)   :: iwork(*), info
+        integer :: na, nzz, lwt
+        ${target_real}$, allocatable :: At(:), wt(:), Zt(:), work_t(:)
+        ${target_real}$ :: vl_t, vu_t
+        na = nloc(desca); nzz = nloc(descZ)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), wt(max(1,n)), Zt(max(1,nzz)), work_t(1))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu)
+            call ${R}$syevr(jobz, range, uplo, n, At, ia, ja, desca, &
+                             vl_t, vu_t, il, iu, m, nz, wt, Zt, iz, jz, descZ, &
+                             work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), wt(n), Zt(max(1,nzz)), work_t(lwt))
+            At = q2t_r(A(1:na))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu)
+            call ${R}$syevr(jobz, range, uplo, n, At, ia, ja, desca, &
+                             vl_t, vu_t, il, iu, m, nz, wt, Zt, iz, jz, descZ, &
+                             work_t, lwt, iwork, liwork, info)
+            w(1:n) = t2q_r(wt)
+            Z(1:nzz) = t2q_r(Zt)
+        end if
+    end subroutine
+
+    subroutine target_pzheevr(jobz, range, uplo, n, A, ia, ja, desca, &
+                               vl, vu, il, iu, m, nz, w, Z, iz, jz, descZ, &
+                               work, lwork, rwork, lrwork, iwork, liwork, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, ia, ja, il, iu, iz, jz, lwork, lrwork, liwork
+        integer,     intent(in)    :: desca(9), descZ(9)
+        real(ep),    intent(in)    :: vl, vu
+        complex(ep), intent(inout) :: A(*)
+        integer,     intent(out)   :: m, nz
+        real(ep),    intent(out)   :: w(*), rwork(*)
+        complex(ep), intent(out)   :: Z(*), work(*)
+        integer,     intent(out)   :: iwork(*), info
+        integer :: na, nzz, lwt, lrt
+        ${target_real}$,    allocatable :: wt(:), rwork_t(:)
+        ${target_complex}$, allocatable :: At(:), Zt(:), work_t(:)
+        ${target_real}$ :: vl_t, vu_t
+        na = nloc(desca); nzz = nloc(descZ)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), wt(max(1,n)), Zt(max(1,nzz)), &
+                     work_t(1), rwork_t(1))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu)
+            call ${C}$heevr(jobz, range, uplo, n, At, ia, ja, desca, &
+                             vl_t, vu_t, il, iu, m, nz, wt, Zt, iz, jz, descZ, &
+                             work_t, -1, rwork_t, -1, iwork, liwork, info)
+            work(1) = t2q_c(work_t(1))
+            rwork(1) = t2q_r(rwork_t(1))
+        else
+            lwt = max(1, lwork); lrt = max(1, lrwork)
+            allocate(At(na), wt(n), Zt(max(1,nzz)), work_t(lwt), rwork_t(lrt))
+            At = q2t_c(A(1:na))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu)
+            call ${C}$heevr(jobz, range, uplo, n, At, ia, ja, desca, &
+                             vl_t, vu_t, il, iu, m, nz, wt, Zt, iz, jz, descZ, &
+                             work_t, lwt, rwork_t, lrt, iwork, liwork, info)
+            w(1:n) = t2q_r(wt)
+            Z(1:nzz) = t2q_c(Zt)
         end if
     end subroutine
 
