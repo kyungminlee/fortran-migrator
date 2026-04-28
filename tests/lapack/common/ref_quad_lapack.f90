@@ -4070,6 +4070,142 @@ module ref_quad_lapack
             real(ep),    intent(out) :: work(*)
             real(ep) :: r
         end function zlantr
+
+        ! Phase L19 — Permutation/norm helpers.
+        subroutine dlapmr(forwrd, m, n, X, ldx, K)
+            import :: ep
+            logical,  intent(in)    :: forwrd
+            integer,  intent(in)    :: m, n, ldx
+            real(ep), intent(inout) :: X(ldx,*)
+            integer,  intent(inout) :: K(*)
+        end subroutine dlapmr
+
+        subroutine zlapmr(forwrd, m, n, X, ldx, K)
+            import :: ep
+            logical,     intent(in)    :: forwrd
+            integer,     intent(in)    :: m, n, ldx
+            complex(ep), intent(inout) :: X(ldx,*)
+            integer,     intent(inout) :: K(*)
+        end subroutine zlapmr
+
+        subroutine dlapmt(forwrd, m, n, X, ldx, K)
+            import :: ep
+            logical,  intent(in)    :: forwrd
+            integer,  intent(in)    :: m, n, ldx
+            real(ep), intent(inout) :: X(ldx,*)
+            integer,  intent(inout) :: K(*)
+        end subroutine dlapmt
+
+        subroutine zlapmt(forwrd, m, n, X, ldx, K)
+            import :: ep
+            logical,     intent(in)    :: forwrd
+            integer,     intent(in)    :: m, n, ldx
+            complex(ep), intent(inout) :: X(ldx,*)
+            integer,     intent(inout) :: K(*)
+        end subroutine zlapmt
+
+        subroutine dlapll(n, X, incx, Y, incy, ssmin)
+            import :: ep
+            integer,  intent(in)    :: n, incx, incy
+            real(ep), intent(inout) :: X(*), Y(*)
+            real(ep), intent(out)   :: ssmin
+        end subroutine dlapll
+
+        subroutine zlapll(n, X, incx, Y, incy, ssmin)
+            import :: ep
+            integer,     intent(in)    :: n, incx, incy
+            complex(ep), intent(inout) :: X(*), Y(*)
+            real(ep),    intent(out)   :: ssmin
+        end subroutine zlapll
+
+        subroutine dlacn2(n, V, X, isgn, est, kase, isave)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(out)   :: V(*)
+            real(ep), intent(inout) :: X(*), est
+            integer,  intent(out)   :: isgn(*)
+            integer,  intent(inout) :: kase, isave(3)
+        end subroutine dlacn2
+
+        subroutine zlacn2(n, V, X, est, kase, isave)
+            import :: ep
+            integer,     intent(in)    :: n
+            complex(ep), intent(out)   :: V(*)
+            complex(ep), intent(inout) :: X(*)
+            real(ep),    intent(inout) :: est
+            integer,     intent(inout) :: kase, isave(3)
+        end subroutine zlacn2
+
+        subroutine dlartg(f, g, c, s, r)
+            import :: ep
+            real(ep), intent(in)  :: f, g
+            real(ep), intent(out) :: c, s, r
+        end subroutine dlartg
+
+        subroutine zlartg(f, g, c, s, r)
+            import :: ep
+            complex(ep), intent(in)  :: f, g
+            real(ep),    intent(out) :: c
+            complex(ep), intent(out) :: s, r
+        end subroutine zlartg
+
+        subroutine dlartgp(f, g, c, s, r)
+            import :: ep
+            real(ep), intent(in)  :: f, g
+            real(ep), intent(out) :: c, s, r
+        end subroutine dlartgp
+
+        subroutine dlartgs(x, y, sigma, c, s)
+            import :: ep
+            real(ep), intent(in)  :: x, y, sigma
+            real(ep), intent(out) :: c, s
+        end subroutine dlartgs
+
+        ! Phase L20 — Small public scalar utilities.
+        function dlapy2(x, y) result(r)
+            import :: ep
+            real(ep), intent(in) :: x, y
+            real(ep) :: r
+        end function dlapy2
+
+        function dlapy3(x, y, z) result(r)
+            import :: ep
+            real(ep), intent(in) :: x, y, z
+            real(ep) :: r
+        end function dlapy3
+
+        subroutine dladiv(a, b, c, d, p, q)
+            import :: ep
+            real(ep), intent(in)  :: a, b, c, d
+            real(ep), intent(out) :: p, q
+        end subroutine dladiv
+
+        function zladiv(x, y) result(r)
+            import :: ep
+            complex(ep), intent(in) :: x, y
+            complex(ep) :: r
+        end function zladiv
+
+        subroutine dlamrg(n1, n2, A, dtrd1, dtrd2, index)
+            import :: ep
+            integer,  intent(in)  :: n1, n2, dtrd1, dtrd2
+            real(ep), intent(in)  :: A(*)
+            integer,  intent(out) :: index(*)
+        end subroutine dlamrg
+
+        subroutine dlarnv(idist, iseed, n, X)
+            import :: ep
+            integer,  intent(in)    :: idist, n
+            integer,  intent(inout) :: iseed(4)
+            real(ep), intent(out)   :: X(*)
+        end subroutine dlarnv
+
+        subroutine zlarnv(idist, iseed, n, X)
+            import :: ep
+            integer,     intent(in)    :: idist, n
+            integer,     intent(inout) :: iseed(4)
+            complex(ep), intent(out)   :: X(*)
+        end subroutine zlarnv
     end interface
 
 end module ref_quad_lapack

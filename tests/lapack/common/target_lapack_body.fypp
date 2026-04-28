@@ -189,6 +189,20 @@ module target_lapack
     public :: target_dlantb, target_zlantb
     public :: target_dlantp, target_zlantp
     public :: target_dlantr, target_zlantr
+    ! Phase L19 — Permutation/norm helpers.
+    public :: target_dlapmr, target_zlapmr
+    public :: target_dlapmt, target_zlapmt
+    public :: target_dlapll, target_zlapll
+    public :: target_dlacn2, target_zlacn2
+    public :: target_dlartg, target_zlartg
+    public :: target_dlartgp
+    public :: target_dlartgs
+    ! Phase L20 — Small public scalar utilities.
+    public :: target_dlapy2
+    public :: target_dlapy3
+    public :: target_dladiv, target_zladiv
+    public :: target_dlamrg
+    public :: target_dlarnv, target_zlarnv
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -4245,6 +4259,142 @@ $:IMPORT_C()
             ${target_real}$,    intent(out) :: work(*)
             ${target_real}$ :: r
         end function
+
+        ! Phase L19 — Permutation/norm helpers.
+        subroutine ${R}$lapmr(forwrd, m, n, X, ldx, K)
+$:IMPORT_R()
+            logical,  intent(in)    :: forwrd
+            integer,  intent(in)    :: m, n, ldx
+            ${target_real}$, intent(inout) :: X(ldx,*)
+            integer,  intent(inout) :: K(*)
+        end subroutine
+
+        subroutine ${C}$lapmr(forwrd, m, n, X, ldx, K)
+$:IMPORT_C()
+            logical,     intent(in)    :: forwrd
+            integer,     intent(in)    :: m, n, ldx
+            ${target_complex}$, intent(inout) :: X(ldx,*)
+            integer,     intent(inout) :: K(*)
+        end subroutine
+
+        subroutine ${R}$lapmt(forwrd, m, n, X, ldx, K)
+$:IMPORT_R()
+            logical,  intent(in)    :: forwrd
+            integer,  intent(in)    :: m, n, ldx
+            ${target_real}$, intent(inout) :: X(ldx,*)
+            integer,  intent(inout) :: K(*)
+        end subroutine
+
+        subroutine ${C}$lapmt(forwrd, m, n, X, ldx, K)
+$:IMPORT_C()
+            logical,     intent(in)    :: forwrd
+            integer,     intent(in)    :: m, n, ldx
+            ${target_complex}$, intent(inout) :: X(ldx,*)
+            integer,     intent(inout) :: K(*)
+        end subroutine
+
+        subroutine ${R}$lapll(n, X, incx, Y, incy, ssmin)
+$:IMPORT_R()
+            integer,  intent(in)    :: n, incx, incy
+            ${target_real}$, intent(inout) :: X(*), Y(*)
+            ${target_real}$, intent(out)   :: ssmin
+        end subroutine
+
+        subroutine ${C}$lapll(n, X, incx, Y, incy, ssmin)
+$:IMPORT_C()
+            integer,     intent(in)    :: n, incx, incy
+            ${target_complex}$, intent(inout) :: X(*), Y(*)
+            ${target_real}$,    intent(out)   :: ssmin
+        end subroutine
+
+        subroutine ${R}$lacn2(n, V, X, isgn, est, kase, isave)
+$:IMPORT_R()
+            integer,  intent(in)    :: n
+            ${target_real}$, intent(out)   :: V(*)
+            ${target_real}$, intent(inout) :: X(*), est
+            integer,  intent(out)   :: isgn(*)
+            integer,  intent(inout) :: kase, isave(3)
+        end subroutine
+
+        subroutine ${C}$lacn2(n, V, X, est, kase, isave)
+$:IMPORT_C()
+            integer,     intent(in)    :: n
+            ${target_complex}$, intent(out)   :: V(*)
+            ${target_complex}$, intent(inout) :: X(*)
+            ${target_real}$,    intent(inout) :: est
+            integer,     intent(inout) :: kase, isave(3)
+        end subroutine
+
+        subroutine ${R}$lartg(f, g, c, s, r)
+$:IMPORT_R()
+            ${target_real}$, intent(in)  :: f, g
+            ${target_real}$, intent(out) :: c, s, r
+        end subroutine
+
+        subroutine ${C}$lartg(f, g, c, s, r)
+$:IMPORT_C()
+            ${target_complex}$, intent(in)  :: f, g
+            ${target_real}$,    intent(out) :: c
+            ${target_complex}$, intent(out) :: s, r
+        end subroutine
+
+        subroutine ${R}$lartgp(f, g, c, s, r)
+$:IMPORT_R()
+            ${target_real}$, intent(in)  :: f, g
+            ${target_real}$, intent(out) :: c, s, r
+        end subroutine
+
+        subroutine ${R}$lartgs(x, y, sigma, c, s)
+$:IMPORT_R()
+            ${target_real}$, intent(in)  :: x, y, sigma
+            ${target_real}$, intent(out) :: c, s
+        end subroutine
+
+        ! Phase L20 — Small public scalar utilities.
+        function ${R}$lapy2(x, y) result(r)
+$:IMPORT_R()
+            ${target_real}$, intent(in) :: x, y
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lapy3(x, y, z) result(r)
+$:IMPORT_R()
+            ${target_real}$, intent(in) :: x, y, z
+            ${target_real}$ :: r
+        end function
+
+        subroutine ${R}$ladiv(a, b, c, d, p, q)
+$:IMPORT_R()
+            ${target_real}$, intent(in)  :: a, b, c, d
+            ${target_real}$, intent(out) :: p, q
+        end subroutine
+
+        function ${C}$ladiv(x, y) result(r)
+$:IMPORT_C()
+            ${target_complex}$, intent(in) :: x, y
+            ${target_complex}$ :: r
+        end function
+
+        subroutine ${R}$lamrg(n1, n2, A, dtrd1, dtrd2, index)
+$:IMPORT_R()
+            integer,  intent(in)  :: n1, n2, dtrd1, dtrd2
+            ${target_real}$, intent(in)  :: A(*)
+            integer,  intent(out) :: index(*)
+        end subroutine
+
+        subroutine ${R}$larnv(idist, iseed, n, X)
+$:IMPORT_R()
+            integer,  intent(in)    :: idist, n
+            integer,  intent(inout) :: iseed(4)
+            ${target_real}$, intent(out)   :: X(*)
+        end subroutine
+
+        subroutine ${C}$larnv(idist, iseed, n, X)
+$:IMPORT_C()
+            integer,     intent(in)    :: idist, n
+            integer,     intent(inout) :: iseed(4)
+            ${target_complex}$, intent(out)   :: X(*)
+        end subroutine
     end interface
 
 contains
@@ -11895,5 +12045,209 @@ $:CPACK_INV('zsptri', C + 'sptri')
         At = q2t_c(A(1:lda,1:n))
         r = t2q_r(${C}$lantr(norm, uplo, diag, m, n, At, lda, workt))
     end function
+
+    ! ── Phase L19 — Permutation/norm helpers ─────────────────────────
+    subroutine target_dlapmr(forwrd, m, n, X, ldx, K)
+        logical,  intent(in)    :: forwrd
+        integer,  intent(in)    :: m, n, ldx
+        real(ep), intent(inout) :: X(ldx,*)
+        integer,  intent(inout) :: K(*)
+        ${target_real}$, allocatable :: Xt(:,:)
+        allocate(Xt(ldx,n))
+        Xt = q2t_r(X(1:ldx,1:n))
+        call ${R}$lapmr(forwrd, m, n, Xt, ldx, K)
+        X(1:ldx,1:n) = t2q_r(Xt)
+    end subroutine
+
+    subroutine target_zlapmr(forwrd, m, n, X, ldx, K)
+        logical,     intent(in)    :: forwrd
+        integer,     intent(in)    :: m, n, ldx
+        complex(ep), intent(inout) :: X(ldx,*)
+        integer,     intent(inout) :: K(*)
+        ${target_complex}$, allocatable :: Xt(:,:)
+        allocate(Xt(ldx,n))
+        Xt = q2t_c(X(1:ldx,1:n))
+        call ${C}$lapmr(forwrd, m, n, Xt, ldx, K)
+        X(1:ldx,1:n) = t2q_c(Xt)
+    end subroutine
+
+    subroutine target_dlapmt(forwrd, m, n, X, ldx, K)
+        logical,  intent(in)    :: forwrd
+        integer,  intent(in)    :: m, n, ldx
+        real(ep), intent(inout) :: X(ldx,*)
+        integer,  intent(inout) :: K(*)
+        ${target_real}$, allocatable :: Xt(:,:)
+        allocate(Xt(ldx,n))
+        Xt = q2t_r(X(1:ldx,1:n))
+        call ${R}$lapmt(forwrd, m, n, Xt, ldx, K)
+        X(1:ldx,1:n) = t2q_r(Xt)
+    end subroutine
+
+    subroutine target_zlapmt(forwrd, m, n, X, ldx, K)
+        logical,     intent(in)    :: forwrd
+        integer,     intent(in)    :: m, n, ldx
+        complex(ep), intent(inout) :: X(ldx,*)
+        integer,     intent(inout) :: K(*)
+        ${target_complex}$, allocatable :: Xt(:,:)
+        allocate(Xt(ldx,n))
+        Xt = q2t_c(X(1:ldx,1:n))
+        call ${C}$lapmt(forwrd, m, n, Xt, ldx, K)
+        X(1:ldx,1:n) = t2q_c(Xt)
+    end subroutine
+
+    subroutine target_dlapll(n, X, incx, Y, incy, ssmin)
+        integer,  intent(in)    :: n, incx, incy
+        real(ep), intent(inout) :: X(*), Y(*)
+        real(ep), intent(out)   :: ssmin
+        integer :: lx, ly
+        ${target_real}$, allocatable :: Xt(:), Yt(:)
+        ${target_real}$ :: st
+        lx = max(1, 1 + (n-1) * abs(incx))
+        ly = max(1, 1 + (n-1) * abs(incy))
+        allocate(Xt(lx), Yt(ly))
+        Xt = q2t_r(X(1:lx)); Yt = q2t_r(Y(1:ly))
+        call ${R}$lapll(n, Xt, incx, Yt, incy, st)
+        X(1:lx) = t2q_r(Xt); Y(1:ly) = t2q_r(Yt)
+        ssmin = t2q_r(st)
+    end subroutine
+
+    subroutine target_zlapll(n, X, incx, Y, incy, ssmin)
+        integer,     intent(in)    :: n, incx, incy
+        complex(ep), intent(inout) :: X(*), Y(*)
+        real(ep),    intent(out)   :: ssmin
+        integer :: lx, ly
+        ${target_complex}$, allocatable :: Xt(:), Yt(:)
+        ${target_real}$ :: st
+        lx = max(1, 1 + (n-1) * abs(incx))
+        ly = max(1, 1 + (n-1) * abs(incy))
+        allocate(Xt(lx), Yt(ly))
+        Xt = q2t_c(X(1:lx)); Yt = q2t_c(Y(1:ly))
+        call ${C}$lapll(n, Xt, incx, Yt, incy, st)
+        X(1:lx) = t2q_c(Xt); Y(1:ly) = t2q_c(Yt)
+        ssmin = t2q_r(st)
+    end subroutine
+
+    subroutine target_dlacn2(n, V, X, isgn, est, kase, isave)
+        integer,  intent(in)    :: n
+        real(ep), intent(out)   :: V(*)
+        real(ep), intent(inout) :: X(*), est
+        integer,  intent(out)   :: isgn(*)
+        integer,  intent(inout) :: kase, isave(3)
+        ${target_real}$, allocatable :: Vt(:), Xt(:)
+        ${target_real}$ :: estt
+        allocate(Vt(n), Xt(n))
+        Xt = q2t_r(X(1:n))
+        estt = q2t_r(est)
+        call ${R}$lacn2(n, Vt, Xt, isgn, estt, kase, isave)
+        V(1:n) = t2q_r(Vt); X(1:n) = t2q_r(Xt)
+        est = t2q_r(estt)
+    end subroutine
+
+    subroutine target_zlacn2(n, V, X, est, kase, isave)
+        integer,     intent(in)    :: n
+        complex(ep), intent(out)   :: V(*)
+        complex(ep), intent(inout) :: X(*)
+        real(ep),    intent(inout) :: est
+        integer,     intent(inout) :: kase, isave(3)
+        ${target_complex}$, allocatable :: Vt(:), Xt(:)
+        ${target_real}$ :: estt
+        allocate(Vt(n), Xt(n))
+        Xt = q2t_c(X(1:n))
+        estt = q2t_r(est)
+        call ${C}$lacn2(n, Vt, Xt, estt, kase, isave)
+        V(1:n) = t2q_c(Vt); X(1:n) = t2q_c(Xt)
+        est = t2q_r(estt)
+    end subroutine
+
+    subroutine target_dlartg(f, g, c, s, r)
+        real(ep), intent(in)  :: f, g
+        real(ep), intent(out) :: c, s, r
+        ${target_real}$ :: ct, st, rt
+        call ${R}$lartg(q2t_r(f), q2t_r(g), ct, st, rt)
+        c = t2q_r(ct); s = t2q_r(st); r = t2q_r(rt)
+    end subroutine
+
+    subroutine target_zlartg(f, g, c, s, r)
+        complex(ep), intent(in)  :: f, g
+        real(ep),    intent(out) :: c
+        complex(ep), intent(out) :: s, r
+        ${target_real}$    :: ct
+        ${target_complex}$ :: st, rt
+        call ${C}$lartg(q2t_c(f), q2t_c(g), ct, st, rt)
+        c = t2q_r(ct); s = t2q_c(st); r = t2q_c(rt)
+    end subroutine
+
+    subroutine target_dlartgp(f, g, c, s, r)
+        real(ep), intent(in)  :: f, g
+        real(ep), intent(out) :: c, s, r
+        ${target_real}$ :: ct, st, rt
+        call ${R}$lartgp(q2t_r(f), q2t_r(g), ct, st, rt)
+        c = t2q_r(ct); s = t2q_r(st); r = t2q_r(rt)
+    end subroutine
+
+    subroutine target_dlartgs(x, y, sigma, c, s)
+        real(ep), intent(in)  :: x, y, sigma
+        real(ep), intent(out) :: c, s
+        ${target_real}$ :: ct, st
+        call ${R}$lartgs(q2t_r(x), q2t_r(y), q2t_r(sigma), ct, st)
+        c = t2q_r(ct); s = t2q_r(st)
+    end subroutine
+
+    ! ── Phase L20 — Small public scalar utilities ────────────────────
+    function target_dlapy2(x, y) result(r)
+        real(ep), intent(in) :: x, y
+        real(ep) :: r
+        r = t2q_r(${R}$lapy2(q2t_r(x), q2t_r(y)))
+    end function
+
+    function target_dlapy3(x, y, z) result(r)
+        real(ep), intent(in) :: x, y, z
+        real(ep) :: r
+        r = t2q_r(${R}$lapy3(q2t_r(x), q2t_r(y), q2t_r(z)))
+    end function
+
+    subroutine target_dladiv(a, b, c, d, p, q)
+        real(ep), intent(in)  :: a, b, c, d
+        real(ep), intent(out) :: p, q
+        ${target_real}$ :: pt, qt
+        call ${R}$ladiv(q2t_r(a), q2t_r(b), q2t_r(c), q2t_r(d), pt, qt)
+        p = t2q_r(pt); q = t2q_r(qt)
+    end subroutine
+
+    function target_zladiv(x, y) result(r)
+        complex(ep), intent(in) :: x, y
+        complex(ep) :: r
+        r = t2q_c(${C}$ladiv(q2t_c(x), q2t_c(y)))
+    end function
+
+    subroutine target_dlamrg(n1, n2, A, dtrd1, dtrd2, index)
+        integer,  intent(in)  :: n1, n2, dtrd1, dtrd2
+        real(ep), intent(in)  :: A(*)
+        integer,  intent(out) :: index(*)
+        ${target_real}$, allocatable :: At(:)
+        allocate(At(n1+n2))
+        At = q2t_r(A(1:n1+n2))
+        call ${R}$lamrg(n1, n2, At, dtrd1, dtrd2, index)
+    end subroutine
+
+    subroutine target_dlarnv(idist, iseed, n, X)
+        integer,  intent(in)    :: idist, n
+        integer,  intent(inout) :: iseed(4)
+        real(ep), intent(out)   :: X(*)
+        ${target_real}$, allocatable :: Xt(:)
+        allocate(Xt(n))
+        call ${R}$larnv(idist, iseed, n, Xt)
+        X(1:n) = t2q_r(Xt)
+    end subroutine
+
+    subroutine target_zlarnv(idist, iseed, n, X)
+        integer,     intent(in)    :: idist, n
+        integer,     intent(inout) :: iseed(4)
+        complex(ep), intent(out)   :: X(*)
+        ${target_complex}$, allocatable :: Xt(:)
+        allocate(Xt(n))
+        call ${C}$larnv(idist, iseed, n, Xt)
+        X(1:n) = t2q_c(Xt)
+    end subroutine
 
 end module target_lapack
