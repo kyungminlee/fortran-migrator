@@ -62,6 +62,7 @@ module target_scalapack
     public :: target_pzgeequ, target_pzpoequ
     public :: target_pdgerfs, target_pzgerfs
     public :: target_pdporfs, target_pzporfs
+    public :: target_pdgeqpf, target_pzgeqpf
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -619,6 +620,27 @@ $:IMPORT_RC()
             ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
             ${target_complex}$, intent(out)   :: work(*)
             integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$geqpf(m, n, A, ia, ja, desca, ipiv, tau, &
+                              work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: ipiv(*), info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${C}$geqpf(m, n, A, ia, ja, desca, ipiv, tau, &
+                              work, lwork, rwork, lrwork, info)
+$:IMPORT_RC()
+            integer, intent(in)    :: m, n, ia, ja, lwork, lrwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: ipiv(*), info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+            ${target_real}$,    intent(out)   :: rwork(*)
         end subroutine
 
         subroutine ${R}$pocon(uplo, n, A, ia, ja, desca, anorm, rcond, &
@@ -2603,6 +2625,59 @@ contains
                              ferrt, berrt, work_t, lwt, rwork_t, lrt, info)
             X(1:nx) = t2q_c(Xt)
             ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+        end if
+    end subroutine
+
+    subroutine target_pdgeqpf(m, n, A, ia, ja, desca, ipiv, tau, &
+                               work, lwork, info)
+        integer,  intent(in)    :: m, n, ia, ja, lwork
+        integer,  intent(in)    :: desca(9)
+        integer,  intent(out)   :: ipiv(*), info
+        real(ep), intent(inout) :: A(*)
+        real(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_real}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${R}$geqpf(m, n, At, ia, ja, desca, ipiv, tau_t, &
+                             work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$geqpf(m, n, At, ia, ja, desca, ipiv, tau_t, &
+                             work_t, lwt, info)
+            A(1:na) = t2q_r(At); tau(1:ntau) = t2q_r(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pzgeqpf(m, n, A, ia, ja, desca, ipiv, tau, &
+                               work, lwork, rwork, lrwork, info)
+        integer,     intent(in)    :: m, n, ia, ja, lwork, lrwork
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: ipiv(*), info
+        complex(ep), intent(inout) :: A(*)
+        complex(ep), intent(out)   :: tau(*), work(*)
+        real(ep),    intent(out)   :: rwork(*)
+        integer :: na, ntau, lwt, lrt
+        ${target_complex}$, allocatable :: At(:), tau_t(:), work_t(:)
+        ${target_real}$,    allocatable :: rwork_t(:)
+        na = nloc(desca); ntau = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1), rwork_t(1))
+            call ${C}$geqpf(m, n, At, ia, ja, desca, ipiv, tau_t, &
+                             work_t, -1, rwork_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+            rwork(1) = t2q_r(rwork_t(1))
+        else
+            lwt = max(1, lwork); lrt = max(1, lrwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt), rwork_t(lrt))
+            At = q2t_c(A(1:na))
+            call ${C}$geqpf(m, n, At, ia, ja, desca, ipiv, tau_t, &
+                             work_t, lwt, rwork_t, lrt, info)
+            A(1:na) = t2q_c(At); tau(1:ntau) = t2q_c(tau_t)
         end if
     end subroutine
 
