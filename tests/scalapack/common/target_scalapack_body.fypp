@@ -66,6 +66,7 @@ module target_scalapack
     public :: target_pdgebal
     public :: target_pdtrtrs, target_pztrtrs
     public :: target_pdrscl
+    public :: target_pdstedc
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -684,6 +685,17 @@ $:IMPORT_R()
             integer, intent(in) :: descx(9)
             ${target_real}$, intent(in)    :: sa
             ${target_real}$, intent(inout) :: sx(*)
+        end subroutine
+
+        subroutine ${R}$stedc(compz, n, d, e, Q, iq, jq, descq, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in) :: compz
+            integer,   intent(in) :: n, iq, jq, lwork, liwork
+            integer,   intent(in) :: descq(9)
+            ${target_real}$, intent(inout) :: d(*), e(*), Q(*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(out) :: iwork(*), info
         end subroutine
 
 
@@ -2774,6 +2786,34 @@ contains
         sa_t = q2t_r(sa)
         call ${R}$rscl(n, sa_t, sxt, ix, jx, descx, incx)
         sx(1:nx) = t2q_r(sxt)
+    end subroutine
+
+    subroutine target_pdstedc(compz, n, d, e, Q, iq, jq, descq, &
+                               work, lwork, iwork, liwork, info)
+        character, intent(in)    :: compz
+        integer,   intent(in)    :: n, iq, jq, lwork, liwork
+        integer,   intent(in)    :: descq(9)
+        real(ep),  intent(inout) :: d(*), e(*), Q(*)
+        real(ep),  intent(out)   :: work(*)
+        integer,   intent(out)   :: iwork(*), info
+        integer :: nq, lwt
+        ${target_real}$, allocatable :: dt(:), et(:), Qt(:), work_t(:)
+        nq = nloc(descq)
+        if (lwork == -1) then
+            allocate(dt(max(1,n)), et(max(1,n)), Qt(max(1,nq)), work_t(1))
+            call ${R}$stedc(compz, n, dt, et, Qt, iq, jq, descq, &
+                             work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(dt(n), et(n), Qt(max(1,nq)), work_t(lwt))
+            dt = q2t_r(d(1:n)); et = q2t_r(e(1:n))
+            Qt = q2t_r(Q(1:nq))
+            call ${R}$stedc(compz, n, dt, et, Qt, iq, jq, descq, &
+                             work_t, lwt, iwork, liwork, info)
+            d(1:n) = t2q_r(dt); e(1:n) = t2q_r(et)
+            Q(1:nq) = t2q_r(Qt)
+        end if
     end subroutine
 
     subroutine target_pztrtrs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
