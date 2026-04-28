@@ -49,7 +49,7 @@ module target_scalapack
     public :: target_name, target_eps
     public :: target_pdgesv, target_pdgetrf, target_pdgetrs
     public :: target_pdpotrf, target_pdpotrs
-    public :: target_pddtsv, target_pdptsv
+    public :: target_pddtsv, target_pdptsv, target_pzdtsv
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -150,6 +150,16 @@ $:IMPORT_R()
             integer, intent(out)   :: info
             ${target_real}$, intent(inout) :: dl(*), d(*), du(*), B(*)
             ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$dtsv(n, nrhs, dl, d, du, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: n, nrhs, ja, ib, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: dl(*), d(*), du(*), B(*)
+            ${target_complex}$, intent(out)   :: work(*)
         end subroutine
 
         subroutine ${R}$ptsv(n, nrhs, d, e, ja, desca, &
@@ -1076,6 +1086,29 @@ contains
                         Bt, ib, descb, work_t, lwt, info)
         dl(1:nv) = t2q_r(dlt); d(1:nv) = t2q_r(dt); du(1:nv) = t2q_r(dut)
         B(1:ldb * nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_pzdtsv(n, nrhs, dl, d, du, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+        ! Complex tridiagonal-solve. See target_pddtsv for layout.
+        integer,     intent(in)    :: n, nrhs, ja, ib, lwork
+        integer,     intent(in)    :: desca(*), descb(*)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: dl(*), d(*), du(*), B(*)
+        complex(ep), intent(out)   :: work(*)
+        integer :: nv, nb, lwt, ldb
+        ${target_complex}$, allocatable :: dlt(:), dt(:), dut(:), Bt(:), work_t(:)
+        nb = desca(4)
+        nv = nb
+        ldb = descb(6)
+        lwt = max(1, lwork)
+        allocate(dlt(nv), dt(nv), dut(nv), Bt(ldb * nrhs), work_t(lwt))
+        dlt = q2t_c(dl(1:nv)); dt = q2t_c(d(1:nv)); dut = q2t_c(du(1:nv))
+        Bt = q2t_c(B(1:ldb * nrhs))
+        call ${C}$dtsv(n, nrhs, dlt, dt, dut, ja, desca, &
+                        Bt, ib, descb, work_t, lwt, info)
+        dl(1:nv) = t2q_c(dlt); d(1:nv) = t2q_c(dt); du(1:nv) = t2q_c(dut)
+        B(1:ldb * nrhs) = t2q_c(Bt)
     end subroutine
 
     subroutine target_pdgeqr2(m, n, A, ia, ja, desca, tau, work, lwork, info)

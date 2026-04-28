@@ -64,6 +64,13 @@ module ref_quad_lapack
             integer,  intent(out)   :: info
         end subroutine dgtsv
 
+        subroutine zgtsv(n, nrhs, dl, d, du, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: dl(*), d(*), du(*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgtsv
+
         subroutine dptsv(n, nrhs, d, e, B, ldb, info)
             import :: ep
             integer,  intent(in)    :: n, nrhs, ldb
