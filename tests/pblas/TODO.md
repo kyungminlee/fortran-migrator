@@ -4,21 +4,6 @@ This file tracks items that were *deferred* during the test-coverage
 expansion because they live outside `tests/pblas/`. Each entry names
 the file/concern and what should change after the test PR lands.
 
-## Multifloats `pdzasum` SEGFAULT (mixed real-from-complex |x|-sum)
-
-- **Symptom**: `test_pdzasum` segfaults on the multifloats target.
-  All 54 other PBLAS tests pass on multifloats. kind10 and kind16
-  pass; the issue is multifloats-specific.
-- **Diagnosis**: The wrapper's accumulator init was hardened
-  (zero-init the target-type asum, declare interface as
-  intent(inout)) which fixed the analogous kind10 NaN elsewhere;
-  the multifloats SEGV persists, so the crash is in the migrated
-  kernel itself, not the wrapper. Same pattern as the
-  `dzvasum` / `tvvasum` SEGV documented in
-  `tests/ptzblas/TODO.md`.
-- **Action**: Defer; gate by skipping `test_pdzasum` on multifloats
-  until the migrated `tvasum` / mixed-prefix code path is debugged.
-
 ## doc/PROCEDURES.md — coverage column
 
 `doc/PROCEDURES.md` enumerates all 61 PBLAS (family, stem) rows with

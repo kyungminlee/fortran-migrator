@@ -6,20 +6,6 @@
   `target_dzvasum` and tested. There is no analogous `xqvasum` in the
   source set, so no symmetric test was written.
 
-## Multifloats `dzvasum` SEGFAULT
-
-- **Symptom**: `test_dzvasum` segfaults on the multifloats target.
-  All 27 other ptzblas tests pass on multifloats. Fixing the
-  accumulator-wrapper init for the vvdot pair resolved the kind10
-  NaN issue but not the multifloats SEGV here.
-- **Diagnosis**: The migrated `tvvasum` calls `TVASUM(N, X, INCX)`
-  which assigns through to `ASUM`. Likely a bug in the migrated
-  TVASUM body or in how `q2t_c(complex(16) → cmplx64x2)` constructs
-  the input vector — either way the crash is downstream of the
-  wrapper, in the migrated kernel.
-- **Action**: Defer; gate by skipping `test_dzvasum` on multifloats
-  until the migrated tvvasum / q2t_c path is debugged.
-
 ## Potential migrator follow-ups (NOT in this subtree)
 
 None observed during the kind16 build — every test passed on the

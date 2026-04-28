@@ -50,29 +50,18 @@ copy_files:
   - LA_XISNAN_EP
   - LA_XISNAN_MF
 
-# Hand-patched overrides. The multifloats T-prefix renames DSCAL → TSCAL,
-# which collides with a local variable also named TSCAL in the source
-# of dlatbs.f / dlatps.f / dlatrs.f. The overrides rename the local
-# variable to TSCFAC; the EXTERNAL/CALL sites keep TSCAL (the renamed
-# routine). This is the only LAPACK-internal local-name clash with the
-# T-prefixed BLAS namespace (verified by intersecting BLAS T-routines
-# with all T<UPPER>-prefixed local variable declarations in LAPACK).
+# Hand-patched overrides. With multifloats prefixes M (real) and W
+# (complex), no BLAS routine renames collide with LAPACK locals, so
+# the per-routine overrides previously needed for T/V (TSCAL collisions
+# in *latbs/*latps/*latrs and VCOPY collisions in pXlahqr/pXlaqr1) are
+# no longer required. Only the iparam2stage gate still needs patching
+# so 2-stage routines get a non-bogus LWORK back; without it, the
+# migrated name `'MSYTRD_2STAGE'` falls through iparam2stage's S/D/C/Z
+# gate and IPARAM2STAGE returns -1 → LWMIN < actual workspace.
 overrides:
   multifloats:
     src_dir: lapack/mf_overrides
     files:
-      - tlatbs.f
-      - tlatps.f
-      - tlatrs.f
-      - vlatbs.f
-      - vlatps.f
-      - vlatrs.f
-      # iparam2stage workspace dispatcher patched to recognize the
-      # multifloats real/complex prefixes (T/V) so 2-stage routines
-      # get a non-bogus LWORK back. Without this, the migrated
-      # name `'TSYTRD_2STAGE'` falls through iparam2stage's S/D/C/Z
-      # gate and IPARAM2STAGE returns -1 → LWMIN < actual workspace
-      # → heap corruption inside qsyev_2stage / vheev_2stage.
       - iparam2stage.F
   # Same iparam2stage patch is needed for kind16 (prefixes Q/X) and
   # kind10 (E/Y). Reuse the file from lapack/mf_overrides since the

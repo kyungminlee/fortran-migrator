@@ -14,8 +14,8 @@ intrinsics:
   mode: wrap_constructor
 
 prefixes:
-  R: T
-  C: V
+  R: M
+  C: W
   I: I
   L: L
   S: S

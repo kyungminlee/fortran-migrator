@@ -275,8 +275,8 @@ overrides:
   multifloats:
     src_dir: pblas/mfc_overrides
     files:
-      - pb_cttypeset.c
-      - pb_cvtypeset.c
+      - pb_cmtypeset.c
+      - pb_cwtypeset.c
       # C++ bridge header providing type aliases and operators.
       # Copied to output_dir so -include pblas_mf_bridge.h resolves.
       - pblas_mf_bridge.h
