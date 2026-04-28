@@ -60,7 +60,8 @@ module target_scalapack
     public :: target_pdpbtrf, target_pdpbtrs, target_pzpbtrf, target_pzpbtrs
     public :: target_pdgecon, target_pdgeequ, target_pdpocon, target_pdpoequ
     public :: target_pzgeequ, target_pzpoequ
-    public :: target_pdgerfs
+    public :: target_pdgerfs, target_pzgerfs
+    public :: target_pdporfs, target_pzporfs
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -573,6 +574,51 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: X(*)
             ${target_real}$, intent(out)   :: ferr(*), berr(*), work(*)
             integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$gerfs(trans, n, nrhs, A, ia, ja, desca, AF, iaf, jaf, &
+                              descaf, ipiv, B, ib, jb, descb, X, ix, jx, descx, &
+                              ferr, berr, work, lwork, rwork, lrwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: trans
+            integer,   intent(in) :: n, nrhs, ia, ja, iaf, jaf, ib, jb, ix, jx
+            integer,   intent(in) :: lwork, lrwork
+            integer,   intent(in) :: desca(9), descaf(9), descb(9), descx(9)
+            integer,   intent(in) :: ipiv(*)
+            ${target_complex}$, intent(in)    :: A(*), AF(*), B(*)
+            ${target_complex}$, intent(inout) :: X(*)
+            ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$porfs(uplo, n, nrhs, A, ia, ja, desca, AF, iaf, jaf, &
+                              descaf, B, ib, jb, descb, X, ix, jx, descx, &
+                              ferr, berr, work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ia, ja, iaf, jaf, ib, jb, ix, jx
+            integer,   intent(in) :: lwork, liwork
+            integer,   intent(in) :: desca(9), descaf(9), descb(9), descx(9)
+            ${target_real}$, intent(in)    :: A(*), AF(*), B(*)
+            ${target_real}$, intent(inout) :: X(*)
+            ${target_real}$, intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$porfs(uplo, n, nrhs, A, ia, ja, desca, AF, iaf, jaf, &
+                              descaf, B, ib, jb, descb, X, ix, jx, descx, &
+                              ferr, berr, work, lwork, rwork, lrwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, nrhs, ia, ja, iaf, jaf, ib, jb, ix, jx
+            integer,   intent(in) :: lwork, lrwork
+            integer,   intent(in) :: desca(9), descaf(9), descb(9), descx(9)
+            ${target_complex}$, intent(in)    :: A(*), AF(*), B(*)
+            ${target_complex}$, intent(inout) :: X(*)
+            ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,   intent(out) :: info
         end subroutine
 
         subroutine ${R}$pocon(uplo, n, A, ia, ja, desca, anorm, rcond, &
@@ -2440,6 +2486,122 @@ contains
                              descaf, ipiv, Bt, ib, jb, descb, Xt, ix, jx, descx, &
                              ferrt, berrt, work_t, lwt, iwork, liwork, info)
             X(1:nx) = t2q_r(Xt)
+            ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+        end if
+    end subroutine
+
+    subroutine target_pzgerfs(trans, n, nrhs, A, ia, ja, desca, AF, iaf, jaf, &
+                               descaf, ipiv, B, ib, jb, descb, X, ix, jx, descx, &
+                               ferr, berr, work, lwork, rwork, lrwork, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: n, nrhs, ia, ja, iaf, jaf, ib, jb, ix, jx
+        integer,     intent(in)    :: lwork, lrwork
+        integer,     intent(in)    :: desca(9), descaf(9), descb(9), descx(9)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(in)    :: A(*), AF(*), B(*)
+        complex(ep), intent(inout) :: X(*)
+        real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+        complex(ep), intent(out)   :: work(*)
+        integer,     intent(out)   :: info
+        integer :: na, naf, nb, nx, lwt, lrt
+        ${target_complex}$, allocatable :: At(:), AFt(:), Bt(:), Xt(:), work_t(:)
+        ${target_real}$,    allocatable :: ferrt(:), berrt(:), rwork_t(:)
+        na = nloc(desca); naf = nloc(descaf); nb = nloc(descb); nx = nloc(descx)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), AFt(max(1,naf)), Bt(max(1,nb)), &
+                     Xt(max(1,nx)), ferrt(max(1,nrhs)), berrt(max(1,nrhs)), &
+                     work_t(1), rwork_t(1))
+            call ${C}$gerfs(trans, n, nrhs, At, ia, ja, desca, AFt, iaf, jaf, &
+                             descaf, ipiv, Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferrt, berrt, work_t, -1, rwork_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+            rwork(1) = t2q_r(rwork_t(1))
+        else
+            lwt = max(1, lwork); lrt = max(1, lrwork)
+            allocate(At(na), AFt(naf), Bt(nb), Xt(nx), &
+                     ferrt(nrhs), berrt(nrhs), work_t(lwt), rwork_t(lrt))
+            At = q2t_c(A(1:na)); AFt = q2t_c(AF(1:naf))
+            Bt = q2t_c(B(1:nb)); Xt = q2t_c(X(1:nx))
+            call ${C}$gerfs(trans, n, nrhs, At, ia, ja, desca, AFt, iaf, jaf, &
+                             descaf, ipiv, Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferrt, berrt, work_t, lwt, rwork_t, lrt, info)
+            X(1:nx) = t2q_c(Xt)
+            ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+        end if
+    end subroutine
+
+    subroutine target_pdporfs(uplo, n, nrhs, A, ia, ja, desca, AF, iaf, jaf, &
+                               descaf, B, ib, jb, descb, X, ix, jx, descx, &
+                               ferr, berr, work, lwork, iwork, liwork, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, ia, ja, iaf, jaf, ib, jb, ix, jx
+        integer,   intent(in)    :: lwork, liwork
+        integer,   intent(in)    :: desca(9), descaf(9), descb(9), descx(9)
+        real(ep),  intent(in)    :: A(*), AF(*), B(*)
+        real(ep),  intent(inout) :: X(*)
+        real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+        integer,   intent(out)   :: iwork(*), info
+        integer :: na, naf, nb, nx, lwt
+        ${target_real}$, allocatable :: At(:), AFt(:), Bt(:), Xt(:), &
+                                          ferrt(:), berrt(:), work_t(:)
+        na = nloc(desca); naf = nloc(descaf); nb = nloc(descb); nx = nloc(descx)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), AFt(max(1,naf)), Bt(max(1,nb)), &
+                     Xt(max(1,nx)), ferrt(max(1,nrhs)), berrt(max(1,nrhs)), &
+                     work_t(1))
+            call ${R}$porfs(uplo, n, nrhs, At, ia, ja, desca, AFt, iaf, jaf, &
+                             descaf, Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferrt, berrt, work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), AFt(naf), Bt(nb), Xt(nx), &
+                     ferrt(nrhs), berrt(nrhs), work_t(lwt))
+            At = q2t_r(A(1:na)); AFt = q2t_r(AF(1:naf))
+            Bt = q2t_r(B(1:nb)); Xt = q2t_r(X(1:nx))
+            call ${R}$porfs(uplo, n, nrhs, At, ia, ja, desca, AFt, iaf, jaf, &
+                             descaf, Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferrt, berrt, work_t, lwt, iwork, liwork, info)
+            X(1:nx) = t2q_r(Xt)
+            ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+        end if
+    end subroutine
+
+    subroutine target_pzporfs(uplo, n, nrhs, A, ia, ja, desca, AF, iaf, jaf, &
+                               descaf, B, ib, jb, descb, X, ix, jx, descx, &
+                               ferr, berr, work, lwork, rwork, lrwork, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, ia, ja, iaf, jaf, ib, jb, ix, jx
+        integer,     intent(in)    :: lwork, lrwork
+        integer,     intent(in)    :: desca(9), descaf(9), descb(9), descx(9)
+        complex(ep), intent(in)    :: A(*), AF(*), B(*)
+        complex(ep), intent(inout) :: X(*)
+        real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+        complex(ep), intent(out)   :: work(*)
+        integer,     intent(out)   :: info
+        integer :: na, naf, nb, nx, lwt, lrt
+        ${target_complex}$, allocatable :: At(:), AFt(:), Bt(:), Xt(:), work_t(:)
+        ${target_real}$,    allocatable :: ferrt(:), berrt(:), rwork_t(:)
+        na = nloc(desca); naf = nloc(descaf); nb = nloc(descb); nx = nloc(descx)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), AFt(max(1,naf)), Bt(max(1,nb)), &
+                     Xt(max(1,nx)), ferrt(max(1,nrhs)), berrt(max(1,nrhs)), &
+                     work_t(1), rwork_t(1))
+            call ${C}$porfs(uplo, n, nrhs, At, ia, ja, desca, AFt, iaf, jaf, &
+                             descaf, Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferrt, berrt, work_t, -1, rwork_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+            rwork(1) = t2q_r(rwork_t(1))
+        else
+            lwt = max(1, lwork); lrt = max(1, lrwork)
+            allocate(At(na), AFt(naf), Bt(nb), Xt(nx), &
+                     ferrt(nrhs), berrt(nrhs), work_t(lwt), rwork_t(lrt))
+            At = q2t_c(A(1:na)); AFt = q2t_c(AF(1:naf))
+            Bt = q2t_c(B(1:nb)); Xt = q2t_c(X(1:nx))
+            call ${C}$porfs(uplo, n, nrhs, At, ia, ja, desca, AFt, iaf, jaf, &
+                             descaf, Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferrt, berrt, work_t, lwt, rwork_t, lrt, info)
+            X(1:nx) = t2q_c(Xt)
             ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
         end if
     end subroutine
