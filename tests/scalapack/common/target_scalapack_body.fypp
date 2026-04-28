@@ -63,6 +63,7 @@ module target_scalapack
     public :: target_pdgerfs, target_pzgerfs
     public :: target_pdporfs, target_pzporfs
     public :: target_pdgeqpf, target_pzgeqpf
+    public :: target_pdgebal
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -641,6 +642,16 @@ $:IMPORT_RC()
             ${target_complex}$, intent(inout) :: A(*)
             ${target_complex}$, intent(out)   :: tau(*), work(*)
             ${target_real}$,    intent(out)   :: rwork(*)
+        end subroutine
+
+        subroutine ${R}$gebal(job, n, A, desca, ilo, ihi, scale, info)
+$:IMPORT_R()
+            character, intent(in)    :: job
+            integer,   intent(in)    :: n
+            integer,   intent(in)    :: desca(9)
+            ${target_real}$, intent(inout) :: A(*)
+            integer,   intent(out)   :: ilo, ihi, info
+            ${target_real}$, intent(out)   :: scale(*)
         end subroutine
 
         subroutine ${R}$pocon(uplo, n, A, ia, ja, desca, anorm, rcond, &
@@ -2679,6 +2690,22 @@ contains
                              work_t, lwt, rwork_t, lrt, info)
             A(1:na) = t2q_c(At); tau(1:ntau) = t2q_c(tau_t)
         end if
+    end subroutine
+
+    subroutine target_pdgebal(job, n, A, desca, ilo, ihi, scale, info)
+        character, intent(in)    :: job
+        integer,   intent(in)    :: n
+        integer,   intent(in)    :: desca(9)
+        real(ep),  intent(inout) :: A(*)
+        integer,   intent(out)   :: ilo, ihi, info
+        real(ep),  intent(out)   :: scale(*)
+        integer :: na
+        ${target_real}$, allocatable :: At(:), scale_t(:)
+        na = nloc(desca)
+        allocate(At(na), scale_t(max(1, n)))
+        At = q2t_r(A(1:na))
+        call ${R}$gebal(job, n, At, desca, ilo, ihi, scale_t, info)
+        A(1:na) = t2q_r(At); scale(1:n) = t2q_r(scale_t)
     end subroutine
 
     subroutine target_pzpoequ(n, A, ia, ja, desca, sr, sc, scond, amax, info)

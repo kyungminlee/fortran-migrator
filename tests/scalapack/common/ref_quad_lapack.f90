@@ -129,6 +129,15 @@ module ref_quad_lapack
             integer,   intent(out)   :: iwork(*), info
         end subroutine dgecon
 
+        subroutine dgebal(job, n, A, lda, ilo, ihi, scale, info)
+            import :: ep
+            character, intent(in)    :: job
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ilo, ihi, info
+            real(ep),  intent(out)   :: scale(*)
+        end subroutine dgebal
+
         subroutine dpoequ(n, A, lda, S, scond, amax, info)
             import :: ep
             integer,  intent(in)    :: n, lda
