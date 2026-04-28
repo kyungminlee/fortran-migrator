@@ -87,8 +87,8 @@ module target_scalapack
     public :: target_pzhetrd
     public :: target_pzgels
     public :: target_pzgebrd
-    public :: target_pzposv, target_pzpotrf, target_pzpotri
-    public :: target_pzgetrf, target_pzgetri, target_pztrtri
+    public :: target_pzposv, target_pzpotrf, target_pzpotrs, target_pzpotri
+    public :: target_pzgetrf, target_pzgetrs, target_pzgetri, target_pztrtri
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -129,6 +129,17 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: B(*)
         end subroutine
 
+        subroutine ${C}$getrs(trans, n, nrhs, A, ia, ja, desca, ipiv, &
+                              B, ib, jb, descb, info)
+$:IMPORT_C()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb
+            integer,   intent(in)    :: desca(9), descb(9), ipiv(*)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(in)    :: A(*)
+            ${target_complex}$, intent(inout) :: B(*)
+        end subroutine
+
         subroutine ${R}$potrf(uplo, n, A, ia, ja, desca, info)
 $:IMPORT_R()
             character, intent(in)    :: uplo
@@ -147,6 +158,17 @@ $:IMPORT_R()
             integer,   intent(out)   :: info
             ${target_real}$, intent(in)    :: A(*)
             ${target_real}$, intent(inout) :: B(*)
+        end subroutine
+
+        subroutine ${C}$potrs(uplo, n, nrhs, A, ia, ja, desca, &
+                              B, ib, jb, descb, info)
+$:IMPORT_C()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb
+            integer,   intent(in)    :: desca(9), descb(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(in)    :: A(*)
+            ${target_complex}$, intent(inout) :: B(*)
         end subroutine
 
         ! 1D-distributed tridiagonal solver. DESCA / DESCB use the
@@ -1381,6 +1403,24 @@ contains
         B(1:nb) = t2q_r(Bt)
     end subroutine
 
+    subroutine target_pzgetrs(trans, n, nrhs, A, ia, ja, desca, ipiv, &
+                              B, ib, jb, descb, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: n, nrhs, ia, ja, ib, jb
+        integer,     intent(in)    :: desca(9), descb(9), ipiv(*)
+        integer,     intent(out)   :: info
+        complex(ep), intent(in)    :: A(*)
+        complex(ep), intent(inout) :: B(*)
+        integer :: na, nb
+        ${target_complex}$, allocatable :: At(:), Bt(:)
+        na = nloc(desca); nb = nloc(descb)
+        allocate(At(na), Bt(nb))
+        At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
+        call ${C}$getrs(trans, n, nrhs, At, ia, ja, desca, ipiv, &
+                         Bt, ib, jb, descb, info)
+        B(1:nb) = t2q_c(Bt)
+    end subroutine
+
     subroutine target_pdpotrf(uplo, n, A, ia, ja, desca, info)
         character, intent(in)    :: uplo
         integer,   intent(in)    :: n, ia, ja
@@ -1412,6 +1452,24 @@ contains
         call ${R}$potrs(uplo, n, nrhs, At, ia, ja, desca, &
                          Bt, ib, jb, descb, info)
         B(1:nb) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_pzpotrs(uplo, n, nrhs, A, ia, ja, desca, &
+                              B, ib, jb, descb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, ia, ja, ib, jb
+        integer,     intent(in)    :: desca(9), descb(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(in)    :: A(*)
+        complex(ep), intent(inout) :: B(*)
+        integer :: na, nb
+        ${target_complex}$, allocatable :: At(:), Bt(:)
+        na = nloc(desca); nb = nloc(descb)
+        allocate(At(na), Bt(nb))
+        At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
+        call ${C}$potrs(uplo, n, nrhs, At, ia, ja, desca, &
+                         Bt, ib, jb, descb, info)
+        B(1:nb) = t2q_c(Bt)
     end subroutine
 
     subroutine target_pdgeqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)

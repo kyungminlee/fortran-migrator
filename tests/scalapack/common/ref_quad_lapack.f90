@@ -536,6 +536,24 @@ module ref_quad_lapack
             integer,     intent(out)   :: info
         end subroutine zpotrf
 
+        subroutine zpotrs(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotrs
+
+        subroutine zgetrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, lda, ldb, ipiv(*)
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgetrs
+
         subroutine zgetrf(m, n, A, lda, ipiv, info)
             import :: ep
             integer,     intent(in)    :: m, n, lda
