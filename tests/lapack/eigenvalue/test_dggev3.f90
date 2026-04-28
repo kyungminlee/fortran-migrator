@@ -1,6 +1,4 @@
 ! dggev3: blocked generalized eig (no Schur form output). JOBVL/VR='N'.
-! KNOWN FAILING (Phase L3): aborts with SIGABRT, same crash pattern as
-! the L2 dgeevx/zgeevx failures. See tests/lapack/TODO.md.
 program test_dggev3
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize

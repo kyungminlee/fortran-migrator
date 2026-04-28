@@ -1,6 +1,4 @@
 ! zgeevx: complex non-Hermitian eig. BALANC='N', JOBV*='N', SENSE='N'.
-! KNOWN FAILING (Phase L2): same crash signature as test_dgeevx —
-! aborts during the dgeevx invocation. See tests/lapack/TODO.md.
 program test_zgeevx
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize

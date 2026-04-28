@@ -1,5 +1,4 @@
 ! zggevx: complex generalized eig with options. BALANC='N', JOBV*='N', SENSE='N'.
-! KNOWN FAILING (Phase L3): same SIGABRT pattern as L2 zgeevx.
 program test_zggevx
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize

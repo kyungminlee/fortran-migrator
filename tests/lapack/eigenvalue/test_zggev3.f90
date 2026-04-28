@@ -1,5 +1,4 @@
 ! zggev3: complex blocked generalized eig. JOBVL/VR='N'.
-! KNOWN FAILING (Phase L3): same SIGABRT pattern as test_dggev3.
 program test_zggev3
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize

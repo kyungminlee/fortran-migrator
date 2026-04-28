@@ -1,6 +1,5 @@
 ! dggevx: generalized eig with optional balancing/condition.
 ! BALANC='N', JOBVL/VR='N', SENSE='N'.
-! KNOWN FAILING (Phase L3): same SIGABRT pattern as L2 dgeevx.
 program test_dggevx
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize

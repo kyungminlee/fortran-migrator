@@ -1,10 +1,5 @@
 ! dgeevx: non-symmetric eig with optional balancing/condition.
 ! BALANC='N', JOBVL='N', JOBVR='N', SENSE='N' — eigenvalues only.
-! KNOWN FAILING (Phase L2): aborts with `free(): invalid pointer`
-! immediately on first invocation. Workspace sizes and IWORK length
-! follow the LAPACK manual (IWORK not referenced when SENSE='N',
-! LDVL/LDVR=1 when JOBVL/JOBVR='N'); root cause not yet diagnosed.
-! See tests/lapack/TODO.md.
 program test_dgeevx
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize
