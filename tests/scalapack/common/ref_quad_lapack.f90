@@ -119,6 +119,34 @@ module ref_quad_lapack
             integer,     intent(out)   :: info
         end subroutine zpttrs
 
+        subroutine dgecon(norm, n, A, lda, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: norm
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(in)    :: A(lda,*), anorm
+            real(ep),  intent(out)   :: rcond
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgecon
+
+        subroutine dgeequ(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda
+            real(ep), intent(in)    :: A(lda,*)
+            real(ep), intent(out)   :: R(*), C(*), rowcnd, colcnd, amax
+            integer,  intent(out)   :: info
+        end subroutine dgeequ
+
+        subroutine dpocon(uplo, n, A, lda, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(in)    :: A(lda,*), anorm
+            real(ep),  intent(out)   :: rcond
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dpocon
+
         ! ── Linear solve — complex ───────────────────────────────────
         subroutine zgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
             import :: ep

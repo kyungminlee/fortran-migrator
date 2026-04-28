@@ -78,6 +78,21 @@ issue is fixed outside `tests/scalapack/`.
   (wrapper `target_pzhetrd` is already in the template) when the
   underlying `pxhetrd` Householder path is fixed upstream.
 
+## pdgecon / pdpocon (condition-number estimators)
+
+- **Symptom**: `target_pdgecon` / `target_pdpocon` wrappers run cleanly
+  but a straight `rel_err_scalar(rcond_scalapack, rcond_lapack)`
+  comparison drifts to 50-200% disagreement, scaling roughly with n.
+- **Diagnosis**: ScaLAPACK's `PDLACON` and LAPACK's `DLACON` are
+  iterative 1-norm estimators (Hager-Higham). Same input matrix,
+  different parallel ordering / starting vectors → different estimates.
+  This is algorithmic non-determinism, not a precision bug, so a
+  `target_eps`-driven tolerance does not apply.
+- **Action**: A meaningful test would compute true `kappa_1(A)` from a
+  quad SVD of A on rank 0, then verify the documented LACON guarantee
+  `kappa_true / 3 <= kappa_est <= kappa_true`. Deferred until that
+  helper exists; the wrappers remain exposed.
+
 ## pxheev (complex Hermitian eigensolver, JOBZ='N' or 'V')
 
 - **Symptom**: A test driver of the same shape as `test_pdsyev.f90`,

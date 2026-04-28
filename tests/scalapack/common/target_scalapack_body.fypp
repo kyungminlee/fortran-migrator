@@ -58,6 +58,7 @@ module target_scalapack
     public :: target_pdgbtrf, target_pdgbtrs, target_pzgbtrf, target_pzgbtrs
     public :: target_pdpbsv, target_pzpbsv
     public :: target_pdpbtrf, target_pdpbtrs, target_pzpbtrf, target_pzpbtrs
+    public :: target_pdgecon, target_pdgeequ, target_pdpocon
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -481,6 +482,40 @@ $:IMPORT_C()
             ${target_complex}$, intent(in)    :: A(*), af(*)
             ${target_complex}$, intent(inout) :: B(*)
             ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${R}$gecon(norm, n, A, ia, ja, desca, anorm, rcond, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)  :: norm
+            integer,   intent(in)  :: n, ia, ja, lwork, liwork
+            integer,   intent(in)  :: desca(9)
+            ${target_real}$, intent(in)  :: A(*), anorm
+            ${target_real}$, intent(out) :: rcond
+            ${target_real}$, intent(out) :: work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$geequ(m, n, A, ia, ja, desca, R, C, &
+                              rowcnd, colcnd, amax, info)
+$:IMPORT_R()
+            integer,   intent(in)  :: m, n, ia, ja
+            integer,   intent(in)  :: desca(9)
+            ${target_real}$, intent(in)  :: A(*)
+            ${target_real}$, intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$pocon(uplo, n, A, ia, ja, desca, anorm, rcond, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, ia, ja, lwork, liwork
+            integer,   intent(in)  :: desca(9)
+            ${target_real}$, intent(in)  :: A(*), anorm
+            ${target_real}$, intent(out) :: rcond
+            ${target_real}$, intent(out) :: work(*)
+            integer,   intent(out) :: iwork(*), info
         end subroutine
 
         subroutine ${R}$geqrf(m, n, A, ia, ja, desca, tau, work, lwork, info)
@@ -2113,6 +2148,90 @@ contains
             call ${C}$pbtrs(uplo, n, bw, nrhs, At, ja, desca, &
                              Bt, ib, descb, aft, laf, work_t, lwt, info)
             B(1:ldb * nrhs) = t2q_c(Bt)
+        end if
+    end subroutine
+
+    subroutine target_pdgecon(norm, n, A, ia, ja, desca, anorm, rcond, &
+                              work, lwork, iwork, liwork, info)
+        character, intent(in)    :: norm
+        integer,   intent(in)    :: n, ia, ja, lwork, liwork
+        integer,   intent(in)    :: desca(9)
+        real(ep),  intent(in)    :: A(*), anorm
+        real(ep),  intent(out)   :: rcond
+        real(ep),  intent(out)   :: work(*)
+        integer,   intent(out)   :: iwork(*), info
+        integer :: na, lwt
+        ${target_real}$, allocatable :: At(:), work_t(:)
+        ${target_real}$ :: anorm_t, rcond_t
+        na = nloc(desca)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), work_t(1))
+            anorm_t = q2t_r(anorm)
+            call ${R}$gecon(norm, n, At, ia, ja, desca, anorm_t, rcond_t, &
+                             work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+            rcond = t2q_r(rcond_t)
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), work_t(lwt))
+            At = q2t_r(A(1:na))
+            anorm_t = q2t_r(anorm)
+            call ${R}$gecon(norm, n, At, ia, ja, desca, anorm_t, rcond_t, &
+                             work_t, lwt, iwork, liwork, info)
+            rcond = t2q_r(rcond_t)
+        end if
+    end subroutine
+
+    subroutine target_pdgeequ(m, n, A, ia, ja, desca, R, C, &
+                              rowcnd, colcnd, amax, info)
+        integer,   intent(in)    :: m, n, ia, ja
+        integer,   intent(in)    :: desca(9)
+        real(ep),  intent(in)    :: A(*)
+        real(ep),  intent(out)   :: R(*), C(*), rowcnd, colcnd, amax
+        integer,   intent(out)   :: info
+        integer :: na, nr, nc
+        ${target_real}$, allocatable :: At(:), Rt(:), Ct(:)
+        ${target_real}$ :: rowcnd_t, colcnd_t, amax_t
+        na = nloc(desca)
+        nr = max(1, locrows(desca))
+        nc = max(1, loccols(desca))
+        allocate(At(na), Rt(nr), Ct(nc))
+        At = q2t_r(A(1:na))
+        call ${R}$geequ(m, n, At, ia, ja, desca, Rt, Ct, &
+                         rowcnd_t, colcnd_t, amax_t, info)
+        R(1:nr) = t2q_r(Rt); C(1:nc) = t2q_r(Ct)
+        rowcnd = t2q_r(rowcnd_t); colcnd = t2q_r(colcnd_t)
+        amax = t2q_r(amax_t)
+    end subroutine
+
+    subroutine target_pdpocon(uplo, n, A, ia, ja, desca, anorm, rcond, &
+                              work, lwork, iwork, liwork, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, ia, ja, lwork, liwork
+        integer,   intent(in)    :: desca(9)
+        real(ep),  intent(in)    :: A(*), anorm
+        real(ep),  intent(out)   :: rcond
+        real(ep),  intent(out)   :: work(*)
+        integer,   intent(out)   :: iwork(*), info
+        integer :: na, lwt
+        ${target_real}$, allocatable :: At(:), work_t(:)
+        ${target_real}$ :: anorm_t, rcond_t
+        na = nloc(desca)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), work_t(1))
+            anorm_t = q2t_r(anorm)
+            call ${R}$pocon(uplo, n, At, ia, ja, desca, anorm_t, rcond_t, &
+                             work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+            rcond = t2q_r(rcond_t)
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), work_t(lwt))
+            At = q2t_r(A(1:na))
+            anorm_t = q2t_r(anorm)
+            call ${R}$pocon(uplo, n, At, ia, ja, desca, anorm_t, rcond_t, &
+                             work_t, lwt, iwork, liwork, info)
+            rcond = t2q_r(rcond_t)
         end if
     end subroutine
 
