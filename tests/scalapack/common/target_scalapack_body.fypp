@@ -52,6 +52,8 @@ module target_scalapack
     public :: target_pddtsv, target_pdptsv, target_pzdtsv, target_pzptsv
     public :: target_pddttrf, target_pddttrs, target_pzdttrf, target_pzdttrs
     public :: target_pdpttrf, target_pdpttrs, target_pzpttrf, target_pzpttrs
+    public :: target_pddbsv, target_pzdbsv
+    public :: target_pddbtrf, target_pddbtrs, target_pzdbtrf, target_pzdbtrs
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -271,6 +273,70 @@ $:IMPORT_RC()
             integer, intent(out)   :: info
             ${target_real}$,    intent(in)    :: d(*)
             ${target_complex}$, intent(in)    :: e(*), af(*)
+            ${target_complex}$, intent(inout) :: B(*)
+            ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${R}$dbsv(n, bwl, bwu, nrhs, A, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: n, bwl, bwu, nrhs, ja, ib, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*), B(*)
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$dbsv(n, bwl, bwu, nrhs, A, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: n, bwl, bwu, nrhs, ja, ib, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*), B(*)
+            ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${R}$dbtrf(n, bwl, bwu, A, ja, desca, &
+                              af, laf, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: n, bwl, bwu, ja, laf, lwork
+            integer, intent(in)    :: desca(*)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: af(*), work(*)
+        end subroutine
+
+        subroutine ${C}$dbtrf(n, bwl, bwu, A, ja, desca, &
+                              af, laf, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: n, bwl, bwu, ja, laf, lwork
+            integer, intent(in)    :: desca(*)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_complex}$, intent(out)   :: af(*), work(*)
+        end subroutine
+
+        subroutine ${R}$dbtrs(trans, n, bwl, bwu, nrhs, A, ja, desca, &
+                              B, ib, descb, af, laf, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)  :: trans
+            integer, intent(in)    :: n, bwl, bwu, nrhs, ja, ib, laf, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(in)    :: A(*), af(*)
+            ${target_real}$, intent(inout) :: B(*)
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$dbtrs(trans, n, bwl, bwu, nrhs, A, ja, desca, &
+                              B, ib, descb, af, laf, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in)  :: trans
+            integer, intent(in)    :: n, bwl, bwu, nrhs, ja, ib, laf, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(in)    :: A(*), af(*)
             ${target_complex}$, intent(inout) :: B(*)
             ${target_complex}$, intent(out)   :: work(*)
         end subroutine
@@ -1456,6 +1522,155 @@ contains
             dt = q2t_r(d(1:nv)); et = q2t_c(e(1:nv))
             aft = q2t_c(af(1:laf)); Bt = q2t_c(B(1:ldb * nrhs))
             call ${C}$pttrs(uplo, n, nrhs, dt, et, ja, desca, &
+                             Bt, ib, descb, aft, laf, work_t, lwt, info)
+            B(1:ldb * nrhs) = t2q_c(Bt)
+        end if
+    end subroutine
+
+    subroutine target_pddbsv(n, bwl, bwu, nrhs, A, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+        ! Diagonally-dominant banded solver (no pivot). A is stored
+        ! in 1D-distributed band format: LLD_A >= bwl+bwu+1, NB cols
+        ! per process.
+        integer,  intent(in)    :: n, bwl, bwu, nrhs, ja, ib, lwork
+        integer,  intent(in)    :: desca(*), descb(*)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*), B(*)
+        real(ep), intent(out)   :: work(*)
+        integer :: nb, lda, na, ldb, lwt
+        ${target_real}$, allocatable :: At(:), Bt(:), work_t(:)
+        nb = desca(4); lda = desca(6); na = lda * nb
+        ldb = descb(6)
+        lwt = max(1, lwork)
+        allocate(At(na), Bt(ldb * nrhs), work_t(lwt))
+        At = q2t_r(A(1:na)); Bt = q2t_r(B(1:ldb * nrhs))
+        call ${R}$dbsv(n, bwl, bwu, nrhs, At, ja, desca, &
+                        Bt, ib, descb, work_t, lwt, info)
+        A(1:na) = t2q_r(At); B(1:ldb * nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_pzdbsv(n, bwl, bwu, nrhs, A, ja, desca, &
+                             B, ib, descb, work, lwork, info)
+        integer,     intent(in)    :: n, bwl, bwu, nrhs, ja, ib, lwork
+        integer,     intent(in)    :: desca(*), descb(*)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*), B(*)
+        complex(ep), intent(out)   :: work(*)
+        integer :: nb, lda, na, ldb, lwt
+        ${target_complex}$, allocatable :: At(:), Bt(:), work_t(:)
+        nb = desca(4); lda = desca(6); na = lda * nb
+        ldb = descb(6)
+        lwt = max(1, lwork)
+        allocate(At(na), Bt(ldb * nrhs), work_t(lwt))
+        At = q2t_c(A(1:na)); Bt = q2t_c(B(1:ldb * nrhs))
+        call ${C}$dbsv(n, bwl, bwu, nrhs, At, ja, desca, &
+                        Bt, ib, descb, work_t, lwt, info)
+        A(1:na) = t2q_c(At); B(1:ldb * nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_pddbtrf(n, bwl, bwu, A, ja, desca, &
+                              af, laf, work, lwork, info)
+        integer,  intent(in)    :: n, bwl, bwu, ja, laf, lwork
+        integer,  intent(in)    :: desca(*)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*)
+        real(ep), intent(out)   :: af(*), work(*)
+        integer :: nb, lda, na, lwt
+        ${target_real}$, allocatable :: At(:), aft(:), work_t(:)
+        nb = desca(4); lda = desca(6); na = lda * nb
+        if (lwork == -1) then
+            allocate(At(max(1, na)), aft(max(1, laf)), work_t(1))
+            call ${R}$dbtrf(n, bwl, bwu, At, ja, desca, &
+                             aft, laf, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), aft(max(1, laf)), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$dbtrf(n, bwl, bwu, At, ja, desca, &
+                             aft, laf, work_t, lwt, info)
+            A(1:na) = t2q_r(At); af(1:laf) = t2q_r(aft)
+        end if
+    end subroutine
+
+    subroutine target_pzdbtrf(n, bwl, bwu, A, ja, desca, &
+                              af, laf, work, lwork, info)
+        integer,     intent(in)    :: n, bwl, bwu, ja, laf, lwork
+        integer,     intent(in)    :: desca(*)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        complex(ep), intent(out)   :: af(*), work(*)
+        integer :: nb, lda, na, lwt
+        ${target_complex}$, allocatable :: At(:), aft(:), work_t(:)
+        nb = desca(4); lda = desca(6); na = lda * nb
+        if (lwork == -1) then
+            allocate(At(max(1, na)), aft(max(1, laf)), work_t(1))
+            call ${C}$dbtrf(n, bwl, bwu, At, ja, desca, &
+                             aft, laf, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), aft(max(1, laf)), work_t(lwt))
+            At = q2t_c(A(1:na))
+            call ${C}$dbtrf(n, bwl, bwu, At, ja, desca, &
+                             aft, laf, work_t, lwt, info)
+            A(1:na) = t2q_c(At); af(1:laf) = t2q_c(aft)
+        end if
+    end subroutine
+
+    subroutine target_pddbtrs(trans, n, bwl, bwu, nrhs, A, ja, desca, &
+                              B, ib, descb, af, laf, work, lwork, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: n, bwl, bwu, nrhs, ja, ib, laf, lwork
+        integer,   intent(in)    :: desca(*), descb(*)
+        integer,   intent(out)   :: info
+        real(ep),  intent(in)    :: A(*), af(*)
+        real(ep),  intent(inout) :: B(*)
+        real(ep),  intent(out)   :: work(*)
+        integer :: nb, lda, na, ldb, lwt
+        ${target_real}$, allocatable :: At(:), aft(:), Bt(:), work_t(:)
+        nb = desca(4); lda = desca(6); na = lda * nb
+        ldb = descb(6)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), aft(max(1, laf)), Bt(1), work_t(1))
+            call ${R}$dbtrs(trans, n, bwl, bwu, nrhs, At, ja, desca, &
+                             Bt, ib, descb, aft, laf, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), aft(max(1, laf)), Bt(ldb * nrhs), work_t(lwt))
+            At = q2t_r(A(1:na)); aft = q2t_r(af(1:laf))
+            Bt = q2t_r(B(1:ldb * nrhs))
+            call ${R}$dbtrs(trans, n, bwl, bwu, nrhs, At, ja, desca, &
+                             Bt, ib, descb, aft, laf, work_t, lwt, info)
+            B(1:ldb * nrhs) = t2q_r(Bt)
+        end if
+    end subroutine
+
+    subroutine target_pzdbtrs(trans, n, bwl, bwu, nrhs, A, ja, desca, &
+                              B, ib, descb, af, laf, work, lwork, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: n, bwl, bwu, nrhs, ja, ib, laf, lwork
+        integer,     intent(in)    :: desca(*), descb(*)
+        integer,     intent(out)   :: info
+        complex(ep), intent(in)    :: A(*), af(*)
+        complex(ep), intent(inout) :: B(*)
+        complex(ep), intent(out)   :: work(*)
+        integer :: nb, lda, na, ldb, lwt
+        ${target_complex}$, allocatable :: At(:), aft(:), Bt(:), work_t(:)
+        nb = desca(4); lda = desca(6); na = lda * nb
+        ldb = descb(6)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), aft(max(1, laf)), Bt(1), work_t(1))
+            call ${C}$dbtrs(trans, n, bwl, bwu, nrhs, At, ja, desca, &
+                             Bt, ib, descb, aft, laf, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), aft(max(1, laf)), Bt(ldb * nrhs), work_t(lwt))
+            At = q2t_c(A(1:na)); aft = q2t_c(af(1:laf))
+            Bt = q2t_c(B(1:ldb * nrhs))
+            call ${C}$dbtrs(trans, n, bwl, bwu, nrhs, At, ja, desca, &
                              Bt, ib, descb, aft, laf, work_t, lwt, info)
             B(1:ldb * nrhs) = t2q_c(Bt)
         end if
