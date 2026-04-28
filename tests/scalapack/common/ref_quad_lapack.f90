@@ -137,6 +137,22 @@ module ref_quad_lapack
             integer,  intent(out)   :: info
         end subroutine dpoequ
 
+        subroutine zgeequ(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda
+            complex(ep), intent(in)    :: A(lda,*)
+            real(ep),    intent(out)   :: R(*), C(*), rowcnd, colcnd, amax
+            integer,     intent(out)   :: info
+        end subroutine zgeequ
+
+        subroutine zpoequ(n, A, lda, S, scond, amax, info)
+            import :: ep
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(in)    :: A(lda,*)
+            real(ep),    intent(out)   :: S(*), scond, amax
+            integer,     intent(out)   :: info
+        end subroutine zpoequ
+
         subroutine dgeequ(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
             import :: ep
             integer,  intent(in)    :: m, n, lda

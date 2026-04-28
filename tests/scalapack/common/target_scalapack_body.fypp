@@ -59,6 +59,7 @@ module target_scalapack
     public :: target_pdpbsv, target_pzpbsv
     public :: target_pdpbtrf, target_pdpbtrs, target_pzpbtrf, target_pzpbtrs
     public :: target_pdgecon, target_pdgeequ, target_pdpocon, target_pdpoequ
+    public :: target_pzgeequ, target_pzpoequ
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -536,6 +537,25 @@ $:IMPORT_R()
             integer,   intent(in)  :: desca(9)
             ${target_real}$, intent(in)  :: A(*)
             ${target_real}$, intent(out) :: sr(*), sc(*), scond, amax
+            integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$geequ(m, n, A, ia, ja, desca, R, C, &
+                              rowcnd, colcnd, amax, info)
+$:IMPORT_RC()
+            integer,   intent(in)  :: m, n, ia, ja
+            integer,   intent(in)  :: desca(9)
+            ${target_complex}$, intent(in)  :: A(*)
+            ${target_real}$,    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$poequ(n, A, ia, ja, desca, sr, sc, scond, amax, info)
+$:IMPORT_RC()
+            integer,   intent(in)  :: n, ia, ja
+            integer,   intent(in)  :: desca(9)
+            ${target_complex}$, intent(in)  :: A(*)
+            ${target_real}$,    intent(out) :: sr(*), sc(*), scond, amax
             integer,   intent(out) :: info
         end subroutine
 
@@ -2342,6 +2362,50 @@ contains
         allocate(At(na), srt(nr), sct(nc))
         At = q2t_r(A(1:na))
         call ${R}$poequ(n, At, ia, ja, desca, srt, sct, &
+                         scond_t, amax_t, info)
+        sr(1:nr) = t2q_r(srt); sc(1:nc) = t2q_r(sct)
+        scond = t2q_r(scond_t); amax = t2q_r(amax_t)
+    end subroutine
+
+    subroutine target_pzgeequ(m, n, A, ia, ja, desca, R, C, &
+                              rowcnd, colcnd, amax, info)
+        integer,     intent(in)    :: m, n, ia, ja
+        integer,     intent(in)    :: desca(9)
+        complex(ep), intent(in)    :: A(*)
+        real(ep),    intent(out)   :: R(*), C(*), rowcnd, colcnd, amax
+        integer,     intent(out)   :: info
+        integer :: na, nr, nc
+        ${target_complex}$, allocatable :: At(:)
+        ${target_real}$,    allocatable :: Rt(:), Ct(:)
+        ${target_real}$ :: rowcnd_t, colcnd_t, amax_t
+        na = nloc(desca)
+        nr = max(1, locrows(desca))
+        nc = max(1, loccols(desca))
+        allocate(At(na), Rt(nr), Ct(nc))
+        At = q2t_c(A(1:na))
+        call ${C}$geequ(m, n, At, ia, ja, desca, Rt, Ct, &
+                         rowcnd_t, colcnd_t, amax_t, info)
+        R(1:nr) = t2q_r(Rt); C(1:nc) = t2q_r(Ct)
+        rowcnd = t2q_r(rowcnd_t); colcnd = t2q_r(colcnd_t)
+        amax = t2q_r(amax_t)
+    end subroutine
+
+    subroutine target_pzpoequ(n, A, ia, ja, desca, sr, sc, scond, amax, info)
+        integer,     intent(in)    :: n, ia, ja
+        integer,     intent(in)    :: desca(9)
+        complex(ep), intent(in)    :: A(*)
+        real(ep),    intent(out)   :: sr(*), sc(*), scond, amax
+        integer,     intent(out)   :: info
+        integer :: na, nr, nc
+        ${target_complex}$, allocatable :: At(:)
+        ${target_real}$,    allocatable :: srt(:), sct(:)
+        ${target_real}$ :: scond_t, amax_t
+        na = nloc(desca)
+        nr = max(1, locrows(desca))
+        nc = max(1, loccols(desca))
+        allocate(At(na), srt(nr), sct(nc))
+        At = q2t_c(A(1:na))
+        call ${C}$poequ(n, At, ia, ja, desca, srt, sct, &
                          scond_t, amax_t, info)
         sr(1:nr) = t2q_r(srt); sc(1:nc) = t2q_r(sct)
         scond = t2q_r(scond_t); amax = t2q_r(amax_t)
