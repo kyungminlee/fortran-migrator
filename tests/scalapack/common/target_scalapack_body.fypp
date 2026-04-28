@@ -50,6 +50,7 @@ module target_scalapack
     public :: target_pdgesv, target_pdgetrf, target_pdgetrs
     public :: target_pdpotrf, target_pdpotrs
     public :: target_pddtsv, target_pdptsv, target_pzdtsv
+    public :: target_pddttrf, target_pddttrs, target_pzdttrf, target_pzdttrs
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -159,6 +160,50 @@ $:IMPORT_C()
             integer, intent(in)    :: desca(*), descb(*)
             integer, intent(out)   :: info
             ${target_complex}$, intent(inout) :: dl(*), d(*), du(*), B(*)
+            ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${R}$dttrf(n, dl, d, du, ja, desca, &
+                              af, laf, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: n, ja, laf, lwork
+            integer, intent(in)    :: desca(*)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: dl(*), d(*), du(*)
+            ${target_real}$, intent(out)   :: af(*), work(*)
+        end subroutine
+
+        subroutine ${C}$dttrf(n, dl, d, du, ja, desca, &
+                              af, laf, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: n, ja, laf, lwork
+            integer, intent(in)    :: desca(*)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: dl(*), d(*), du(*)
+            ${target_complex}$, intent(out)   :: af(*), work(*)
+        end subroutine
+
+        subroutine ${R}$dttrs(trans, n, nrhs, dl, d, du, ja, desca, &
+                              B, ib, descb, af, laf, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)  :: trans
+            integer, intent(in)    :: n, nrhs, ja, ib, laf, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(in)    :: dl(*), d(*), du(*), af(*)
+            ${target_real}$, intent(inout) :: B(*)
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$dttrs(trans, n, nrhs, dl, d, du, ja, desca, &
+                              B, ib, descb, af, laf, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in)  :: trans
+            integer, intent(in)    :: n, nrhs, ja, ib, laf, lwork
+            integer, intent(in)    :: desca(*), descb(*)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(in)    :: dl(*), d(*), du(*), af(*)
+            ${target_complex}$, intent(inout) :: B(*)
             ${target_complex}$, intent(out)   :: work(*)
         end subroutine
 
@@ -1109,6 +1154,116 @@ contains
                         Bt, ib, descb, work_t, lwt, info)
         dl(1:nv) = t2q_c(dlt); d(1:nv) = t2q_c(dt); du(1:nv) = t2q_c(dut)
         B(1:ldb * nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_pddttrf(n, dl, d, du, ja, desca, &
+                              af, laf, work, lwork, info)
+        integer,  intent(in)    :: n, ja, laf, lwork
+        integer,  intent(in)    :: desca(*)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: dl(*), d(*), du(*)
+        real(ep), intent(out)   :: af(*), work(*)
+        integer :: nv, nb, lwt
+        ${target_real}$, allocatable :: dlt(:), dt(:), dut(:), aft(:), work_t(:)
+        nb = desca(4); nv = nb
+        if (lwork == -1) then
+            allocate(dlt(nv), dt(nv), dut(nv), aft(max(1, laf)), work_t(1))
+            call ${R}$dttrf(n, dlt, dt, dut, ja, desca, &
+                             aft, laf, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(dlt(nv), dt(nv), dut(nv), aft(max(1, laf)), work_t(lwt))
+            dlt = q2t_r(dl(1:nv)); dt = q2t_r(d(1:nv)); dut = q2t_r(du(1:nv))
+            call ${R}$dttrf(n, dlt, dt, dut, ja, desca, &
+                             aft, laf, work_t, lwt, info)
+            dl(1:nv) = t2q_r(dlt); d(1:nv) = t2q_r(dt); du(1:nv) = t2q_r(dut)
+            af(1:laf) = t2q_r(aft)
+        end if
+    end subroutine
+
+    subroutine target_pzdttrf(n, dl, d, du, ja, desca, &
+                              af, laf, work, lwork, info)
+        integer,     intent(in)    :: n, ja, laf, lwork
+        integer,     intent(in)    :: desca(*)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: dl(*), d(*), du(*)
+        complex(ep), intent(out)   :: af(*), work(*)
+        integer :: nv, nb, lwt
+        ${target_complex}$, allocatable :: dlt(:), dt(:), dut(:), aft(:), work_t(:)
+        nb = desca(4); nv = nb
+        if (lwork == -1) then
+            allocate(dlt(nv), dt(nv), dut(nv), aft(max(1, laf)), work_t(1))
+            call ${C}$dttrf(n, dlt, dt, dut, ja, desca, &
+                             aft, laf, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(dlt(nv), dt(nv), dut(nv), aft(max(1, laf)), work_t(lwt))
+            dlt = q2t_c(dl(1:nv)); dt = q2t_c(d(1:nv)); dut = q2t_c(du(1:nv))
+            call ${C}$dttrf(n, dlt, dt, dut, ja, desca, &
+                             aft, laf, work_t, lwt, info)
+            dl(1:nv) = t2q_c(dlt); d(1:nv) = t2q_c(dt); du(1:nv) = t2q_c(dut)
+            af(1:laf) = t2q_c(aft)
+        end if
+    end subroutine
+
+    subroutine target_pddttrs(trans, n, nrhs, dl, d, du, ja, desca, &
+                              B, ib, descb, af, laf, work, lwork, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: n, nrhs, ja, ib, laf, lwork
+        integer,   intent(in)    :: desca(*), descb(*)
+        integer,   intent(out)   :: info
+        real(ep),  intent(in)    :: dl(*), d(*), du(*), af(*)
+        real(ep),  intent(inout) :: B(*)
+        real(ep),  intent(out)   :: work(*)
+        integer :: nv, nb, lwt, ldb
+        ${target_real}$, allocatable :: dlt(:), dt(:), dut(:), aft(:), Bt(:), work_t(:)
+        nb = desca(4); nv = nb; ldb = descb(6)
+        if (lwork == -1) then
+            allocate(dlt(nv), dt(nv), dut(nv), aft(max(1, laf)), Bt(1), work_t(1))
+            call ${R}$dttrs(trans, n, nrhs, dlt, dt, dut, ja, desca, &
+                             Bt, ib, descb, aft, laf, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(dlt(nv), dt(nv), dut(nv), aft(max(1, laf)), &
+                     Bt(ldb * nrhs), work_t(lwt))
+            dlt = q2t_r(dl(1:nv)); dt = q2t_r(d(1:nv)); dut = q2t_r(du(1:nv))
+            aft = q2t_r(af(1:laf)); Bt = q2t_r(B(1:ldb * nrhs))
+            call ${R}$dttrs(trans, n, nrhs, dlt, dt, dut, ja, desca, &
+                             Bt, ib, descb, aft, laf, work_t, lwt, info)
+            B(1:ldb * nrhs) = t2q_r(Bt)
+        end if
+    end subroutine
+
+    subroutine target_pzdttrs(trans, n, nrhs, dl, d, du, ja, desca, &
+                              B, ib, descb, af, laf, work, lwork, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: n, nrhs, ja, ib, laf, lwork
+        integer,     intent(in)    :: desca(*), descb(*)
+        integer,     intent(out)   :: info
+        complex(ep), intent(in)    :: dl(*), d(*), du(*), af(*)
+        complex(ep), intent(inout) :: B(*)
+        complex(ep), intent(out)   :: work(*)
+        integer :: nv, nb, lwt, ldb
+        ${target_complex}$, allocatable :: dlt(:), dt(:), dut(:), aft(:), Bt(:), work_t(:)
+        nb = desca(4); nv = nb; ldb = descb(6)
+        if (lwork == -1) then
+            allocate(dlt(nv), dt(nv), dut(nv), aft(max(1, laf)), Bt(1), work_t(1))
+            call ${C}$dttrs(trans, n, nrhs, dlt, dt, dut, ja, desca, &
+                             Bt, ib, descb, aft, laf, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(dlt(nv), dt(nv), dut(nv), aft(max(1, laf)), &
+                     Bt(ldb * nrhs), work_t(lwt))
+            dlt = q2t_c(dl(1:nv)); dt = q2t_c(d(1:nv)); dut = q2t_c(du(1:nv))
+            aft = q2t_c(af(1:laf)); Bt = q2t_c(B(1:ldb * nrhs))
+            call ${C}$dttrs(trans, n, nrhs, dlt, dt, dut, ja, desca, &
+                             Bt, ib, descb, aft, laf, work_t, lwt, info)
+            B(1:ldb * nrhs) = t2q_c(Bt)
+        end if
     end subroutine
 
     subroutine target_pdgeqr2(m, n, A, ia, ja, desca, tau, work, lwork, info)
