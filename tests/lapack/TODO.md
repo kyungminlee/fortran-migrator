@@ -52,17 +52,6 @@ Remaining phases per `~/.claude/plans/start-a-project-to-stateless-bumblebee.md`
   L22 Modern dynamic mode decomposition (gedmd/gedmdq)
   L23 Audit / consolidation
 
-## Phase L2 — `test_ztrsen` n=24 case still failing
-
-`test_ztrsen` n=24 reports `max_rel_err ≈ 0.85` while n=12 and n=32
-pass with `err = 0`. Almost certainly a comparison-side bug — sorting
-moduli can swap selected vs unselected eigenvalues with equal
-magnitudes — but the asymmetry vs n=12/32 is unusual. Recheck with
-explicit per-position comparison after a stable secondary sort.
-
-Test is left in the build per the failing-test-stays-visible
-convention. Fix in a follow-up phase.
-
 ## Older blocked-T routines that need a wider scope to test
 
 The following routines were tested in Phase 35 / Phase 36, but only

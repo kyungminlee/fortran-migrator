@@ -1,9 +1,4 @@
 ! ztrsen: complex Schur reordering with SELECT. JOB='N', COMPQ='N'.
-! KNOWN FAILING (Phase L2): the n=24 case reports
-! max_rel_err ≈ 0.85 while n=12 and n=32 pass exactly. Likely a
-! reordering-order mismatch in the comparison logic (the sorted-modulus
-! check can collide when multiple eigenvalues have similar magnitudes
-! at the unselected/selected boundary). See tests/lapack/TODO.md.
 program test_ztrsen
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize

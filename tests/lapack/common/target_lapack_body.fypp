@@ -10868,10 +10868,11 @@ $:CPACK_INV('zsptri', C + 'sptri')
         ${target_real}$, allocatable :: Tt(:,:), Qt(:,:), wrt(:), wit(:), work(:)
         integer,   allocatable :: iwork(:)
         ${target_real}$ :: wopt(1), st, sept
-        integer :: lwork, liwork, iwopt(1)
-        allocate(Tt(ldt, n), Qt(ldq, n), wrt(n), wit(n))
+        integer :: lwork, liwork, iwopt(1), nq
+        nq = merge(n, 1, compq /= 'N' .and. compq /= 'n')
+        allocate(Tt(ldt, n), Qt(ldq, nq), wrt(n), wit(n))
         Tt = q2t_r(T(1:ldt, 1:n))
-        Qt = q2t_r(Q(1:ldq, 1:n))
+        if (compq /= 'N' .and. compq /= 'n') Qt = q2t_r(Q(1:ldq, 1:n))
         call ${R}$trsen(job, compq, select, n, Tt, ldt, Qt, ldq, &
                         wrt, wit, m, st, sept, wopt, -1, iwopt, -1, info)
         lwork  = max(1, int(t2q_r(wopt(1))))
@@ -10880,7 +10881,7 @@ $:CPACK_INV('zsptri', C + 'sptri')
         call ${R}$trsen(job, compq, select, n, Tt, ldt, Qt, ldq, &
                         wrt, wit, m, st, sept, work, lwork, iwork, liwork, info)
         T(1:ldt, 1:n) = t2q_r(Tt)
-        Q(1:ldq, 1:n) = t2q_r(Qt)
+        if (compq /= 'N' .and. compq /= 'n') Q(1:ldq, 1:n) = t2q_r(Qt)
         wr(1:n) = t2q_r(wrt)
         wi(1:n) = t2q_r(wit)
         s   = t2q_r(st)
@@ -10899,10 +10900,11 @@ $:CPACK_INV('zsptri', C + 'sptri')
         ${target_complex}$, allocatable :: Tt(:,:), Qt(:,:), wt(:), work(:)
         ${target_complex}$ :: wopt(1)
         ${target_real}$ :: st, sept
-        integer :: lwork
-        allocate(Tt(ldt, n), Qt(ldq, n), wt(n))
+        integer :: lwork, nq
+        nq = merge(n, 1, compq /= 'N' .and. compq /= 'n')
+        allocate(Tt(ldt, n), Qt(ldq, nq), wt(n))
         Tt = q2t_c(T(1:ldt, 1:n))
-        Qt = q2t_c(Q(1:ldq, 1:n))
+        if (compq /= 'N' .and. compq /= 'n') Qt = q2t_c(Q(1:ldq, 1:n))
         call ${C}$trsen(job, compq, select, n, Tt, ldt, Qt, ldq, &
                         wt, m, st, sept, wopt, -1, info)
         lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
@@ -10910,7 +10912,7 @@ $:CPACK_INV('zsptri', C + 'sptri')
         call ${C}$trsen(job, compq, select, n, Tt, ldt, Qt, ldq, &
                         wt, m, st, sept, work, lwork, info)
         T(1:ldt, 1:n) = t2q_c(Tt)
-        Q(1:ldq, 1:n) = t2q_c(Qt)
+        if (compq /= 'N' .and. compq /= 'n') Q(1:ldq, 1:n) = t2q_c(Qt)
         w(1:n) = t2q_c(wt)
         s   = t2q_r(st)
         sep = t2q_r(sept)
