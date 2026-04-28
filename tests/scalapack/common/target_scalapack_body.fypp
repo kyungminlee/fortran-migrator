@@ -60,6 +60,7 @@ module target_scalapack
     public :: target_pdpbtrf, target_pdpbtrs, target_pzpbtrf, target_pzpbtrs
     public :: target_pdgecon, target_pdgeequ, target_pdpocon, target_pdpoequ
     public :: target_pzgeequ, target_pzpoequ
+    public :: target_pdgerfs
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -557,6 +558,21 @@ $:IMPORT_RC()
             ${target_complex}$, intent(in)  :: A(*)
             ${target_real}$,    intent(out) :: sr(*), sc(*), scond, amax
             integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$gerfs(trans, n, nrhs, A, ia, ja, desca, AF, iaf, jaf, &
+                              descaf, ipiv, B, ib, jb, descb, X, ix, jx, descx, &
+                              ferr, berr, work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in) :: trans
+            integer,   intent(in) :: n, nrhs, ia, ja, iaf, jaf, ib, jb, ix, jx
+            integer,   intent(in) :: lwork, liwork
+            integer,   intent(in) :: desca(9), descaf(9), descb(9), descx(9)
+            integer,   intent(in) :: ipiv(*)
+            ${target_real}$, intent(in)    :: A(*), AF(*), B(*)
+            ${target_real}$, intent(inout) :: X(*)
+            ${target_real}$, intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out) :: iwork(*), info
         end subroutine
 
         subroutine ${R}$pocon(uplo, n, A, ia, ja, desca, anorm, rcond, &
@@ -2388,6 +2404,44 @@ contains
         R(1:nr) = t2q_r(Rt); C(1:nc) = t2q_r(Ct)
         rowcnd = t2q_r(rowcnd_t); colcnd = t2q_r(colcnd_t)
         amax = t2q_r(amax_t)
+    end subroutine
+
+    subroutine target_pdgerfs(trans, n, nrhs, A, ia, ja, desca, AF, iaf, jaf, &
+                               descaf, ipiv, B, ib, jb, descb, X, ix, jx, descx, &
+                               ferr, berr, work, lwork, iwork, liwork, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: n, nrhs, ia, ja, iaf, jaf, ib, jb, ix, jx
+        integer,   intent(in)    :: lwork, liwork
+        integer,   intent(in)    :: desca(9), descaf(9), descb(9), descx(9)
+        integer,   intent(in)    :: ipiv(*)
+        real(ep),  intent(in)    :: A(*), AF(*), B(*)
+        real(ep),  intent(inout) :: X(*)
+        real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+        integer,   intent(out)   :: iwork(*), info
+        integer :: na, naf, nb, nx, lwt
+        ${target_real}$, allocatable :: At(:), AFt(:), Bt(:), Xt(:), &
+                                          ferrt(:), berrt(:), work_t(:)
+        na = nloc(desca); naf = nloc(descaf); nb = nloc(descb); nx = nloc(descx)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), AFt(max(1,naf)), Bt(max(1,nb)), &
+                     Xt(max(1,nx)), ferrt(max(1,nrhs)), berrt(max(1,nrhs)), &
+                     work_t(1))
+            call ${R}$gerfs(trans, n, nrhs, At, ia, ja, desca, AFt, iaf, jaf, &
+                             descaf, ipiv, Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferrt, berrt, work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), AFt(naf), Bt(nb), Xt(nx), &
+                     ferrt(nrhs), berrt(nrhs), work_t(lwt))
+            At = q2t_r(A(1:na)); AFt = q2t_r(AF(1:naf))
+            Bt = q2t_r(B(1:nb)); Xt = q2t_r(X(1:nx))
+            call ${R}$gerfs(trans, n, nrhs, At, ia, ja, desca, AFt, iaf, jaf, &
+                             descaf, ipiv, Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferrt, berrt, work_t, lwt, iwork, liwork, info)
+            X(1:nx) = t2q_r(Xt)
+            ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+        end if
     end subroutine
 
     subroutine target_pzpoequ(n, A, ia, ja, desca, sr, sc, scond, amax, info)
