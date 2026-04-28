@@ -6,32 +6,19 @@
   `target_dzvasum` and tested. There is no analogous `xqvasum` in the
   source set, so no symmetric test was written.
 
-## Multifloats `dzvasum` — fixed (root cause: complex-prefix collision)
+## Multifloats `dzvasum` SEGFAULT
 
-The SEGV was a link-time symbol collision driven by multifloats's
-choice of `V` as the complex prefix. PTZBLAS uses literal `V` as a
-"vector" indicator in routine names (`dvasum`, `dvvdot`, `dzvasum`,
-…) and BLAS uses `dz`/`sc` as the mixed real-from-complex prefix.
-With C: V the slot-driven mechanical rename produced
-
-  D[V]ASUM (real, slot R + literal V)  → T + V + ASUM = TVASUM
-  D[Z]ASUM (mixed, slot R + slot C)    → T + V + ASUM = TVASUM
-
-— two distinct upstream families both rename to TVASUM, and the
-linker picks one nondeterministically. Calling the wrong TVASUM
-(real-only `SUBROUTINE TVASUM(N, ASUM, X, INCX)` instead of mixed
-`FUNCTION TVASUM(N, ZX, INCX)`) trampled stack memory and crashed.
-
-**Fix**: switched the multifloats target's complex prefix from V to
-W (W is unused as a literal anywhere in the BLAS / LAPACK /
-ScaLAPACK / MUMPS source corpus). After re-staging multifloats,
-all migrated complex-precision symbols use the `w*` prefix and
-TVASUM resolves uniquely to the PTZBLAS real-only routine.
-
-The migrator's `prefix_classifier.build_rename_map` now also raises
-`RuntimeError` on any cross-family many-to-one rename collision, so
-a bad prefix choice is surfaced at staging time rather than as a
-runtime SEGV.
+- **Symptom**: `test_dzvasum` segfaults on the multifloats target.
+  All 27 other ptzblas tests pass on multifloats. Fixing the
+  accumulator-wrapper init for the vvdot pair resolved the kind10
+  NaN issue but not the multifloats SEGV here.
+- **Diagnosis**: The migrated `tvvasum` calls `TVASUM(N, X, INCX)`
+  which assigns through to `ASUM`. Likely a bug in the migrated
+  TVASUM body or in how `q2t_c(complex(16) → cmplx64x2)` constructs
+  the input vector — either way the crash is downstream of the
+  wrapper, in the migrated kernel.
+- **Action**: Defer; gate by skipping `test_dzvasum` on multifloats
+  until the migrated tvvasum / q2t_c path is debugged.
 
 ## Potential migrator follow-ups (NOT in this subtree)
 

@@ -4,23 +4,20 @@ This file tracks items that were *deferred* during the test-coverage
 expansion because they live outside `tests/pblas/`. Each entry names
 the file/concern and what should change after the test PR lands.
 
-## Multifloats `pdzasum` — fixed (root cause: complex-prefix collision)
+## Multifloats `pdzasum` SEGFAULT (mixed real-from-complex |x|-sum)
 
-Symptom: `test_pdzasum` segfaulted on multifloats; kind10/kind16
-were unaffected.
-
-Root cause: see `tests/ptzblas/TODO.md`. The migrator's slot-driven
-rename mapped two distinct upstream families to the same target
-symbol `TVASUM` because multifloats's complex prefix `V` collided
-with the literal `V` in PTZBLAS routine names (`vasum`, `vvdot`,
-…). At link time the wrong TVASUM was picked, calling-convention
-mismatched, and called `tvvasum` SEGV'd.
-
-Fix: switched multifloats's complex prefix from V to W in
-`targets/multifloats.yaml`. The migrator's prefix classifier now
-also raises a hard error on any future cross-family rename
-collision, so the same class of bug can't sneak back in without a
-loud failure at staging time.
+- **Symptom**: `test_pdzasum` segfaults on the multifloats target.
+  All 54 other PBLAS tests pass on multifloats. kind10 and kind16
+  pass; the issue is multifloats-specific.
+- **Diagnosis**: The wrapper's accumulator init was hardened
+  (zero-init the target-type asum, declare interface as
+  intent(inout)) which fixed the analogous kind10 NaN elsewhere;
+  the multifloats SEGV persists, so the crash is in the migrated
+  kernel itself, not the wrapper. Same pattern as the
+  `dzvasum` / `tvvasum` SEGV documented in
+  `tests/ptzblas/TODO.md`.
+- **Action**: Defer; gate by skipping `test_pdzasum` on multifloats
+  until the migrated `tvasum` / mixed-prefix code path is debugged.
 
 ## doc/PROCEDURES.md — coverage column
 
