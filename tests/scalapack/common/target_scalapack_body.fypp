@@ -65,6 +65,7 @@ module target_scalapack
     public :: target_pdgeqpf, target_pzgeqpf
     public :: target_pdgebal
     public :: target_pdtrtrs, target_pztrtrs
+    public :: target_pdrscl
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -676,6 +677,15 @@ $:IMPORT_C()
             ${target_complex}$, intent(inout) :: B(*)
             integer,   intent(out)   :: info
         end subroutine
+
+        subroutine ${R}$rscl(n, sa, sx, ix, jx, descx, incx)
+$:IMPORT_R()
+            integer, intent(in) :: n, ix, jx, incx
+            integer, intent(in) :: descx(9)
+            ${target_real}$, intent(in)    :: sa
+            ${target_real}$, intent(inout) :: sx(*)
+        end subroutine
+
 
         subroutine ${R}$pocon(uplo, n, A, ia, ja, desca, anorm, rcond, &
                               work, lwork, iwork, liwork, info)
@@ -2747,6 +2757,23 @@ contains
         call ${R}$trtrs(uplo, trans, diag, n, nrhs, At, ia, ja, desca, &
                          Bt, ib, jb, descb, info)
         B(1:nb) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_pdrscl(n, sa, sx, ix, jx, descx, incx)
+        ! Vector reciprocal scaling: SX := SX / SA.
+        integer,  intent(in)    :: n, ix, jx, incx
+        integer,  intent(in)    :: descx(9)
+        real(ep), intent(in)    :: sa
+        real(ep), intent(inout) :: sx(*)
+        integer :: nx
+        ${target_real}$, allocatable :: sxt(:)
+        ${target_real}$ :: sa_t
+        nx = nloc(descx)
+        allocate(sxt(nx))
+        sxt = q2t_r(sx(1:nx))
+        sa_t = q2t_r(sa)
+        call ${R}$rscl(n, sa_t, sxt, ix, jx, descx, incx)
+        sx(1:nx) = t2q_r(sxt)
     end subroutine
 
     subroutine target_pztrtrs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
