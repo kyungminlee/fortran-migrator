@@ -14,21 +14,8 @@ intrinsics:
   mode: wrap_constructor
 
 prefixes:
-  # The complex prefix must be a letter that does NOT appear as a
-  # literal in upstream BLAS / LAPACK / ScaLAPACK / MUMPS routine
-  # names — otherwise the slot-driven rename collides with itself.
-  # Concretely: PTZBLAS uses literal V as a "vector" indicator
-  # (DVASUM, DVVDOT, …). Picking V as the complex prefix here would
-  # make D[V] + ASUM (real, slot R + literal V) and DZ + ASUM (mixed,
-  # slots [R][C]) both rename to T + V + ASUM = TVASUM, silently
-  # merging two unrelated symbols at link time.
-  #
-  # W is unused as a literal anywhere in the source corpus, so use it
-  # as the complex prefix. Any future literal-W addition upstream
-  # will be caught by the cross-family collision check in
-  # prefix_classifier.build_rename_map.
   R: T
-  C: W
+  C: V
   I: I
   L: L
   S: S
