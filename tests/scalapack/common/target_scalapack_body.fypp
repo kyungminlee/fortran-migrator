@@ -64,6 +64,7 @@ module target_scalapack
     public :: target_pdporfs, target_pzporfs
     public :: target_pdgeqpf, target_pzgeqpf
     public :: target_pdgebal
+    public :: target_pdtrtrs, target_pztrtrs
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -652,6 +653,28 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: A(*)
             integer,   intent(out)   :: ilo, ihi, info
             ${target_real}$, intent(out)   :: scale(*)
+        end subroutine
+
+        subroutine ${R}$trtrs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
+                              B, ib, jb, descb, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb
+            integer,   intent(in)    :: desca(9), descb(9)
+            ${target_real}$, intent(in)    :: A(*)
+            ${target_real}$, intent(inout) :: B(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$trtrs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
+                              B, ib, jb, descb, info)
+$:IMPORT_C()
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb
+            integer,   intent(in)    :: desca(9), descb(9)
+            ${target_complex}$, intent(in)    :: A(*)
+            ${target_complex}$, intent(inout) :: B(*)
+            integer,   intent(out)   :: info
         end subroutine
 
         subroutine ${R}$pocon(uplo, n, A, ia, ja, desca, anorm, rcond, &
@@ -2706,6 +2729,42 @@ contains
         At = q2t_r(A(1:na))
         call ${R}$gebal(job, n, At, desca, ilo, ihi, scale_t, info)
         A(1:na) = t2q_r(At); scale(1:n) = t2q_r(scale_t)
+    end subroutine
+
+    subroutine target_pdtrtrs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
+                               B, ib, jb, descb, info)
+        character, intent(in)    :: uplo, trans, diag
+        integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb
+        integer,   intent(in)    :: desca(9), descb(9)
+        real(ep),  intent(in)    :: A(*)
+        real(ep),  intent(inout) :: B(*)
+        integer,   intent(out)   :: info
+        integer :: na, nb
+        ${target_real}$, allocatable :: At(:), Bt(:)
+        na = nloc(desca); nb = nloc(descb)
+        allocate(At(na), Bt(nb))
+        At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
+        call ${R}$trtrs(uplo, trans, diag, n, nrhs, At, ia, ja, desca, &
+                         Bt, ib, jb, descb, info)
+        B(1:nb) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_pztrtrs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
+                               B, ib, jb, descb, info)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, nrhs, ia, ja, ib, jb
+        integer,     intent(in)    :: desca(9), descb(9)
+        complex(ep), intent(in)    :: A(*)
+        complex(ep), intent(inout) :: B(*)
+        integer,     intent(out)   :: info
+        integer :: na, nb
+        ${target_complex}$, allocatable :: At(:), Bt(:)
+        na = nloc(desca); nb = nloc(descb)
+        allocate(At(na), Bt(nb))
+        At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
+        call ${C}$trtrs(uplo, trans, diag, n, nrhs, At, ia, ja, desca, &
+                         Bt, ib, jb, descb, info)
+        B(1:nb) = t2q_c(Bt)
     end subroutine
 
     subroutine target_pzpoequ(n, A, ia, ja, desca, sr, sc, scond, amax, info)
