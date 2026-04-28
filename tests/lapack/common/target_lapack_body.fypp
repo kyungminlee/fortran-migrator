@@ -22,7 +22,7 @@
 
 #:def IMPORT_C()
 #:if target == 'multifloats'
-            import :: cmplx64x2
+            import :: cmplx64x2, real64x2
 #:elif target == 'kind16'
             import :: ep
 #:endif
@@ -40,7 +40,7 @@ module target_lapack
     use prec_kinds, only: ep
     use target_conv, only: q2t_r, t2q_r, q2t_c, t2q_c
 #:if target == 'multifloats'
-    use multifloats, only: real64x2, cmplx64x2
+    use multifloats, only: real64x2, cmplx64x2, operator(==)
 #:endif
     implicit none
     private
@@ -138,6 +138,78 @@ module target_lapack
     public :: target_dgesvx, target_zgesvx, target_dposvx, target_zposvx
     public :: target_dpbsvx, target_zpbsvx, target_dppsvx, target_zppsvx
     public :: target_dgbsvx, target_zgbsvx, target_dsysvx, target_zsysvx, target_zhesvx
+    ! Phase L1 — 2-stage symmetric/Hermitian eigensolvers (JOBZ='N' only).
+    public :: target_dsyev_2stage,  target_zheev_2stage
+    public :: target_dsyevd_2stage, target_zheevd_2stage
+    public :: target_dsyevr_2stage, target_zheevr_2stage
+    public :: target_dsyevx_2stage, target_zheevx_2stage
+    public :: target_dsbev_2stage,  target_zhbev_2stage
+    public :: target_dsbevd_2stage, target_zhbevd_2stage
+    public :: target_dsbevx_2stage, target_zhbevx_2stage
+    public :: target_dsygv_2stage,  target_zhegv_2stage
+    ! Phase L2 — Hessenberg/Schur expert drivers.
+    public :: target_dgees,   target_zgees
+    public :: target_dgeesx,  target_zgeesx
+    public :: target_dgeevx,  target_zgeevx
+    public :: target_dhsein,  target_zhsein
+    public :: target_dtrevc3, target_ztrevc3
+    public :: target_dtrexc,  target_ztrexc
+    public :: target_dtrsen,  target_ztrsen
+    ! Phase L3 — Generalized non-symmetric expert drivers + QZ.
+    public :: target_dgges,   target_zgges
+    public :: target_dgges3,  target_zgges3
+    public :: target_dggesx,  target_zggesx
+    public :: target_dggev3,  target_zggev3
+    public :: target_dggevx,  target_zggevx
+    public :: target_dhgeqz,  target_zhgeqz
+    public :: target_dtgevc,  target_ztgevc
+    ! Phase L4 — Generalized post-processing + constrained LS.
+    public :: target_dtgexc, target_ztgexc
+    public :: target_dtgsen, target_ztgsen
+    public :: target_dtgsna, target_ztgsna
+    public :: target_dtgsja, target_ztgsja
+    public :: target_dtgsyl, target_ztgsyl
+    public :: target_dggglm, target_zggglm
+    public :: target_dgglse, target_zgglse
+    ! Phase L5 — Modern least-squares + Jacobi SVD.
+    public :: target_dgelsd, target_zgelsd
+    public :: target_dgelss, target_zgelss
+    public :: target_dgelsy, target_zgelsy
+    public :: target_dgelst, target_zgelst
+    public :: target_dgejsv, target_zgejsv
+    public :: target_dgesvj, target_zgesvj
+    ! Phase L18 — Auxiliary matrix norm utilities.
+    public :: target_dlangb, target_zlangb
+    public :: target_dlangt, target_zlangt
+    public :: target_dlanhs, target_zlanhs
+    public :: target_dlansb, target_zlanhb
+    public :: target_dlansp, target_zlanhp
+    public :: target_dlanst, target_zlanht
+    public :: target_dlansy
+    public :: target_dlantb, target_zlantb
+    public :: target_dlantp, target_zlantp
+    public :: target_dlantr, target_zlantr
+    ! Phase L19 — Permutation/norm helpers.
+    public :: target_dlapmr, target_zlapmr
+    public :: target_dlapmt, target_zlapmt
+    public :: target_dlapll, target_zlapll
+    public :: target_dlacn2, target_zlacn2
+    public :: target_dlartg, target_zlartg
+    public :: target_dlartgp
+    public :: target_dlartgs
+    ! Phase L20 — Small public scalar utilities.
+    public :: target_dlapy2
+    public :: target_dlapy3
+    public :: target_dladiv, target_zladiv
+    public :: target_dlamrg
+    public :: target_dlarnv, target_zlarnv
+    ! Phase L21 — Generalized sym/Hermitian glue.
+    public :: target_dsbgst, target_zhbgst
+    public :: target_dspgst, target_zhpgst
+    public :: target_dsygst, target_zhegst
+    public :: target_dsbgvx, target_zhbgvx
+    public :: target_dspgvx, target_zhpgvx
+    public :: target_dsygvx, target_zhegvx
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -3146,6 +3218,1322 @@ $:IMPORT_RC()
             ${target_complex}$, intent(out)   :: X(ldx,*), work(*)
             ${target_real}$,    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
             integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase L1 — 2-stage symmetric/Hermitian eigensolvers ──────
+        ! Signatures match the non-2-stage variants except where noted
+        ! (sbev_2stage / sbevx_2stage / hbev_2stage / hbevx_2stage add an
+        ! LWORK parameter not present in the non-2-stage versions).
+        subroutine ${R}$syev_2stage(jobz, uplo, n, A, lda, w, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$heev_2stage(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$syevd_2stage(jobz, uplo, n, A, lda, w, work, lwork, &
+                                     iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, liwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$heevd_2stage(jobz, uplo, n, A, lda, w, work, lwork, &
+                                     rwork, lrwork, iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, lrwork, liwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$syevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                     abstol, m, w, z, ldz, isuppz, &
+                                     work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork, liwork
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), z(ldz,*), work(*)
+            integer, intent(out) :: m, isuppz(*), iwork(*), info
+        end subroutine
+
+        subroutine ${C}$heevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                     abstol, m, w, z, ldz, isuppz, &
+                                     work, lwork, rwork, lrwork, iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork, lrwork, liwork
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: m, isuppz(*), iwork(*), info
+        end subroutine
+
+        subroutine ${R}$syevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                     abstol, m, w, z, ldz, work, lwork, iwork, &
+                                     ifail, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: w(*), z(ldz,*), work(*)
+            integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${C}$heevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                     abstol, m, w, z, ldz, work, lwork, rwork, &
+                                     iwork, ifail, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${R}$sbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                    work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            ${target_real}$, intent(out)   :: w(*), z(ldz,*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                    work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$sbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                     work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork, liwork
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            ${target_real}$, intent(out)   :: w(*), z(ldz,*), work(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$hbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                     work, lwork, rwork, lrwork, iwork, liwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork, lrwork, liwork
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            ${target_complex}$, intent(out)   :: z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$sbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                     vl, vu, il, iu, abstol, m, w, z, ldz, &
+                                     work, lwork, iwork, ifail, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz, lwork
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            ${target_real}$, intent(out)   :: Q(ldq,*), w(*), z(ldz,*), work(*)
+            integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${C}$hbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                     vl, vu, il, iu, abstol, m, w, z, ldz, &
+                                     work, lwork, rwork, iwork, ifail, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz, lwork
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            ${target_complex}$, intent(out)   :: Q(ldq,*), z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${R}$sygv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                                    work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: w(*), work(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hegv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                                    work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer, intent(out) :: info
+        end subroutine
+
+        ! ── Phase L2 — Hessenberg/Schur expert drivers ───────────────
+        subroutine ${R}$gees(jobvs, sort, select, n, A, lda, sdim, wr, wi, &
+                             vs, ldvs, work, lwork, bwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobvs, sort
+            interface
+                logical function select(re, im)
+$:IMPORT_R()
+                    ${target_real}$, intent(in) :: re, im
+                end function select
+            end interface
+            integer,   intent(in) :: n, lda, ldvs, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer,   intent(out) :: sdim, info
+            ${target_real}$, intent(out) :: wr(*), wi(*), vs(ldvs,*), work(*)
+            logical,   intent(out) :: bwork(*)
+        end subroutine
+
+        subroutine ${C}$gees(jobvs, sort, select, n, A, lda, sdim, w, &
+                             vs, ldvs, work, lwork, rwork, bwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: jobvs, sort
+            interface
+                logical function select(z)
+$:IMPORT_C()
+                    ${target_complex}$, intent(in) :: z
+                end function select
+            end interface
+            integer,   intent(in) :: n, lda, ldvs, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer,   intent(out) :: sdim, info
+            ${target_complex}$, intent(out) :: w(*), vs(ldvs,*), work(*)
+            ${target_real}$,    intent(out) :: rwork(*)
+            logical,   intent(out) :: bwork(*)
+        end subroutine
+
+        subroutine ${R}$geesx(jobvs, sort, select, sense, n, A, lda, sdim, &
+                              wr, wi, vs, ldvs, rconde, rcondv, work, lwork, &
+                              iwork, liwork, bwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobvs, sort, sense
+            interface
+                logical function select(re, im)
+$:IMPORT_R()
+                    ${target_real}$, intent(in) :: re, im
+                end function select
+            end interface
+            integer,   intent(in) :: n, lda, ldvs, lwork, liwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer,   intent(out) :: sdim, iwork(*), info
+            ${target_real}$, intent(out) :: wr(*), wi(*), vs(ldvs,*), work(*)
+            ${target_real}$, intent(out) :: rconde, rcondv
+            logical,   intent(out) :: bwork(*)
+        end subroutine
+
+        subroutine ${C}$geesx(jobvs, sort, select, sense, n, A, lda, sdim, &
+                              w, vs, ldvs, rconde, rcondv, work, lwork, &
+                              rwork, bwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: jobvs, sort, sense
+            interface
+                logical function select(z)
+$:IMPORT_C()
+                    ${target_complex}$, intent(in) :: z
+                end function select
+            end interface
+            integer,   intent(in) :: n, lda, ldvs, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer,   intent(out) :: sdim, info
+            ${target_complex}$, intent(out) :: w(*), vs(ldvs,*), work(*)
+            ${target_real}$,    intent(out) :: rconde, rcondv, rwork(*)
+            logical,   intent(out) :: bwork(*)
+        end subroutine
+
+        subroutine ${R}$geevx(balanc, jobvl, jobvr, sense, n, A, lda, &
+                              wr, wi, vl, ldvl, vr, ldvr, ilo, ihi, &
+                              scale, abnrm, rconde, rcondv, work, lwork, &
+                              iwork, info)
+$:IMPORT_R()
+            character, intent(in) :: balanc, jobvl, jobvr, sense
+            integer,   intent(in) :: n, lda, ldvl, ldvr, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer,   intent(out) :: ilo, ihi, iwork(*), info
+            ${target_real}$, intent(out) :: wr(*), wi(*), vl(ldvl,*), vr(ldvr,*)
+            ${target_real}$, intent(out) :: scale(*), abnrm
+            ${target_real}$, intent(out) :: rconde(*), rcondv(*), work(*)
+        end subroutine
+
+        subroutine ${C}$geevx(balanc, jobvl, jobvr, sense, n, A, lda, w, &
+                              vl, ldvl, vr, ldvr, ilo, ihi, scale, abnrm, &
+                              rconde, rcondv, work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: balanc, jobvl, jobvr, sense
+            integer,   intent(in) :: n, lda, ldvl, ldvr, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer,   intent(out) :: ilo, ihi, info
+            ${target_complex}$, intent(out) :: w(*), vl(ldvl,*), vr(ldvr,*), work(*)
+            ${target_real}$,    intent(out) :: scale(*), abnrm
+            ${target_real}$,    intent(out) :: rconde(*), rcondv(*), rwork(*)
+        end subroutine
+
+        subroutine ${R}$hsein(side, eigsrc, initv, select, n, H, ldh, &
+                              wr, wi, vl, ldvl, vr, ldvr, mm, m, work, &
+                              ifaill, ifailr, info)
+$:IMPORT_R()
+            character, intent(in)    :: side, eigsrc, initv
+            integer,   intent(in)    :: n, ldh, ldvl, ldvr, mm
+            logical,   intent(inout) :: select(*)
+            ${target_real}$, intent(in)    :: H(ldh,*)
+            ${target_real}$, intent(inout) :: wr(*)
+            ${target_real}$, intent(in)    :: wi(*)
+            ${target_real}$, intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out) :: m, ifaill(*), ifailr(*), info
+            ${target_real}$, intent(out) :: work(*)
+        end subroutine
+
+        subroutine ${C}$hsein(side, eigsrc, initv, select, n, H, ldh, &
+                              w, vl, ldvl, vr, ldvr, mm, m, work, rwork, &
+                              ifaill, ifailr, info)
+$:IMPORT_RC()
+            character, intent(in)    :: side, eigsrc, initv
+            integer,   intent(in)    :: n, ldh, ldvl, ldvr, mm
+            logical,   intent(in)    :: select(*)
+            ${target_complex}$, intent(in)    :: H(ldh,*)
+            ${target_complex}$, intent(inout) :: w(*), vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out) :: m, ifaill(*), ifailr(*), info
+            ${target_complex}$, intent(out) :: work(*)
+            ${target_real}$,    intent(out) :: rwork(*)
+        end subroutine
+
+        subroutine ${R}$trevc3(side, howmny, select, n, T, ldt, vl, ldvl, &
+                               vr, ldvr, mm, m, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm, lwork
+            logical,   intent(inout) :: select(*)
+            ${target_real}$, intent(in)    :: T(ldt,*)
+            ${target_real}$, intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out) :: m, info
+            ${target_real}$, intent(out) :: work(*)
+        end subroutine
+
+        subroutine ${C}$trevc3(side, howmny, select, n, T, ldt, vl, ldvl, &
+                               vr, ldvr, mm, m, work, lwork, rwork, lrwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm, lwork, lrwork
+            logical,   intent(in)    :: select(*)
+            ${target_complex}$, intent(inout) :: T(ldt,*), vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out) :: m, info
+            ${target_complex}$, intent(out) :: work(*)
+            ${target_real}$,    intent(out) :: rwork(*)
+        end subroutine
+
+        subroutine ${R}$trexc(compq, n, T, ldt, Q, ldq, ifst, ilst, work, info)
+$:IMPORT_R()
+            character, intent(in)    :: compq
+            integer,   intent(in)    :: n, ldt, ldq
+            integer,   intent(inout) :: ifst, ilst
+            ${target_real}$, intent(inout) :: T(ldt,*), Q(ldq,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$trexc(compq, n, T, ldt, Q, ldq, ifst, ilst, info)
+$:IMPORT_C()
+            character, intent(in)    :: compq
+            integer,   intent(in)    :: n, ldt, ldq, ifst, ilst
+            ${target_complex}$, intent(inout) :: T(ldt,*), Q(ldq,*)
+            integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$trsen(job, compq, select, n, T, ldt, Q, ldq, &
+                              wr, wi, m, s, sep, work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: job, compq
+            integer,   intent(in)    :: n, ldt, ldq, lwork, liwork
+            logical,   intent(in)    :: select(*)
+            ${target_real}$, intent(inout) :: T(ldt,*), Q(ldq,*)
+            ${target_real}$, intent(out)   :: wr(*), wi(*), s, sep, work(*)
+            integer,   intent(out) :: m, iwork(*), info
+        end subroutine
+
+        subroutine ${C}$trsen(job, compq, select, n, T, ldt, Q, ldq, &
+                              w, m, s, sep, work, lwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: job, compq
+            integer,   intent(in)    :: n, ldt, ldq, lwork
+            logical,   intent(in)    :: select(*)
+            ${target_complex}$, intent(inout) :: T(ldt,*), Q(ldq,*)
+            ${target_complex}$, intent(out)   :: w(*), work(*)
+            ${target_real}$,    intent(out)   :: s, sep
+            integer,   intent(out) :: m, info
+        end subroutine
+
+        ! ── Phase L3 — Generalized non-symmetric drivers + QZ ────────
+        subroutine ${R}$gges(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                             sdim, alphar, alphai, beta, vsl, ldvsl, vsr, ldvsr, &
+                             work, lwork, bwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobvsl, jobvsr, sort
+            interface
+                logical function selctg(re, im, b)
+$:IMPORT_R()
+                    ${target_real}$, intent(in) :: re, im, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, info
+            ${target_real}$, intent(out) :: alphar(*), alphai(*), beta(*)
+            ${target_real}$, intent(out) :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine
+
+        subroutine ${C}$gges(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                             sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, &
+                             work, lwork, rwork, bwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: jobvsl, jobvsr, sort
+            interface
+                logical function selctg(a, b)
+$:IMPORT_C()
+                    ${target_complex}$, intent(in) :: a, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, info
+            ${target_complex}$, intent(out) :: alpha(*), beta(*)
+            ${target_complex}$, intent(out) :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            ${target_real}$,    intent(out) :: rwork(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine
+
+        subroutine ${R}$gges3(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                              sdim, alphar, alphai, beta, vsl, ldvsl, vsr, ldvsr, &
+                              work, lwork, bwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobvsl, jobvsr, sort
+            interface
+                logical function selctg(re, im, b)
+$:IMPORT_R()
+                    ${target_real}$, intent(in) :: re, im, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, info
+            ${target_real}$, intent(out) :: alphar(*), alphai(*), beta(*)
+            ${target_real}$, intent(out) :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine
+
+        subroutine ${C}$gges3(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                              sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, &
+                              work, lwork, rwork, bwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: jobvsl, jobvsr, sort
+            interface
+                logical function selctg(a, b)
+$:IMPORT_C()
+                    ${target_complex}$, intent(in) :: a, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, info
+            ${target_complex}$, intent(out) :: alpha(*), beta(*)
+            ${target_complex}$, intent(out) :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            ${target_real}$,    intent(out) :: rwork(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine
+
+        subroutine ${R}$ggesx(jobvsl, jobvsr, sort, selctg, sense, n, A, lda, &
+                              B, ldb, sdim, alphar, alphai, beta, vsl, ldvsl, &
+                              vsr, ldvsr, rconde, rcondv, work, lwork, &
+                              iwork, liwork, bwork, info)
+$:IMPORT_R()
+            character, intent(in) :: jobvsl, jobvsr, sort, sense
+            interface
+                logical function selctg(re, im, b)
+$:IMPORT_R()
+                    ${target_real}$, intent(in) :: re, im, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork, liwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, iwork(*), info
+            ${target_real}$, intent(out) :: alphar(*), alphai(*), beta(*)
+            ${target_real}$, intent(out) :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            ${target_real}$, intent(out) :: rconde(2), rcondv(2)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine
+
+        subroutine ${C}$ggesx(jobvsl, jobvsr, sort, selctg, sense, n, A, lda, &
+                              B, ldb, sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, &
+                              rconde, rcondv, work, lwork, rwork, iwork, liwork, &
+                              bwork, info)
+$:IMPORT_RC()
+            character, intent(in) :: jobvsl, jobvsr, sort, sense
+            interface
+                logical function selctg(a, b)
+$:IMPORT_C()
+                    ${target_complex}$, intent(in) :: a, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork, liwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, iwork(*), info
+            ${target_complex}$, intent(out) :: alpha(*), beta(*)
+            ${target_complex}$, intent(out) :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            ${target_real}$,    intent(out) :: rconde(2), rcondv(2), rwork(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine
+
+        subroutine ${R}$ggev3(jobvl, jobvr, n, A, lda, B, ldb, alphar, alphai, &
+                              beta, vl, ldvl, vr, ldvr, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobvl, jobvr
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(out) :: alphar(*), alphai(*), beta(*)
+            ${target_real}$, intent(out) :: vl(ldvl,*), vr(ldvr,*), work(*)
+        end subroutine
+
+        subroutine ${C}$ggev3(jobvl, jobvr, n, A, lda, B, ldb, alpha, beta, &
+                              vl, ldvl, vr, ldvr, work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobvl, jobvr
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(out) :: alpha(*), beta(*)
+            ${target_complex}$, intent(out) :: vl(ldvl,*), vr(ldvr,*), work(*)
+            ${target_real}$,    intent(out) :: rwork(*)
+        end subroutine
+
+        subroutine ${R}$ggevx(balanc, jobvl, jobvr, sense, n, A, lda, B, ldb, &
+                              alphar, alphai, beta, vl, ldvl, vr, ldvr, &
+                              ilo, ihi, lscale, rscale, abnrm, bbnrm, &
+                              rconde, rcondv, work, lwork, iwork, bwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: balanc, jobvl, jobvr, sense
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ilo, ihi, iwork(*), info
+            ${target_real}$, intent(out) :: alphar(*), alphai(*), beta(*)
+            ${target_real}$, intent(out) :: vl(ldvl,*), vr(ldvr,*)
+            ${target_real}$, intent(out) :: lscale(*), rscale(*), abnrm, bbnrm
+            ${target_real}$, intent(out) :: rconde(*), rcondv(*), work(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine
+
+        subroutine ${C}$ggevx(balanc, jobvl, jobvr, sense, n, A, lda, B, ldb, &
+                              alpha, beta, vl, ldvl, vr, ldvr, &
+                              ilo, ihi, lscale, rscale, abnrm, bbnrm, &
+                              rconde, rcondv, work, lwork, rwork, iwork, bwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: balanc, jobvl, jobvr, sense
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ilo, ihi, iwork(*), info
+            ${target_complex}$, intent(out) :: alpha(*), beta(*)
+            ${target_complex}$, intent(out) :: vl(ldvl,*), vr(ldvr,*), work(*)
+            ${target_real}$,    intent(out) :: lscale(*), rscale(*), abnrm, bbnrm
+            ${target_real}$,    intent(out) :: rconde(*), rcondv(*), rwork(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine
+
+        subroutine ${R}$hgeqz(job, compq, compz, n, ilo, ihi, H, ldh, T, ldt, &
+                              alphar, alphai, beta, Q, ldq, Z, ldz, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: job, compq, compz
+            integer,   intent(in)    :: n, ilo, ihi, ldh, ldt, ldq, ldz, lwork
+            ${target_real}$, intent(inout) :: H(ldh,*), T(ldt,*), Q(ldq,*), Z(ldz,*)
+            ${target_real}$, intent(out) :: alphar(*), alphai(*), beta(*), work(*)
+            integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${C}$hgeqz(job, compq, compz, n, ilo, ihi, H, ldh, T, ldt, &
+                              alpha, beta, Q, ldq, Z, ldz, work, lwork, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: job, compq, compz
+            integer,   intent(in)    :: n, ilo, ihi, ldh, ldt, ldq, ldz, lwork
+            ${target_complex}$, intent(inout) :: H(ldh,*), T(ldt,*), Q(ldq,*), Z(ldz,*)
+            ${target_complex}$, intent(out) :: alpha(*), beta(*), work(*)
+            ${target_real}$,    intent(out) :: rwork(*)
+            integer,   intent(out) :: info
+        end subroutine
+
+        subroutine ${R}$tgevc(side, howmny, select, n, S, lds, P, ldp, &
+                              vl, ldvl, vr, ldvr, mm, m, work, info)
+$:IMPORT_R()
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, lds, ldp, ldvl, ldvr, mm
+            logical,   intent(in)    :: select(*)
+            ${target_real}$, intent(in)    :: S(lds,*), P(ldp,*)
+            ${target_real}$, intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out) :: m, info
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$tgevc(side, howmny, select, n, S, lds, P, ldp, &
+                              vl, ldvl, vr, ldvr, mm, m, work, rwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, lds, ldp, ldvl, ldvr, mm
+            logical,   intent(in)    :: select(*)
+            ${target_complex}$, intent(in)    :: S(lds,*), P(ldp,*)
+            ${target_complex}$, intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out) :: m, info
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: rwork(*)
+        end subroutine
+
+        ! ── Phase L4 — Generalized post-processing + constrained LS ──
+        subroutine ${R}$tgexc(wantq, wantz, n, A, lda, B, ldb, Q, ldq, Z, ldz, &
+                              ifst, ilst, work, lwork, info)
+$:IMPORT_R()
+            logical,   intent(in)    :: wantq, wantz
+            integer,   intent(in)    :: n, lda, ldb, ldq, ldz, lwork
+            integer,   intent(inout) :: ifst, ilst
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$tgexc(wantq, wantz, n, A, lda, B, ldb, Q, ldq, Z, ldz, &
+                              ifst, ilst, info)
+$:IMPORT_C()
+            logical,   intent(in)    :: wantq, wantz
+            integer,   intent(in)    :: n, lda, ldb, ldq, ldz, ifst, ilst
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$tgsen(ijob, wantq, wantz, select, n, A, lda, B, ldb, &
+                              alphar, alphai, beta, Q, ldq, Z, ldz, m, pl, pr, &
+                              dif, work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: ijob, n, lda, ldb, ldq, ldz, lwork, liwork
+            logical,   intent(in)    :: wantq, wantz, select(*)
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            ${target_real}$, intent(out)   :: alphar(*), alphai(*), beta(*), pl, pr
+            ${target_real}$, intent(out)   :: dif(2), work(*)
+            integer,   intent(out) :: m, iwork(*), info
+        end subroutine
+
+        subroutine ${C}$tgsen(ijob, wantq, wantz, select, n, A, lda, B, ldb, &
+                              alpha, beta, Q, ldq, Z, ldz, m, pl, pr, dif, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_RC()
+            integer,   intent(in)    :: ijob, n, lda, ldb, ldq, ldz, lwork, liwork
+            logical,   intent(in)    :: wantq, wantz, select(*)
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            ${target_complex}$, intent(out)   :: alpha(*), beta(*), work(*)
+            ${target_real}$,    intent(out)   :: pl, pr, dif(2)
+            integer,   intent(out) :: m, iwork(*), info
+        end subroutine
+
+        subroutine ${R}$tgsna(job, howmny, select, n, A, lda, B, ldb, vl, ldvl, &
+                              vr, ldvr, s, dif, mm, m, work, lwork, iwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: job, howmny
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, mm, lwork
+            logical,   intent(in)    :: select(*)
+            ${target_real}$, intent(in)    :: A(lda,*), B(ldb,*), vl(ldvl,*), vr(ldvr,*)
+            ${target_real}$, intent(out)   :: s(*), dif(*), work(*)
+            integer,   intent(out) :: m, iwork(*), info
+        end subroutine
+
+        subroutine ${C}$tgsna(job, howmny, select, n, A, lda, B, ldb, vl, ldvl, &
+                              vr, ldvr, s, dif, mm, m, work, lwork, iwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: job, howmny
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, mm, lwork
+            logical,   intent(in)    :: select(*)
+            ${target_complex}$, intent(in)    :: A(lda,*), B(ldb,*), vl(ldvl,*), vr(ldvr,*)
+            ${target_real}$,    intent(out)   :: s(*), dif(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,   intent(out) :: m, iwork(*), info
+        end subroutine
+
+        subroutine ${R}$tgsja(jobu, jobv, jobq, m, p, n, k, l, A, lda, B, ldb, &
+                              tola, tolb, alpha, beta, U, ldu, V, ldv, Q, ldq, &
+                              work, ncycle, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobu, jobv, jobq
+            integer,   intent(in)    :: m, p, n, k, l, lda, ldb, ldu, ldv, ldq
+            ${target_real}$, intent(in)    :: tola, tolb
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(inout) :: U(ldu,*), V(ldv,*), Q(ldq,*)
+            ${target_real}$, intent(out)   :: alpha(*), beta(*), work(*)
+            integer,   intent(out) :: ncycle, info
+        end subroutine
+
+        subroutine ${C}$tgsja(jobu, jobv, jobq, m, p, n, k, l, A, lda, B, ldb, &
+                              tola, tolb, alpha, beta, U, ldu, V, ldv, Q, ldq, &
+                              work, ncycle, info)
+$:IMPORT_RC()
+            character, intent(in)    :: jobu, jobv, jobq
+            integer,   intent(in)    :: m, p, n, k, l, lda, ldb, ldu, ldv, ldq
+            ${target_real}$,    intent(in)    :: tola, tolb
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(inout) :: U(ldu,*), V(ldv,*), Q(ldq,*)
+            ${target_real}$,    intent(out)   :: alpha(*), beta(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,   intent(out) :: ncycle, info
+        end subroutine
+
+        subroutine ${R}$tgsyl(trans, ijob, m, n, A, lda, B, ldb, C, ldc, &
+                              D, ldd, E, lde, F, ldf, scale, dif, work, lwork, &
+                              iwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: ijob, m, n, lda, ldb, ldc, ldd, lde, ldf, lwork
+            ${target_real}$, intent(in)    :: A(lda,*), B(ldb,*), D(ldd,*), E(lde,*)
+            ${target_real}$, intent(inout) :: C(ldc,*), F(ldf,*)
+            ${target_real}$, intent(out)   :: scale, dif, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$tgsyl(trans, ijob, m, n, A, lda, B, ldb, C, ldc, &
+                              D, ldd, E, lde, F, ldf, scale, dif, work, lwork, &
+                              iwork, info)
+$:IMPORT_RC()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: ijob, m, n, lda, ldb, ldc, ldd, lde, ldf, lwork
+            ${target_complex}$, intent(in)    :: A(lda,*), B(ldb,*), D(ldd,*), E(lde,*)
+            ${target_complex}$, intent(inout) :: C(ldc,*), F(ldf,*)
+            ${target_real}$,    intent(out)   :: scale, dif
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$ggglm(n, m, p, A, lda, B, ldb, d, x, y, work, lwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: n, m, p, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*), d(*)
+            ${target_real}$, intent(out)   :: x(*), y(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$ggglm(n, m, p, A, lda, B, ldb, d, x, y, work, lwork, info)
+$:IMPORT_C()
+            integer,   intent(in)    :: n, m, p, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*), d(*)
+            ${target_complex}$, intent(out)   :: x(*), y(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$gglse(m, n, p, A, lda, B, ldb, c, d, x, work, lwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: m, n, p, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
+            ${target_real}$, intent(out)   :: x(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$gglse(m, n, p, A, lda, B, ldb, c, d, x, work, lwork, info)
+$:IMPORT_C()
+            integer,   intent(in)    :: m, n, p, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
+            ${target_complex}$, intent(out)   :: x(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        ! Phase L5 — Modern LS + Jacobi SVD.
+        subroutine ${R}$gelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                              work, lwork, iwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(in)    :: rcond
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: S(*), work(*)
+            integer,   intent(out)   :: rank, iwork(*), info
+        end subroutine
+
+        subroutine ${C}$gelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                              work, lwork, rwork, iwork, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$,    intent(in)    :: rcond
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$,    intent(out)   :: S(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,     intent(out)   :: rank, iwork(*), info
+        end subroutine
+
+        subroutine ${R}$gelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                              work, lwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(in)    :: rcond
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: S(*), work(*)
+            integer,   intent(out)   :: rank, info
+        end subroutine
+
+        subroutine ${C}$gelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                              work, lwork, rwork, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$,    intent(in)    :: rcond
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$,    intent(out)   :: S(*), rwork(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,     intent(out)   :: rank, info
+        end subroutine
+
+        subroutine ${R}$gelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, &
+                              work, lwork, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(in)    :: rcond
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(inout) :: jpvt(*)
+            integer,   intent(out)   :: rank, info
+        end subroutine
+
+        subroutine ${C}$gelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, &
+                              work, lwork, rwork, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$,    intent(in)    :: rcond
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: rwork(*)
+            integer,     intent(inout) :: jpvt(*)
+            integer,     intent(out)   :: rank, info
+        end subroutine
+
+        subroutine ${R}$gelst(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$gelst(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$gejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                              sva, U, ldu, V, ldv, work, lwork, iwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+            integer,   intent(in)    :: m, n, lda, ldu, ldv, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(out)   :: sva(*), U(ldu,*), V(ldv,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$gejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                              sva, U, ldu, V, ldv, cwork, lwork, rwork, lrwork, &
+                              iwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+            integer,     intent(in)    :: m, n, lda, ldu, ldv, lwork, lrwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_real}$,    intent(out)   :: sva(*), rwork(*)
+            ${target_complex}$, intent(out)   :: U(ldu,*), V(ldv,*), cwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$gesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                              work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: joba, jobu, jobv
+            integer,   intent(in)    :: m, n, lda, mv, ldv, lwork
+            ${target_real}$, intent(inout) :: A(lda,*), V(ldv,*), work(*)
+            ${target_real}$, intent(out)   :: sva(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$gesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                              cwork, lwork, rwork, lrwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: joba, jobu, jobv
+            integer,     intent(in)    :: m, n, lda, mv, ldv, lwork, lrwork
+            ${target_complex}$, intent(inout) :: A(lda,*), V(ldv,*), cwork(*)
+            ${target_real}$,    intent(inout) :: rwork(*)
+            ${target_real}$,    intent(out)   :: sva(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        ! Phase L18 — Norm utilities.
+        function ${R}$langb(norm, n, kl, ku, AB, ldab, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, kl, ku, ldab
+            ${target_real}$, intent(in) :: AB(ldab,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$langb(norm, n, kl, ku, AB, ldab, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n, kl, ku, ldab
+            ${target_complex}$, intent(in) :: AB(ldab,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$langt(norm, n, dl, d, du) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: dl(*), d(*), du(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$langt(norm, n, dl, d, du) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n
+            ${target_complex}$, intent(in) :: dl(*), d(*), du(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lanhs(norm, n, A, lda, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(in) :: A(lda,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhs(norm, n, A, lda, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n, lda
+            ${target_complex}$, intent(in) :: A(lda,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lansb(norm, uplo, n, k, AB, ldab, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, k, ldab
+            ${target_real}$, intent(in) :: AB(ldab,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhb(norm, uplo, n, k, AB, ldab, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, k, ldab
+            ${target_complex}$, intent(in) :: AB(ldab,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lansp(norm, uplo, n, AP, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: AP(*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanhp(norm, uplo, n, AP, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n
+            ${target_complex}$, intent(in) :: AP(*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lanst(norm, n, d, e) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: d(*), e(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lanht(norm, n, d, e) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n
+            ${target_real}$,    intent(in) :: d(*)
+            ${target_complex}$, intent(in) :: e(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lansy(norm, uplo, n, A, lda, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, lda
+            ${target_real}$, intent(in) :: A(lda,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lantb(norm, uplo, diag, n, k, AB, ldab, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: n, k, ldab
+            ${target_real}$, intent(in) :: AB(ldab,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lantb(norm, uplo, diag, n, k, AB, ldab, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: n, k, ldab
+            ${target_complex}$, intent(in) :: AB(ldab,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lantp(norm, uplo, diag, n, AP, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: AP(*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lantp(norm, uplo, diag, n, AP, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: n
+            ${target_complex}$, intent(in) :: AP(*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lantr(norm, uplo, diag, m, n, A, lda, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: m, n, lda
+            ${target_real}$, intent(in) :: A(lda,*)
+            ${target_real}$, intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lantr(norm, uplo, diag, m, n, A, lda, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: m, n, lda
+            ${target_complex}$, intent(in) :: A(lda,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        ! Phase L19 — Permutation/norm helpers.
+        subroutine ${R}$lapmr(forwrd, m, n, X, ldx, K)
+$:IMPORT_R()
+            logical,  intent(in)    :: forwrd
+            integer,  intent(in)    :: m, n, ldx
+            ${target_real}$, intent(inout) :: X(ldx,*)
+            integer,  intent(inout) :: K(*)
+        end subroutine
+
+        subroutine ${C}$lapmr(forwrd, m, n, X, ldx, K)
+$:IMPORT_C()
+            logical,     intent(in)    :: forwrd
+            integer,     intent(in)    :: m, n, ldx
+            ${target_complex}$, intent(inout) :: X(ldx,*)
+            integer,     intent(inout) :: K(*)
+        end subroutine
+
+        subroutine ${R}$lapmt(forwrd, m, n, X, ldx, K)
+$:IMPORT_R()
+            logical,  intent(in)    :: forwrd
+            integer,  intent(in)    :: m, n, ldx
+            ${target_real}$, intent(inout) :: X(ldx,*)
+            integer,  intent(inout) :: K(*)
+        end subroutine
+
+        subroutine ${C}$lapmt(forwrd, m, n, X, ldx, K)
+$:IMPORT_C()
+            logical,     intent(in)    :: forwrd
+            integer,     intent(in)    :: m, n, ldx
+            ${target_complex}$, intent(inout) :: X(ldx,*)
+            integer,     intent(inout) :: K(*)
+        end subroutine
+
+        subroutine ${R}$lapll(n, X, incx, Y, incy, ssmin)
+$:IMPORT_R()
+            integer,  intent(in)    :: n, incx, incy
+            ${target_real}$, intent(inout) :: X(*), Y(*)
+            ${target_real}$, intent(out)   :: ssmin
+        end subroutine
+
+        subroutine ${C}$lapll(n, X, incx, Y, incy, ssmin)
+$:IMPORT_C()
+            integer,     intent(in)    :: n, incx, incy
+            ${target_complex}$, intent(inout) :: X(*), Y(*)
+            ${target_real}$,    intent(out)   :: ssmin
+        end subroutine
+
+        subroutine ${R}$lacn2(n, V, X, isgn, est, kase, isave)
+$:IMPORT_R()
+            integer,  intent(in)    :: n
+            ${target_real}$, intent(out)   :: V(*)
+            ${target_real}$, intent(inout) :: X(*), est
+            integer,  intent(out)   :: isgn(*)
+            integer,  intent(inout) :: kase, isave(3)
+        end subroutine
+
+        subroutine ${C}$lacn2(n, V, X, est, kase, isave)
+$:IMPORT_C()
+            integer,     intent(in)    :: n
+            ${target_complex}$, intent(out)   :: V(*)
+            ${target_complex}$, intent(inout) :: X(*)
+            ${target_real}$,    intent(inout) :: est
+            integer,     intent(inout) :: kase, isave(3)
+        end subroutine
+
+        subroutine ${R}$lartg(f, g, c, s, r)
+$:IMPORT_R()
+            ${target_real}$, intent(in)  :: f, g
+            ${target_real}$, intent(out) :: c, s, r
+        end subroutine
+
+        subroutine ${C}$lartg(f, g, c, s, r)
+$:IMPORT_C()
+            ${target_complex}$, intent(in)  :: f, g
+            ${target_real}$,    intent(out) :: c
+            ${target_complex}$, intent(out) :: s, r
+        end subroutine
+
+        subroutine ${R}$lartgp(f, g, c, s, r)
+$:IMPORT_R()
+            ${target_real}$, intent(in)  :: f, g
+            ${target_real}$, intent(out) :: c, s, r
+        end subroutine
+
+        subroutine ${R}$lartgs(x, y, sigma, c, s)
+$:IMPORT_R()
+            ${target_real}$, intent(in)  :: x, y, sigma
+            ${target_real}$, intent(out) :: c, s
+        end subroutine
+
+        ! Phase L20 — Small public scalar utilities.
+        function ${R}$lapy2(x, y) result(r)
+$:IMPORT_R()
+            ${target_real}$, intent(in) :: x, y
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lapy3(x, y, z) result(r)
+$:IMPORT_R()
+            ${target_real}$, intent(in) :: x, y, z
+            ${target_real}$ :: r
+        end function
+
+        subroutine ${R}$ladiv(a, b, c, d, p, q)
+$:IMPORT_R()
+            ${target_real}$, intent(in)  :: a, b, c, d
+            ${target_real}$, intent(out) :: p, q
+        end subroutine
+
+        function ${C}$ladiv(x, y) result(r)
+$:IMPORT_C()
+            ${target_complex}$, intent(in) :: x, y
+            ${target_complex}$ :: r
+        end function
+
+        subroutine ${R}$lamrg(n1, n2, A, dtrd1, dtrd2, index)
+$:IMPORT_R()
+            integer,  intent(in)  :: n1, n2, dtrd1, dtrd2
+            ${target_real}$, intent(in)  :: A(*)
+            integer,  intent(out) :: index(*)
+        end subroutine
+
+        subroutine ${R}$larnv(idist, iseed, n, X)
+$:IMPORT_R()
+            integer,  intent(in)    :: idist, n
+            integer,  intent(inout) :: iseed(4)
+            ${target_real}$, intent(out)   :: X(*)
+        end subroutine
+
+        subroutine ${C}$larnv(idist, iseed, n, X)
+$:IMPORT_C()
+            integer,     intent(in)    :: idist, n
+            integer,     intent(inout) :: iseed(4)
+            ${target_complex}$, intent(out)   :: X(*)
+        end subroutine
+
+        ! Phase L21 — Generalized sym/Hermitian glue.
+        subroutine ${R}$sbgst(vect, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                              X, ldx, work, info)
+$:IMPORT_R()
+            character, intent(in)    :: vect, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldx
+            ${target_real}$, intent(inout) :: AB(ldab,*)
+            ${target_real}$, intent(in)    :: BB(ldbb,*)
+            ${target_real}$, intent(out)   :: X(ldx,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$hbgst(vect, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                              X, ldx, work, rwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: vect, uplo
+            integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldx
+            ${target_complex}$, intent(inout) :: AB(ldab,*)
+            ${target_complex}$, intent(in)    :: BB(ldbb,*)
+            ${target_complex}$, intent(out)   :: X(ldx,*), work(*)
+            ${target_real}$,    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$spgst(itype, uplo, n, AP, BP, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: itype, n
+            character, intent(in)    :: uplo
+            ${target_real}$, intent(inout) :: AP(*)
+            ${target_real}$, intent(in)    :: BP(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$hpgst(itype, uplo, n, AP, BP, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: itype, n
+            character,   intent(in)    :: uplo
+            ${target_complex}$, intent(inout) :: AP(*)
+            ${target_complex}$, intent(in)    :: BP(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$sygst(itype, uplo, n, A, lda, B, ldb, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: itype, n, lda, ldb
+            character, intent(in)    :: uplo
+            ${target_real}$, intent(inout) :: A(lda,*)
+            ${target_real}$, intent(in)    :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$hegst(itype, uplo, n, A, lda, B, ldb, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: itype, n, lda, ldb
+            character,   intent(in)    :: uplo
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            ${target_complex}$, intent(in)    :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$sbgvx(jobz, range, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                              Q, ldq, vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                              work, iwork, ifail, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldq, il, iu, ldz
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            ${target_real}$, intent(out)   :: Q(ldq,*), w(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${C}$hbgvx(jobz, range, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                              Q, ldq, vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                              work, rwork, iwork, ifail, info)
+$:IMPORT_C()
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldq, il, iu, ldz
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            ${target_complex}$, intent(out)   :: Q(ldq,*), Z(ldz,*), work(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${R}$spgvx(itype, jobz, range, uplo, n, AP, BP, vl, vu, il, iu, &
+                              abstol, m, w, Z, ldz, work, iwork, ifail, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: itype, n, il, iu, ldz
+            character, intent(in)    :: jobz, range, uplo
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: AP(*), BP(*)
+            ${target_real}$, intent(out)   :: w(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${C}$hpgvx(itype, jobz, range, uplo, n, AP, BP, vl, vu, il, iu, &
+                              abstol, m, w, Z, ldz, work, rwork, iwork, ifail, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: itype, n, il, iu, ldz
+            character,   intent(in)    :: jobz, range, uplo
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: AP(*), BP(*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            ${target_complex}$, intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${R}$sygvx(itype, jobz, range, uplo, n, A, lda, B, ldb, &
+                              vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                              work, lwork, iwork, ifail, info)
+$:IMPORT_R()
+            integer,   intent(in)    :: itype, n, lda, ldb, il, iu, ldz, lwork
+            character, intent(in)    :: jobz, range, uplo
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$, intent(out)   :: w(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${C}$hegvx(itype, jobz, range, uplo, n, A, lda, B, ldb, &
+                              vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                              work, lwork, rwork, iwork, ifail, info)
+$:IMPORT_C()
+            integer,     intent(in)    :: itype, n, lda, ldb, il, iu, ldz, lwork
+            character,   intent(in)    :: jobz, range, uplo
+            ${target_real}$,    intent(in)    :: vl, vu, abstol
+            ${target_complex}$, intent(inout) :: A(lda,*), B(ldb,*)
+            ${target_real}$,    intent(out)   :: w(*), rwork(*)
+            ${target_complex}$, intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
         end subroutine
     end interface
 
@@ -8722,6 +10110,2524 @@ $:CPACK_INV('zsptri', C + 'sptri')
         X(1:ldx, 1:nrhs) = t2q_c(Xt)
         rcond = t2q_r(rcondt)
         ferr(1:nrhs) = t2q_r(ferrt); berr(1:nrhs) = t2q_r(berrt)
+    end subroutine
+
+    ! ── Phase L1 — 2-stage symmetric/Hermitian eigensolvers (JOBZ='N') ──
+    ! All 2-stage drivers reject JOBZ='V' at parameter check 1; tests
+    ! must hard-code 'N'. Workspaces are much larger than the regular
+    ! variants — always do the (-1) workspace query first.
+    subroutine target_dsyev_2stage(jobz, uplo, n, A, lda, w, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: w(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), wt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), wt(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syev_2stage(jobz, uplo, n, At, lda, wt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$syev_2stage(jobz, uplo, n, At, lda, wt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zheev_2stage(jobz, uplo, n, A, lda, w, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, lrwork
+        lrwork = max(1, 3*n - 2)
+        allocate(At(lda, n), wt(n), rwork(lrwork))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heev_2stage(jobz, uplo, n, At, lda, wt, wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$heev_2stage(jobz, uplo, n, At, lda, wt, work, lwork, rwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsyevd_2stage(jobz, uplo, n, A, lda, w, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: w(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), wt(:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda, n), wt(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syevd_2stage(jobz, uplo, n, At, lda, wt, wopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$syevd_2stage(jobz, uplo, n, At, lda, wt, work, lwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zheevd_2stage(jobz, uplo, n, A, lda, w, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, lrwork, liwork, iwopt(1)
+        allocate(At(lda, n), wt(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heevd_2stage(jobz, uplo, n, At, lda, wt, wopt, -1, &
+                               rwopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$heevd_2stage(jobz, uplo, n, At, lda, wt, work, lwork, &
+                               rwork, lrwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsyevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                    abstol, m, w, z, ldz, isuppz, info)
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, lda, il, iu, ldz
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: m, isuppz(*), info
+        real(ep),  intent(out)   :: w(*), z(ldz,*)
+        ${target_real}$, allocatable :: At(:,:), wt(:), zt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda, n), wt(n), zt(ldz, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syevr_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, isuppz, &
+                               wopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$syevr_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, isuppz, &
+                               work, lwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zheevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                    abstol, m, w, z, ldz, isuppz, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, lda, il, iu, ldz
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: m, isuppz(*), info
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: z(ldz,*)
+        ${target_complex}$, allocatable :: At(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, lrwork, liwork, iwopt(1)
+        allocate(At(lda, n), zt(ldz, n), wt(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heevr_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, isuppz, &
+                               wopt, -1, rwopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$heevr_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, isuppz, &
+                               work, lwork, rwork, lrwork, iwork, liwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsyevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                    abstol, m, w, z, ldz, ifail, info)
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, lda, il, iu, ldz
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: m, ifail(*), info
+        real(ep),  intent(out)   :: w(*), z(ldz,*)
+        ${target_real}$, allocatable :: At(:,:), wt(:), zt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), wt(n), zt(ldz, n), iwork(5*n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$syevx_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, &
+                               wopt, -1, iwork, ifail, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$syevx_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, &
+                               work, lwork, iwork, ifail, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zheevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                    abstol, m, w, z, ldz, ifail, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, lda, il, iu, ldz
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: m, ifail(*), info
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: z(ldz,*)
+        ${target_complex}$, allocatable :: At(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), zt(ldz, n), wt(n), rwork(7*n), iwork(5*n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$heevx_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, &
+                               wopt, -1, rwork, iwork, ifail, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$heevx_2stage(jobz, range, uplo, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                               il, iu, q2t_r(abstol), m, wt, zt, ldz, &
+                               work, lwork, rwork, iwork, ifail, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, kd, ldab, ldz
+        real(ep),  intent(inout) :: AB(ldab,*)
+        real(ep),  intent(out)   :: w(*), z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), wt(:), zt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(ABt(ldab, n), wt(n), zt(ldz, n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$sbev_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sbev_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, work, lwork, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zhbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, kd, ldab, ldz
+        complex(ep), intent(inout) :: AB(ldab,*)
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(ABt(ldab, n), wt(n), zt(ldz, n), rwork(max(1, n)))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$hbev_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                              wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hbev_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                              work, lwork, rwork, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: n, kd, ldab, ldz
+        real(ep),  intent(inout) :: AB(ldab,*)
+        real(ep),  intent(out)   :: w(*), z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), wt(:), zt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(ABt(ldab, n), wt(n), zt(ldz, n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$sbevd_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                               wopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$sbevd_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                               work, lwork, iwork, liwork, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zhbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: n, kd, ldab, ldz
+        complex(ep), intent(inout) :: AB(ldab,*)
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, lrwork, liwork, iwopt(1)
+        allocate(ABt(ldab, n), wt(n), zt(ldz, n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$hbevd_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                               wopt, -1, rwopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$hbevd_2stage(jobz, uplo, n, kd, ABt, ldab, wt, zt, ldz, &
+                               work, lwork, rwork, lrwork, iwork, liwork, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                    vl, vu, il, iu, abstol, m, w, z, ldz, ifail, info)
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: AB(ldab,*)
+        real(ep),  intent(out)   :: Q(ldq,*), w(*), z(ldz,*)
+        integer,   intent(out)   :: m, ifail(*), info
+        ${target_real}$, allocatable :: ABt(:,:), Qt(:,:), wt(:), zt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(ABt(ldab, n), Qt(ldq, n), wt(n), zt(ldz, n), iwork(5*n))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        call ${R}$sbevx_2stage(jobz, range, uplo, n, kd, ABt, ldab, Qt, ldq, &
+                               q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                               m, wt, zt, ldz, wopt, -1, iwork, ifail, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sbevx_2stage(jobz, range, uplo, n, kd, ABt, ldab, Qt, ldq, &
+                               q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                               m, wt, zt, ldz, work, lwork, iwork, ifail, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zhbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                    vl, vu, il, iu, abstol, m, w, z, ldz, ifail, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, kd, ldab, ldq, il, iu, ldz
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: AB(ldab,*)
+        complex(ep), intent(out)   :: Q(ldq,*), z(ldz,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: m, ifail(*), info
+        ${target_complex}$, allocatable :: ABt(:,:), Qt(:,:), zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(ABt(ldab, n), Qt(ldq, n), wt(n), zt(ldz, n), &
+                 rwork(7*n), iwork(5*n))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        call ${C}$hbevx_2stage(jobz, range, uplo, n, kd, ABt, ldab, Qt, ldq, &
+                               q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                               m, wt, zt, ldz, wopt, -1, rwork, iwork, ifail, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hbevx_2stage(jobz, range, uplo, n, kd, ABt, ldab, Qt, ldq, &
+                               q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                               m, wt, zt, ldz, work, lwork, rwork, iwork, ifail, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        w(1:n) = t2q_r(wt)
+    end subroutine
+
+    subroutine target_dsygv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, info)
+        character, intent(in)    :: jobz, uplo
+        integer,   intent(in)    :: itype, n, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),  intent(out)   :: w(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), wt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, n), wt(n))
+        At = q2t_r(A(1:lda, 1:n))
+        Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$sygv_2stage(itype, jobz, uplo, n, At, lda, Bt, ldb, wt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sygv_2stage(itype, jobz, uplo, n, At, lda, Bt, ldb, wt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        B(1:ldb, 1:n) = t2q_r(Bt)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    subroutine target_zhegv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, info)
+        character,   intent(in)    :: jobz, uplo
+        integer,     intent(in)    :: itype, n, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, lrwork
+        lrwork = max(1, 3*n - 2)
+        allocate(At(lda, n), Bt(ldb, n), wt(n), rwork(lrwork))
+        At = q2t_c(A(1:lda, 1:n))
+        Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$hegv_2stage(itype, jobz, uplo, n, At, lda, Bt, ldb, wt, &
+                              wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hegv_2stage(itype, jobz, uplo, n, At, lda, Bt, ldb, wt, &
+                              work, lwork, rwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        B(1:ldb, 1:n) = t2q_c(Bt)
+        w(1:n)        = t2q_r(wt)
+    end subroutine
+
+    ! ── Phase L2 — Hessenberg/Schur expert drivers ──────────────────
+    subroutine target_dgees(jobvs, sort, select, n, A, lda, sdim, wr, wi, &
+                            vs, ldvs, info)
+        character, intent(in)    :: jobvs, sort
+        interface
+            logical function select(re, im)
+                import :: ep
+                real(ep), intent(in) :: re, im
+            end function select
+        end interface
+        integer,   intent(in)    :: n, lda, ldvs
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: sdim, info
+        real(ep),  intent(out)   :: wr(*), wi(*), vs(ldvs,*)
+        ${target_real}$, allocatable :: At(:,:), wrt(:), wit(:), vst(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        logical, allocatable :: bwork(:)
+        integer :: lwork
+        allocate(At(lda, n), wrt(n), wit(n), vst(ldvs, n), bwork(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gees(jobvs, sort, target_select_r, n, At, lda, sdim, &
+                       wrt, wit, vst, ldvs, wopt, -1, bwork, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$gees(jobvs, sort, target_select_r, n, At, lda, sdim, &
+                       wrt, wit, vst, ldvs, work, lwork, bwork, info)
+        A(1:lda, 1:n)   = t2q_r(At)
+        wr(1:n)         = t2q_r(wrt)
+        wi(1:n)         = t2q_r(wit)
+        vs(1:ldvs, 1:n) = t2q_r(vst)
+    end subroutine
+
+    subroutine target_zgees(jobvs, sort, select, n, A, lda, sdim, w, &
+                            vs, ldvs, info)
+        character,   intent(in)    :: jobvs, sort
+        interface
+            logical function select(z)
+                import :: ep
+                complex(ep), intent(in) :: z
+            end function select
+        end interface
+        integer,     intent(in)    :: n, lda, ldvs
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: sdim, info
+        complex(ep), intent(out)   :: w(*), vs(ldvs,*)
+        ${target_complex}$, allocatable :: At(:,:), wt(:), vst(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        logical, allocatable :: bwork(:)
+        integer :: lwork
+        allocate(At(lda, n), wt(n), vst(ldvs, n), rwork(n), bwork(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gees(jobvs, sort, target_select_c, n, At, lda, sdim, &
+                       wt, vst, ldvs, wopt, -1, rwork, bwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$gees(jobvs, sort, target_select_c, n, At, lda, sdim, &
+                       wt, vst, ldvs, work, lwork, rwork, bwork, info)
+        A(1:lda, 1:n)   = t2q_c(At)
+        w(1:n)          = t2q_c(wt)
+        vs(1:ldvs, 1:n) = t2q_c(vst)
+    end subroutine
+
+    subroutine target_dgeesx(jobvs, sort, select, sense, n, A, lda, sdim, &
+                             wr, wi, vs, ldvs, rconde, rcondv, info)
+        character, intent(in)    :: jobvs, sort, sense
+        interface
+            logical function select(re, im)
+                import :: ep
+                real(ep), intent(in) :: re, im
+            end function select
+        end interface
+        integer,   intent(in)    :: n, lda, ldvs
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: sdim, info
+        real(ep),  intent(out)   :: wr(*), wi(*), vs(ldvs,*)
+        real(ep),  intent(out)   :: rconde, rcondv
+        ${target_real}$, allocatable :: At(:,:), wrt(:), wit(:), vst(:,:), work(:)
+        integer,   allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1), rcondet, rcondvt
+        logical, allocatable :: bwork(:)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda, n), wrt(n), wit(n), vst(ldvs, n), bwork(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geesx(jobvs, sort, target_select_r, sense, n, At, lda, sdim, &
+                        wrt, wit, vst, ldvs, rcondet, rcondvt, &
+                        wopt, -1, iwopt, -1, bwork, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$geesx(jobvs, sort, target_select_r, sense, n, At, lda, sdim, &
+                        wrt, wit, vst, ldvs, rcondet, rcondvt, &
+                        work, lwork, iwork, liwork, bwork, info)
+        A(1:lda, 1:n)   = t2q_r(At)
+        wr(1:n)         = t2q_r(wrt)
+        wi(1:n)         = t2q_r(wit)
+        vs(1:ldvs, 1:n) = t2q_r(vst)
+        rconde          = t2q_r(rcondet)
+        rcondv          = t2q_r(rcondvt)
+    end subroutine
+
+    subroutine target_zgeesx(jobvs, sort, select, sense, n, A, lda, sdim, &
+                             w, vs, ldvs, rconde, rcondv, info)
+        character,   intent(in)    :: jobvs, sort, sense
+        interface
+            logical function select(z)
+                import :: ep
+                complex(ep), intent(in) :: z
+            end function select
+        end interface
+        integer,     intent(in)    :: n, lda, ldvs
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: sdim, info
+        complex(ep), intent(out)   :: w(*), vs(ldvs,*)
+        real(ep),    intent(out)   :: rconde, rcondv
+        ${target_complex}$, allocatable :: At(:,:), wt(:), vst(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: rcondet, rcondvt
+        logical, allocatable :: bwork(:)
+        integer :: lwork
+        allocate(At(lda, n), wt(n), vst(ldvs, n), rwork(n), bwork(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$geesx(jobvs, sort, target_select_c, sense, n, At, lda, sdim, &
+                        wt, vst, ldvs, rcondet, rcondvt, &
+                        wopt, -1, rwork, bwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$geesx(jobvs, sort, target_select_c, sense, n, At, lda, sdim, &
+                        wt, vst, ldvs, rcondet, rcondvt, &
+                        work, lwork, rwork, bwork, info)
+        A(1:lda, 1:n)   = t2q_c(At)
+        w(1:n)          = t2q_c(wt)
+        vs(1:ldvs, 1:n) = t2q_c(vst)
+        rconde          = t2q_r(rcondet)
+        rcondv          = t2q_r(rcondvt)
+    end subroutine
+
+    subroutine target_dgeevx(balanc, jobvl, jobvr, sense, n, A, lda, &
+                             wr, wi, vl, ldvl, vr, ldvr, ilo, ihi, &
+                             scale, abnrm, rconde, rcondv, info)
+        character, intent(in)    :: balanc, jobvl, jobvr, sense
+        integer,   intent(in)    :: n, lda, ldvl, ldvr
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: ilo, ihi, info
+        real(ep),  intent(out)   :: wr(*), wi(*), vl(ldvl,*), vr(ldvr,*)
+        real(ep),  intent(out)   :: scale(*), abnrm
+        real(ep),  intent(out)   :: rconde(*), rcondv(*)
+        ${target_real}$, allocatable :: At(:,:), wrt(:), wit(:)
+        ${target_real}$, allocatable :: vlt(:,:), vrt(:,:), scalet(:)
+        ${target_real}$, allocatable :: rcondet(:), rcondvt(:), work(:)
+        integer,   allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1), abnrmt
+        integer :: lwork
+        allocate(At(lda, n), wrt(n), wit(n))
+        allocate(vlt(ldvl, n), vrt(ldvr, n), scalet(n))
+        allocate(rcondet(n), rcondvt(n), iwork(2*n - 2))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geevx(balanc, jobvl, jobvr, sense, n, At, lda, &
+                        wrt, wit, vlt, ldvl, vrt, ldvr, ilo, ihi, &
+                        scalet, abnrmt, rcondet, rcondvt, &
+                        wopt, -1, iwork, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$geevx(balanc, jobvl, jobvr, sense, n, At, lda, &
+                        wrt, wit, vlt, ldvl, vrt, ldvr, ilo, ihi, &
+                        scalet, abnrmt, rcondet, rcondvt, &
+                        work, lwork, iwork, info)
+        A(1:lda, 1:n)   = t2q_r(At)
+        wr(1:n)         = t2q_r(wrt)
+        wi(1:n)         = t2q_r(wit)
+        vl(1:ldvl, 1:n) = t2q_r(vlt)
+        vr(1:ldvr, 1:n) = t2q_r(vrt)
+        scale(1:n)      = t2q_r(scalet)
+        abnrm           = t2q_r(abnrmt)
+        rconde(1:n)     = t2q_r(rcondet)
+        rcondv(1:n)     = t2q_r(rcondvt)
+    end subroutine
+
+    subroutine target_zgeevx(balanc, jobvl, jobvr, sense, n, A, lda, w, &
+                             vl, ldvl, vr, ldvr, ilo, ihi, scale, abnrm, &
+                             rconde, rcondv, info)
+        character,   intent(in)    :: balanc, jobvl, jobvr, sense
+        integer,     intent(in)    :: n, lda, ldvl, ldvr
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: ilo, ihi, info
+        complex(ep), intent(out)   :: w(*), vl(ldvl,*), vr(ldvr,*)
+        real(ep),    intent(out)   :: scale(*), abnrm
+        real(ep),    intent(out)   :: rconde(*), rcondv(*)
+        ${target_complex}$, allocatable :: At(:,:), wt(:), vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$,    allocatable :: scalet(:), rcondet(:), rcondvt(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: abnrmt
+        integer :: lwork
+        allocate(At(lda, n), wt(n), vlt(ldvl, n), vrt(ldvr, n))
+        allocate(scalet(n), rcondet(n), rcondvt(n), rwork(2*n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$geevx(balanc, jobvl, jobvr, sense, n, At, lda, wt, &
+                        vlt, ldvl, vrt, ldvr, ilo, ihi, scalet, abnrmt, &
+                        rcondet, rcondvt, wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$geevx(balanc, jobvl, jobvr, sense, n, At, lda, wt, &
+                        vlt, ldvl, vrt, ldvr, ilo, ihi, scalet, abnrmt, &
+                        rcondet, rcondvt, work, lwork, rwork, info)
+        A(1:lda, 1:n)   = t2q_c(At)
+        w(1:n)          = t2q_c(wt)
+        vl(1:ldvl, 1:n) = t2q_c(vlt)
+        vr(1:ldvr, 1:n) = t2q_c(vrt)
+        scale(1:n)      = t2q_r(scalet)
+        abnrm           = t2q_r(abnrmt)
+        rconde(1:n)     = t2q_r(rcondet)
+        rcondv(1:n)     = t2q_r(rcondvt)
+    end subroutine
+
+    subroutine target_dhsein(side, eigsrc, initv, select, n, H, ldh, &
+                             wr, wi, vl, ldvl, vr, ldvr, mm, m, &
+                             ifaill, ifailr, info)
+        character, intent(in)    :: side, eigsrc, initv
+        integer,   intent(in)    :: n, ldh, ldvl, ldvr, mm
+        logical,   intent(inout) :: select(*)
+        real(ep),  intent(in)    :: H(ldh,*)
+        real(ep),  intent(inout) :: wr(*)
+        real(ep),  intent(in)    :: wi(*)
+        real(ep),  intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+        integer,   intent(out)   :: m, ifaill(*), ifailr(*), info
+        ${target_real}$, allocatable :: Ht(:,:), wrt(:), wit(:), vlt(:,:), vrt(:,:), work(:)
+        allocate(Ht(ldh, n), wrt(n), wit(n), vlt(ldvl, mm), vrt(ldvr, mm))
+        allocate(work(n*(n+2)))
+        Ht = q2t_r(H(1:ldh, 1:n))
+        wrt = q2t_r(wr(1:n))
+        wit = q2t_r(wi(1:n))
+        vlt = q2t_r(vl(1:ldvl, 1:mm))
+        vrt = q2t_r(vr(1:ldvr, 1:mm))
+        call ${R}$hsein(side, eigsrc, initv, select, n, Ht, ldh, &
+                        wrt, wit, vlt, ldvl, vrt, ldvr, mm, m, work, &
+                        ifaill, ifailr, info)
+        wr(1:n)          = t2q_r(wrt)
+        vl(1:ldvl, 1:mm) = t2q_r(vlt)
+        vr(1:ldvr, 1:mm) = t2q_r(vrt)
+    end subroutine
+
+    subroutine target_zhsein(side, eigsrc, initv, select, n, H, ldh, &
+                             w, vl, ldvl, vr, ldvr, mm, m, &
+                             ifaill, ifailr, info)
+        character,   intent(in)    :: side, eigsrc, initv
+        integer,     intent(in)    :: n, ldh, ldvl, ldvr, mm
+        logical,     intent(in)    :: select(*)
+        complex(ep), intent(in)    :: H(ldh,*)
+        complex(ep), intent(inout) :: w(*), vl(ldvl,*), vr(ldvr,*)
+        integer,     intent(out)   :: m, ifaill(*), ifailr(*), info
+        ${target_complex}$, allocatable :: Ht(:,:), wt(:), vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        allocate(Ht(ldh, n), wt(n), vlt(ldvl, mm), vrt(ldvr, mm))
+        allocate(work(n*n), rwork(n))
+        Ht  = q2t_c(H(1:ldh, 1:n))
+        wt  = q2t_c(w(1:n))
+        vlt = q2t_c(vl(1:ldvl, 1:mm))
+        vrt = q2t_c(vr(1:ldvr, 1:mm))
+        call ${C}$hsein(side, eigsrc, initv, select, n, Ht, ldh, &
+                        wt, vlt, ldvl, vrt, ldvr, mm, m, work, rwork, &
+                        ifaill, ifailr, info)
+        w(1:n)           = t2q_c(wt)
+        vl(1:ldvl, 1:mm) = t2q_c(vlt)
+        vr(1:ldvr, 1:mm) = t2q_c(vrt)
+    end subroutine
+
+    subroutine target_dtrevc3(side, howmny, select, n, T, ldt, vl, ldvl, &
+                              vr, ldvr, mm, m, info)
+        character, intent(in)    :: side, howmny
+        integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm
+        logical,   intent(inout) :: select(*)
+        real(ep),  intent(in)    :: T(ldt,*)
+        real(ep),  intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+        integer,   intent(out)   :: m, info
+        ${target_real}$, allocatable :: Tt(:,:), vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(Tt(ldt, n), vlt(ldvl, mm), vrt(ldvr, mm))
+        Tt  = q2t_r(T(1:ldt, 1:n))
+        vlt = q2t_r(vl(1:ldvl, 1:mm))
+        vrt = q2t_r(vr(1:ldvr, 1:mm))
+        call ${R}$trevc3(side, howmny, select, n, Tt, ldt, vlt, ldvl, &
+                         vrt, ldvr, mm, m, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$trevc3(side, howmny, select, n, Tt, ldt, vlt, ldvl, &
+                         vrt, ldvr, mm, m, work, lwork, info)
+        vl(1:ldvl, 1:mm) = t2q_r(vlt)
+        vr(1:ldvr, 1:mm) = t2q_r(vrt)
+    end subroutine
+
+    subroutine target_ztrevc3(side, howmny, select, n, T, ldt, vl, ldvl, &
+                              vr, ldvr, mm, m, info)
+        character,   intent(in)    :: side, howmny
+        integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm
+        logical,     intent(in)    :: select(*)
+        complex(ep), intent(inout) :: T(ldt,*), vl(ldvl,*), vr(ldvr,*)
+        integer,     intent(out)   :: m, info
+        ${target_complex}$, allocatable :: Tt(:,:), vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, lrwork
+        allocate(Tt(ldt, n), vlt(ldvl, mm), vrt(ldvr, mm))
+        Tt  = q2t_c(T(1:ldt, 1:n))
+        vlt = q2t_c(vl(1:ldvl, 1:mm))
+        vrt = q2t_c(vr(1:ldvr, 1:mm))
+        call ${C}$trevc3(side, howmny, select, n, Tt, ldt, vlt, ldvl, &
+                         vrt, ldvr, mm, m, wopt, -1, rwopt, -1, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        allocate(work(lwork), rwork(lrwork))
+        call ${C}$trevc3(side, howmny, select, n, Tt, ldt, vlt, ldvl, &
+                         vrt, ldvr, mm, m, work, lwork, rwork, lrwork, info)
+        T(1:ldt, 1:n)    = t2q_c(Tt)
+        vl(1:ldvl, 1:mm) = t2q_c(vlt)
+        vr(1:ldvr, 1:mm) = t2q_c(vrt)
+    end subroutine
+
+    subroutine target_dtrexc(compq, n, T, ldt, Q, ldq, ifst, ilst, info)
+        character, intent(in)    :: compq
+        integer,   intent(in)    :: n, ldt, ldq
+        integer,   intent(inout) :: ifst, ilst
+        real(ep),  intent(inout) :: T(ldt,*), Q(ldq,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Tt(:,:), Qt(:,:), work(:)
+        allocate(Tt(ldt, n), Qt(ldq, n), work(n))
+        Tt = q2t_r(T(1:ldt, 1:n))
+        Qt = q2t_r(Q(1:ldq, 1:n))
+        call ${R}$trexc(compq, n, Tt, ldt, Qt, ldq, ifst, ilst, work, info)
+        T(1:ldt, 1:n) = t2q_r(Tt)
+        Q(1:ldq, 1:n) = t2q_r(Qt)
+    end subroutine
+
+    subroutine target_ztrexc(compq, n, T, ldt, Q, ldq, ifst, ilst, info)
+        character,   intent(in)    :: compq
+        integer,     intent(in)    :: n, ldt, ldq, ifst, ilst
+        complex(ep), intent(inout) :: T(ldt,*), Q(ldq,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Tt(:,:), Qt(:,:)
+        allocate(Tt(ldt, n), Qt(ldq, n))
+        Tt = q2t_c(T(1:ldt, 1:n))
+        Qt = q2t_c(Q(1:ldq, 1:n))
+        call ${C}$trexc(compq, n, Tt, ldt, Qt, ldq, ifst, ilst, info)
+        T(1:ldt, 1:n) = t2q_c(Tt)
+        Q(1:ldq, 1:n) = t2q_c(Qt)
+    end subroutine
+
+    subroutine target_dtrsen(job, compq, select, n, T, ldt, Q, ldq, &
+                             wr, wi, m, s, sep, info)
+        character, intent(in)    :: job, compq
+        integer,   intent(in)    :: n, ldt, ldq
+        logical,   intent(in)    :: select(*)
+        real(ep),  intent(inout) :: T(ldt,*), Q(ldq,*)
+        real(ep),  intent(out)   :: wr(*), wi(*), s, sep
+        integer,   intent(out)   :: m, info
+        ${target_real}$, allocatable :: Tt(:,:), Qt(:,:), wrt(:), wit(:), work(:)
+        integer,   allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1), st, sept
+        integer :: lwork, liwork, iwopt(1)
+        allocate(Tt(ldt, n), Qt(ldq, n), wrt(n), wit(n))
+        Tt = q2t_r(T(1:ldt, 1:n))
+        Qt = q2t_r(Q(1:ldq, 1:n))
+        call ${R}$trsen(job, compq, select, n, Tt, ldt, Qt, ldq, &
+                        wrt, wit, m, st, sept, wopt, -1, iwopt, -1, info)
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$trsen(job, compq, select, n, Tt, ldt, Qt, ldq, &
+                        wrt, wit, m, st, sept, work, lwork, iwork, liwork, info)
+        T(1:ldt, 1:n) = t2q_r(Tt)
+        Q(1:ldq, 1:n) = t2q_r(Qt)
+        wr(1:n) = t2q_r(wrt)
+        wi(1:n) = t2q_r(wit)
+        s   = t2q_r(st)
+        sep = t2q_r(sept)
+    end subroutine
+
+    subroutine target_ztrsen(job, compq, select, n, T, ldt, Q, ldq, &
+                             w, m, s, sep, info)
+        character,   intent(in)    :: job, compq
+        integer,     intent(in)    :: n, ldt, ldq
+        logical,     intent(in)    :: select(*)
+        complex(ep), intent(inout) :: T(ldt,*), Q(ldq,*)
+        complex(ep), intent(out)   :: w(*)
+        real(ep),    intent(out)   :: s, sep
+        integer,     intent(out)   :: m, info
+        ${target_complex}$, allocatable :: Tt(:,:), Qt(:,:), wt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: st, sept
+        integer :: lwork
+        allocate(Tt(ldt, n), Qt(ldq, n), wt(n))
+        Tt = q2t_c(T(1:ldt, 1:n))
+        Qt = q2t_c(Q(1:ldq, 1:n))
+        call ${C}$trsen(job, compq, select, n, Tt, ldt, Qt, ldq, &
+                        wt, m, st, sept, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$trsen(job, compq, select, n, Tt, ldt, Qt, ldq, &
+                        wt, m, st, sept, work, lwork, info)
+        T(1:ldt, 1:n) = t2q_c(Tt)
+        Q(1:ldq, 1:n) = t2q_c(Qt)
+        w(1:n) = t2q_c(wt)
+        s   = t2q_r(st)
+        sep = t2q_r(sept)
+    end subroutine
+
+    ! Trivial "select all" predicates passed to *gees / *geesx through
+    ! the SELECT argument when SORT='N'. LAPACK does not actually invoke
+    ! SELECT in that case, but the EXTERNAL declaration in the
+    ! interfaces above still requires a callable function reference.
+    logical function target_select_r(re, im) result(sel)
+        ${target_real}$, intent(in) :: re, im
+        sel = .true.
+        if (re == re) continue  ! suppress unused-arg warning
+        if (im == im) continue
+    end function
+
+    logical function target_select_c(z) result(sel)
+        ${target_complex}$, intent(in) :: z
+        sel = .true.
+        if (z == z) continue
+    end function
+
+    ! Trivial 3-arg / 2-arg SELCTG predicates for *gges* / *ggesx*.
+    logical function target_selctg_r(re, im, b) result(sel)
+        ${target_real}$, intent(in) :: re, im, b
+        sel = .true.
+        if (re == re) continue
+        if (im == im) continue
+        if (b == b) continue
+    end function
+
+    logical function target_selctg_c(a, b) result(sel)
+        ${target_complex}$, intent(in) :: a, b
+        sel = .true.
+        if (a == a) continue
+        if (b == b) continue
+    end function
+
+    ! ── Phase L3 — Generalized non-symmetric drivers + QZ ───────────
+    subroutine target_dgges(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                            sdim, alphar, alphai, beta, vsl, ldvsl, vsr, ldvsr, info)
+        character, intent(in) :: jobvsl, jobvsr, sort
+        interface
+            logical function selctg(re, im, b)
+                import :: ep
+                real(ep), intent(in) :: re, im, b
+            end function selctg
+        end interface
+        integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: sdim, info
+        real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+        real(ep),  intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), art(:), ait(:), bet(:)
+        ${target_real}$, allocatable :: vslt(:,:), vsrt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        logical, allocatable :: bwork(:)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), art(n), ait(n), bet(n))
+        allocate(vslt(ldvsl,n), vsrt(ldvsr,n), bwork(n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        call ${R}$gges(jobvsl, jobvsr, sort, target_selctg_r, n, At, lda, Bt, ldb, &
+                       sdim, art, ait, bet, vslt, ldvsl, vsrt, ldvsr, &
+                       wopt, -1, bwork, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gges(jobvsl, jobvsr, sort, target_selctg_r, n, At, lda, Bt, ldb, &
+                       sdim, art, ait, bet, vslt, ldvsl, vsrt, ldvsr, &
+                       work, lwork, bwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        alphar(1:n) = t2q_r(art); alphai(1:n) = t2q_r(ait); beta(1:n) = t2q_r(bet)
+        vsl(1:ldvsl,1:n) = t2q_r(vslt); vsr(1:ldvsr,1:n) = t2q_r(vsrt)
+    end subroutine
+
+    subroutine target_zgges(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                            sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, info)
+        character,   intent(in) :: jobvsl, jobvsr, sort
+        interface
+            logical function selctg(a, b)
+                import :: ep
+                complex(ep), intent(in) :: a, b
+            end function selctg
+        end interface
+        integer,     intent(in)    :: n, lda, ldb, ldvsl, ldvsr
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: sdim, info
+        complex(ep), intent(out)   :: alpha(*), beta(*)
+        complex(ep), intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), at_(:), bet(:)
+        ${target_complex}$, allocatable :: vslt(:,:), vsrt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        logical, allocatable :: bwork(:)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), at_(n), bet(n))
+        allocate(vslt(ldvsl,n), vsrt(ldvsr,n), rwork(8*n), bwork(n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        call ${C}$gges(jobvsl, jobvsr, sort, target_selctg_c, n, At, lda, Bt, ldb, &
+                       sdim, at_, bet, vslt, ldvsl, vsrt, ldvsr, &
+                       wopt, -1, rwork, bwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gges(jobvsl, jobvsr, sort, target_selctg_c, n, At, lda, Bt, ldb, &
+                       sdim, at_, bet, vslt, ldvsl, vsrt, ldvsr, &
+                       work, lwork, rwork, bwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        alpha(1:n) = t2q_c(at_); beta(1:n) = t2q_c(bet)
+        vsl(1:ldvsl,1:n) = t2q_c(vslt); vsr(1:ldvsr,1:n) = t2q_c(vsrt)
+    end subroutine
+
+    subroutine target_dgges3(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                             sdim, alphar, alphai, beta, vsl, ldvsl, vsr, ldvsr, info)
+        character, intent(in) :: jobvsl, jobvsr, sort
+        interface
+            logical function selctg(re, im, b)
+                import :: ep
+                real(ep), intent(in) :: re, im, b
+            end function selctg
+        end interface
+        integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: sdim, info
+        real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+        real(ep),  intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), art(:), ait(:), bet(:)
+        ${target_real}$, allocatable :: vslt(:,:), vsrt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        logical, allocatable :: bwork(:)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), art(n), ait(n), bet(n))
+        allocate(vslt(ldvsl,n), vsrt(ldvsr,n), bwork(n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        call ${R}$gges3(jobvsl, jobvsr, sort, target_selctg_r, n, At, lda, Bt, ldb, &
+                        sdim, art, ait, bet, vslt, ldvsl, vsrt, ldvsr, &
+                        wopt, -1, bwork, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gges3(jobvsl, jobvsr, sort, target_selctg_r, n, At, lda, Bt, ldb, &
+                        sdim, art, ait, bet, vslt, ldvsl, vsrt, ldvsr, &
+                        work, lwork, bwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        alphar(1:n) = t2q_r(art); alphai(1:n) = t2q_r(ait); beta(1:n) = t2q_r(bet)
+        vsl(1:ldvsl,1:n) = t2q_r(vslt); vsr(1:ldvsr,1:n) = t2q_r(vsrt)
+    end subroutine
+
+    subroutine target_zgges3(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                             sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, info)
+        character,   intent(in) :: jobvsl, jobvsr, sort
+        interface
+            logical function selctg(a, b)
+                import :: ep
+                complex(ep), intent(in) :: a, b
+            end function selctg
+        end interface
+        integer,     intent(in)    :: n, lda, ldb, ldvsl, ldvsr
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: sdim, info
+        complex(ep), intent(out)   :: alpha(*), beta(*)
+        complex(ep), intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), at_(:), bet(:)
+        ${target_complex}$, allocatable :: vslt(:,:), vsrt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        logical, allocatable :: bwork(:)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), at_(n), bet(n))
+        allocate(vslt(ldvsl,n), vsrt(ldvsr,n), rwork(8*n), bwork(n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        call ${C}$gges3(jobvsl, jobvsr, sort, target_selctg_c, n, At, lda, Bt, ldb, &
+                        sdim, at_, bet, vslt, ldvsl, vsrt, ldvsr, &
+                        wopt, -1, rwork, bwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gges3(jobvsl, jobvsr, sort, target_selctg_c, n, At, lda, Bt, ldb, &
+                        sdim, at_, bet, vslt, ldvsl, vsrt, ldvsr, &
+                        work, lwork, rwork, bwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        alpha(1:n) = t2q_c(at_); beta(1:n) = t2q_c(bet)
+        vsl(1:ldvsl,1:n) = t2q_c(vslt); vsr(1:ldvsr,1:n) = t2q_c(vsrt)
+    end subroutine
+
+    subroutine target_dggesx(jobvsl, jobvsr, sort, selctg, sense, n, A, lda, &
+                             B, ldb, sdim, alphar, alphai, beta, vsl, ldvsl, &
+                             vsr, ldvsr, rconde, rcondv, info)
+        character, intent(in) :: jobvsl, jobvsr, sort, sense
+        interface
+            logical function selctg(re, im, b)
+                import :: ep
+                real(ep), intent(in) :: re, im, b
+            end function selctg
+        end interface
+        integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: sdim, info
+        real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+        real(ep),  intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*)
+        real(ep),  intent(out)   :: rconde(2), rcondv(2)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), art(:), ait(:), bet(:)
+        ${target_real}$, allocatable :: vslt(:,:), vsrt(:,:), work(:)
+        integer, allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1), rcondet(2), rcondvt(2)
+        logical, allocatable :: bwork(:)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda,n), Bt(ldb,n), art(n), ait(n), bet(n))
+        allocate(vslt(ldvsl,n), vsrt(ldvsr,n), bwork(n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        call ${R}$ggesx(jobvsl, jobvsr, sort, target_selctg_r, sense, n, At, lda, &
+                        Bt, ldb, sdim, art, ait, bet, vslt, ldvsl, vsrt, ldvsr, &
+                        rcondet, rcondvt, wopt, -1, iwopt, -1, bwork, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$ggesx(jobvsl, jobvsr, sort, target_selctg_r, sense, n, At, lda, &
+                        Bt, ldb, sdim, art, ait, bet, vslt, ldvsl, vsrt, ldvsr, &
+                        rcondet, rcondvt, work, lwork, iwork, liwork, bwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        alphar(1:n) = t2q_r(art); alphai(1:n) = t2q_r(ait); beta(1:n) = t2q_r(bet)
+        vsl(1:ldvsl,1:n) = t2q_r(vslt); vsr(1:ldvsr,1:n) = t2q_r(vsrt)
+        rconde = t2q_r(rcondet); rcondv = t2q_r(rcondvt)
+    end subroutine
+
+    subroutine target_zggesx(jobvsl, jobvsr, sort, selctg, sense, n, A, lda, &
+                             B, ldb, sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, &
+                             rconde, rcondv, info)
+        character,   intent(in) :: jobvsl, jobvsr, sort, sense
+        interface
+            logical function selctg(a, b)
+                import :: ep
+                complex(ep), intent(in) :: a, b
+            end function selctg
+        end interface
+        integer,     intent(in)    :: n, lda, ldb, ldvsl, ldvsr
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: sdim, info
+        complex(ep), intent(out)   :: alpha(*), beta(*)
+        complex(ep), intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*)
+        real(ep),    intent(out)   :: rconde(2), rcondv(2)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), at_(:), bet(:)
+        ${target_complex}$, allocatable :: vslt(:,:), vsrt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        integer, allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rcondet(2), rcondvt(2)
+        logical, allocatable :: bwork(:)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda,n), Bt(ldb,n), at_(n), bet(n))
+        allocate(vslt(ldvsl,n), vsrt(ldvsr,n), rwork(8*n), bwork(n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        call ${C}$ggesx(jobvsl, jobvsr, sort, target_selctg_c, sense, n, At, lda, &
+                        Bt, ldb, sdim, at_, bet, vslt, ldvsl, vsrt, ldvsr, &
+                        rcondet, rcondvt, wopt, -1, rwork, iwopt, -1, bwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${C}$ggesx(jobvsl, jobvsr, sort, target_selctg_c, sense, n, At, lda, &
+                        Bt, ldb, sdim, at_, bet, vslt, ldvsl, vsrt, ldvsr, &
+                        rcondet, rcondvt, work, lwork, rwork, iwork, liwork, bwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        alpha(1:n) = t2q_c(at_); beta(1:n) = t2q_c(bet)
+        vsl(1:ldvsl,1:n) = t2q_c(vslt); vsr(1:ldvsr,1:n) = t2q_c(vsrt)
+        rconde = t2q_r(rcondet); rcondv = t2q_r(rcondvt)
+    end subroutine
+
+    subroutine target_dggev3(jobvl, jobvr, n, A, lda, B, ldb, alphar, alphai, &
+                             beta, vl, ldvl, vr, ldvr, info)
+        character, intent(in) :: jobvl, jobvr
+        integer,   intent(in) :: n, lda, ldb, ldvl, ldvr
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+        real(ep),  intent(out)   :: vl(ldvl,*), vr(ldvr,*)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), art(:), ait(:), bet(:)
+        ${target_real}$, allocatable :: vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), art(n), ait(n), bet(n))
+        allocate(vlt(ldvl,n), vrt(ldvr,n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        call ${R}$ggev3(jobvl, jobvr, n, At, lda, Bt, ldb, art, ait, bet, &
+                        vlt, ldvl, vrt, ldvr, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$ggev3(jobvl, jobvr, n, At, lda, Bt, ldb, art, ait, bet, &
+                        vlt, ldvl, vrt, ldvr, work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        alphar(1:n) = t2q_r(art); alphai(1:n) = t2q_r(ait); beta(1:n) = t2q_r(bet)
+        vl(1:ldvl,1:n) = t2q_r(vlt); vr(1:ldvr,1:n) = t2q_r(vrt)
+    end subroutine
+
+    subroutine target_zggev3(jobvl, jobvr, n, A, lda, B, ldb, alpha, beta, &
+                             vl, ldvl, vr, ldvr, info)
+        character,   intent(in)    :: jobvl, jobvr
+        integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: info
+        complex(ep), intent(out)   :: alpha(*), beta(*)
+        complex(ep), intent(out)   :: vl(ldvl,*), vr(ldvr,*)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), at_(:), bet(:)
+        ${target_complex}$, allocatable :: vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), at_(n), bet(n))
+        allocate(vlt(ldvl,n), vrt(ldvr,n), rwork(8*n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        call ${C}$ggev3(jobvl, jobvr, n, At, lda, Bt, ldb, at_, bet, &
+                        vlt, ldvl, vrt, ldvr, wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$ggev3(jobvl, jobvr, n, At, lda, Bt, ldb, at_, bet, &
+                        vlt, ldvl, vrt, ldvr, work, lwork, rwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        alpha(1:n) = t2q_c(at_); beta(1:n) = t2q_c(bet)
+        vl(1:ldvl,1:n) = t2q_c(vlt); vr(1:ldvr,1:n) = t2q_c(vrt)
+    end subroutine
+
+    subroutine target_dggevx(balanc, jobvl, jobvr, sense, n, A, lda, B, ldb, &
+                             alphar, alphai, beta, vl, ldvl, vr, ldvr, &
+                             ilo, ihi, lscale, rscale, abnrm, bbnrm, &
+                             rconde, rcondv, info)
+        character, intent(in)    :: balanc, jobvl, jobvr, sense
+        integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: ilo, ihi, info
+        real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+        real(ep),  intent(out)   :: vl(ldvl,*), vr(ldvr,*)
+        real(ep),  intent(out)   :: lscale(*), rscale(*), abnrm, bbnrm
+        real(ep),  intent(out)   :: rconde(*), rcondv(*)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), art(:), ait(:), bet(:)
+        ${target_real}$, allocatable :: vlt(:,:), vrt(:,:), lscalet(:), rscalet(:)
+        ${target_real}$, allocatable :: rcondet(:), rcondvt(:), work(:)
+        integer, allocatable :: iwork(:)
+        logical, allocatable :: bwork(:)
+        ${target_real}$ :: wopt(1), abnrmt, bbnrmt
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), art(n), ait(n), bet(n))
+        allocate(vlt(ldvl,n), vrt(ldvr,n), lscalet(n), rscalet(n))
+        allocate(rcondet(n), rcondvt(n), iwork(n+6), bwork(n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        call ${R}$ggevx(balanc, jobvl, jobvr, sense, n, At, lda, Bt, ldb, &
+                        art, ait, bet, vlt, ldvl, vrt, ldvr, ilo, ihi, &
+                        lscalet, rscalet, abnrmt, bbnrmt, rcondet, rcondvt, &
+                        wopt, -1, iwork, bwork, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$ggevx(balanc, jobvl, jobvr, sense, n, At, lda, Bt, ldb, &
+                        art, ait, bet, vlt, ldvl, vrt, ldvr, ilo, ihi, &
+                        lscalet, rscalet, abnrmt, bbnrmt, rcondet, rcondvt, &
+                        work, lwork, iwork, bwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        alphar(1:n) = t2q_r(art); alphai(1:n) = t2q_r(ait); beta(1:n) = t2q_r(bet)
+        vl(1:ldvl,1:n) = t2q_r(vlt); vr(1:ldvr,1:n) = t2q_r(vrt)
+        lscale(1:n) = t2q_r(lscalet); rscale(1:n) = t2q_r(rscalet)
+        abnrm = t2q_r(abnrmt); bbnrm = t2q_r(bbnrmt)
+        rconde(1:n) = t2q_r(rcondet); rcondv(1:n) = t2q_r(rcondvt)
+    end subroutine
+
+    subroutine target_zggevx(balanc, jobvl, jobvr, sense, n, A, lda, B, ldb, &
+                             alpha, beta, vl, ldvl, vr, ldvr, &
+                             ilo, ihi, lscale, rscale, abnrm, bbnrm, &
+                             rconde, rcondv, info)
+        character,   intent(in)    :: balanc, jobvl, jobvr, sense
+        integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: ilo, ihi, info
+        complex(ep), intent(out)   :: alpha(*), beta(*)
+        complex(ep), intent(out)   :: vl(ldvl,*), vr(ldvr,*)
+        real(ep),    intent(out)   :: lscale(*), rscale(*), abnrm, bbnrm
+        real(ep),    intent(out)   :: rconde(*), rcondv(*)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), at_(:), bet(:)
+        ${target_complex}$, allocatable :: vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$,    allocatable :: lscalet(:), rscalet(:)
+        ${target_real}$,    allocatable :: rcondet(:), rcondvt(:), rwork(:)
+        integer, allocatable :: iwork(:)
+        logical, allocatable :: bwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: abnrmt, bbnrmt
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), at_(n), bet(n))
+        allocate(vlt(ldvl,n), vrt(ldvr,n), lscalet(n), rscalet(n))
+        allocate(rcondet(n), rcondvt(n), rwork(6*n), iwork(n+2), bwork(n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        call ${C}$ggevx(balanc, jobvl, jobvr, sense, n, At, lda, Bt, ldb, &
+                        at_, bet, vlt, ldvl, vrt, ldvr, ilo, ihi, &
+                        lscalet, rscalet, abnrmt, bbnrmt, rcondet, rcondvt, &
+                        wopt, -1, rwork, iwork, bwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$ggevx(balanc, jobvl, jobvr, sense, n, At, lda, Bt, ldb, &
+                        at_, bet, vlt, ldvl, vrt, ldvr, ilo, ihi, &
+                        lscalet, rscalet, abnrmt, bbnrmt, rcondet, rcondvt, &
+                        work, lwork, rwork, iwork, bwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        alpha(1:n) = t2q_c(at_); beta(1:n) = t2q_c(bet)
+        vl(1:ldvl,1:n) = t2q_c(vlt); vr(1:ldvr,1:n) = t2q_c(vrt)
+        lscale(1:n) = t2q_r(lscalet); rscale(1:n) = t2q_r(rscalet)
+        abnrm = t2q_r(abnrmt); bbnrm = t2q_r(bbnrmt)
+        rconde(1:n) = t2q_r(rcondet); rcondv(1:n) = t2q_r(rcondvt)
+    end subroutine
+
+    subroutine target_dhgeqz(job, compq, compz, n, ilo, ihi, H, ldh, T, ldt, &
+                             alphar, alphai, beta, Q, ldq, Z, ldz, info)
+        character, intent(in)    :: job, compq, compz
+        integer,   intent(in)    :: n, ilo, ihi, ldh, ldt, ldq, ldz
+        real(ep),  intent(inout) :: H(ldh,*), T(ldt,*), Q(ldq,*), Z(ldz,*)
+        real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Ht(:,:), Tt(:,:), Qt(:,:), Zt(:,:)
+        ${target_real}$, allocatable :: art(:), ait(:), bet(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(Ht(ldh,n), Tt(ldt,n), Qt(ldq,n), Zt(ldz,n))
+        allocate(art(n), ait(n), bet(n))
+        Ht = q2t_r(H(1:ldh,1:n)); Tt = q2t_r(T(1:ldt,1:n))
+        Qt = q2t_r(Q(1:ldq,1:n)); Zt = q2t_r(Z(1:ldz,1:n))
+        call ${R}$hgeqz(job, compq, compz, n, ilo, ihi, Ht, ldh, Tt, ldt, &
+                        art, ait, bet, Qt, ldq, Zt, ldz, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$hgeqz(job, compq, compz, n, ilo, ihi, Ht, ldh, Tt, ldt, &
+                        art, ait, bet, Qt, ldq, Zt, ldz, work, lwork, info)
+        H(1:ldh,1:n) = t2q_r(Ht); T(1:ldt,1:n) = t2q_r(Tt)
+        Q(1:ldq,1:n) = t2q_r(Qt); Z(1:ldz,1:n) = t2q_r(Zt)
+        alphar(1:n) = t2q_r(art); alphai(1:n) = t2q_r(ait); beta(1:n) = t2q_r(bet)
+    end subroutine
+
+    subroutine target_zhgeqz(job, compq, compz, n, ilo, ihi, H, ldh, T, ldt, &
+                             alpha, beta, Q, ldq, Z, ldz, info)
+        character,   intent(in)    :: job, compq, compz
+        integer,     intent(in)    :: n, ilo, ihi, ldh, ldt, ldq, ldz
+        complex(ep), intent(inout) :: H(ldh,*), T(ldt,*), Q(ldq,*), Z(ldz,*)
+        complex(ep), intent(out)   :: alpha(*), beta(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Ht(:,:), Tt(:,:), Qt(:,:), Zt(:,:)
+        ${target_complex}$, allocatable :: at_(:), bet(:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(Ht(ldh,n), Tt(ldt,n), Qt(ldq,n), Zt(ldz,n))
+        allocate(at_(n), bet(n), rwork(n))
+        Ht = q2t_c(H(1:ldh,1:n)); Tt = q2t_c(T(1:ldt,1:n))
+        Qt = q2t_c(Q(1:ldq,1:n)); Zt = q2t_c(Z(1:ldz,1:n))
+        call ${C}$hgeqz(job, compq, compz, n, ilo, ihi, Ht, ldh, Tt, ldt, &
+                        at_, bet, Qt, ldq, Zt, ldz, wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$hgeqz(job, compq, compz, n, ilo, ihi, Ht, ldh, Tt, ldt, &
+                        at_, bet, Qt, ldq, Zt, ldz, work, lwork, rwork, info)
+        H(1:ldh,1:n) = t2q_c(Ht); T(1:ldt,1:n) = t2q_c(Tt)
+        Q(1:ldq,1:n) = t2q_c(Qt); Z(1:ldz,1:n) = t2q_c(Zt)
+        alpha(1:n) = t2q_c(at_); beta(1:n) = t2q_c(bet)
+    end subroutine
+
+    subroutine target_dtgevc(side, howmny, select, n, S, lds, P, ldp, &
+                             vl, ldvl, vr, ldvr, mm, m, info)
+        character, intent(in)    :: side, howmny
+        integer,   intent(in)    :: n, lds, ldp, ldvl, ldvr, mm
+        logical,   intent(in)    :: select(*)
+        real(ep),  intent(in)    :: S(lds,*), P(ldp,*)
+        real(ep),  intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+        integer,   intent(out)   :: m, info
+        ${target_real}$, allocatable :: St(:,:), Pt(:,:), vlt(:,:), vrt(:,:), work(:)
+        allocate(St(lds,n), Pt(ldp,n), vlt(ldvl,mm), vrt(ldvr,mm))
+        allocate(work(6*n))
+        St = q2t_r(S(1:lds,1:n)); Pt = q2t_r(P(1:ldp,1:n))
+        vlt = q2t_r(vl(1:ldvl,1:mm)); vrt = q2t_r(vr(1:ldvr,1:mm))
+        call ${R}$tgevc(side, howmny, select, n, St, lds, Pt, ldp, &
+                        vlt, ldvl, vrt, ldvr, mm, m, work, info)
+        vl(1:ldvl,1:mm) = t2q_r(vlt); vr(1:ldvr,1:mm) = t2q_r(vrt)
+    end subroutine
+
+    ! ── Phase L4 — Generalized post-processing + constrained LS ─────
+    subroutine target_dtgexc(wantq, wantz, n, A, lda, B, ldb, Q, ldq, Z, ldz, &
+                             ifst, ilst, info)
+        logical,   intent(in)    :: wantq, wantz
+        integer,   intent(in)    :: n, lda, ldb, ldq, ldz
+        integer,   intent(inout) :: ifst, ilst
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Qt(:,:), Zt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), Qt(ldq,n), Zt(ldz,n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        Qt = q2t_r(Q(1:ldq,1:n)); Zt = q2t_r(Z(1:ldz,1:n))
+        call ${R}$tgexc(wantq, wantz, n, At, lda, Bt, ldb, Qt, ldq, Zt, ldz, &
+                        ifst, ilst, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$tgexc(wantq, wantz, n, At, lda, Bt, ldb, Qt, ldq, Zt, ldz, &
+                        ifst, ilst, work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        Q(1:ldq,1:n) = t2q_r(Qt); Z(1:ldz,1:n) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_ztgexc(wantq, wantz, n, A, lda, B, ldb, Q, ldq, Z, ldz, &
+                             ifst, ilst, info)
+        logical,     intent(in)    :: wantq, wantz
+        integer,     intent(in)    :: n, lda, ldb, ldq, ldz, ifst, ilst
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Qt(:,:), Zt(:,:)
+        allocate(At(lda,n), Bt(ldb,n), Qt(ldq,n), Zt(ldz,n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        Qt = q2t_c(Q(1:ldq,1:n)); Zt = q2t_c(Z(1:ldz,1:n))
+        call ${C}$tgexc(wantq, wantz, n, At, lda, Bt, ldb, Qt, ldq, Zt, ldz, &
+                        ifst, ilst, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        Q(1:ldq,1:n) = t2q_c(Qt); Z(1:ldz,1:n) = t2q_c(Zt)
+    end subroutine
+
+    subroutine target_dtgsen(ijob, wantq, wantz, select, n, A, lda, B, ldb, &
+                             alphar, alphai, beta, Q, ldq, Z, ldz, m, pl, pr, &
+                             dif, info)
+        integer,   intent(in)    :: ijob, n, lda, ldb, ldq, ldz
+        logical,   intent(in)    :: wantq, wantz, select(*)
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+        real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*), pl, pr, dif(2)
+        integer,   intent(out)   :: m, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Qt(:,:), Zt(:,:)
+        ${target_real}$, allocatable :: art(:), ait(:), bet(:), work(:)
+        ${target_real}$ :: wopt(1), plt, prt, dift(2)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda,n), Bt(ldb,n), Qt(ldq,n), Zt(ldz,n))
+        allocate(art(n), ait(n), bet(n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        Qt = q2t_r(Q(1:ldq,1:n)); Zt = q2t_r(Z(1:ldz,1:n))
+        call ${R}$tgsen(ijob, wantq, wantz, select, n, At, lda, Bt, ldb, &
+                        art, ait, bet, Qt, ldq, Zt, ldz, m, plt, prt, dift, &
+                        wopt, -1, iwopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$tgsen(ijob, wantq, wantz, select, n, At, lda, Bt, ldb, &
+                        art, ait, bet, Qt, ldq, Zt, ldz, m, plt, prt, dift, &
+                        work, lwork, iwork, liwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        Q(1:ldq,1:n) = t2q_r(Qt); Z(1:ldz,1:n) = t2q_r(Zt)
+        alphar(1:n) = t2q_r(art); alphai(1:n) = t2q_r(ait); beta(1:n) = t2q_r(bet)
+        pl = t2q_r(plt); pr = t2q_r(prt); dif = t2q_r(dift)
+    end subroutine
+
+    subroutine target_ztgsen(ijob, wantq, wantz, select, n, A, lda, B, ldb, &
+                             alpha, beta, Q, ldq, Z, ldz, m, pl, pr, dif, info)
+        integer,     intent(in)    :: ijob, n, lda, ldb, ldq, ldz
+        logical,     intent(in)    :: wantq, wantz, select(*)
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+        complex(ep), intent(out)   :: alpha(*), beta(*)
+        real(ep),    intent(out)   :: pl, pr, dif(2)
+        integer,     intent(out)   :: m, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Qt(:,:), Zt(:,:)
+        ${target_complex}$, allocatable :: a_(:), bet(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: plt, prt, dift(2)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, liwork, iwopt(1)
+        allocate(At(lda,n), Bt(ldb,n), Qt(ldq,n), Zt(ldz,n), a_(n), bet(n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        Qt = q2t_c(Q(1:ldq,1:n)); Zt = q2t_c(Z(1:ldz,1:n))
+        call ${C}$tgsen(ijob, wantq, wantz, select, n, At, lda, Bt, ldb, &
+                        a_, bet, Qt, ldq, Zt, ldz, m, plt, prt, dift, &
+                        wopt, -1, iwopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${C}$tgsen(ijob, wantq, wantz, select, n, At, lda, Bt, ldb, &
+                        a_, bet, Qt, ldq, Zt, ldz, m, plt, prt, dift, &
+                        work, lwork, iwork, liwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        Q(1:ldq,1:n) = t2q_c(Qt); Z(1:ldz,1:n) = t2q_c(Zt)
+        alpha(1:n) = t2q_c(a_); beta(1:n) = t2q_c(bet)
+        pl = t2q_r(plt); pr = t2q_r(prt); dif = t2q_r(dift)
+    end subroutine
+
+    subroutine target_dtgsna(job, howmny, select, n, A, lda, B, ldb, vl, ldvl, &
+                             vr, ldvr, s, dif, mm, m, info)
+        character, intent(in)    :: job, howmny
+        integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, mm
+        logical,   intent(in)    :: select(*)
+        real(ep),  intent(in)    :: A(lda,*), B(ldb,*), vl(ldvl,*), vr(ldvr,*)
+        real(ep),  intent(out)   :: s(*), dif(*)
+        integer,   intent(out)   :: m, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), vlt(:,:), vrt(:,:)
+        ${target_real}$, allocatable :: st(:), dift(:), work(:)
+        integer, allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), vlt(ldvl,mm), vrt(ldvr,mm))
+        allocate(st(mm), dift(mm), iwork(n+6))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        vlt = q2t_r(vl(1:ldvl,1:mm)); vrt = q2t_r(vr(1:ldvr,1:mm))
+        call ${R}$tgsna(job, howmny, select, n, At, lda, Bt, ldb, vlt, ldvl, &
+                        vrt, ldvr, st, dift, mm, m, wopt, -1, iwork, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$tgsna(job, howmny, select, n, At, lda, Bt, ldb, vlt, ldvl, &
+                        vrt, ldvr, st, dift, mm, m, work, lwork, iwork, info)
+        s(1:mm) = t2q_r(st); dif(1:mm) = t2q_r(dift)
+    end subroutine
+
+    subroutine target_ztgsna(job, howmny, select, n, A, lda, B, ldb, vl, ldvl, &
+                             vr, ldvr, s, dif, mm, m, info)
+        character,   intent(in)    :: job, howmny
+        integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr, mm
+        logical,     intent(in)    :: select(*)
+        complex(ep), intent(in)    :: A(lda,*), B(ldb,*), vl(ldvl,*), vr(ldvr,*)
+        real(ep),    intent(out)   :: s(*), dif(*)
+        integer,     intent(out)   :: m, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$,    allocatable :: st(:), dift(:)
+        integer, allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), vlt(ldvl,mm), vrt(ldvr,mm))
+        allocate(st(mm), dift(mm), iwork(n+2))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        vlt = q2t_c(vl(1:ldvl,1:mm)); vrt = q2t_c(vr(1:ldvr,1:mm))
+        call ${C}$tgsna(job, howmny, select, n, At, lda, Bt, ldb, vlt, ldvl, &
+                        vrt, ldvr, st, dift, mm, m, wopt, -1, iwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$tgsna(job, howmny, select, n, At, lda, Bt, ldb, vlt, ldvl, &
+                        vrt, ldvr, st, dift, mm, m, work, lwork, iwork, info)
+        s(1:mm) = t2q_r(st); dif(1:mm) = t2q_r(dift)
+    end subroutine
+
+    subroutine target_dtgsja(jobu, jobv, jobq, m, p, n, k, l, A, lda, B, ldb, &
+                             tola, tolb, alpha, beta, U, ldu, V, ldv, Q, ldq, &
+                             ncycle, info)
+        character, intent(in)    :: jobu, jobv, jobq
+        integer,   intent(in)    :: m, p, n, k, l, lda, ldb, ldu, ldv, ldq
+        real(ep),  intent(in)    :: tola, tolb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*), U(ldu,*), V(ldv,*), Q(ldq,*)
+        real(ep),  intent(out)   :: alpha(*), beta(*)
+        integer,   intent(out)   :: ncycle, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Ut(:,:), Vt(:,:), Qt(:,:)
+        ${target_real}$, allocatable :: alphat(:), betat(:), work(:)
+        allocate(At(lda,n), Bt(ldb,n), Ut(ldu,m), Vt(ldv,p), Qt(ldq,n))
+        allocate(alphat(n), betat(n), work(2*n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        Ut = q2t_r(U(1:ldu,1:m)); Vt = q2t_r(V(1:ldv,1:p))
+        Qt = q2t_r(Q(1:ldq,1:n))
+        call ${R}$tgsja(jobu, jobv, jobq, m, p, n, k, l, At, lda, Bt, ldb, &
+                        q2t_r(tola), q2t_r(tolb), alphat, betat, Ut, ldu, Vt, ldv, &
+                        Qt, ldq, work, ncycle, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        U(1:ldu,1:m) = t2q_r(Ut); V(1:ldv,1:p) = t2q_r(Vt); Q(1:ldq,1:n) = t2q_r(Qt)
+        alpha(1:n) = t2q_r(alphat); beta(1:n) = t2q_r(betat)
+    end subroutine
+
+    subroutine target_ztgsja(jobu, jobv, jobq, m, p, n, k, l, A, lda, B, ldb, &
+                             tola, tolb, alpha, beta, U, ldu, V, ldv, Q, ldq, &
+                             ncycle, info)
+        character,   intent(in)    :: jobu, jobv, jobq
+        integer,     intent(in)    :: m, p, n, k, l, lda, ldb, ldu, ldv, ldq
+        real(ep),    intent(in)    :: tola, tolb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), U(ldu,*), V(ldv,*), Q(ldq,*)
+        real(ep),    intent(out)   :: alpha(*), beta(*)
+        integer,     intent(out)   :: ncycle, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Ut(:,:), Vt(:,:), Qt(:,:), work(:)
+        ${target_real}$,    allocatable :: alphat(:), betat(:)
+        allocate(At(lda,n), Bt(ldb,n), Ut(ldu,m), Vt(ldv,p), Qt(ldq,n))
+        allocate(alphat(n), betat(n), work(2*n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        Ut = q2t_c(U(1:ldu,1:m)); Vt = q2t_c(V(1:ldv,1:p))
+        Qt = q2t_c(Q(1:ldq,1:n))
+        call ${C}$tgsja(jobu, jobv, jobq, m, p, n, k, l, At, lda, Bt, ldb, &
+                        q2t_r(tola), q2t_r(tolb), alphat, betat, Ut, ldu, Vt, ldv, &
+                        Qt, ldq, work, ncycle, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        U(1:ldu,1:m) = t2q_c(Ut); V(1:ldv,1:p) = t2q_c(Vt); Q(1:ldq,1:n) = t2q_c(Qt)
+        alpha(1:n) = t2q_r(alphat); beta(1:n) = t2q_r(betat)
+    end subroutine
+
+    subroutine target_dtgsyl(trans, ijob, m, n, A, lda, B, ldb, C, ldc, &
+                             D, ldd, E, lde, F, ldf, scale, dif, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: ijob, m, n, lda, ldb, ldc, ldd, lde, ldf
+        real(ep),  intent(in)    :: A(lda,*), B(ldb,*), D(ldd,*), E(lde,*)
+        real(ep),  intent(inout) :: C(ldc,*), F(ldf,*)
+        real(ep),  intent(out)   :: scale, dif
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:), Dt(:,:), Et(:,:), Ft(:,:), work(:)
+        integer, allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1), scalet, dift
+        integer :: lwork
+        allocate(At(lda,m), Bt(ldb,n), Ct(ldc,n), Dt(ldd,m), Et(lde,n), Ft(ldf,n))
+        allocate(iwork(m+n+6))
+        At = q2t_r(A(1:lda,1:m)); Bt = q2t_r(B(1:ldb,1:n))
+        Ct = q2t_r(C(1:ldc,1:n)); Dt = q2t_r(D(1:ldd,1:m))
+        Et = q2t_r(E(1:lde,1:n)); Ft = q2t_r(F(1:ldf,1:n))
+        call ${R}$tgsyl(trans, ijob, m, n, At, lda, Bt, ldb, Ct, ldc, &
+                        Dt, ldd, Et, lde, Ft, ldf, scalet, dift, wopt, -1, iwork, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$tgsyl(trans, ijob, m, n, At, lda, Bt, ldb, Ct, ldc, &
+                        Dt, ldd, Et, lde, Ft, ldf, scalet, dift, work, lwork, iwork, info)
+        C(1:ldc,1:n) = t2q_r(Ct); F(1:ldf,1:n) = t2q_r(Ft)
+        scale = t2q_r(scalet); dif = t2q_r(dift)
+    end subroutine
+
+    subroutine target_ztgsyl(trans, ijob, m, n, A, lda, B, ldb, C, ldc, &
+                             D, ldd, E, lde, F, ldf, scale, dif, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: ijob, m, n, lda, ldb, ldc, ldd, lde, ldf
+        complex(ep), intent(in)    :: A(lda,*), B(ldb,*), D(ldd,*), E(lde,*)
+        complex(ep), intent(inout) :: C(ldc,*), F(ldf,*)
+        real(ep),    intent(out)   :: scale, dif
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Ct(:,:), Dt(:,:), Et(:,:), Ft(:,:), work(:)
+        integer, allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: scalet, dift
+        integer :: lwork
+        allocate(At(lda,m), Bt(ldb,n), Ct(ldc,n), Dt(ldd,m), Et(lde,n), Ft(ldf,n))
+        allocate(iwork(m+n+2))
+        At = q2t_c(A(1:lda,1:m)); Bt = q2t_c(B(1:ldb,1:n))
+        Ct = q2t_c(C(1:ldc,1:n)); Dt = q2t_c(D(1:ldd,1:m))
+        Et = q2t_c(E(1:lde,1:n)); Ft = q2t_c(F(1:ldf,1:n))
+        call ${C}$tgsyl(trans, ijob, m, n, At, lda, Bt, ldb, Ct, ldc, &
+                        Dt, ldd, Et, lde, Ft, ldf, scalet, dift, wopt, -1, iwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$tgsyl(trans, ijob, m, n, At, lda, Bt, ldb, Ct, ldc, &
+                        Dt, ldd, Et, lde, Ft, ldf, scalet, dift, work, lwork, iwork, info)
+        C(1:ldc,1:n) = t2q_c(Ct); F(1:ldf,1:n) = t2q_c(Ft)
+        scale = t2q_r(scalet); dif = t2q_r(dift)
+    end subroutine
+
+    subroutine target_dggglm(n, m, p, A, lda, B, ldb, d, x, y, info)
+        integer,   intent(in)    :: n, m, p, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*), d(*)
+        real(ep),  intent(out)   :: x(*), y(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), dt(:), xt(:), yt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,m), Bt(ldb,p), dt(n), xt(m), yt(p))
+        At = q2t_r(A(1:lda,1:m)); Bt = q2t_r(B(1:ldb,1:p)); dt = q2t_r(d(1:n))
+        call ${R}$ggglm(n, m, p, At, lda, Bt, ldb, dt, xt, yt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$ggglm(n, m, p, At, lda, Bt, ldb, dt, xt, yt, work, lwork, info)
+        A(1:lda,1:m) = t2q_r(At); B(1:ldb,1:p) = t2q_r(Bt); d(1:n) = t2q_r(dt)
+        x(1:m) = t2q_r(xt); y(1:p) = t2q_r(yt)
+    end subroutine
+
+    subroutine target_zggglm(n, m, p, A, lda, B, ldb, d, x, y, info)
+        integer,     intent(in)    :: n, m, p, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), d(*)
+        complex(ep), intent(out)   :: x(*), y(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), dt(:), xt(:), yt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,m), Bt(ldb,p), dt(n), xt(m), yt(p))
+        At = q2t_c(A(1:lda,1:m)); Bt = q2t_c(B(1:ldb,1:p)); dt = q2t_c(d(1:n))
+        call ${C}$ggglm(n, m, p, At, lda, Bt, ldb, dt, xt, yt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$ggglm(n, m, p, At, lda, Bt, ldb, dt, xt, yt, work, lwork, info)
+        A(1:lda,1:m) = t2q_c(At); B(1:ldb,1:p) = t2q_c(Bt); d(1:n) = t2q_c(dt)
+        x(1:m) = t2q_c(xt); y(1:p) = t2q_c(yt)
+    end subroutine
+
+    subroutine target_dgglse(m, n, p, A, lda, B, ldb, c, d, x, info)
+        integer,   intent(in)    :: m, n, p, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
+        real(ep),  intent(out)   :: x(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), ct(:), dt(:), xt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), ct(m), dt(p), xt(n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        ct = q2t_r(c(1:m)); dt = q2t_r(d(1:p))
+        call ${R}$gglse(m, n, p, At, lda, Bt, ldb, ct, dt, xt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gglse(m, n, p, At, lda, Bt, ldb, ct, dt, xt, work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        c(1:m) = t2q_r(ct); d(1:p) = t2q_r(dt); x(1:n) = t2q_r(xt)
+    end subroutine
+
+    subroutine target_zgglse(m, n, p, A, lda, B, ldb, c, d, x, info)
+        integer,     intent(in)    :: m, n, p, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
+        complex(ep), intent(out)   :: x(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), ct(:), dt(:), xt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), ct(m), dt(p), xt(n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        ct = q2t_c(c(1:m)); dt = q2t_c(d(1:p))
+        call ${C}$gglse(m, n, p, At, lda, Bt, ldb, ct, dt, xt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gglse(m, n, p, At, lda, Bt, ldb, ct, dt, xt, work, lwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        c(1:m) = t2q_c(ct); d(1:p) = t2q_c(dt); x(1:n) = t2q_c(xt)
+    end subroutine
+
+    subroutine target_ztgevc(side, howmny, select, n, S, lds, P, ldp, &
+                             vl, ldvl, vr, ldvr, mm, m, info)
+        character,   intent(in)    :: side, howmny
+        integer,     intent(in)    :: n, lds, ldp, ldvl, ldvr, mm
+        logical,     intent(in)    :: select(*)
+        complex(ep), intent(in)    :: S(lds,*), P(ldp,*)
+        complex(ep), intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+        integer,     intent(out)   :: m, info
+        ${target_complex}$, allocatable :: St(:,:), Pt(:,:), vlt(:,:), vrt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        allocate(St(lds,n), Pt(ldp,n), vlt(ldvl,mm), vrt(ldvr,mm))
+        allocate(work(2*n), rwork(2*n))
+        St = q2t_c(S(1:lds,1:n)); Pt = q2t_c(P(1:ldp,1:n))
+        vlt = q2t_c(vl(1:ldvl,1:mm)); vrt = q2t_c(vr(1:ldvr,1:mm))
+        call ${C}$tgevc(side, howmny, select, n, St, lds, Pt, ldp, &
+                        vlt, ldvl, vrt, ldvr, mm, m, work, rwork, info)
+        vl(1:ldvl,1:mm) = t2q_c(vlt); vr(1:ldvr,1:mm) = t2q_c(vrt)
+    end subroutine
+
+    ! ── Phase L5 — Modern least-squares + Jacobi SVD ─────────────────
+    subroutine target_dgelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, info)
+        integer,  intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep), intent(in)    :: rcond
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep), intent(out)   :: S(*)
+        integer,  intent(out)   :: rank, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), St(:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, iwopt(1), liwork
+        allocate(At(lda,n), Bt(ldb,nrhs), St(min(m,n)))
+        allocate(iwork(1))   ! resized after query
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:nrhs))
+        call ${R}$gelsd(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        wopt, -1, iwopt, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); liwork = max(1, iwopt(1))
+        deallocate(iwork); allocate(work(lwork), iwork(liwork))
+        call ${R}$gelsd(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        work, lwork, iwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:nrhs) = t2q_r(Bt)
+        S(1:min(m,n)) = t2q_r(St)
+    end subroutine
+
+    subroutine target_zgelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, info)
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),    intent(in)    :: rcond
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),    intent(out)   :: S(*)
+        integer,     intent(out)   :: rank, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$,    allocatable :: St(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$    :: rwopt(1)
+        integer :: lwork, iwopt(1), liwork, lrwork
+        allocate(At(lda,n), Bt(ldb,nrhs), St(min(m,n)))
+        allocate(iwork(1), rwork(1))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:nrhs))
+        ! ZGELSD's workspace query writes RWORK(1) and IWORK(1) too.
+        call ${C}$gelsd(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        wopt, -1, rwopt, iwopt, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        deallocate(iwork, rwork)
+        allocate(work(lwork), rwork(lrwork), iwork(liwork))
+        call ${C}$gelsd(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        work, lwork, rwork, iwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:nrhs) = t2q_c(Bt)
+        S(1:min(m,n)) = t2q_r(St)
+    end subroutine
+
+    subroutine target_dgelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, info)
+        integer,  intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep), intent(in)    :: rcond
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep), intent(out)   :: S(*)
+        integer,  intent(out)   :: rank, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), St(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs), St(min(m,n)))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:nrhs))
+        call ${R}$gelss(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gelss(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:nrhs) = t2q_r(Bt)
+        S(1:min(m,n)) = t2q_r(St)
+    end subroutine
+
+    subroutine target_zgelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, info)
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),    intent(in)    :: rcond
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),    intent(out)   :: S(*)
+        integer,     intent(out)   :: rank, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$,    allocatable :: St(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs), St(min(m,n)), rwork(5*min(m,n)))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:nrhs))
+        call ${C}$gelss(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gelss(m, n, nrhs, At, lda, Bt, ldb, St, q2t_r(rcond), rank, &
+                        work, lwork, rwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:nrhs) = t2q_c(Bt)
+        S(1:min(m,n)) = t2q_r(St)
+    end subroutine
+
+    subroutine target_dgelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, info)
+        integer,  intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep), intent(in)    :: rcond
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,  intent(inout) :: jpvt(*)
+        integer,  intent(out)   :: rank, info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:nrhs))
+        call ${R}$gelsy(m, n, nrhs, At, lda, Bt, ldb, jpvt, q2t_r(rcond), rank, &
+                        wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gelsy(m, n, nrhs, At, lda, Bt, ldb, jpvt, q2t_r(rcond), rank, &
+                        work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_zgelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, info)
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),    intent(in)    :: rcond
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(inout) :: jpvt(*)
+        integer,     intent(out)   :: rank, info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs), rwork(2*n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:nrhs))
+        call ${C}$gelsy(m, n, nrhs, At, lda, Bt, ldb, jpvt, q2t_r(rcond), rank, &
+                        wopt, -1, rwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gelsy(m, n, nrhs, At, lda, Bt, ldb, jpvt, q2t_r(rcond), rank, &
+                        work, lwork, rwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dgelst(trans, m, n, nrhs, A, lda, B, ldb, info)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: m, n, nrhs, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:nrhs))
+        call ${R}$gelst(trans, m, n, nrhs, At, lda, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$gelst(trans, m, n, nrhs, At, lda, Bt, ldb, work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_zgelst(trans, m, n, nrhs, A, lda, B, ldb, info)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: m, n, nrhs, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,nrhs))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:nrhs))
+        call ${C}$gelst(trans, m, n, nrhs, At, lda, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gelst(trans, m, n, nrhs, At, lda, Bt, ldb, work, lwork, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dgejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                             sva, U, ldu, V, ldv, info)
+        character, intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+        integer,   intent(in)    :: m, n, lda, ldu, ldv
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: sva(*), U(ldu,*), V(ldv,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), svat(:), Ut(:,:), Vt(:,:), work(:)
+        integer,         allocatable :: iwork(:)
+        integer :: lwork, ucols, vcols
+        ! DGEJSV does not provide a workspace query; size pessimistically.
+        lwork = max(1, 7*n + 4*n*n + 6 + 2*max(m,n))
+        ucols = merge(m, n, jobu == 'F')
+        vcols = n
+        allocate(At(lda,n), svat(n), Ut(ldu,max(1,ucols)), Vt(ldv,max(1,vcols)))
+        allocate(work(lwork), iwork(max(1, m+3*n)))
+        At = q2t_r(A(1:lda,1:n))
+        call ${R}$gejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, At, lda, &
+                        svat, Ut, ldu, Vt, ldv, work, lwork, iwork, info)
+        A(1:lda,1:n) = t2q_r(At); sva(1:n) = t2q_r(svat)
+        if (jobu /= 'N') U(1:ldu,1:ucols) = t2q_r(Ut)
+        if (jobv /= 'N') V(1:ldv,1:vcols) = t2q_r(Vt)
+    end subroutine
+
+    subroutine target_zgejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                             sva, U, ldu, V, ldv, info)
+        character,   intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+        integer,     intent(in)    :: m, n, lda, ldu, ldv
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: sva(*)
+        complex(ep), intent(out)   :: U(ldu,*), V(ldv,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Ut(:,:), Vt(:,:), cwork(:)
+        ${target_real}$,    allocatable :: svat(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        integer :: lwork, lrwork, ucols, vcols
+        lwork  = max(2, 5*n + 2*n*n)
+        lrwork = max(7, n + 2*m)
+        ucols = merge(m, n, jobu == 'F')
+        vcols = n
+        allocate(At(lda,n), svat(n), Ut(ldu,max(1,ucols)), Vt(ldv,max(1,vcols)))
+        allocate(cwork(lwork), rwork(lrwork), iwork(max(1, m+3*n)))
+        At = q2t_c(A(1:lda,1:n))
+        call ${C}$gejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, At, lda, &
+                        svat, Ut, ldu, Vt, ldv, cwork, lwork, rwork, lrwork, &
+                        iwork, info)
+        A(1:lda,1:n) = t2q_c(At); sva(1:n) = t2q_r(svat)
+        if (jobu /= 'N') U(1:ldu,1:ucols) = t2q_c(Ut)
+        if (jobv /= 'N') V(1:ldv,1:vcols) = t2q_c(Vt)
+    end subroutine
+
+    subroutine target_dgesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                             ctol, info)
+        character, intent(in)    :: joba, jobu, jobv
+        integer,   intent(in)    :: m, n, lda, mv, ldv
+        real(ep),  intent(in)    :: ctol
+        real(ep),  intent(inout) :: A(lda,*), V(ldv,*)
+        real(ep),  intent(out)   :: sva(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Vt(:,:), svat(:), work(:)
+        integer :: lwork
+        lwork = max(6, m + n)
+        allocate(At(lda,n), Vt(ldv,n), svat(n), work(lwork))
+        At = q2t_r(A(1:lda,1:n)); Vt = q2t_r(V(1:ldv,1:n))
+        ! DGESVJ uses work(1) as input "ctol" hint (0 → routine's default).
+        work(1) = q2t_r(ctol)
+        call ${R}$gesvj(joba, jobu, jobv, m, n, At, lda, svat, mv, Vt, ldv, &
+                        work, lwork, info)
+        A(1:lda,1:n) = t2q_r(At); V(1:ldv,1:n) = t2q_r(Vt)
+        sva(1:n) = t2q_r(svat)
+    end subroutine
+
+    subroutine target_zgesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                             ctol, info)
+        character,   intent(in)    :: joba, jobu, jobv
+        integer,     intent(in)    :: m, n, lda, mv, ldv
+        real(ep),    intent(in)    :: ctol
+        complex(ep), intent(inout) :: A(lda,*), V(ldv,*)
+        real(ep),    intent(out)   :: sva(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Vt(:,:), cwork(:)
+        ${target_real}$,    allocatable :: svat(:), rwork(:)
+        integer :: lwork, lrwork
+        lwork  = max(6, m + n)
+        lrwork = max(6, n)
+        allocate(At(lda,n), Vt(ldv,n), svat(n), cwork(lwork), rwork(lrwork))
+        At = q2t_c(A(1:lda,1:n)); Vt = q2t_c(V(1:ldv,1:n))
+        rwork(1) = q2t_r(ctol)
+        call ${C}$gesvj(joba, jobu, jobv, m, n, At, lda, svat, mv, Vt, ldv, &
+                        cwork, lwork, rwork, lrwork, info)
+        A(1:lda,1:n) = t2q_c(At); V(1:ldv,1:n) = t2q_c(Vt)
+        sva(1:n) = t2q_r(svat)
+    end subroutine
+
+    ! ── Phase L18 — Auxiliary matrix norm utilities ──────────────────
+    function target_dlangb(norm, n, kl, ku, AB, ldab) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n, kl, ku, ldab
+        real(ep),  intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: ABt(:,:), workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_r(AB(1:ldab,1:n))
+        r = t2q_r(${R}$langb(norm, n, kl, ku, ABt, ldab, workt))
+    end function
+
+    function target_zlangb(norm, n, kl, ku, AB, ldab) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n, kl, ku, ldab
+        complex(ep), intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: ABt(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_c(AB(1:ldab,1:n))
+        r = t2q_r(${C}$langb(norm, n, kl, ku, ABt, ldab, workt))
+    end function
+
+    function target_dlangt(norm, n, dl, d, du) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: dl(*), d(*), du(*)
+        real(ep) :: r
+        r = t2q_r(${R}$langt(norm, n, q2t_r(dl(1:max(1,n-1))), &
+                              q2t_r(d(1:n)), q2t_r(du(1:max(1,n-1)))))
+    end function
+
+    function target_zlangt(norm, n, dl, d, du) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n
+        complex(ep), intent(in) :: dl(*), d(*), du(*)
+        real(ep) :: r
+        r = t2q_r(${C}$langt(norm, n, q2t_c(dl(1:max(1,n-1))), &
+                              q2t_c(d(1:n)), q2t_c(du(1:max(1,n-1)))))
+    end function
+
+    function target_dlanhs(norm, n, A, lda) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n, lda
+        real(ep),  intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: At(:,:), workt(:)
+        allocate(At(lda,n), workt(max(1,n)))
+        At = q2t_r(A(1:lda,1:n))
+        r = t2q_r(${R}$lanhs(norm, n, At, lda, workt))
+    end function
+
+    function target_zlanhs(norm, n, A, lda) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n, lda
+        complex(ep), intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(At(lda,n), workt(max(1,n)))
+        At = q2t_c(A(1:lda,1:n))
+        r = t2q_r(${C}$lanhs(norm, n, At, lda, workt))
+    end function
+
+    function target_dlansb(norm, uplo, n, k, AB, ldab) result(r)
+        character, intent(in) :: norm, uplo
+        integer,   intent(in) :: n, k, ldab
+        real(ep),  intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: ABt(:,:), workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_r(AB(1:ldab,1:n))
+        r = t2q_r(${R}$lansb(norm, uplo, n, k, ABt, ldab, workt))
+    end function
+
+    function target_zlanhb(norm, uplo, n, k, AB, ldab) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n, k, ldab
+        complex(ep), intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: ABt(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_c(AB(1:ldab,1:n))
+        r = t2q_r(${C}$lanhb(norm, uplo, n, k, ABt, ldab, workt))
+    end function
+
+    function target_dlansp(norm, uplo, n, AP) result(r)
+        character, intent(in) :: norm, uplo
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_real}$, allocatable :: APt(:), workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_r(AP(1:nap))
+        r = t2q_r(${R}$lansp(norm, uplo, n, APt, workt))
+    end function
+
+    function target_zlanhp(norm, uplo, n, AP) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n
+        complex(ep), intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_complex}$, allocatable :: APt(:)
+        ${target_real}$,    allocatable :: workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_c(AP(1:nap))
+        r = t2q_r(${C}$lanhp(norm, uplo, n, APt, workt))
+    end function
+
+    function target_dlanst(norm, n, d, e) result(r)
+        character, intent(in) :: norm
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: d(*), e(*)
+        real(ep) :: r
+        r = t2q_r(${R}$lanst(norm, n, q2t_r(d(1:n)), q2t_r(e(1:max(1,n-1)))))
+    end function
+
+    function target_zlanht(norm, n, d, e) result(r)
+        character,   intent(in) :: norm
+        integer,     intent(in) :: n
+        real(ep),    intent(in) :: d(*)
+        complex(ep), intent(in) :: e(*)
+        real(ep) :: r
+        r = t2q_r(${C}$lanht(norm, n, q2t_r(d(1:n)), q2t_c(e(1:max(1,n-1)))))
+    end function
+
+    function target_dlansy(norm, uplo, n, A, lda) result(r)
+        character, intent(in) :: norm, uplo
+        integer,   intent(in) :: n, lda
+        real(ep),  intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: At(:,:), workt(:)
+        allocate(At(lda,n), workt(max(1,n)))
+        At = q2t_r(A(1:lda,1:n))
+        r = t2q_r(${R}$lansy(norm, uplo, n, At, lda, workt))
+    end function
+
+    function target_dlantb(norm, uplo, diag, n, k, AB, ldab) result(r)
+        character, intent(in) :: norm, uplo, diag
+        integer,   intent(in) :: n, k, ldab
+        real(ep),  intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: ABt(:,:), workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_r(AB(1:ldab,1:n))
+        r = t2q_r(${R}$lantb(norm, uplo, diag, n, k, ABt, ldab, workt))
+    end function
+
+    function target_zlantb(norm, uplo, diag, n, k, AB, ldab) result(r)
+        character,   intent(in) :: norm, uplo, diag
+        integer,     intent(in) :: n, k, ldab
+        complex(ep), intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: ABt(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_c(AB(1:ldab,1:n))
+        r = t2q_r(${C}$lantb(norm, uplo, diag, n, k, ABt, ldab, workt))
+    end function
+
+    function target_dlantp(norm, uplo, diag, n, AP) result(r)
+        character, intent(in) :: norm, uplo, diag
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_real}$, allocatable :: APt(:), workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_r(AP(1:nap))
+        r = t2q_r(${R}$lantp(norm, uplo, diag, n, APt, workt))
+    end function
+
+    function target_zlantp(norm, uplo, diag, n, AP) result(r)
+        character,   intent(in) :: norm, uplo, diag
+        integer,     intent(in) :: n
+        complex(ep), intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_complex}$, allocatable :: APt(:)
+        ${target_real}$,    allocatable :: workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_c(AP(1:nap))
+        r = t2q_r(${C}$lantp(norm, uplo, diag, n, APt, workt))
+    end function
+
+    function target_dlantr(norm, uplo, diag, m, n, A, lda) result(r)
+        character, intent(in) :: norm, uplo, diag
+        integer,   intent(in) :: m, n, lda
+        real(ep),  intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_real}$, allocatable :: At(:,:), workt(:)
+        allocate(At(lda,n), workt(max(1,m)))
+        At = q2t_r(A(1:lda,1:n))
+        r = t2q_r(${R}$lantr(norm, uplo, diag, m, n, At, lda, workt))
+    end function
+
+    function target_zlantr(norm, uplo, diag, m, n, A, lda) result(r)
+        character,   intent(in) :: norm, uplo, diag
+        integer,     intent(in) :: m, n, lda
+        complex(ep), intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(At(lda,n), workt(max(1,m)))
+        At = q2t_c(A(1:lda,1:n))
+        r = t2q_r(${C}$lantr(norm, uplo, diag, m, n, At, lda, workt))
+    end function
+
+    ! ── Phase L19 — Permutation/norm helpers ─────────────────────────
+    subroutine target_dlapmr(forwrd, m, n, X, ldx, K)
+        logical,  intent(in)    :: forwrd
+        integer,  intent(in)    :: m, n, ldx
+        real(ep), intent(inout) :: X(ldx,*)
+        integer,  intent(inout) :: K(*)
+        ${target_real}$, allocatable :: Xt(:,:)
+        allocate(Xt(ldx,n))
+        Xt = q2t_r(X(1:ldx,1:n))
+        call ${R}$lapmr(forwrd, m, n, Xt, ldx, K)
+        X(1:ldx,1:n) = t2q_r(Xt)
+    end subroutine
+
+    subroutine target_zlapmr(forwrd, m, n, X, ldx, K)
+        logical,     intent(in)    :: forwrd
+        integer,     intent(in)    :: m, n, ldx
+        complex(ep), intent(inout) :: X(ldx,*)
+        integer,     intent(inout) :: K(*)
+        ${target_complex}$, allocatable :: Xt(:,:)
+        allocate(Xt(ldx,n))
+        Xt = q2t_c(X(1:ldx,1:n))
+        call ${C}$lapmr(forwrd, m, n, Xt, ldx, K)
+        X(1:ldx,1:n) = t2q_c(Xt)
+    end subroutine
+
+    subroutine target_dlapmt(forwrd, m, n, X, ldx, K)
+        logical,  intent(in)    :: forwrd
+        integer,  intent(in)    :: m, n, ldx
+        real(ep), intent(inout) :: X(ldx,*)
+        integer,  intent(inout) :: K(*)
+        ${target_real}$, allocatable :: Xt(:,:)
+        allocate(Xt(ldx,n))
+        Xt = q2t_r(X(1:ldx,1:n))
+        call ${R}$lapmt(forwrd, m, n, Xt, ldx, K)
+        X(1:ldx,1:n) = t2q_r(Xt)
+    end subroutine
+
+    subroutine target_zlapmt(forwrd, m, n, X, ldx, K)
+        logical,     intent(in)    :: forwrd
+        integer,     intent(in)    :: m, n, ldx
+        complex(ep), intent(inout) :: X(ldx,*)
+        integer,     intent(inout) :: K(*)
+        ${target_complex}$, allocatable :: Xt(:,:)
+        allocate(Xt(ldx,n))
+        Xt = q2t_c(X(1:ldx,1:n))
+        call ${C}$lapmt(forwrd, m, n, Xt, ldx, K)
+        X(1:ldx,1:n) = t2q_c(Xt)
+    end subroutine
+
+    subroutine target_dlapll(n, X, incx, Y, incy, ssmin)
+        integer,  intent(in)    :: n, incx, incy
+        real(ep), intent(inout) :: X(*), Y(*)
+        real(ep), intent(out)   :: ssmin
+        integer :: lx, ly
+        ${target_real}$, allocatable :: Xt(:), Yt(:)
+        ${target_real}$ :: st
+        lx = max(1, 1 + (n-1) * abs(incx))
+        ly = max(1, 1 + (n-1) * abs(incy))
+        allocate(Xt(lx), Yt(ly))
+        Xt = q2t_r(X(1:lx)); Yt = q2t_r(Y(1:ly))
+        call ${R}$lapll(n, Xt, incx, Yt, incy, st)
+        X(1:lx) = t2q_r(Xt); Y(1:ly) = t2q_r(Yt)
+        ssmin = t2q_r(st)
+    end subroutine
+
+    subroutine target_zlapll(n, X, incx, Y, incy, ssmin)
+        integer,     intent(in)    :: n, incx, incy
+        complex(ep), intent(inout) :: X(*), Y(*)
+        real(ep),    intent(out)   :: ssmin
+        integer :: lx, ly
+        ${target_complex}$, allocatable :: Xt(:), Yt(:)
+        ${target_real}$ :: st
+        lx = max(1, 1 + (n-1) * abs(incx))
+        ly = max(1, 1 + (n-1) * abs(incy))
+        allocate(Xt(lx), Yt(ly))
+        Xt = q2t_c(X(1:lx)); Yt = q2t_c(Y(1:ly))
+        call ${C}$lapll(n, Xt, incx, Yt, incy, st)
+        X(1:lx) = t2q_c(Xt); Y(1:ly) = t2q_c(Yt)
+        ssmin = t2q_r(st)
+    end subroutine
+
+    subroutine target_dlacn2(n, V, X, isgn, est, kase, isave)
+        integer,  intent(in)    :: n
+        real(ep), intent(out)   :: V(*)
+        real(ep), intent(inout) :: X(*), est
+        integer,  intent(out)   :: isgn(*)
+        integer,  intent(inout) :: kase, isave(3)
+        ${target_real}$, allocatable :: Vt(:), Xt(:)
+        ${target_real}$ :: estt
+        allocate(Vt(n), Xt(n))
+        Xt = q2t_r(X(1:n))
+        estt = q2t_r(est)
+        call ${R}$lacn2(n, Vt, Xt, isgn, estt, kase, isave)
+        V(1:n) = t2q_r(Vt); X(1:n) = t2q_r(Xt)
+        est = t2q_r(estt)
+    end subroutine
+
+    subroutine target_zlacn2(n, V, X, est, kase, isave)
+        integer,     intent(in)    :: n
+        complex(ep), intent(out)   :: V(*)
+        complex(ep), intent(inout) :: X(*)
+        real(ep),    intent(inout) :: est
+        integer,     intent(inout) :: kase, isave(3)
+        ${target_complex}$, allocatable :: Vt(:), Xt(:)
+        ${target_real}$ :: estt
+        allocate(Vt(n), Xt(n))
+        Xt = q2t_c(X(1:n))
+        estt = q2t_r(est)
+        call ${C}$lacn2(n, Vt, Xt, estt, kase, isave)
+        V(1:n) = t2q_c(Vt); X(1:n) = t2q_c(Xt)
+        est = t2q_r(estt)
+    end subroutine
+
+    subroutine target_dlartg(f, g, c, s, r)
+        real(ep), intent(in)  :: f, g
+        real(ep), intent(out) :: c, s, r
+        ${target_real}$ :: ct, st, rt
+        call ${R}$lartg(q2t_r(f), q2t_r(g), ct, st, rt)
+        c = t2q_r(ct); s = t2q_r(st); r = t2q_r(rt)
+    end subroutine
+
+    subroutine target_zlartg(f, g, c, s, r)
+        complex(ep), intent(in)  :: f, g
+        real(ep),    intent(out) :: c
+        complex(ep), intent(out) :: s, r
+        ${target_real}$    :: ct
+        ${target_complex}$ :: st, rt
+        call ${C}$lartg(q2t_c(f), q2t_c(g), ct, st, rt)
+        c = t2q_r(ct); s = t2q_c(st); r = t2q_c(rt)
+    end subroutine
+
+    subroutine target_dlartgp(f, g, c, s, r)
+        real(ep), intent(in)  :: f, g
+        real(ep), intent(out) :: c, s, r
+        ${target_real}$ :: ct, st, rt
+        call ${R}$lartgp(q2t_r(f), q2t_r(g), ct, st, rt)
+        c = t2q_r(ct); s = t2q_r(st); r = t2q_r(rt)
+    end subroutine
+
+    subroutine target_dlartgs(x, y, sigma, c, s)
+        real(ep), intent(in)  :: x, y, sigma
+        real(ep), intent(out) :: c, s
+        ${target_real}$ :: ct, st
+        call ${R}$lartgs(q2t_r(x), q2t_r(y), q2t_r(sigma), ct, st)
+        c = t2q_r(ct); s = t2q_r(st)
+    end subroutine
+
+    ! ── Phase L20 — Small public scalar utilities ────────────────────
+    function target_dlapy2(x, y) result(r)
+        real(ep), intent(in) :: x, y
+        real(ep) :: r
+        r = t2q_r(${R}$lapy2(q2t_r(x), q2t_r(y)))
+    end function
+
+    function target_dlapy3(x, y, z) result(r)
+        real(ep), intent(in) :: x, y, z
+        real(ep) :: r
+        r = t2q_r(${R}$lapy3(q2t_r(x), q2t_r(y), q2t_r(z)))
+    end function
+
+    subroutine target_dladiv(a, b, c, d, p, q)
+        real(ep), intent(in)  :: a, b, c, d
+        real(ep), intent(out) :: p, q
+        ${target_real}$ :: pt, qt
+        call ${R}$ladiv(q2t_r(a), q2t_r(b), q2t_r(c), q2t_r(d), pt, qt)
+        p = t2q_r(pt); q = t2q_r(qt)
+    end subroutine
+
+    function target_zladiv(x, y) result(r)
+        complex(ep), intent(in) :: x, y
+        complex(ep) :: r
+        r = t2q_c(${C}$ladiv(q2t_c(x), q2t_c(y)))
+    end function
+
+    subroutine target_dlamrg(n1, n2, A, dtrd1, dtrd2, index)
+        integer,  intent(in)  :: n1, n2, dtrd1, dtrd2
+        real(ep), intent(in)  :: A(*)
+        integer,  intent(out) :: index(*)
+        ${target_real}$, allocatable :: At(:)
+        allocate(At(n1+n2))
+        At = q2t_r(A(1:n1+n2))
+        call ${R}$lamrg(n1, n2, At, dtrd1, dtrd2, index)
+    end subroutine
+
+    subroutine target_dlarnv(idist, iseed, n, X)
+        integer,  intent(in)    :: idist, n
+        integer,  intent(inout) :: iseed(4)
+        real(ep), intent(out)   :: X(*)
+        ${target_real}$, allocatable :: Xt(:)
+        allocate(Xt(n))
+        call ${R}$larnv(idist, iseed, n, Xt)
+        X(1:n) = t2q_r(Xt)
+    end subroutine
+
+    subroutine target_zlarnv(idist, iseed, n, X)
+        integer,     intent(in)    :: idist, n
+        integer,     intent(inout) :: iseed(4)
+        complex(ep), intent(out)   :: X(*)
+        ${target_complex}$, allocatable :: Xt(:)
+        allocate(Xt(n))
+        call ${C}$larnv(idist, iseed, n, Xt)
+        X(1:n) = t2q_c(Xt)
+    end subroutine
+
+    ! ── Phase L21 — Generalized sym/Hermitian glue ───────────────────
+    subroutine target_dsbgst(vect, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                             X, ldx, info)
+        character, intent(in)    :: vect, uplo
+        integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldx
+        real(ep),  intent(inout) :: AB(ldab,*)
+        real(ep),  intent(in)    :: BB(ldbb,*)
+        real(ep),  intent(out)   :: X(ldx,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), BBt(:,:), Xt(:,:), work(:)
+        allocate(ABt(ldab,n), BBt(ldbb,n), Xt(ldx,n), work(2*n))
+        ABt = q2t_r(AB(1:ldab,1:n)); BBt = q2t_r(BB(1:ldbb,1:n))
+        call ${R}$sbgst(vect, uplo, n, ka, kb, ABt, ldab, BBt, ldbb, &
+                        Xt, ldx, work, info)
+        AB(1:ldab,1:n) = t2q_r(ABt)
+        if (vect /= 'N') X(1:ldx,1:n) = t2q_r(Xt)
+    end subroutine
+
+    subroutine target_zhbgst(vect, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                             X, ldx, info)
+        character,   intent(in)    :: vect, uplo
+        integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldx
+        complex(ep), intent(inout) :: AB(ldab,*)
+        complex(ep), intent(in)    :: BB(ldbb,*)
+        complex(ep), intent(out)   :: X(ldx,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), BBt(:,:), Xt(:,:), work(:)
+        ${target_real}$,    allocatable :: rwork(:)
+        allocate(ABt(ldab,n), BBt(ldbb,n), Xt(ldx,n), work(n), rwork(n))
+        ABt = q2t_c(AB(1:ldab,1:n)); BBt = q2t_c(BB(1:ldbb,1:n))
+        call ${C}$hbgst(vect, uplo, n, ka, kb, ABt, ldab, BBt, ldbb, &
+                        Xt, ldx, work, rwork, info)
+        AB(1:ldab,1:n) = t2q_c(ABt)
+        if (vect /= 'N') X(1:ldx,1:n) = t2q_c(Xt)
+    end subroutine
+
+    subroutine target_dspgst(itype, uplo, n, AP, BP, info)
+        integer,   intent(in)    :: itype, n
+        character, intent(in)    :: uplo
+        real(ep),  intent(inout) :: AP(*)
+        real(ep),  intent(in)    :: BP(*)
+        integer,   intent(out)   :: info
+        integer :: nap
+        ${target_real}$, allocatable :: APt(:), BPt(:)
+        nap = n*(n+1)/2
+        allocate(APt(max(1,nap)), BPt(max(1,nap)))
+        APt = q2t_r(AP(1:nap)); BPt = q2t_r(BP(1:nap))
+        call ${R}$spgst(itype, uplo, n, APt, BPt, info)
+        AP(1:nap) = t2q_r(APt)
+    end subroutine
+
+    subroutine target_zhpgst(itype, uplo, n, AP, BP, info)
+        integer,     intent(in)    :: itype, n
+        character,   intent(in)    :: uplo
+        complex(ep), intent(inout) :: AP(*)
+        complex(ep), intent(in)    :: BP(*)
+        integer,     intent(out)   :: info
+        integer :: nap
+        ${target_complex}$, allocatable :: APt(:), BPt(:)
+        nap = n*(n+1)/2
+        allocate(APt(max(1,nap)), BPt(max(1,nap)))
+        APt = q2t_c(AP(1:nap)); BPt = q2t_c(BP(1:nap))
+        call ${C}$hpgst(itype, uplo, n, APt, BPt, info)
+        AP(1:nap) = t2q_c(APt)
+    end subroutine
+
+    subroutine target_dsygst(itype, uplo, n, A, lda, B, ldb, info)
+        integer,   intent(in)    :: itype, n, lda, ldb
+        character, intent(in)    :: uplo
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(in)    :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda,n), Bt(ldb,n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        call ${R}$sygst(itype, uplo, n, At, lda, Bt, ldb, info)
+        A(1:lda,1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_zhegst(itype, uplo, n, A, lda, B, ldb, info)
+        integer,     intent(in)    :: itype, n, lda, ldb
+        character,   intent(in)    :: uplo
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        allocate(At(lda,n), Bt(ldb,n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        call ${C}$hegst(itype, uplo, n, At, lda, Bt, ldb, info)
+        A(1:lda,1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_dsbgvx(jobz, range, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                             Q, ldq, vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                             ifail, info)
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldq, il, iu, ldz
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: AB(ldab,*), BB(ldbb,*)
+        real(ep),  intent(out)   :: Q(ldq,*), w(*), Z(ldz,*)
+        integer,   intent(out)   :: m, ifail(*), info
+        ${target_real}$, allocatable :: ABt(:,:), BBt(:,:), Qt(:,:), wt(:), Zt(:,:), work(:)
+        integer, allocatable :: iwork(:)
+        allocate(ABt(ldab,n), BBt(ldbb,n), Qt(ldq,n), wt(n), Zt(ldz,n))
+        allocate(work(7*n), iwork(5*n))
+        ABt = q2t_r(AB(1:ldab,1:n)); BBt = q2t_r(BB(1:ldbb,1:n))
+        call ${R}$sbgvx(jobz, range, uplo, n, ka, kb, ABt, ldab, BBt, ldbb, &
+                        Qt, ldq, q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                        m, wt, Zt, ldz, work, iwork, ifail, info)
+        AB(1:ldab,1:n) = t2q_r(ABt); BB(1:ldbb,1:n) = t2q_r(BBt)
+        if (jobz /= 'N') Q(1:ldq,1:n) = t2q_r(Qt)
+        w(1:n) = t2q_r(wt)
+        if (jobz /= 'N') Z(1:ldz,1:n) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zhbgvx(jobz, range, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                             Q, ldq, vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                             ifail, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldq, il, iu, ldz
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: AB(ldab,*), BB(ldbb,*)
+        complex(ep), intent(out)   :: Q(ldq,*), Z(ldz,*)
+        real(ep),    intent(out)   :: w(*)
+        integer,     intent(out)   :: m, ifail(*), info
+        ${target_complex}$, allocatable :: ABt(:,:), BBt(:,:), Qt(:,:), Zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer, allocatable :: iwork(:)
+        allocate(ABt(ldab,n), BBt(ldbb,n), Qt(ldq,n), wt(n), Zt(ldz,n))
+        allocate(work(n), rwork(7*n), iwork(5*n))
+        ABt = q2t_c(AB(1:ldab,1:n)); BBt = q2t_c(BB(1:ldbb,1:n))
+        call ${C}$hbgvx(jobz, range, uplo, n, ka, kb, ABt, ldab, BBt, ldbb, &
+                        Qt, ldq, q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                        m, wt, Zt, ldz, work, rwork, iwork, ifail, info)
+        AB(1:ldab,1:n) = t2q_c(ABt); BB(1:ldbb,1:n) = t2q_c(BBt)
+        if (jobz /= 'N') Q(1:ldq,1:n) = t2q_c(Qt)
+        w(1:n) = t2q_r(wt)
+        if (jobz /= 'N') Z(1:ldz,1:n) = t2q_c(Zt)
+    end subroutine
+
+    subroutine target_dspgvx(itype, jobz, range, uplo, n, AP, BP, vl, vu, il, iu, &
+                             abstol, m, w, Z, ldz, ifail, info)
+        integer,   intent(in)    :: itype, n, il, iu, ldz
+        character, intent(in)    :: jobz, range, uplo
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: AP(*), BP(*)
+        real(ep),  intent(out)   :: w(*), Z(ldz,*)
+        integer,   intent(out)   :: m, ifail(*), info
+        integer :: nap
+        ${target_real}$, allocatable :: APt(:), BPt(:), wt(:), Zt(:,:), work(:)
+        integer, allocatable :: iwork(:)
+        nap = n*(n+1)/2
+        allocate(APt(max(1,nap)), BPt(max(1,nap)), wt(n), Zt(ldz,n))
+        allocate(work(8*n), iwork(5*n))
+        APt = q2t_r(AP(1:nap)); BPt = q2t_r(BP(1:nap))
+        call ${R}$spgvx(itype, jobz, range, uplo, n, APt, BPt, q2t_r(vl), q2t_r(vu), &
+                        il, iu, q2t_r(abstol), m, wt, Zt, ldz, work, iwork, ifail, info)
+        AP(1:nap) = t2q_r(APt); BP(1:nap) = t2q_r(BPt)
+        w(1:n) = t2q_r(wt)
+        if (jobz /= 'N') Z(1:ldz,1:n) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zhpgvx(itype, jobz, range, uplo, n, AP, BP, vl, vu, il, iu, &
+                             abstol, m, w, Z, ldz, ifail, info)
+        integer,     intent(in)    :: itype, n, il, iu, ldz
+        character,   intent(in)    :: jobz, range, uplo
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: AP(*), BP(*)
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: Z(ldz,*)
+        integer,     intent(out)   :: m, ifail(*), info
+        integer :: nap
+        ${target_complex}$, allocatable :: APt(:), BPt(:), Zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer, allocatable :: iwork(:)
+        nap = n*(n+1)/2
+        allocate(APt(max(1,nap)), BPt(max(1,nap)), wt(n), Zt(ldz,n))
+        allocate(work(2*n), rwork(7*n), iwork(5*n))
+        APt = q2t_c(AP(1:nap)); BPt = q2t_c(BP(1:nap))
+        call ${C}$hpgvx(itype, jobz, range, uplo, n, APt, BPt, q2t_r(vl), q2t_r(vu), &
+                        il, iu, q2t_r(abstol), m, wt, Zt, ldz, work, rwork, iwork, ifail, info)
+        AP(1:nap) = t2q_c(APt); BP(1:nap) = t2q_c(BPt)
+        w(1:n) = t2q_r(wt)
+        if (jobz /= 'N') Z(1:ldz,1:n) = t2q_c(Zt)
+    end subroutine
+
+    subroutine target_dsygvx(itype, jobz, range, uplo, n, A, lda, B, ldb, &
+                             vl, vu, il, iu, abstol, m, w, Z, ldz, ifail, info)
+        integer,   intent(in)    :: itype, n, lda, ldb, il, iu, ldz
+        character, intent(in)    :: jobz, range, uplo
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),  intent(out)   :: w(*), Z(ldz,*)
+        integer,   intent(out)   :: m, ifail(*), info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), wt(:), Zt(:,:), work(:)
+        integer, allocatable :: iwork(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), wt(n), Zt(ldz,n), iwork(5*n))
+        At = q2t_r(A(1:lda,1:n)); Bt = q2t_r(B(1:ldb,1:n))
+        call ${R}$sygvx(itype, jobz, range, uplo, n, At, lda, Bt, ldb, &
+                        q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), m, wt, &
+                        Zt, ldz, wopt, -1, iwork, ifail, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$sygvx(itype, jobz, range, uplo, n, At, lda, Bt, ldb, &
+                        q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), m, wt, &
+                        Zt, ldz, work, lwork, iwork, ifail, info)
+        A(1:lda,1:n) = t2q_r(At); B(1:ldb,1:n) = t2q_r(Bt)
+        w(1:n) = t2q_r(wt)
+        if (jobz /= 'N') Z(1:ldz,1:n) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zhegvx(itype, jobz, range, uplo, n, A, lda, B, ldb, &
+                             vl, vu, il, iu, abstol, m, w, Z, ldz, ifail, info)
+        integer,     intent(in)    :: itype, n, lda, ldb, il, iu, ldz
+        character,   intent(in)    :: jobz, range, uplo
+        real(ep),    intent(in)    :: vl, vu, abstol
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),    intent(out)   :: w(*)
+        complex(ep), intent(out)   :: Z(ldz,*)
+        integer,     intent(out)   :: m, ifail(*), info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Zt(:,:), work(:)
+        ${target_real}$,    allocatable :: wt(:), rwork(:)
+        integer, allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda,n), Bt(ldb,n), wt(n), Zt(ldz,n), rwork(7*n), iwork(5*n))
+        At = q2t_c(A(1:lda,1:n)); Bt = q2t_c(B(1:ldb,1:n))
+        call ${C}$hegvx(itype, jobz, range, uplo, n, At, lda, Bt, ldb, &
+                        q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), m, wt, &
+                        Zt, ldz, wopt, -1, rwork, iwork, ifail, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$hegvx(itype, jobz, range, uplo, n, At, lda, Bt, ldb, &
+                        q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), m, wt, &
+                        Zt, ldz, work, lwork, rwork, iwork, ifail, info)
+        A(1:lda,1:n) = t2q_c(At); B(1:ldb,1:n) = t2q_c(Bt)
+        w(1:n) = t2q_r(wt)
+        if (jobz /= 'N') Z(1:ldz,1:n) = t2q_c(Zt)
     end subroutine
 
 end module target_lapack
