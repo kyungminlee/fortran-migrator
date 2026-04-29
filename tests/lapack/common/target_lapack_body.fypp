@@ -239,6 +239,12 @@ module target_lapack
     public :: target_dsfrk,  target_zhfrk
     public :: target_dtfsm,  target_ztfsm
     public :: target_dtftri, target_ztftri
+    ! P13 — pentagonal QR/LQ
+    public :: target_dtpqrt, target_ztpqrt
+    public :: target_dtpmqrt, target_ztpmqrt
+    public :: target_dtplqt, target_ztplqt
+    public :: target_dtpmlqt, target_ztpmlqt
+    public :: target_dtprfb, target_ztprfb
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -13434,6 +13440,183 @@ $:CPACK_INV('zsptri', C + 'sptri')
         At = q2t_c(A(0:nt-1))
         call ${C}$tftri(transr, uplo, diag, n, At, info)
         A(0:nt-1) = t2q_c(At)
+    end subroutine
+
+    ! ----- P13 pentagonal QR/LQ -----
+
+    subroutine target_dtpqrt(m, n, l, nb, A, lda, B, ldb, T, ldt, info)
+        integer,  intent(in)    :: m, n, l, nb, lda, ldb, ldt
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Tt(:,:), work(:)
+        allocate(At(lda, n), Bt(ldb, n), Tt(ldt, n), work(nb*n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        Tt = q2t_r(T(1:ldt, 1:n))
+        call ${R}$tpqrt(m, n, l, nb, At, lda, Bt, ldb, Tt, ldt, work, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt); T(1:ldt, 1:n) = t2q_r(Tt)
+    end subroutine
+
+    subroutine target_ztpqrt(m, n, l, nb, A, lda, B, ldb, T, ldt, info)
+        integer,     intent(in)    :: m, n, l, nb, lda, ldb, ldt
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Tt(:,:), work(:)
+        allocate(At(lda, n), Bt(ldb, n), Tt(ldt, n), work(nb*n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        Tt = q2t_c(T(1:ldt, 1:n))
+        call ${C}$tpqrt(m, n, l, nb, At, lda, Bt, ldb, Tt, ldt, work, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt); T(1:ldt, 1:n) = t2q_c(Tt)
+    end subroutine
+
+    subroutine target_dtpmqrt(side, trans, m, n, k, l, nb, V, ldv, T, ldt, &
+                              A, lda, B, ldb, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, k, l, nb, ldv, ldt, lda, ldb
+        real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Vt(:,:), Tt(:,:), At(:,:), Bt(:,:), work(:)
+        integer :: vcols, acols, lwork
+        vcols = k
+        acols = merge(n, k, side == 'L' .or. side == 'l')   ! A is K x N if 'L', M x K if 'R'
+        lwork = nb * max(m, n)
+        allocate(Vt(ldv, vcols), Tt(ldt, vcols), At(lda, acols), Bt(ldb, n), work(lwork))
+        Vt = q2t_r(V(1:ldv, 1:vcols)); Tt = q2t_r(T(1:ldt, 1:vcols))
+        At = q2t_r(A(1:lda, 1:acols)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$tpmqrt(side, trans, m, n, k, l, nb, Vt, ldv, Tt, ldt, &
+                         At, lda, Bt, ldb, work, info)
+        A(1:lda, 1:acols) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_ztpmqrt(side, trans, m, n, k, l, nb, V, ldv, T, ldt, &
+                              A, lda, B, ldb, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, k, l, nb, ldv, ldt, lda, ldb
+        complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Vt(:,:), Tt(:,:), At(:,:), Bt(:,:), work(:)
+        integer :: vcols, acols, lwork
+        vcols = k
+        acols = merge(n, k, side == 'L' .or. side == 'l')
+        lwork = nb * max(m, n)
+        allocate(Vt(ldv, vcols), Tt(ldt, vcols), At(lda, acols), Bt(ldb, n), work(lwork))
+        Vt = q2t_c(V(1:ldv, 1:vcols)); Tt = q2t_c(T(1:ldt, 1:vcols))
+        At = q2t_c(A(1:lda, 1:acols)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$tpmqrt(side, trans, m, n, k, l, nb, Vt, ldv, Tt, ldt, &
+                         At, lda, Bt, ldb, work, info)
+        A(1:lda, 1:acols) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dtplqt(m, n, l, mb, A, lda, B, ldb, T, ldt, info)
+        integer,  intent(in)    :: m, n, l, mb, lda, ldb, ldt
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Tt(:,:), work(:)
+        allocate(At(lda, m), Bt(ldb, n), Tt(ldt, m), work(mb*m))
+        At = q2t_r(A(1:lda, 1:m)); Bt = q2t_r(B(1:ldb, 1:n))
+        Tt = q2t_r(T(1:ldt, 1:m))
+        call ${R}$tplqt(m, n, l, mb, At, lda, Bt, ldb, Tt, ldt, work, info)
+        A(1:lda, 1:m) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt); T(1:ldt, 1:m) = t2q_r(Tt)
+    end subroutine
+
+    subroutine target_ztplqt(m, n, l, mb, A, lda, B, ldb, T, ldt, info)
+        integer,     intent(in)    :: m, n, l, mb, lda, ldb, ldt
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Tt(:,:), work(:)
+        allocate(At(lda, m), Bt(ldb, n), Tt(ldt, m), work(mb*m))
+        At = q2t_c(A(1:lda, 1:m)); Bt = q2t_c(B(1:ldb, 1:n))
+        Tt = q2t_c(T(1:ldt, 1:m))
+        call ${C}$tplqt(m, n, l, mb, At, lda, Bt, ldb, Tt, ldt, work, info)
+        A(1:lda, 1:m) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt); T(1:ldt, 1:m) = t2q_c(Tt)
+    end subroutine
+
+    subroutine target_dtpmlqt(side, trans, m, n, k, l, mb, V, ldv, T, ldt, &
+                              A, lda, B, ldb, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, k, l, mb, ldv, ldt, lda, ldb
+        real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Vt(:,:), Tt(:,:), At(:,:), Bt(:,:), work(:)
+        integer :: vcols, acols, lwork
+        ! V is K x M (left) or K x N (right) -- K rows of length M / N
+        vcols = merge(m, n, side == 'L' .or. side == 'l')
+        acols = merge(n, k, side == 'L' .or. side == 'l')
+        lwork = mb * max(m, n)
+        allocate(Vt(ldv, vcols), Tt(ldt, k), At(lda, acols), Bt(ldb, n), work(lwork))
+        Vt = q2t_r(V(1:ldv, 1:vcols)); Tt = q2t_r(T(1:ldt, 1:k))
+        At = q2t_r(A(1:lda, 1:acols)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$tpmlqt(side, trans, m, n, k, l, mb, Vt, ldv, Tt, ldt, &
+                         At, lda, Bt, ldb, work, info)
+        A(1:lda, 1:acols) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_ztpmlqt(side, trans, m, n, k, l, mb, V, ldv, T, ldt, &
+                              A, lda, B, ldb, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, k, l, mb, ldv, ldt, lda, ldb
+        complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Vt(:,:), Tt(:,:), At(:,:), Bt(:,:), work(:)
+        integer :: vcols, acols, lwork
+        vcols = merge(m, n, side == 'L' .or. side == 'l')
+        acols = merge(n, k, side == 'L' .or. side == 'l')
+        lwork = mb * max(m, n)
+        allocate(Vt(ldv, vcols), Tt(ldt, k), At(lda, acols), Bt(ldb, n), work(lwork))
+        Vt = q2t_c(V(1:ldv, 1:vcols)); Tt = q2t_c(T(1:ldt, 1:k))
+        At = q2t_c(A(1:lda, 1:acols)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$tpmlqt(side, trans, m, n, k, l, mb, Vt, ldv, Tt, ldt, &
+                         At, lda, Bt, ldb, work, info)
+        A(1:lda, 1:acols) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dtprfb(side, trans, direct, storev, m, n, k, l, &
+                             V, ldv, T, ldt, A, lda, B, ldb, ldwork)
+        character, intent(in)    :: side, trans, direct, storev
+        integer,   intent(in)    :: m, n, k, l, ldv, ldt, lda, ldb, ldwork
+        real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        ${target_real}$, allocatable :: Vt(:,:), Tt(:,:), At(:,:), Bt(:,:), work(:,:)
+        integer :: vcols, acols, wcols
+        if (storev == 'C' .or. storev == 'c') then
+            vcols = k
+        else
+            vcols = merge(n, m, side == 'L' .or. side == 'l')
+        end if
+        acols = merge(n, k, side == 'L' .or. side == 'l')
+        wcols = merge(n, k, side == 'L' .or. side == 'l')
+        allocate(Vt(ldv, vcols), Tt(ldt, k), At(lda, acols), Bt(ldb, n), work(ldwork, wcols))
+        Vt = q2t_r(V(1:ldv, 1:vcols)); Tt = q2t_r(T(1:ldt, 1:k))
+        At = q2t_r(A(1:lda, 1:acols)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$tprfb(side, trans, direct, storev, m, n, k, l, &
+                        Vt, ldv, Tt, ldt, At, lda, Bt, ldb, work, ldwork)
+        A(1:lda, 1:acols) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_ztprfb(side, trans, direct, storev, m, n, k, l, &
+                             V, ldv, T, ldt, A, lda, B, ldb, ldwork)
+        character,   intent(in)    :: side, trans, direct, storev
+        integer,     intent(in)    :: m, n, k, l, ldv, ldt, lda, ldb, ldwork
+        complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        ${target_complex}$, allocatable :: Vt(:,:), Tt(:,:), At(:,:), Bt(:,:), work(:,:)
+        integer :: vcols, acols, wcols
+        if (storev == 'C' .or. storev == 'c') then
+            vcols = k
+        else
+            vcols = merge(n, m, side == 'L' .or. side == 'l')
+        end if
+        acols = merge(n, k, side == 'L' .or. side == 'l')
+        wcols = merge(n, k, side == 'L' .or. side == 'l')
+        allocate(Vt(ldv, vcols), Tt(ldt, k), At(lda, acols), Bt(ldb, n), work(ldwork, wcols))
+        Vt = q2t_c(V(1:ldv, 1:vcols)); Tt = q2t_c(T(1:ldt, 1:k))
+        At = q2t_c(A(1:lda, 1:acols)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$tprfb(side, trans, direct, storev, m, n, k, l, &
+                        Vt, ldv, Tt, ldt, At, lda, Bt, ldb, work, ldwork)
+        A(1:lda, 1:acols) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
     end subroutine
 
 end module target_lapack

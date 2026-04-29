@@ -4795,6 +4795,103 @@ module ref_quad_lapack
             complex(ep), intent(inout) :: A(0:*)
             integer,     intent(out)   :: info
         end subroutine ztftri
+
+        ! P13 — pentagonal QR/LQ
+        subroutine dtpqrt(m, n, l, nb, A, lda, B, ldb, T, ldt, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, l, nb, lda, ldb, ldt
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dtpqrt
+
+        subroutine ztpqrt(m, n, l, nb, A, lda, B, ldb, T, ldt, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, l, nb, lda, ldb, ldt
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztpqrt
+
+        subroutine dtpmqrt(side, trans, m, n, k, l, nb, V, ldv, T, ldt, &
+                           A, lda, B, ldb, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, nb, ldv, ldt, lda, ldb
+            real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtpmqrt
+
+        subroutine ztpmqrt(side, trans, m, n, k, l, nb, V, ldv, T, ldt, &
+                           A, lda, B, ldb, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, l, nb, ldv, ldt, lda, ldb
+            complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztpmqrt
+
+        subroutine dtplqt(m, n, l, mb, A, lda, B, ldb, T, ldt, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, l, mb, lda, ldb, ldt
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dtplqt
+
+        subroutine ztplqt(m, n, l, mb, A, lda, B, ldb, T, ldt, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, l, mb, lda, ldb, ldt
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztplqt
+
+        subroutine dtpmlqt(side, trans, m, n, k, l, mb, V, ldv, T, ldt, &
+                           A, lda, B, ldb, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, mb, ldv, ldt, lda, ldb
+            real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtpmlqt
+
+        subroutine ztpmlqt(side, trans, m, n, k, l, mb, V, ldv, T, ldt, &
+                           A, lda, B, ldb, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, l, mb, ldv, ldt, lda, ldb
+            complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztpmlqt
+
+        subroutine dtprfb(side, trans, direct, storev, m, n, k, l, &
+                          V, ldv, T, ldt, A, lda, B, ldb, work, ldwork)
+            import :: ep
+            character, intent(in)    :: side, trans, direct, storev
+            integer,   intent(in)    :: m, n, k, l, ldv, ldt, lda, ldb, ldwork
+            real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(ldwork,*)
+        end subroutine dtprfb
+
+        subroutine ztprfb(side, trans, direct, storev, m, n, k, l, &
+                          V, ldv, T, ldt, A, lda, B, ldb, work, ldwork)
+            import :: ep
+            character,   intent(in)    :: side, trans, direct, storev
+            integer,     intent(in)    :: m, n, k, l, ldv, ldt, lda, ldb, ldwork
+            complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(ldwork,*)
+        end subroutine ztprfb
     end interface
 
 end module ref_quad_lapack
