@@ -4892,6 +4892,146 @@ module ref_quad_lapack
             complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
             complex(ep), intent(out)   :: work(ldwork,*)
         end subroutine ztprfb
+
+        ! P14 — TSQR + Householder reconstruction
+        subroutine dgeqr2p(m, n, A, lda, tau, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqr2p
+
+        subroutine zgeqr2p(m, n, A, lda, tau, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqr2p
+
+        subroutine dgeqrfp(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqrfp
+
+        subroutine zgeqrfp(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqrfp
+
+        subroutine dlatsqr(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dlatsqr
+
+        subroutine zlatsqr(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zlatsqr
+
+        subroutine dorgtsqr(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: T(ldt,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgtsqr
+
+        subroutine zungtsqr(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: T(ldt,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungtsqr
+
+        subroutine dorgtsqr_row(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: T(ldt,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgtsqr_row
+
+        subroutine zungtsqr_row(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: T(ldt,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungtsqr_row
+
+        subroutine dorhr_col(m, n, nb, A, lda, T, ldt, D, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nb, lda, ldt
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(ldt,*), D(*)
+            integer,  intent(out)   :: info
+        end subroutine dorhr_col
+
+        subroutine zunhr_col(m, n, nb, A, lda, T, ldt, D, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nb, lda, ldt
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(ldt,*), D(*)
+            integer,     intent(out)   :: info
+        end subroutine zunhr_col
+
+        subroutine dgetsqrhrt(m, n, mb1, nb1, nb2, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb1, nb1, nb2, lda, ldt, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgetsqrhrt
+
+        subroutine zgetsqrhrt(m, n, mb1, nb1, nb2, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb1, nb1, nb2, lda, ldt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgetsqrhrt
+
+        subroutine dgeqp3rk(m, n, nrhs, kmax, abstol, reltol, A, lda, &
+                            K, maxc2nrmk, relmaxc2nrmk, jpiv, tau, &
+                            work, lwork, iwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nrhs, kmax, lda, lwork
+            real(ep), intent(in)    :: abstol, reltol
+            real(ep), intent(inout) :: A(lda,*)
+            integer,  intent(out)   :: K, jpiv(*), iwork(*), info
+            real(ep), intent(out)   :: maxc2nrmk, relmaxc2nrmk, tau(*), work(*)
+        end subroutine dgeqp3rk
+
+        subroutine zgeqp3rk(m, n, nrhs, kmax, abstol, reltol, A, lda, &
+                            K, maxc2nrmk, relmaxc2nrmk, jpiv, tau, &
+                            work, lwork, rwork, iwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nrhs, kmax, lda, lwork
+            real(ep),    intent(in)    :: abstol, reltol
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: K, jpiv(*), iwork(*), info
+            real(ep),    intent(out)   :: maxc2nrmk, relmaxc2nrmk, rwork(*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+        end subroutine zgeqp3rk
     end interface
 
 end module ref_quad_lapack

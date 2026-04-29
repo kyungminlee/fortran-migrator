@@ -245,6 +245,14 @@ module target_lapack
     public :: target_dtplqt, target_ztplqt
     public :: target_dtpmlqt, target_ztpmlqt
     public :: target_dtprfb, target_ztprfb
+    ! P14 — TSQR + Householder reconstruction
+    public :: target_dgeqr2p, target_zgeqr2p
+    public :: target_dgeqrfp, target_zgeqrfp
+    public :: target_dorgtsqr, target_zungtsqr
+    public :: target_dorgtsqr_row, target_zungtsqr_row
+    public :: target_dorhr_col, target_zunhr_col
+    public :: target_dgetsqrhrt, target_zgetsqrhrt
+    public :: target_dgeqp3rk, target_zgeqp3rk
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -13594,6 +13602,239 @@ $:CPACK_INV('zsptri', C + 'sptri')
         call ${R}$tprfb(side, trans, direct, storev, m, n, k, l, &
                         Vt, ldv, Tt, ldt, At, lda, Bt, ldb, work, ldwork)
         A(1:lda, 1:acols) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+    end subroutine
+
+    ! ----- P14 TSQR + Householder reconstruction -----
+
+    subroutine target_dgeqr2p(m, n, A, lda, tau, info)
+        integer,  intent(in)    :: m, n, lda
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: tau(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        allocate(At(lda, n), taut(min(m, n)), work(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geqr2p(m, n, At, lda, taut, work, info)
+        A(1:lda, 1:n) = t2q_r(At); tau(1:min(m,n)) = t2q_r(taut)
+    end subroutine
+
+    subroutine target_zgeqr2p(m, n, A, lda, tau, info)
+        integer,     intent(in)    :: m, n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        allocate(At(lda, n), taut(min(m, n)), work(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$geqr2p(m, n, At, lda, taut, work, info)
+        A(1:lda, 1:n) = t2q_c(At); tau(1:min(m,n)) = t2q_c(taut)
+    end subroutine
+
+    subroutine target_dgeqrfp(m, n, A, lda, tau, info)
+        integer,  intent(in)    :: m, n, lda
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: tau(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(min(m, n)))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$geqrfp(m, n, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$geqrfp(m, n, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At); tau(1:min(m,n)) = t2q_r(taut)
+    end subroutine
+
+    subroutine target_zgeqrfp(m, n, A, lda, tau, info)
+        integer,     intent(in)    :: m, n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), taut(min(m, n)))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$geqrfp(m, n, At, lda, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$geqrfp(m, n, At, lda, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At); tau(1:min(m,n)) = t2q_c(taut)
+    end subroutine
+
+    subroutine target_dorgtsqr(m, n, mb, nb, A, lda, T, ldt, info)
+        integer,  intent(in)    :: m, n, mb, nb, lda, ldt
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(in)    :: T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, ntcols
+        ntcols = n * max(1, (m - n + (mb - n) - 1) / max(1, mb - n))
+        allocate(At(lda, n), Tt(ldt, ntcols))
+        At = q2t_r(A(1:lda, 1:n)); Tt = q2t_r(T(1:ldt, 1:ntcols))
+        call ${R}$orgtsqr(m, n, mb, nb, At, lda, Tt, ldt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$orgtsqr(m, n, mb, nb, At, lda, Tt, ldt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_zungtsqr(m, n, mb, nb, A, lda, T, ldt, info)
+        integer,     intent(in)    :: m, n, mb, nb, lda, ldt
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, ntcols
+        ntcols = n * max(1, (m - n + (mb - n) - 1) / max(1, mb - n))
+        allocate(At(lda, n), Tt(ldt, ntcols))
+        At = q2t_c(A(1:lda, 1:n)); Tt = q2t_c(T(1:ldt, 1:ntcols))
+        call ${C}$ungtsqr(m, n, mb, nb, At, lda, Tt, ldt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$ungtsqr(m, n, mb, nb, At, lda, Tt, ldt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_dorgtsqr_row(m, n, mb, nb, A, lda, T, ldt, info)
+        integer,  intent(in)    :: m, n, mb, nb, lda, ldt
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(in)    :: T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, ntcols
+        ntcols = n * max(1, (m - n + (mb - n) - 1) / max(1, mb - n))
+        allocate(At(lda, n), Tt(ldt, ntcols))
+        At = q2t_r(A(1:lda, 1:n)); Tt = q2t_r(T(1:ldt, 1:ntcols))
+        call ${R}$orgtsqr_row(m, n, mb, nb, At, lda, Tt, ldt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$orgtsqr_row(m, n, mb, nb, At, lda, Tt, ldt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_zungtsqr_row(m, n, mb, nb, A, lda, T, ldt, info)
+        integer,     intent(in)    :: m, n, mb, nb, lda, ldt
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, ntcols
+        ntcols = n * max(1, (m - n + (mb - n) - 1) / max(1, mb - n))
+        allocate(At(lda, n), Tt(ldt, ntcols))
+        At = q2t_c(A(1:lda, 1:n)); Tt = q2t_c(T(1:ldt, 1:ntcols))
+        call ${C}$ungtsqr_row(m, n, mb, nb, At, lda, Tt, ldt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$ungtsqr_row(m, n, mb, nb, At, lda, Tt, ldt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_dorhr_col(m, n, nb, A, lda, T, ldt, D, info)
+        integer,  intent(in)    :: m, n, nb, lda, ldt
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: T(ldt,*), D(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Tt(:,:), Dt(:)
+        allocate(At(lda, n), Tt(ldt, n), Dt(n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$orhr_col(m, n, nb, At, lda, Tt, ldt, Dt, info)
+        A(1:lda, 1:n) = t2q_r(At); T(1:ldt, 1:n) = t2q_r(Tt); D(1:n) = t2q_r(Dt)
+    end subroutine
+
+    subroutine target_zunhr_col(m, n, nb, A, lda, T, ldt, D, info)
+        integer,     intent(in)    :: m, n, nb, lda, ldt
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: T(ldt,*), D(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Tt(:,:), Dt(:)
+        allocate(At(lda, n), Tt(ldt, n), Dt(n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$unhr_col(m, n, nb, At, lda, Tt, ldt, Dt, info)
+        A(1:lda, 1:n) = t2q_c(At); T(1:ldt, 1:n) = t2q_c(Tt); D(1:n) = t2q_c(Dt)
+    end subroutine
+
+    subroutine target_dgetsqrhrt(m, n, mb1, nb1, nb2, A, lda, T, ldt, info)
+        integer,  intent(in)    :: m, n, mb1, nb1, nb2, lda, ldt
+        real(ep), intent(inout) :: A(lda,*)
+        real(ep), intent(out)   :: T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Tt(ldt, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$getsqrhrt(m, n, mb1, nb1, nb2, At, lda, Tt, ldt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$getsqrhrt(m, n, mb1, nb1, nb2, At, lda, Tt, ldt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At); T(1:ldt, 1:n) = t2q_r(Tt)
+    end subroutine
+
+    subroutine target_zgetsqrhrt(m, n, mb1, nb1, nb2, A, lda, T, ldt, info)
+        integer,     intent(in)    :: m, n, mb1, nb1, nb2, lda, ldt
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Tt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Tt(ldt, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$getsqrhrt(m, n, mb1, nb1, nb2, At, lda, Tt, ldt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$getsqrhrt(m, n, mb1, nb1, nb2, At, lda, Tt, ldt, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At); T(1:ldt, 1:n) = t2q_c(Tt)
+    end subroutine
+
+    subroutine target_dgeqp3rk(m, n, nrhs, kmax, abstol, reltol, A, lda, &
+                               K, maxc2nrmk, relmaxc2nrmk, jpiv, tau, info)
+        integer,  intent(in)    :: m, n, nrhs, kmax, lda
+        real(ep), intent(in)    :: abstol, reltol
+        real(ep), intent(inout) :: A(lda,*)
+        integer,  intent(out)   :: K, jpiv(*), info
+        real(ep), intent(out)   :: maxc2nrmk, relmaxc2nrmk, tau(*)
+        ${target_real}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1), m2k, rm2k
+        integer, allocatable :: iwork(:)
+        integer :: lwork, ncols
+        ncols = n + nrhs
+        allocate(At(lda, ncols), taut(min(m, n)), iwork(n))
+        At = q2t_r(A(1:lda, 1:ncols))
+        call ${R}$geqp3rk(m, n, nrhs, kmax, q2t_r(abstol), q2t_r(reltol), At, lda, &
+                          K, m2k, rm2k, jpiv, taut, wopt, -1, iwork, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$geqp3rk(m, n, nrhs, kmax, q2t_r(abstol), q2t_r(reltol), At, lda, &
+                          K, m2k, rm2k, jpiv, taut, work, lwork, iwork, info)
+        A(1:lda, 1:ncols) = t2q_r(At)
+        tau(1:min(m,n)) = t2q_r(taut)
+        maxc2nrmk = t2q_r(m2k); relmaxc2nrmk = t2q_r(rm2k)
+    end subroutine
+
+    subroutine target_zgeqp3rk(m, n, nrhs, kmax, abstol, reltol, A, lda, &
+                               K, maxc2nrmk, relmaxc2nrmk, jpiv, tau, info)
+        integer,     intent(in)    :: m, n, nrhs, kmax, lda
+        real(ep),    intent(in)    :: abstol, reltol
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: K, jpiv(*), info
+        real(ep),    intent(out)   :: maxc2nrmk, relmaxc2nrmk
+        complex(ep), intent(out)   :: tau(*)
+        ${target_complex}$, allocatable :: At(:,:), taut(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$, allocatable :: rwork(:)
+        ${target_real}$ :: m2k, rm2k
+        integer, allocatable :: iwork(:)
+        integer :: lwork, ncols
+        ncols = n + nrhs
+        allocate(At(lda, ncols), taut(min(m, n)), iwork(n), rwork(2*n))
+        At = q2t_c(A(1:lda, 1:ncols))
+        call ${C}$geqp3rk(m, n, nrhs, kmax, q2t_r(abstol), q2t_r(reltol), At, lda, &
+                          K, m2k, rm2k, jpiv, taut, wopt, -1, rwork, iwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$geqp3rk(m, n, nrhs, kmax, q2t_r(abstol), q2t_r(reltol), At, lda, &
+                          K, m2k, rm2k, jpiv, taut, work, lwork, rwork, iwork, info)
+        A(1:lda, 1:ncols) = t2q_c(At)
+        tau(1:min(m,n)) = t2q_c(taut)
+        maxc2nrmk = t2q_r(m2k); relmaxc2nrmk = t2q_r(rm2k)
     end subroutine
 
     subroutine target_ztprfb(side, trans, direct, storev, m, n, k, l, &
