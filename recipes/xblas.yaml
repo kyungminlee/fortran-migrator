@@ -75,6 +75,66 @@ header_patches:
     after: '#define BLAS_ENUM_H'
     insert: |
       #include "multifloats_bridge.h"
+  # multifloats compiles XBLAS C sources as C++ (so multifloats's
+  # operator-overload-rich float64x2 type does what's needed in
+  # element-wise math). The two prototype headers declare functions
+  # at file scope without extern "C", so the C++ compiler gives them
+  # C++ linkage; the function definitions in *.c then re-open
+  # extern "C" inside the translation unit, producing
+  # "conflicting declaration … with C linkage" errors. Wrap each
+  # proto.h body in an extern "C" block under multifloats.
+  - file: blas_extended_proto.h
+    when: multifloats
+    after: '#define BLAS_EXTENDED_PROTO_H'
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: blas_extended_proto.h
+    when: multifloats
+    before: '#endif /* BLAS_EXTENDED_PROTO_H */'
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  # blas_dense_proto.h's trailing include-guard `#endif` is on its own
+  # line followed by an indented comment — order the closing-brace
+  # patch BEFORE the opening one so `before: '#endif'` still matches
+  # the original include guard's `#endif` (the opening patch's own
+  # `#endif` doesn't exist yet at this point).
+  - file: blas_dense_proto.h
+    when: multifloats
+    before: '#endif'
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  - file: blas_dense_proto.h
+    when: multifloats
+    after: '#define BLAS_DENSE_PROTO_H'
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  # blas_malloc.h declares blas_malloc/blas_realloc/blas_free in the
+  # #else branch of an NO_BLASMALLOC switch. Same C-vs-C++ linkage
+  # mismatch under multifloats. Apply the closing patch first so the
+  # `before: '#endif'` anchor still points to the original close-of-
+  # #else (the opening patch's own `#endif` doesn't exist yet).
+  - file: blas_malloc.h
+    when: multifloats
+    before: '#endif'
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  - file: blas_malloc.h
+    when: multifloats
+    after: '#include <stddef.h>'
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
 
 # Mixed-input-precision variants (BLAS_<P><routine>_<P1>_<P2>[_x].c)
 # have no S/C ↔ D/Z partner in the source tree — the prefix

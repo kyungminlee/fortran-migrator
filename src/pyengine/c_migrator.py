@@ -762,8 +762,13 @@ def _expand_template(s: str, template_vars: dict[str, str]) -> str:
 # type, otherwise (double) casts and `*=` arithmetic in the cost model
 # stop compiling. Survey of pblas/SRC/p[dz]*.c shows just two declaration
 # lines containing these names; recognising them by name is sufficient.
+#
+# Note: ``tmp\d+`` deliberately excluded — PBLAS pairs them with
+# ABest/ACest/BCest on the same line (so the line still matches via
+# those anchors), while XBLAS uses bare ``double tmp1;`` accumulators
+# that DO need to be promoted to float64x2 for working-precision math.
 _PBLAS_COST_LOCAL = (
-    r'ABest|ACest|BCest|ABestL|ABestR|Best|tmp\d+'
+    r'ABest|ACest|BCest|ABestL|ABestR|Best'
 )
 
 

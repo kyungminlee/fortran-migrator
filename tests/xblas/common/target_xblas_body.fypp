@@ -98,60 +98,52 @@ module target_xblas
     interface
 
         ! ── Level 1 ────────────────────────────────────────────────
-        subroutine ${R}$axpby_x_ext(n, alpha, x, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${R}$axpby_x_")
+        subroutine blas_${R}$axpby_x(n, alpha, x, incx, beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in) :: n, incx, incy, prec
             ${target_real}$, intent(in) :: alpha, beta, x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$axpby_x_ext(n, alpha, x, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${C}$axpby_x_")
+        subroutine blas_${C}$axpby_x(n, alpha, x, incx, beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in) :: n, incx, incy, prec
             ${target_complex}$, intent(in) :: alpha, beta, x(*)
             ${target_complex}$, intent(inout) :: y(*)
         end subroutine
 
-        subroutine ${R}$dot_x_ext(conj, n, alpha, x, incx, beta, y, incy, r, prec) &
-                                  bind(c, name="blas_${R}$dot_x_")
+        subroutine blas_${R}$dot_x(conj, n, alpha, x, incx, beta, y, incy, r, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: conj, n, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta, x(*), y(*)
             ${target_real}$, intent(inout) :: r
         end subroutine
-        subroutine ${C}$dot_x_ext(conj, n, alpha, x, incx, beta, y, incy, r, prec) &
-                                  bind(c, name="blas_${C}$dot_x_")
+        subroutine blas_${C}$dot_x(conj, n, alpha, x, incx, beta, y, incy, r, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: conj, n, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, x(*), y(*)
             ${target_complex}$, intent(inout) :: r
         end subroutine
 
-        subroutine ${R}$sum_x_ext(n, x, incx, s, prec) &
-                                  bind(c, name="blas_${R}$sum_x_")
+        subroutine blas_${R}$sum_x(n, x, incx, s, prec)
 $:IMPORT_R()
             integer,         intent(in)  :: n, incx, prec
             ${target_real}$, intent(in)  :: x(*)
             ${target_real}$, intent(out) :: s
         end subroutine
-        subroutine ${C}$sum_x_ext(n, x, incx, s, prec) &
-                                  bind(c, name="blas_${C}$sum_x_")
+        subroutine blas_${C}$sum_x(n, x, incx, s, prec)
 $:IMPORT_C()
             integer,            intent(in)  :: n, incx, prec
             ${target_complex}$, intent(in)  :: x(*)
             ${target_complex}$, intent(out) :: s
         end subroutine
 
-        subroutine ${R}$waxpby_x_ext(n, alpha, x, incx, beta, y, incy, w, incw, prec) &
-                                     bind(c, name="blas_${R}$waxpby_x_")
+        subroutine blas_${R}$waxpby_x(n, alpha, x, incx, beta, y, incy, w, incw, prec)
 $:IMPORT_R()
             integer,         intent(in)  :: n, incx, incy, incw, prec
             ${target_real}$, intent(in)  :: alpha, beta, x(*), y(*)
             ${target_real}$, intent(out) :: w(*)
         end subroutine
-        subroutine ${C}$waxpby_x_ext(n, alpha, x, incx, beta, y, incy, w, incw, prec) &
-                                     bind(c, name="blas_${C}$waxpby_x_")
+        subroutine blas_${C}$waxpby_x(n, alpha, x, incx, beta, y, incy, w, incw, prec)
 $:IMPORT_C()
             integer,            intent(in)  :: n, incx, incy, incw, prec
             ${target_complex}$, intent(in)  :: alpha, beta, x(*), y(*)
@@ -159,35 +151,31 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — gemv ─────────────────────────────────────────
-        subroutine ${R}$gemv_x_ext(trans, m, n, alpha, a, lda, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${R}$gemv_x_")
+        subroutine blas_${R}$gemv_x(trans, m, n, alpha, a, lda, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: trans, m, n, lda, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$gemv_x_ext(trans, m, n, alpha, a, lda, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${C}$gemv_x_")
+        subroutine blas_${C}$gemv_x(trans, m, n, alpha, a, lda, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: trans, m, n, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
             ${target_complex}$, intent(inout) :: y(*)
         end subroutine
 
-        subroutine ${R}$gemv2_x_ext(trans, m, n, alpha, a, lda, &
-                                    head_x, tail_x, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${R}$gemv2_x_")
+        subroutine blas_${R}$gemv2_x(trans, m, n, alpha, a, lda, &
+                                    head_x, tail_x, incx, beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: trans, m, n, lda, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta
             ${target_real}$, intent(in)    :: a(lda,*), head_x(*), tail_x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$gemv2_x_ext(trans, m, n, alpha, a, lda, &
-                                    head_x, tail_x, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${C}$gemv2_x_")
+        subroutine blas_${C}$gemv2_x(trans, m, n, alpha, a, lda, &
+                                    head_x, tail_x, incx, beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: trans, m, n, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta
@@ -196,35 +184,31 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — gbmv ─────────────────────────────────────────
-        subroutine ${R}$gbmv_x_ext(trans, m, n, kl, ku, alpha, a, lda, &
-                                   x, incx, beta, y, incy, prec) &
-                                   bind(c, name="blas_${R}$gbmv_x_")
+        subroutine blas_${R}$gbmv_x(trans, m, n, kl, ku, alpha, a, lda, &
+                                   x, incx, beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: trans, m, n, kl, ku, lda, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$gbmv_x_ext(trans, m, n, kl, ku, alpha, a, lda, &
-                                   x, incx, beta, y, incy, prec) &
-                                   bind(c, name="blas_${C}$gbmv_x_")
+        subroutine blas_${C}$gbmv_x(trans, m, n, kl, ku, alpha, a, lda, &
+                                   x, incx, beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: trans, m, n, kl, ku, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
             ${target_complex}$, intent(inout) :: y(*)
         end subroutine
 
-        subroutine ${R}$gbmv2_x_ext(trans, m, n, kl, ku, alpha, a, lda, &
-                                    head_x, tail_x, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${R}$gbmv2_x_")
+        subroutine blas_${R}$gbmv2_x(trans, m, n, kl, ku, alpha, a, lda, &
+                                    head_x, tail_x, incx, beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: trans, m, n, kl, ku, lda, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta
             ${target_real}$, intent(in)    :: a(lda,*), head_x(*), tail_x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$gbmv2_x_ext(trans, m, n, kl, ku, alpha, a, lda, &
-                                    head_x, tail_x, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${C}$gbmv2_x_")
+        subroutine blas_${C}$gbmv2_x(trans, m, n, kl, ku, alpha, a, lda, &
+                                    head_x, tail_x, incx, beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: trans, m, n, kl, ku, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta
@@ -233,35 +217,31 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — symv (real & complex symmetric) ──────────────
-        subroutine ${R}$symv_x_ext(uplo, n, alpha, a, lda, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${R}$symv_x_")
+        subroutine blas_${R}$symv_x(uplo, n, alpha, a, lda, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: uplo, n, lda, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$symv_x_ext(uplo, n, alpha, a, lda, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${C}$symv_x_")
+        subroutine blas_${C}$symv_x(uplo, n, alpha, a, lda, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, n, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
             ${target_complex}$, intent(inout) :: y(*)
         end subroutine
 
-        subroutine ${R}$symv2_x_ext(uplo, n, alpha, a, lda, &
-                                    x_head, x_tail, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${R}$symv2_x_")
+        subroutine blas_${R}$symv2_x(uplo, n, alpha, a, lda, &
+                                    x_head, x_tail, incx, beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: uplo, n, lda, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta
             ${target_real}$, intent(in)    :: a(lda,*), x_head(*), x_tail(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$symv2_x_ext(uplo, n, alpha, a, lda, &
-                                    x_head, x_tail, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${C}$symv2_x_")
+        subroutine blas_${C}$symv2_x(uplo, n, alpha, a, lda, &
+                                    x_head, x_tail, incx, beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, n, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta
@@ -270,17 +250,15 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — sbmv (symmetric banded) ──────────────────────
-        subroutine ${R}$sbmv_x_ext(uplo, n, k, alpha, a, lda, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${R}$sbmv_x_")
+        subroutine blas_${R}$sbmv_x(uplo, n, k, alpha, a, lda, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: uplo, n, k, lda, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$sbmv_x_ext(uplo, n, k, alpha, a, lda, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${C}$sbmv_x_")
+        subroutine blas_${C}$sbmv_x(uplo, n, k, alpha, a, lda, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, n, k, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
@@ -288,17 +266,15 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — spmv (symmetric packed) ──────────────────────
-        subroutine ${R}$spmv_x_ext(uplo, n, alpha, ap, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${R}$spmv_x_")
+        subroutine blas_${R}$spmv_x(uplo, n, alpha, ap, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: uplo, n, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta, ap(*), x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$spmv_x_ext(uplo, n, alpha, ap, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${C}$spmv_x_")
+        subroutine blas_${C}$spmv_x(uplo, n, alpha, ap, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, n, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, ap(*), x(*)
@@ -306,17 +282,15 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — hemv (complex hermitian) ─────────────────────
-        subroutine ${C}$hemv_x_ext(uplo, n, alpha, a, lda, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${C}$hemv_x_")
+        subroutine blas_${C}$hemv_x(uplo, n, alpha, a, lda, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, n, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
             ${target_complex}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$hemv2_x_ext(uplo, n, alpha, a, lda, &
-                                    x_head, x_tail, incx, beta, y, incy, prec) &
-                                    bind(c, name="blas_${C}$hemv2_x_")
+        subroutine blas_${C}$hemv2_x(uplo, n, alpha, a, lda, &
+                                    x_head, x_tail, incx, beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, n, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta
@@ -325,9 +299,8 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — hbmv (hermitian banded) ──────────────────────
-        subroutine ${C}$hbmv_x_ext(uplo, n, k, alpha, a, lda, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${C}$hbmv_x_")
+        subroutine blas_${C}$hbmv_x(uplo, n, k, alpha, a, lda, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, n, k, lda, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), x(*)
@@ -335,9 +308,8 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — hpmv (hermitian packed) ──────────────────────
-        subroutine ${C}$hpmv_x_ext(uplo, n, alpha, ap, x, incx, &
-                                   beta, y, incy, prec) &
-                                   bind(c, name="blas_${C}$hpmv_x_")
+        subroutine blas_${C}$hpmv_x(uplo, n, alpha, ap, x, incx, &
+                                   beta, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, n, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta, ap(*), x(*)
@@ -345,18 +317,16 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — ge_sum_mv (sum of two matvecs) ───────────────
-        subroutine ${R}$ge_sum_mv_x_ext(m, n, alpha, a, lda, x, incx, &
-                                        beta, b, ldb, y, incy, prec) &
-                                        bind(c, name="blas_${R}$ge_sum_mv_x_")
+        subroutine blas_${R}$ge_sum_mv_x(m, n, alpha, a, lda, x, incx, &
+                                        beta, b, ldb, y, incy, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: m, n, lda, ldb, incx, incy, prec
             ${target_real}$, intent(in)    :: alpha, beta
             ${target_real}$, intent(in)    :: a(lda,*), b(ldb,*), x(*)
             ${target_real}$, intent(inout) :: y(*)
         end subroutine
-        subroutine ${C}$ge_sum_mv_x_ext(m, n, alpha, a, lda, x, incx, &
-                                        beta, b, ldb, y, incy, prec) &
-                                        bind(c, name="blas_${C}$ge_sum_mv_x_")
+        subroutine blas_${C}$ge_sum_mv_x(m, n, alpha, a, lda, x, incx, &
+                                        beta, b, ldb, y, incy, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: m, n, lda, ldb, incx, incy, prec
             ${target_complex}$, intent(in)    :: alpha, beta
@@ -365,68 +335,60 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 2 — triangular ───────────────────────────────────
-        subroutine ${R}$trmv_x_ext(uplo, trans, diag, n, alpha, t, ldt, &
-                                   x, incx, prec) &
-                                   bind(c, name="blas_${R}$trmv_x_")
+        subroutine blas_${R}$trmv_x(uplo, trans, diag, n, alpha, t, ldt, &
+                                   x, incx, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: uplo, trans, diag, n, ldt, incx, prec
             ${target_real}$, intent(in)    :: alpha, t(ldt,*)
             ${target_real}$, intent(inout) :: x(*)
         end subroutine
-        subroutine ${C}$trmv_x_ext(uplo, trans, diag, n, alpha, t, ldt, &
-                                   x, incx, prec) &
-                                   bind(c, name="blas_${C}$trmv_x_")
+        subroutine blas_${C}$trmv_x(uplo, trans, diag, n, alpha, t, ldt, &
+                                   x, incx, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, trans, diag, n, ldt, incx, prec
             ${target_complex}$, intent(in)    :: alpha, t(ldt,*)
             ${target_complex}$, intent(inout) :: x(*)
         end subroutine
 
-        subroutine ${R}$tpmv_x_ext(uplo, trans, diag, n, alpha, tp, &
-                                   x, incx, prec) &
-                                   bind(c, name="blas_${R}$tpmv_x_")
+        subroutine blas_${R}$tpmv_x(uplo, trans, diag, n, alpha, tp, &
+                                   x, incx, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: uplo, trans, diag, n, incx, prec
             ${target_real}$, intent(in)    :: alpha, tp(*)
             ${target_real}$, intent(inout) :: x(*)
         end subroutine
-        subroutine ${C}$tpmv_x_ext(uplo, trans, diag, n, alpha, tp, &
-                                   x, incx, prec) &
-                                   bind(c, name="blas_${C}$tpmv_x_")
+        subroutine blas_${C}$tpmv_x(uplo, trans, diag, n, alpha, tp, &
+                                   x, incx, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, trans, diag, n, incx, prec
             ${target_complex}$, intent(in)    :: alpha, tp(*)
             ${target_complex}$, intent(inout) :: x(*)
         end subroutine
 
-        subroutine ${R}$tbsv_x_ext(uplo, trans, diag, n, k, alpha, t, ldt, &
-                                   x, incx, prec) &
-                                   bind(c, name="blas_${R}$tbsv_x_")
+        subroutine blas_${R}$tbsv_x(uplo, trans, diag, n, k, alpha, t, ldt, &
+                                   x, incx, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: uplo, trans, diag, n, k, ldt, incx, prec
             ${target_real}$, intent(in)    :: alpha, t(ldt,*)
             ${target_real}$, intent(inout) :: x(*)
         end subroutine
-        subroutine ${C}$tbsv_x_ext(uplo, trans, diag, n, k, alpha, t, ldt, &
-                                   x, incx, prec) &
-                                   bind(c, name="blas_${C}$tbsv_x_")
+        subroutine blas_${C}$tbsv_x(uplo, trans, diag, n, k, alpha, t, ldt, &
+                                   x, incx, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, trans, diag, n, k, ldt, incx, prec
             ${target_complex}$, intent(in)    :: alpha, t(ldt,*)
             ${target_complex}$, intent(inout) :: x(*)
         end subroutine
 
-        subroutine ${R}$trsv_x_ext(uplo, trans, diag, n, alpha, t, ldt, &
-                                   x, incx, prec) &
-                                   bind(c, name="blas_${R}$trsv_x_")
+        subroutine blas_${R}$trsv_x(uplo, trans, diag, n, alpha, t, ldt, &
+                                   x, incx, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: uplo, trans, diag, n, ldt, incx, prec
             ${target_real}$, intent(in)    :: alpha, t(ldt,*)
             ${target_real}$, intent(inout) :: x(*)
         end subroutine
-        subroutine ${C}$trsv_x_ext(uplo, trans, diag, n, alpha, t, ldt, &
-                                   x, incx, prec) &
-                                   bind(c, name="blas_${C}$trsv_x_")
+        subroutine blas_${C}$trsv_x(uplo, trans, diag, n, alpha, t, ldt, &
+                                   x, incx, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: uplo, trans, diag, n, ldt, incx, prec
             ${target_complex}$, intent(in)    :: alpha, t(ldt,*)
@@ -434,17 +396,15 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 3 — gemm ─────────────────────────────────────────
-        subroutine ${R}$gemm_x_ext(transa, transb, m, n, k, alpha, &
-                                   a, lda, b, ldb, beta, c, ldc, prec) &
-                                   bind(c, name="blas_${R}$gemm_x_")
+        subroutine blas_${R}$gemm_x(transa, transb, m, n, k, alpha, &
+                                   a, lda, b, ldb, beta, c, ldc, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: transa, transb, m, n, k, lda, ldb, ldc, prec
             ${target_real}$, intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
             ${target_real}$, intent(inout) :: c(ldc,*)
         end subroutine
-        subroutine ${C}$gemm_x_ext(transa, transb, m, n, k, alpha, &
-                                   a, lda, b, ldb, beta, c, ldc, prec) &
-                                   bind(c, name="blas_${C}$gemm_x_")
+        subroutine blas_${C}$gemm_x(transa, transb, m, n, k, alpha, &
+                                   a, lda, b, ldb, beta, c, ldc, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: transa, transb, m, n, k, lda, ldb, ldc, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
@@ -452,25 +412,22 @@ $:IMPORT_C()
         end subroutine
 
         ! ── Level 3 — symm / hemm ──────────────────────────────────
-        subroutine ${R}$symm_x_ext(side, uplo, m, n, alpha, a, lda, &
-                                   b, ldb, beta, c, ldc, prec) &
-                                   bind(c, name="blas_${R}$symm_x_")
+        subroutine blas_${R}$symm_x(side, uplo, m, n, alpha, a, lda, &
+                                   b, ldb, beta, c, ldc, prec)
 $:IMPORT_R()
             integer,         intent(in)    :: side, uplo, m, n, lda, ldb, ldc, prec
             ${target_real}$, intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
             ${target_real}$, intent(inout) :: c(ldc,*)
         end subroutine
-        subroutine ${C}$symm_x_ext(side, uplo, m, n, alpha, a, lda, &
-                                   b, ldb, beta, c, ldc, prec) &
-                                   bind(c, name="blas_${C}$symm_x_")
+        subroutine blas_${C}$symm_x(side, uplo, m, n, alpha, a, lda, &
+                                   b, ldb, beta, c, ldc, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: side, uplo, m, n, lda, ldb, ldc, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
             ${target_complex}$, intent(inout) :: c(ldc,*)
         end subroutine
-        subroutine ${C}$hemm_x_ext(side, uplo, m, n, alpha, a, lda, &
-                                   b, ldb, beta, c, ldc, prec) &
-                                   bind(c, name="blas_${C}$hemm_x_")
+        subroutine blas_${C}$hemm_x(side, uplo, m, n, alpha, a, lda, &
+                                   b, ldb, beta, c, ldc, prec)
 $:IMPORT_C()
             integer,            intent(in)    :: side, uplo, m, n, lda, ldb, ldc, prec
             ${target_complex}$, intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
@@ -502,7 +459,7 @@ contains
         allocate(x_t(lx), y_t(ly))
         alpha_t = q2t_r(alpha_q); beta_t = q2t_r(beta_q)
         x_t = q2t_r(x_q(1:lx)); y_t = q2t_r(y_q(1:ly))
-        call ${R}$axpby_x_ext(n, alpha_t, x_t, incx, beta_t, y_t, incy, blas_prec_extra)
+        call blas_${R}$axpby_x(n, alpha_t, x_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:ly) = t2q_r(y_t)
     end subroutine
 
@@ -517,7 +474,7 @@ contains
         allocate(x_t(lx), y_t(ly))
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         x_t = q2t_c(x_q(1:lx)); y_t = q2t_c(y_q(1:ly))
-        call ${C}$axpby_x_ext(n, alpha_t, x_t, incx, beta_t, y_t, incy, blas_prec_extra)
+        call blas_${C}$axpby_x(n, alpha_t, x_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:ly) = t2q_c(y_t)
     end subroutine
 
@@ -532,7 +489,7 @@ contains
         allocate(x_t(lx), y_t(ly))
         alpha_t = q2t_r(alpha_q); beta_t = q2t_r(beta_q)
         x_t = q2t_r(x_q(1:lx)); y_t = q2t_r(y_q(1:ly)); r_t = q2t_r(r_q)
-        call ${R}$dot_x_ext(conj, n, alpha_t, x_t, incx, beta_t, y_t, incy, r_t, blas_prec_extra)
+        call blas_${R}$dot_x(conj, n, alpha_t, x_t, incx, beta_t, y_t, incy, r_t, blas_prec_extra)
         r_q = t2q_r(r_t)
     end subroutine
 
@@ -547,7 +504,7 @@ contains
         allocate(x_t(lx), y_t(ly))
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         x_t = q2t_c(x_q(1:lx)); y_t = q2t_c(y_q(1:ly)); r_t = q2t_c(r_q)
-        call ${C}$dot_x_ext(conj, n, alpha_t, x_t, incx, beta_t, y_t, incy, r_t, blas_prec_extra)
+        call blas_${C}$dot_x(conj, n, alpha_t, x_t, incx, beta_t, y_t, incy, r_t, blas_prec_extra)
         r_q = t2q_c(r_t)
     end subroutine
 
@@ -561,7 +518,7 @@ contains
         lx = 1 + (n - 1) * abs(incx)
         allocate(x_t(lx))
         x_t = q2t_r(x_q(1:lx))
-        call ${R}$sum_x_ext(n, x_t, incx, s_t, blas_prec_extra)
+        call blas_${R}$sum_x(n, x_t, incx, s_t, blas_prec_extra)
         s_q = t2q_r(s_t)
     end subroutine
 
@@ -575,7 +532,7 @@ contains
         lx = 1 + (n - 1) * abs(incx)
         allocate(x_t(lx))
         x_t = q2t_c(x_q(1:lx))
-        call ${C}$sum_x_ext(n, x_t, incx, s_t, blas_prec_extra)
+        call blas_${C}$sum_x(n, x_t, incx, s_t, blas_prec_extra)
         s_q = t2q_c(s_t)
     end subroutine
 
@@ -591,7 +548,7 @@ contains
         allocate(x_t(lx), y_t(ly), w_t(lw))
         alpha_t = q2t_r(alpha_q); beta_t = q2t_r(beta_q)
         x_t = q2t_r(x_q(1:lx)); y_t = q2t_r(y_q(1:ly))
-        call ${R}$waxpby_x_ext(n, alpha_t, x_t, incx, beta_t, y_t, incy, w_t, incw, blas_prec_extra)
+        call blas_${R}$waxpby_x(n, alpha_t, x_t, incx, beta_t, y_t, incy, w_t, incw, blas_prec_extra)
         w_q(1:lw) = t2q_r(w_t)
     end subroutine
 
@@ -607,7 +564,7 @@ contains
         allocate(x_t(lx), y_t(ly), w_t(lw))
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         x_t = q2t_c(x_q(1:lx)); y_t = q2t_c(y_q(1:ly))
-        call ${C}$waxpby_x_ext(n, alpha_t, x_t, incx, beta_t, y_t, incy, w_t, incw, blas_prec_extra)
+        call blas_${C}$waxpby_x(n, alpha_t, x_t, incx, beta_t, y_t, incy, w_t, incw, blas_prec_extra)
         w_q(1:lw) = t2q_c(w_t)
     end subroutine
 
@@ -631,7 +588,7 @@ contains
         alpha_t = q2t_r(alpha_q); beta_t = q2t_r(beta_q)
         a_t = q2t_r(a_q(1:lda, 1:n))
         x_t = q2t_r(x_q(1:lenx)); y_t = q2t_r(y_q(1:leny))
-        call ${R}$gemv_x_ext(trans, m, n, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${R}$gemv_x(trans, m, n, alpha_t, a_t, lda, x_t, incx, &
                              beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -652,7 +609,7 @@ contains
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         a_t = q2t_c(a_q(1:lda, 1:n))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$gemv_x_ext(trans, m, n, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${C}$gemv_x(trans, m, n, alpha_t, a_t, lda, x_t, incx, &
                              beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -674,7 +631,7 @@ contains
         a_t = q2t_r(a_q(1:lda, 1:n))
         h_t = q2t_r(head_q(1:lenx)); t_t = q2t_r(tail_q(1:lenx))
         y_t = q2t_r(y_q(1:leny))
-        call ${R}$gemv2_x_ext(trans, m, n, alpha_t, a_t, lda, &
+        call blas_${R}$gemv2_x(trans, m, n, alpha_t, a_t, lda, &
                               h_t, t_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -696,7 +653,7 @@ contains
         a_t = q2t_c(a_q(1:lda, 1:n))
         h_t = q2t_c(head_q(1:lenx)); t_t = q2t_c(tail_q(1:lenx))
         y_t = q2t_c(y_q(1:leny))
-        call ${C}$gemv2_x_ext(trans, m, n, alpha_t, a_t, lda, &
+        call blas_${C}$gemv2_x(trans, m, n, alpha_t, a_t, lda, &
                               h_t, t_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -721,7 +678,7 @@ contains
         alpha_t = q2t_r(alpha_q); beta_t = q2t_r(beta_q)
         a_t = q2t_r(a_q(1:lda, 1:n))
         x_t = q2t_r(x_q(1:lenx)); y_t = q2t_r(y_q(1:leny))
-        call ${R}$gbmv_x_ext(trans, m, n, kl, ku, alpha_t, a_t, lda, &
+        call blas_${R}$gbmv_x(trans, m, n, kl, ku, alpha_t, a_t, lda, &
                              x_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -742,7 +699,7 @@ contains
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         a_t = q2t_c(a_q(1:lda, 1:n))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$gbmv_x_ext(trans, m, n, kl, ku, alpha_t, a_t, lda, &
+        call blas_${C}$gbmv_x(trans, m, n, kl, ku, alpha_t, a_t, lda, &
                              x_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -764,7 +721,7 @@ contains
         a_t = q2t_r(a_q(1:lda, 1:n))
         h_t = q2t_r(head_q(1:lenx)); t_t = q2t_r(tail_q(1:lenx))
         y_t = q2t_r(y_q(1:leny))
-        call ${R}$gbmv2_x_ext(trans, m, n, kl, ku, alpha_t, a_t, lda, &
+        call blas_${R}$gbmv2_x(trans, m, n, kl, ku, alpha_t, a_t, lda, &
                               h_t, t_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -786,7 +743,7 @@ contains
         a_t = q2t_c(a_q(1:lda, 1:n))
         h_t = q2t_c(head_q(1:lenx)); t_t = q2t_c(tail_q(1:lenx))
         y_t = q2t_c(y_q(1:leny))
-        call ${C}$gbmv2_x_ext(trans, m, n, kl, ku, alpha_t, a_t, lda, &
+        call blas_${C}$gbmv2_x(trans, m, n, kl, ku, alpha_t, a_t, lda, &
                               h_t, t_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -808,7 +765,7 @@ contains
         alpha_t = q2t_r(alpha_q); beta_t = q2t_r(beta_q)
         a_t = q2t_r(a_q(1:lda, 1:n))
         x_t = q2t_r(x_q(1:lenx)); y_t = q2t_r(y_q(1:leny))
-        call ${R}$symv_x_ext(uplo, n, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${R}$symv_x(uplo, n, alpha_t, a_t, lda, x_t, incx, &
                              beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -826,7 +783,7 @@ contains
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         a_t = q2t_c(a_q(1:lda, 1:n))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$symv_x_ext(uplo, n, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${C}$symv_x(uplo, n, alpha_t, a_t, lda, x_t, incx, &
                              beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -845,7 +802,7 @@ contains
         a_t = q2t_r(a_q(1:lda, 1:n))
         h_t = q2t_r(head_q(1:lenx)); t_t = q2t_r(tail_q(1:lenx))
         y_t = q2t_r(y_q(1:leny))
-        call ${R}$symv2_x_ext(uplo, n, alpha_t, a_t, lda, &
+        call blas_${R}$symv2_x(uplo, n, alpha_t, a_t, lda, &
                               h_t, t_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -864,7 +821,7 @@ contains
         a_t = q2t_c(a_q(1:lda, 1:n))
         h_t = q2t_c(head_q(1:lenx)); t_t = q2t_c(tail_q(1:lenx))
         y_t = q2t_c(y_q(1:leny))
-        call ${C}$symv2_x_ext(uplo, n, alpha_t, a_t, lda, &
+        call blas_${C}$symv2_x(uplo, n, alpha_t, a_t, lda, &
                               h_t, t_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -882,7 +839,7 @@ contains
         alpha_t = q2t_r(alpha_q); beta_t = q2t_r(beta_q)
         a_t = q2t_r(a_q(1:lda, 1:n))
         x_t = q2t_r(x_q(1:lenx)); y_t = q2t_r(y_q(1:leny))
-        call ${R}$sbmv_x_ext(uplo, n, k, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${R}$sbmv_x(uplo, n, k, alpha_t, a_t, lda, x_t, incx, &
                              beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -900,7 +857,7 @@ contains
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         a_t = q2t_c(a_q(1:lda, 1:n))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$sbmv_x_ext(uplo, n, k, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${C}$sbmv_x(uplo, n, k, alpha_t, a_t, lda, x_t, incx, &
                              beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -918,7 +875,7 @@ contains
         alpha_t = q2t_r(alpha_q); beta_t = q2t_r(beta_q)
         ap_t = q2t_r(ap_q(1:lap))
         x_t = q2t_r(x_q(1:lenx)); y_t = q2t_r(y_q(1:leny))
-        call ${R}$spmv_x_ext(uplo, n, alpha_t, ap_t, x_t, incx, beta_t, y_t, incy, &
+        call blas_${R}$spmv_x(uplo, n, alpha_t, ap_t, x_t, incx, beta_t, y_t, incy, &
                              blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -936,7 +893,7 @@ contains
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         ap_t = q2t_c(ap_q(1:lap))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$spmv_x_ext(uplo, n, alpha_t, ap_t, x_t, incx, beta_t, y_t, incy, &
+        call blas_${C}$spmv_x(uplo, n, alpha_t, ap_t, x_t, incx, beta_t, y_t, incy, &
                              blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -958,7 +915,7 @@ contains
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         a_t = q2t_c(a_q(1:lda, 1:n))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$hemv_x_ext(uplo, n, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${C}$hemv_x(uplo, n, alpha_t, a_t, lda, x_t, incx, &
                              beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -977,7 +934,7 @@ contains
         a_t = q2t_c(a_q(1:lda, 1:n))
         h_t = q2t_c(head_q(1:lenx)); t_t = q2t_c(tail_q(1:lenx))
         y_t = q2t_c(y_q(1:leny))
-        call ${C}$hemv2_x_ext(uplo, n, alpha_t, a_t, lda, &
+        call blas_${C}$hemv2_x(uplo, n, alpha_t, a_t, lda, &
                               h_t, t_t, incx, beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -995,7 +952,7 @@ contains
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         a_t = q2t_c(a_q(1:lda, 1:n))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$hbmv_x_ext(uplo, n, k, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${C}$hbmv_x(uplo, n, k, alpha_t, a_t, lda, x_t, incx, &
                              beta_t, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -1013,7 +970,7 @@ contains
         alpha_t = q2t_c(alpha_q); beta_t = q2t_c(beta_q)
         ap_t = q2t_c(ap_q(1:lap))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$hpmv_x_ext(uplo, n, alpha_t, ap_t, x_t, incx, beta_t, y_t, incy, &
+        call blas_${C}$hpmv_x(uplo, n, alpha_t, ap_t, x_t, incx, beta_t, y_t, incy, &
                              blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -1036,7 +993,7 @@ contains
         a_t = q2t_r(a_q(1:lda, 1:n))
         b_t = q2t_r(b_q(1:ldb, 1:n))
         x_t = q2t_r(x_q(1:lenx)); y_t = q2t_r(y_q(1:leny))
-        call ${R}$ge_sum_mv_x_ext(m, n, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${R}$ge_sum_mv_x(m, n, alpha_t, a_t, lda, x_t, incx, &
                                   beta_t, b_t, ldb, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_r(y_t)
     end subroutine
@@ -1055,7 +1012,7 @@ contains
         a_t = q2t_c(a_q(1:lda, 1:n))
         b_t = q2t_c(b_q(1:ldb, 1:n))
         x_t = q2t_c(x_q(1:lenx)); y_t = q2t_c(y_q(1:leny))
-        call ${C}$ge_sum_mv_x_ext(m, n, alpha_t, a_t, lda, x_t, incx, &
+        call blas_${C}$ge_sum_mv_x(m, n, alpha_t, a_t, lda, x_t, incx, &
                                   beta_t, b_t, ldb, y_t, incy, blas_prec_extra)
         y_q(1:leny) = t2q_c(y_t)
     end subroutine
@@ -1076,7 +1033,7 @@ contains
         alpha_t = q2t_r(alpha_q)
         t_t = q2t_r(t_q(1:ldt, 1:n))
         x_t = q2t_r(x_q(1:lenx))
-        call ${R}$trmv_x_ext(uplo, trans, diag, n, alpha_t, t_t, ldt, x_t, incx, &
+        call blas_${R}$trmv_x(uplo, trans, diag, n, alpha_t, t_t, ldt, x_t, incx, &
                              blas_prec_extra)
         x_q(1:lenx) = t2q_r(x_t)
     end subroutine
@@ -1093,7 +1050,7 @@ contains
         alpha_t = q2t_c(alpha_q)
         t_t = q2t_c(t_q(1:ldt, 1:n))
         x_t = q2t_c(x_q(1:lenx))
-        call ${C}$trmv_x_ext(uplo, trans, diag, n, alpha_t, t_t, ldt, x_t, incx, &
+        call blas_${C}$trmv_x(uplo, trans, diag, n, alpha_t, t_t, ldt, x_t, incx, &
                              blas_prec_extra)
         x_q(1:lenx) = t2q_c(x_t)
     end subroutine
@@ -1111,7 +1068,7 @@ contains
         alpha_t = q2t_r(alpha_q)
         tp_t = q2t_r(tp_q(1:lap))
         x_t = q2t_r(x_q(1:lenx))
-        call ${R}$tpmv_x_ext(uplo, trans, diag, n, alpha_t, tp_t, x_t, incx, &
+        call blas_${R}$tpmv_x(uplo, trans, diag, n, alpha_t, tp_t, x_t, incx, &
                              blas_prec_extra)
         x_q(1:lenx) = t2q_r(x_t)
     end subroutine
@@ -1129,7 +1086,7 @@ contains
         alpha_t = q2t_c(alpha_q)
         tp_t = q2t_c(tp_q(1:lap))
         x_t = q2t_c(x_q(1:lenx))
-        call ${C}$tpmv_x_ext(uplo, trans, diag, n, alpha_t, tp_t, x_t, incx, &
+        call blas_${C}$tpmv_x(uplo, trans, diag, n, alpha_t, tp_t, x_t, incx, &
                              blas_prec_extra)
         x_q(1:lenx) = t2q_c(x_t)
     end subroutine
@@ -1146,7 +1103,7 @@ contains
         alpha_t = q2t_r(alpha_q)
         t_t = q2t_r(t_q(1:ldt, 1:n))
         x_t = q2t_r(x_q(1:lenx))
-        call ${R}$tbsv_x_ext(uplo, trans, diag, n, k, alpha_t, t_t, ldt, x_t, incx, &
+        call blas_${R}$tbsv_x(uplo, trans, diag, n, k, alpha_t, t_t, ldt, x_t, incx, &
                              blas_prec_extra)
         x_q(1:lenx) = t2q_r(x_t)
     end subroutine
@@ -1163,7 +1120,7 @@ contains
         alpha_t = q2t_c(alpha_q)
         t_t = q2t_c(t_q(1:ldt, 1:n))
         x_t = q2t_c(x_q(1:lenx))
-        call ${C}$tbsv_x_ext(uplo, trans, diag, n, k, alpha_t, t_t, ldt, x_t, incx, &
+        call blas_${C}$tbsv_x(uplo, trans, diag, n, k, alpha_t, t_t, ldt, x_t, incx, &
                              blas_prec_extra)
         x_q(1:lenx) = t2q_c(x_t)
     end subroutine
@@ -1180,7 +1137,7 @@ contains
         alpha_t = q2t_r(alpha_q)
         t_t = q2t_r(t_q(1:ldt, 1:n))
         x_t = q2t_r(x_q(1:lenx))
-        call ${R}$trsv_x_ext(uplo, trans, diag, n, alpha_t, t_t, ldt, x_t, incx, &
+        call blas_${R}$trsv_x(uplo, trans, diag, n, alpha_t, t_t, ldt, x_t, incx, &
                              blas_prec_extra)
         x_q(1:lenx) = t2q_r(x_t)
     end subroutine
@@ -1197,7 +1154,7 @@ contains
         alpha_t = q2t_c(alpha_q)
         t_t = q2t_c(t_q(1:ldt, 1:n))
         x_t = q2t_c(x_q(1:lenx))
-        call ${C}$trsv_x_ext(uplo, trans, diag, n, alpha_t, t_t, ldt, x_t, incx, &
+        call blas_${C}$trsv_x(uplo, trans, diag, n, alpha_t, t_t, ldt, x_t, incx, &
                              blas_prec_extra)
         x_q(1:lenx) = t2q_c(x_t)
     end subroutine
@@ -1221,7 +1178,7 @@ contains
         a_t = q2t_r(a_q(1:lda, 1:a_cols))
         b_t = q2t_r(b_q(1:ldb, 1:b_cols))
         c_t = q2t_r(c_q(1:ldc, 1:n))
-        call ${R}$gemm_x_ext(transa, transb, m, n, k, alpha_t, &
+        call blas_${R}$gemm_x(transa, transb, m, n, k, alpha_t, &
                              a_t, lda, b_t, ldb, beta_t, c_t, ldc, blas_prec_extra)
         c_q(1:ldc, 1:n) = t2q_r(c_t)
     end subroutine
@@ -1241,7 +1198,7 @@ contains
         a_t = q2t_c(a_q(1:lda, 1:a_cols))
         b_t = q2t_c(b_q(1:ldb, 1:b_cols))
         c_t = q2t_c(c_q(1:ldc, 1:n))
-        call ${C}$gemm_x_ext(transa, transb, m, n, k, alpha_t, &
+        call blas_${C}$gemm_x(transa, transb, m, n, k, alpha_t, &
                              a_t, lda, b_t, ldb, beta_t, c_t, ldc, blas_prec_extra)
         c_q(1:ldc, 1:n) = t2q_c(c_t)
     end subroutine
@@ -1260,7 +1217,7 @@ contains
         a_t = q2t_r(a_q(1:lda, 1:a_cols))
         b_t = q2t_r(b_q(1:ldb, 1:n))
         c_t = q2t_r(c_q(1:ldc, 1:n))
-        call ${R}$symm_x_ext(side, uplo, m, n, alpha_t, a_t, lda, &
+        call blas_${R}$symm_x(side, uplo, m, n, alpha_t, a_t, lda, &
                              b_t, ldb, beta_t, c_t, ldc, blas_prec_extra)
         c_q(1:ldc, 1:n) = t2q_r(c_t)
     end subroutine
@@ -1279,7 +1236,7 @@ contains
         a_t = q2t_c(a_q(1:lda, 1:a_cols))
         b_t = q2t_c(b_q(1:ldb, 1:n))
         c_t = q2t_c(c_q(1:ldc, 1:n))
-        call ${C}$symm_x_ext(side, uplo, m, n, alpha_t, a_t, lda, &
+        call blas_${C}$symm_x(side, uplo, m, n, alpha_t, a_t, lda, &
                              b_t, ldb, beta_t, c_t, ldc, blas_prec_extra)
         c_q(1:ldc, 1:n) = t2q_c(c_t)
     end subroutine
@@ -1298,7 +1255,7 @@ contains
         a_t = q2t_c(a_q(1:lda, 1:a_cols))
         b_t = q2t_c(b_q(1:ldb, 1:n))
         c_t = q2t_c(c_q(1:ldc, 1:n))
-        call ${C}$hemm_x_ext(side, uplo, m, n, alpha_t, a_t, lda, &
+        call blas_${C}$hemm_x(side, uplo, m, n, alpha_t, a_t, lda, &
                              b_t, ldb, beta_t, c_t, ldc, blas_prec_extra)
         c_q(1:ldc, 1:n) = t2q_c(c_t)
     end subroutine
