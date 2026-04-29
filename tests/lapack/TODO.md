@@ -208,14 +208,116 @@ Once that lands, the xx tests follow the standard pattern (interfaces in
 err_bnds_comp).  The signatures and partial wrapper code from this
 session's aborted attempt are recoverable from the git reflog if useful.
 
-### P22 — Dynamic mode decomposition (4 routines)
+### P22 — Dynamic mode decomposition (4 routines) — pending, rich coverage required
 
   d/z × gedmd, gedmdq
 
-DMD has a wide parameter surface (jobs/jobz/jobr/jobf/whtsvd).  Suggested
-starting point: WHTSVD=1, JOBS='N', JOBZ='V', JOBR='F', JOBF='N' for a
-basic eigenvalue check.  Not attempted yet; should be doable once the
-above XBLAS issue is sorted (DMD does not depend on XBLAS).
+User has requested **rich coverage** (not minimal smoke).  DMD does not
+depend on XBLAS — independent of the P17xx blocker.
+
+#### Routine signatures (LAPACK 3.12.1)
+
+```
+DGEDMD  ( JOBS, JOBZ, JOBR, JOBF, WHTSVD,
+          M, N, X, LDX, Y, LDY, NRNK, TOL,
+          K, REIG, IMEIG, Z, LDZ, RES,
+          B, LDB, W, LDW, S, LDS,
+          WORK, LWORK, IWORK, LIWORK, INFO )            -- 31 args
+
+DGEDMDQ ( JOBS, JOBZ, JOBR, JOBQ, JOBT, JOBF, WHTSVD,
+          M, N, F, LDF, X, LDX, Y, LDY, NRNK, TOL,
+          K, REIG, IMEIG, Z, LDZ, RES,
+          B, LDB, V, LDV, S, LDS,
+          WORK, LWORK, IWORK, LIWORK, INFO )            -- 35 args
+
+ZGEDMD / ZGEDMDQ : same arg lists; eigenvalues come out in EIGS(*) (complex)
+                   instead of the (REIG, IMEIG) real pair.
+```
+
+#### Sources of harmless ref/target divergence
+
+1. **WHTSVD selection** rotates SVD vectors differently across LAPACK's
+   four SVD backends (1=GESVD, 2=GESDD, 3=GESVDQ, 4=GEJSV).  Pin
+   WHTSVD=1 across ref and target so both call GESVD.
+2. **Eigenvalue ordering** — internal Schur problem returns spectrum in
+   implementation-dependent order; compare on a sorted set.
+3. **Conjugate-pair sign ambiguity** for the D variant — REIG/IMEIG
+   pair order within a complex-conjugate cluster is not canonical.
+4. **Eigenvector phase / scaling** — Z columns differ by a unit
+   complex scalar (D: real ±1 modulo conjugate-pair convention).
+
+#### Test design (rich coverage)
+
+Three comparison layers per case:
+
+  **(a)** Spectrum check — assemble eigenvalues as `complex` (D: from
+  REIG+i·IMEIG; Z: from EIGS), sort lexicographically by (Re, Im) on
+  both sides, and compare via `max_rel_err_vec_z`.
+
+  **(b)** Residual norm (RES output) — RES(j) is the LAPACK-reported
+  ‖A·z_j − λ_j·z_j‖₂.  Just verify `RES(j) <= tol_res * ‖A‖_F` for
+  the target — phase-invariant, no sorting needed.
+
+  **(c)** Reconstruction check (when JOBZ='V', JOBF='N') —
+  ‖Y − Z · diag(λ) · (Z⁺ X)‖_F / ‖Y‖_F bounded.  Also phase-invariant.
+
+#### Parameter sweep
+
+For each of `gedmd` and `gedmdq`, run the cross-product:
+
+  - sizes:    `(M, N) ∈ {(8,5), (12,8), (24,16)}`  (m≥n required)
+  - JOBS:    `{'N', 'S'}`              (no scaling, column scaling)
+  - JOBZ:    `{'N', 'V'}`              (skip Z, full Z)
+  - JOBR:    `{'F', 'S'}`              (no residual, residuals)
+  - JOBF:    `{'N', 'E'}`              (no exact-DMD, exact-DMD modes)
+  - WHTSVD:  `1` only (pinned for cross-impl agreement)
+  - NRNK:    `-1` (auto rank from TOL); TOL = 10·target_eps
+  - For `gedmdq`: JOBQ ∈ {'F'}, JOBT ∈ {'F'}, JOBF as above
+
+For each combo, apply layers (a)+(b)+(c) where the chosen JOB flags
+make the relevant outputs available.  Skip (c) when JOBZ='N'.
+
+#### Tolerances
+
+  - Spectrum (layer a):  `tol_eig = 100 * n^2 * target_eps`
+  - Residual (layer b):  `tol_res = 100 * n   * target_eps`
+  - Reconstruction (c):  `tol_rec = 100 * n^2 * target_eps`
+
+(Conservative; tighten after first kind16 pass if `err << tol`.)
+
+#### Test data generation
+
+Build A with controlled spectrum:
+  `A = U · diag(λ) · U⁻¹` with random orthogonal U from
+  `gen_orthogonal_quad`, λ chosen with at least one complex pair
+  (D variant) and one near-zero magnitude.
+Snapshots: `X = random m×n`, `Y = A · X`.  Ensures the spectrum
+the routine recovers is known up to sort order, which is useful for
+debugging when (a) fails.
+
+#### File layout
+
+  - `tests/lapack/eigenvalue/test_dgedmd.f90`
+  - `tests/lapack/eigenvalue/test_zgedmd.f90`
+  - `tests/lapack/eigenvalue/test_dgedmdq.f90`
+  - `tests/lapack/eigenvalue/test_zgedmdq.f90`
+  - `ref_quad_lapack.f90` — 4 new explicit interfaces
+  - `target_lapack_body.fypp` — 4 new `target_*` wrappers (q2t/t2q on
+    X, Y, F, output Z, eigenvalues, RES, B, W, V, S as appropriate)
+
+#### Risks / open items
+
+  - `gedmdq` outputs an extra `T` matrix (N×N small upper-triangular
+    snapshot) under JOBT='F'; verify whether T is canonical or
+    impl-defined.  If non-canonical, skip layer-(c) check that would
+    rely on T.
+  - `JOBF='E'` returns "exact DMD" Koopman modes in B; sign/phase
+    convention may diverge across SVD backends even at WHTSVD=1.
+    First implementation should report B with phase-invariant norms,
+    not elementwise.
+  - Workspace queries: WORK(1)/LWORK and IWORK(1)/LIWORK must be sized
+    via the documented LWORK=-1 query path; the wrapper allocates from
+    the query result, never a hardcoded floor.
 
 ### sb2st kernels (2 routines)
 
