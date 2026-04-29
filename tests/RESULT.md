@@ -1175,7 +1175,7 @@ _55 of 61 migrated entries have a dedicated test driver. 61 are user-facing (✓
 
 ## ScaLAPACK
 
-_144 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_150 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -1218,8 +1218,8 @@ _144 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pdgetrf | 18.23 | exact | 31.17 |
 | ✓ | pdgetri | 18.11 | 33.55 | 31.07 |
 | ✓ | pdgetrs | 18.10 | 33.38 | 31.12 |
-| ✓ | pdggqrf | — | — | — |
-| ✓ | pdggrqf | — | — | — |
+| ✓ | pdggqrf | 17.80 | 32.71 | 30.74 |
+| ✓ | pdggrqf | 17.26 | 32.37 | 30.69 |
 | ✓ | pdhseqr | — | — | — |
 |  | pdlabad | — | — | — |
 |  | pdlabrd | — | — | — |
@@ -1376,8 +1376,8 @@ _144 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pzgetrf | 18.35 | exact | 31.14 |
 | ✓ | pzgetri | 18.14 | 34.02 | 30.94 |
 | ✓ | pzgetrs | 18.28 | 33.37 | 31.11 |
-| ✓ | pzggqrf | — | — | — |
-| ✓ | pzggrqf | — | — | — |
+| ✓ | pzggqrf | 18.14 | 32.75 | 30.90 |
+| ✓ | pzggrqf | 17.83 | 32.77 | 30.51 |
 | ✓ | pzheev | 17.59 | 32.13 | 30.05 |
 | ✓ | pzheevd | — | — | — |
 | ✓ | pzheevr | 17.34 | 32.10 | 29.96 |
@@ -1404,7 +1404,7 @@ _144 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 |  | pzlange | 18.78 | exact | 31.38 |
 |  | pzlanhe | 18.47 | 33.36 | 31.28 |
 |  | pzlanhs | 18.74 | exact | 31.48 |
-|  | pzlansy | — | — | — |
+|  | pzlansy | 18.83 | 33.48 | 31.70 |
 |  | pzlantr | 18.95 | 33.91 | 31.38 |
 |  | pzlapiv | — | — | — |
 |  | pzlapv2 | — | — | — |
@@ -1451,7 +1451,7 @@ _144 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pzpttrf | 18.74 | 33.79 | 31.24 |
 | ✓ | pzpttrs | 18.74 | 33.79 | 31.24 |
 | ✓ | pzpttrsv | — | — | — |
-| ✓ | pzstein | — | — | — |
+| ✓ | pzstein | 21.37 | 33.65 | 33.77 |
 | ✓ | pztrcon | — | — | — |
 | ✓ | pztrevc | — | — | — |
 | ✓ | pztrrfs | — | — | — |
