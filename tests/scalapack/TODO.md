@@ -147,3 +147,13 @@ precision (32+ digits on kind16).
   without the cleanup crash. Wrapper remains exposed; pdtrord (the
   reorder-only sibling) does NOT exhibit the issue and ships a
   passing driver.
+
+## pdormrz / pzunmrz update — semantic mismatch with dormrz/zunmrz
+
+- Followup attempt with SIDE='R' (which side-steps the SIDE='L'
+  PBETRAN parameter-11 abort) produces a numerically clean run
+  (no abort) but the gathered C disagrees with LAPACK dormrz by
+  factors of ~1.3 — same magnitude regardless of TRANS='N' vs 'T'.
+  Either pdormrz stores the reflectors with a different sign/scale
+  convention than dormrz, or the K/L semantics differ. Defer until
+  a careful upstream-doc walkthrough.
