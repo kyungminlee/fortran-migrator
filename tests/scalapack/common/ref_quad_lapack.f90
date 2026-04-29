@@ -572,6 +572,15 @@ module ref_quad_lapack
             integer,     intent(out)   :: info
         end subroutine zposv
 
+        subroutine zhegst(itype, uplo, n, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: itype, n, lda, ldb
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhegst
+
         subroutine zpotrf(uplo, n, A, lda, info)
             import :: ep
             character,   intent(in)    :: uplo

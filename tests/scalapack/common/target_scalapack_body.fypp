@@ -65,7 +65,9 @@ module target_scalapack
     public :: target_pdgeqpf, target_pzgeqpf
     public :: target_pdgebal
     public :: target_pdtrtrs, target_pztrtrs
-    public :: target_pdrscl
+    public :: target_pdrscl, target_pzdrscl
+    public :: target_pdrot
+    public :: target_pzhegst
     public :: target_pdstedc
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
@@ -692,6 +694,28 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: sx(*)
         end subroutine
 
+        subroutine ${C}$${prefix_real[1:]}$rscl(n, sa, sx, ix, jx, descx, incx)
+            ! Mixed-precision name: complex prefix + real-precision letter + 'rscl'.
+            ! Upstream PZDRSCL → pwmrscl/pxqrscl/pyerscl per target.
+$:IMPORT_R()
+$:IMPORT_C()
+            integer, intent(in) :: n, ix, jx, incx
+            integer, intent(in) :: descx(9)
+            ${target_real}$,    intent(in)    :: sa
+            ${target_complex}$, intent(inout) :: sx(*)
+        end subroutine
+
+        subroutine ${R}$rot(n, x, ix, jx, descx, incx, y, iy, jy, descy, &
+                            incy, cs, sn, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: n, ix, jx, iy, jy, incx, incy, lwork
+            integer, intent(in)    :: descx(9), descy(9)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: x(*), y(*)
+            ${target_real}$, intent(in)    :: cs, sn
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
         subroutine ${R}$stedc(compz, n, d, e, Q, iq, jq, descq, &
                               work, lwork, iwork, liwork, info)
 $:IMPORT_R()
@@ -1038,6 +1062,19 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: A(*)
             ${target_real}$, intent(in)    :: B(*)
             ${target_real}$, intent(out)   :: scale
+        end subroutine
+
+        subroutine ${C}$hegst(ibtype, uplo, n, A, ia, ja, desca, &
+                              B, ib, jb, descb, scale, info)
+$:IMPORT_R()
+$:IMPORT_C()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: ibtype, n, ia, ja, ib, jb
+            integer,   intent(in)    :: desca(9), descb(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_complex}$, intent(in)    :: B(*)
+            ${target_real}$,    intent(out)   :: scale
         end subroutine
 
         subroutine ${R}$ormtr(side, uplo, trans, m, n, A, ia, ja, desca, &
@@ -2961,6 +2998,53 @@ contains
         sx(1:nx) = t2q_r(sxt)
     end subroutine
 
+    subroutine target_pzdrscl(n, sa, sx, ix, jx, descx, incx)
+        ! Complex vector / real scalar reciprocal scaling.
+        integer,     intent(in)    :: n, ix, jx, incx
+        integer,     intent(in)    :: descx(9)
+        real(ep),    intent(in)    :: sa
+        complex(ep), intent(inout) :: sx(*)
+        integer :: nx
+        ${target_complex}$, allocatable :: sxt(:)
+        ${target_real}$ :: sa_t
+        nx = nloc(descx)
+        allocate(sxt(nx))
+        sxt = q2t_c(sx(1:nx))
+        sa_t = q2t_r(sa)
+        call ${C}$${prefix_real[1:]}$rscl(n, sa_t, sxt, ix, jx, descx, incx)
+        sx(1:nx) = t2q_c(sxt)
+    end subroutine
+
+    subroutine target_pdrot(n, x, ix, jx, descx, incx, y, iy, jy, descy, &
+                            incy, cs, sn, work, lwork, info)
+        ! Apply a Givens rotation to two distributed vectors.
+        integer,  intent(in)    :: n, ix, jx, iy, jy, incx, incy, lwork
+        integer,  intent(in)    :: descx(9), descy(9)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: x(*), y(*)
+        real(ep), intent(in)    :: cs, sn
+        real(ep), intent(out)   :: work(*)
+        integer :: nx, ny, lwt
+        ${target_real}$, allocatable :: xt(:), yt(:), work_t(:)
+        ${target_real}$ :: cs_t, sn_t
+        nx = nloc(descx); ny = nloc(descy)
+        if (lwork == -1) then
+            allocate(xt(max(1,nx)), yt(max(1,ny)), work_t(1))
+            cs_t = q2t_r(cs); sn_t = q2t_r(sn)
+            call ${R}$rot(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, &
+                           incy, cs_t, sn_t, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(xt(nx), yt(ny), work_t(lwt))
+            xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+            cs_t = q2t_r(cs); sn_t = q2t_r(sn)
+            call ${R}$rot(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, &
+                           incy, cs_t, sn_t, work_t, lwt, info)
+            x(1:nx) = t2q_r(xt); y(1:ny) = t2q_r(yt)
+        end if
+    end subroutine
+
     subroutine target_pdstedc(compz, n, d, e, Q, iq, jq, descq, &
                                work, lwork, iwork, liwork, info)
         character, intent(in)    :: compz
@@ -3760,6 +3844,27 @@ contains
         call ${R}$sygst(ibtype, uplo, n, At, ia, ja, desca, &
                          Bt, ib, jb, descb, scale_t, info)
         A(1:na) = t2q_r(At)
+        scale = t2q_r(scale_t)
+    end subroutine
+
+    subroutine target_pzhegst(ibtype, uplo, n, A, ia, ja, desca, &
+                              B, ib, jb, descb, scale, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: ibtype, n, ia, ja, ib, jb
+        integer,     intent(in)    :: desca(9), descb(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        complex(ep), intent(in)    :: B(*)
+        real(ep),    intent(out)   :: scale
+        integer :: na, nb
+        ${target_complex}$, allocatable :: At(:), Bt(:)
+        ${target_real}$ :: scale_t
+        na = nloc(desca); nb = nloc(descb)
+        allocate(At(na), Bt(nb))
+        At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
+        call ${C}$hegst(ibtype, uplo, n, At, ia, ja, desca, &
+                         Bt, ib, jb, descb, scale_t, info)
+        A(1:na) = t2q_c(At)
         scale = t2q_r(scale_t)
     end subroutine
 
