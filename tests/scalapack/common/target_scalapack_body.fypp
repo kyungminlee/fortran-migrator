@@ -71,7 +71,8 @@ module target_scalapack
     public :: target_pdtzrzf, target_pdormrz, target_pztzrzf, target_pzunmrz
     public :: target_pdggqrf, target_pdggrqf, target_pzggqrf, target_pzggrqf
     public :: target_pdstedc
-    public :: target_pdstein
+    public :: target_pdstein, target_pzstein
+    public :: target_pzlansy
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdstebz, target_pdsyevx, target_pzheevx
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -753,6 +754,31 @@ $:IMPORT_R()
             integer,   intent(out) :: iwork(*), ifail(*), iclustr(*)
             integer,   intent(out) :: info
         end subroutine
+
+        subroutine ${C}$stein(n, d, e, m, w, iblock, isplit, orfac, &
+                              Z, iz, jz, descZ, work, lwork, iwork, liwork, &
+                              ifail, iclustr, gap, info)
+$:IMPORT_R()
+$:IMPORT_C()
+            integer,   intent(in)  :: n, m, iz, jz, lwork, liwork
+            integer,   intent(in)  :: descZ(9), iblock(*), isplit(*)
+            ${target_real}$,    intent(in)  :: d(*), e(*), w(*), orfac
+            ${target_complex}$, intent(out) :: Z(*)
+            ${target_real}$,    intent(out) :: work(*), gap(*)
+            integer,   intent(out) :: iwork(*), ifail(*), iclustr(*)
+            integer,   intent(out) :: info
+        end subroutine
+
+        function ${C}$lansy(norm, uplo, n, A, ia, ja, desca, work) result(r)
+$:IMPORT_R()
+$:IMPORT_C()
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, ia, ja
+            integer,   intent(in) :: desca(9)
+            ${target_complex}$, intent(in) :: A(*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
 
         subroutine ${R}$syevr(jobz, range, uplo, n, A, ia, ja, desca, &
                               vl, vu, il, iu, m, nz, w, Z, iz, jz, descZ, &
@@ -3268,6 +3294,66 @@ contains
             gap(1:np) = t2q_r(gap_t)
         end if
     end subroutine
+
+    subroutine target_pzstein(n, d, e, m, w, iblock, isplit, orfac, &
+                               Z, iz, jz, descZ, work, lwork, iwork, liwork, &
+                               ifail, iclustr, gap, info)
+        integer,     intent(in)    :: n, m, iz, jz, lwork, liwork
+        integer,     intent(in)    :: descZ(9), iblock(*), isplit(*)
+        real(ep),    intent(in)    :: d(*), e(*), w(*), orfac
+        complex(ep), intent(out)   :: Z(*)
+        real(ep),    intent(out)   :: work(*), gap(*)
+        integer,     intent(out)   :: iwork(*), ifail(*), iclustr(*)
+        integer,     intent(out)   :: info
+        integer :: nz, lwt, np
+        ${target_real}$,    allocatable :: dt(:), et(:), wt(:), work_t(:), gap_t(:)
+        ${target_complex}$, allocatable :: Zt(:)
+        ${target_real}$ :: orfac_t
+        nz = nloc(descZ)
+        block
+            integer :: nprow, npcol, myrow, mycol
+            call blacs_gridinfo(descZ(2), nprow, npcol, myrow, mycol)
+            np = max(1, nprow * npcol)
+        end block
+        if (lwork == -1) then
+            allocate(dt(max(1,n)), et(max(1,n)), wt(max(1,m)), &
+                     Zt(max(1,nz)), work_t(1), gap_t(np))
+            orfac_t = q2t_r(orfac)
+            call ${C}$stein(n, dt, et, m, wt, iblock, isplit, orfac_t, &
+                             Zt, iz, jz, descZ, work_t, -1, iwork, liwork, &
+                             ifail, iclustr, gap_t, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(dt(n), et(n), wt(m), Zt(max(1,nz)), work_t(lwt), gap_t(np))
+            dt = q2t_r(d(1:n)); et = q2t_r(e(1:n))
+            wt = q2t_r(w(1:m))
+            orfac_t = q2t_r(orfac)
+            call ${C}$stein(n, dt, et, m, wt, iblock, isplit, orfac_t, &
+                             Zt, iz, jz, descZ, work_t, lwt, iwork, liwork, &
+                             ifail, iclustr, gap_t, info)
+            Z(1:nz) = t2q_c(Zt)
+            gap(1:np) = t2q_r(gap_t)
+        end if
+    end subroutine
+
+    function target_pzlansy(norm, uplo, n, A, ia, ja, desca, work) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n, ia, ja
+        integer,     intent(in) :: desca(9)
+        complex(ep), intent(in) :: A(*)
+        real(ep)                :: work(*)
+        real(ep) :: r
+        integer :: na, nw
+        ${target_complex}$, allocatable :: At(:)
+        ${target_real}$,    allocatable :: work_t(:)
+        ${target_real}$ :: r_t
+        na = nloc(desca); nw = max(8 * n, 1024)
+        allocate(At(na), work_t(nw))
+        At = q2t_c(A(1:na))
+        r_t = ${C}$lansy(norm, uplo, n, At, ia, ja, desca, work_t)
+        r = t2q_r(r_t)
+    end function
 
     subroutine target_pdsyevr(jobz, range, uplo, n, A, ia, ja, desca, &
                                vl, vu, il, iu, m, nz, w, Z, iz, jz, descZ, &

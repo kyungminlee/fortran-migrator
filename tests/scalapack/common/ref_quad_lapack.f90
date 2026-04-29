@@ -909,6 +909,15 @@ module ref_quad_lapack
             real(ep) :: r
         end function zlanhe
 
+        function zlansy(norm, uplo, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlansy
+
         function zlanhs(norm, n, A, lda, work) result(r)
             import :: ep
             character,   intent(in) :: norm
