@@ -962,6 +962,41 @@ set(STAGED_LIBRARIES {staged_list})
             if src.is_file():
                 shutil.copy2(src, reflapack_dst / fname)
 
+    # Stage standard-precision source directories for the std archives
+    # built alongside each migrated extension. The CMakeLists.txt
+    # invokes add_standard_fortran_library / add_standard_c_library
+    # against these directories. Sibling to _refblas_src/_reflapack_src
+    # but used for production link deps, not just tests.
+    # _pblas_src/ includes PTOOLS/ as a child subdirectory (matching
+    # the upstream layout) so PTOOLS sources' ``#include "../pblas.h"``
+    # resolves without an explicit include-path remap. Same shape for
+    # _scalapack_src/ which contains REDIST/SRC and shares the
+    # ``../some_header.h`` convention. PBLAS's internal subdirectories
+    # (PBBLAS, PTZBLAS) are NOT included under _pblas_src — those are
+    # owned by the separate ptzblas / pbblas std archives.
+    # _scalapack_src/ is the upstream SRC/ tree; scalapack_c REDIST
+    # routines live alongside SRC under REDIST/SRC, but we stage them
+    # together inside _scalapack_src/REDIST/ so REDIST sources'
+    # ``#include "../redist.h"`` (or the matching SRC headers)
+    # resolve relative to _scalapack_src/.
+    _std_dirs = [
+        ('_blacs_src',     'scalapack-2.2.3/BLACS/SRC'),
+        ('_pblas_src',     'scalapack-2.2.3/PBLAS/SRC'),
+        ('_ptzblas_src',   'scalapack-2.2.3/PBLAS/SRC/PTZBLAS'),
+        ('_pbblas_src',    'scalapack-2.2.3/PBLAS/SRC/PBBLAS'),
+        ('_scalapack_src', 'scalapack-2.2.3/SRC'),
+        ('_scalapack_tools_src', 'scalapack-2.2.3/TOOLS'),
+        ('_scalapack_redist_src', 'scalapack-2.2.3/REDIST/SRC'),
+    ]
+    for dst_name, rel_src in _std_dirs:
+        src = proj_root / 'external' / rel_src
+        if not src.is_dir():
+            continue
+        dst = staging_dir / dst_name
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(src, dst)
+
     print(f'\n{"=" * 60}')
     print(f'  Staging complete: {len(staged)} libraries')
     print(f'{"=" * 60}')

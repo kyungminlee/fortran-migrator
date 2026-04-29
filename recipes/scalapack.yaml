@@ -135,6 +135,15 @@ prefer_source:
   - PCUNGQL   # fixes restore bug in pzungql.f:292-293
   - PCUNML2   # fixes restore bug in pzunml2.f:394-395
 
+# Mirror the scalapack_c.yaml rename for pdlaiectb_/pdlaiectl_: the
+# Fortran callers PDSTEBZ / PDSYEVX / PDSYGVX / PZHEEVX / PZHEGVX
+# directly reference these C helpers, so the migrated callers (pqstebz
+# etc.) need to call into the extended-precision clones rather than
+# the standard-precision originals (which take double*, not QREAL*).
+extra_renames:
+  PDLAIECTB: P{RPU}LAIECTB
+  PDLAIECTL: P{RPU}LAIECTL
+
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix
 # drift is now auto-filtered at diff time — see _filter_precision_drift.)

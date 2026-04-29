@@ -139,6 +139,20 @@ class RecipeConfig:
     # ``MUMPS_MEMORY_MOD_EP`` that adds extended-precision reallocators
     # without collapsing the original S/D/C/Z generic interface.
     module_renames: dict[str, str] = field(default_factory=dict)
+    # Recipe-level forced rename entries, appended to the classifier's
+    # rename map after family discovery. Used for precision-prefixed
+    # symbols whose S/C sibling does not exist in the upstream source
+    # (so the prefix classifier cannot pair them — ScaLAPACK's
+    # ``pdlaiectb_/pdlaiectl_`` are the canonical example: the IEEE
+    # big/little-endian Sturm-sequence helpers exist only for double
+    # precision because the bit-shift sign trick they rely on is a
+    # 64-bit-double-only hack). Each entry maps an upstream upper-cased
+    # identifier to a target template that may reference {RP}/{CP}/
+    # {RPU}/{CPU} via target template_vars. Applied to migrated output
+    # (clones + caller bodies) but NOT to copy-original sources, so
+    # the upstream (un-migrated) entry points keep their original
+    # symbol names and link cleanly alongside the renamed clones.
+    extra_renames: dict[str, str] = field(default_factory=dict)
 
 
 def load_recipe(recipe_path: Path,
@@ -236,5 +250,9 @@ def load_recipe(recipe_path: Path,
         module_renames={
             str(k).upper(): str(v).upper()
             for k, v in (data.get('module_renames') or {}).items()
+        },
+        extra_renames={
+            str(k).upper(): str(v)
+            for k, v in (data.get('extra_renames') or {}).items()
         },
     )

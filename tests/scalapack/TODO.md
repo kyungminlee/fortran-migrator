@@ -27,28 +27,33 @@ suite but cannot pass with the current toolchain. Each entry documents
 the symptom so a future pass can re-enable a test once the underlying
 issue is fixed outside `tests/scalapack/`.
 
-## pdsyevx / pzheevx / pdstebz / pdsygvx / pzhegvx (RANGE-selector eigensolvers)
+## pdsyevx / pzheevx / pdsygvx / pzhegvx (RANGE-selector eigensolvers)
 
-- **Symptom**: Linking a `test_pdsyevx` driver fails with multiple
-  definitions of `pdlaiectb_` / `pdlaiectl_` between the migrated
-  `libqscalapack_c.a` archive members `pqlaiect.c.o` and
-  `pdlaiect.c.o`. Both compile units export the same C symbols even
-  though one is the migrated rename of the other.
-- **Diagnosis**: `pdlaiect.c` is a small C helper used by the
-  RANGE-selector eigensolver paths (PDSTEBZ, PDSYEVX, PZHEEVX,
-  PDSYGVX, PZHEGVX). The migrator's prefix classifier renames the
-  file (`pq*`) but does not rename the exported function symbols,
-  so the un-migrated `pd*` and the migrated `pq*` versions collide
-  in the same archive. PDSTEIN does *not* call into pdlaiect, so it
-  ships independently (Phase 52 partial).
-- **Action**: Re-enable `tests/scalapack/eigenvalue/test_pdsyevx.f90`
-  / `test_pzheevx.f90`, plus pdstebz, pdsygvx, pzhegvx wrappers and
-  drivers, once the migrator either drops the un-migrated
-  `pdlaiect.c.o` from `libqscalapack_c` or renames its exported
-  symbols. The wrappers also have to come back: they were initially
-  landed alongside the test drivers, but the symbol clash poisons
-  the link of *every* test that pulls in `scalapack_test_target`,
-  so they had to be reverted out of the shared template.
+- **Status**: The pdlaiect symbol clash that originally blocked these
+  tests has been dissolved by the std/extension archive split (see
+  the commit history around recipes/scalapack_c.yaml's `extra_renames`
+  field). Standard archive `scalapack_c` now owns the upstream
+  `pdlaiectb_/pdlaiectl_`; migrated archive `${LIB_PREFIX}scalapack_c`
+  owns the renamed `pqlaiectb_/pqlaiectl_` (etc.). The wrappers
+  `target_pdsyevx`/`target_pzheevx`/`target_pdstebz` are now in the
+  shared template (`tests/scalapack/common/target_scalapack_body.fypp`).
+- **Remaining symptom**: A `test_pdsyevx` driver computes eigenvalues
+  to full target precision (n=32 reports max_rel_err ≈ 1e-33 on
+  kind16, ~1e-19 on kind10, ~4e-32 on multifloats — all PASS the
+  precision check) but every PDSYEVX call leaves the heap in a
+  corrupted state — `free(): invalid pointer` aborts on first
+  deallocate after the call. The corruption is per-call (does not
+  require multiple sizes to surface) and target-independent. PDSYEV /
+  PDSYEVR / PDSYEVD on the same scaffold pass cleanly on all sizes,
+  so the issue is specific to PDSYEVX's bisection + inverse-iteration
+  workspace handling.
+- **Action**: Either find the upstream bug (likely an out-of-bounds
+  write in PDSYEVX's eigenvalue-cluster bookkeeping that corrupts
+  glibc's malloc free-lists) or write a custom safety harness that
+  catches/sandboxes the corruption so the test can still report
+  precision results. PDSTEBZ alone (the eigenvalue-only piece, no
+  eigenvectors) might be testable in isolation without the broken
+  cleanup.
 
 ## pdlanhs / pxlanhs (Hessenberg matrix norms)
 

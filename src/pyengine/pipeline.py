@@ -14,10 +14,29 @@ from .config import RecipeConfig, load_recipe
 from .symbol_scanner import scan_symbols
 from .prefix_classifier import classify_symbols, build_rename_map
 from .fortran_migrator import migrate_file, migrate_file_to_string, target_filename
-from .c_migrator import migrate_c_directory, migrate_c_file_to_string
+from .c_migrator import migrate_c_directory, migrate_c_file_to_string, _build_sub_vars, _expand_template
 from .target_mode import TargetMode
 
 from tqdm import tqdm
+
+
+def _apply_extra_renames(rename_map: dict[str, str],
+                         config: RecipeConfig,
+                         target_mode: TargetMode) -> dict[str, str]:
+    """Append recipe-declared ``extra_renames`` to ``rename_map``.
+
+    Targets may use ``{RP}/{CP}/{RPU}/{CPU}`` template substitutions.
+    Returns ``rename_map`` mutated in place. See
+    :class:`RecipeConfig.extra_renames` for the canonical use case
+    (precision-prefixed orphan symbols whose S/C sibling does not
+    exist upstream so the classifier cannot pair them).
+    """
+    if not config.extra_renames:
+        return rename_map
+    template_vars = _build_sub_vars(target_mode)
+    for src_upper, tgt_template in config.extra_renames.items():
+        rename_map[src_upper] = _expand_template(tgt_template, template_vars).upper()
+    return rename_map
 
 
 def _strip_fortran_comments(text: str, ext: str) -> str:
@@ -836,6 +855,7 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
     symbols = _collect_all_symbols(config, project_root)
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_mode)
+    rename_map = _apply_extra_renames(rename_map, config, target_mode)
 
     # Group eligible source files by their target output name.
     src_files = sorted(
@@ -948,6 +968,7 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
     symbols = _collect_all_symbols(config, project_root)
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_mode)
+    rename_map = _apply_extra_renames(rename_map, config, target_mode)
 
     src_files = sorted(
         p for p in config.source_dir.iterdir()
@@ -1076,6 +1097,7 @@ def run_c_convergence_report(recipe_path: Path, output_dir: Path,
         symbols = _collect_all_symbols(config, project_root)
         classification = classify_symbols(symbols)
         rename_map = classification.build_rename_map(target_mode)
+        rename_map = _apply_extra_renames(rename_map, config, target_mode)
 
     src_files = sorted(
         p for p in config.source_dir.iterdir()
@@ -1261,6 +1283,7 @@ def run_migration(recipe_path: Path, output_dir: Path,
 
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_mode)
+    rename_map = _apply_extra_renames(rename_map, config, target_mode)
 
     # NOTE: target_mode.known_constants (ZERO/ONE/...) are handled
     # per-file by strip_known_constants_from_decls +

@@ -25,7 +25,17 @@ extra_migrate_files:
 prefix:
   style: direct
 
-# Mixed-precision / iterative-refinement / cross-precision conversion
+# Files dropped from the migrated archive:
+#  - ZC*/DS* mixed-precision iterative-refinement drivers and
+#    cross-precision converters (DLAG2S/SLAG2D/CLAG2Z/ZLAG2C/DLAT2S/
+#    ZLAT2C) — not expressible in an extended-precision target.
+#  - Precision-independent helpers (CHLA_TRANSTYPE / IEEECK / ILA* /
+#    IPARAM2STAGE / IPARMQ / LA_CONSTANTS / LA_XISNAN / LSAMEN /
+#    XERBLA / XERBLA_ARRAY) — these come from the standard-precision
+#    archive ``lapack`` (built from the same Netlib sources without
+#    -freal-8-real-16) which the migrated archive PUBLIC-links. The
+#    extended-precision-only helpers (LA_CONSTANTS_EP / LA_XISNAN_EP)
+#    DO ride in the migrated archive — they have no standard sibling.
 skip_files:
   - ZCGESV
   - DSGESV
@@ -33,13 +43,27 @@ skip_files:
   - DSPOSV
   - ZCGELS
   - DSGELS
-  # Cross-precision type conversion routines
   - DLAG2S
   - SLAG2D
   - CLAG2Z
   - ZLAG2C
   - DLAT2S
   - ZLAT2C
+  - CHLA_TRANSTYPE
+  - IEEECK
+  - ILADIAG
+  - ILAENV
+  - ILAENV2STAGE
+  - ILAPREC
+  - ILATRANS
+  - ILAUPLO
+  - IPARAM2STAGE
+  - IPARMQ
+  - LA_CONSTANTS
+  - LA_XISNAN
+  - LSAMEN
+  - XERBLA
+  - XERBLA_ARRAY
 
 # Multi-precision utility modules — copy unchanged
 copy_files:

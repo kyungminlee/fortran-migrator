@@ -9,7 +9,14 @@ symbols:
 prefix:
   style: direct
 
-copy_all_originals: true
+# copy_all_originals removed: the upstream S/D/C/Z entry points
+# (dgesd2d_, sgebr2d_, igsum2d_, ...) and precision-independent
+# helpers (BI_BlacsErr, BI_GetBuff, blacs_setup_, ...) live in the
+# standard-precision archive ``blacs`` built directly from
+# external/scalapack-2.2.3/BLACS/SRC/. The migrated archive
+# ``${LIB_PREFIX}blacs`` ships only the Q/X/E/Y/M/W clones
+# (qgesd2d_, xgebr2d_, BI_qgemm, ...) and PUBLIC-links the standard
+# archive so consumers resolve both symbol families through one link.
 
 skip_files: []
 

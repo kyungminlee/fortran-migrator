@@ -165,6 +165,90 @@ endif()
 
 # ── Helper functions ─────────────────────────────────────────────────
 
+# Build a stock, standard-precision archive (S/D/C/Z entry points) from
+# vendored upstream sources. The target name is the bare library name
+# (``blas``, ``lapack``, ...) — no ``_std`` suffix — so consumers can
+# write ``target_link_libraries(... blas)`` and get the upstream
+# DGEMM_/ZGEMM_/etc. symbols. The migrated archive (``${LIB_PREFIX}<name>``)
+# PUBLIC-links it so Q/X/E/Y/M/W clones can call into the stock half
+# without bundling the originals into the migrated archive.
+#
+# Args:
+#   name      - Target name (bare, no prefix).
+#   src_dir   - Directory containing upstream Fortran sources.
+#   exclude_re - Optional regex passed to list(FILTER EXCLUDE) to drop
+#                files that the migrator's recipe also drops (e.g.
+#                cross-precision routines like dsdot/sdsdot).
+function(add_standard_fortran_library name src_dir)
+    cmake_parse_arguments(_std "" "EXCLUDE_REGEX" "" ${ARGN})
+    if(NOT IS_DIRECTORY "${src_dir}")
+        message(STATUS "${name} (standard): ${src_dir} not found — skipping")
+        return()
+    endif()
+    # Glob both lower- and upper-case Fortran source extensions: ``.F``
+    # and ``.F90`` are preprocessed Fortran (LAPACK uses capital-F for
+    # iparam2stage.F and the la_*_ep / la_*_mf helpers). On case-
+    # sensitive filesystems the lower-case glob misses them entirely.
+    file(GLOB _f   CONFIGURE_DEPENDS ${src_dir}/*.f)
+    file(GLOB _F   CONFIGURE_DEPENDS ${src_dir}/*.F)
+    file(GLOB _f90 CONFIGURE_DEPENDS ${src_dir}/*.f90)
+    file(GLOB _F90 CONFIGURE_DEPENDS ${src_dir}/*.F90)
+    set(_srcs ${_f} ${_F} ${_f90} ${_F90})
+    if(_std_EXCLUDE_REGEX)
+        list(FILTER _srcs EXCLUDE REGEX "${_std_EXCLUDE_REGEX}")
+    endif()
+    if(NOT _srcs)
+        message(STATUS "${name} (standard): no sources under ${src_dir} — skipping")
+        return()
+    endif()
+    add_library(${name} STATIC ${_srcs})
+    fortran_module_layout(${name})
+endfunction()
+
+
+# Build a stock, standard-precision C library archive (S/D/C/Z entry
+# points) from vendored upstream sources. Sibling of
+# ``add_standard_fortran_library`` for C libraries (BLACS, PBLAS,
+# ScaLAPACK_C). Includes MPI privately and propagates it via INTERFACE
+# for downstream Fortran link, mirroring add_migrated_c_library.
+#
+# Args:
+#   name             - Target name (bare, no prefix).
+#   src_dir          - Directory containing upstream C sources.
+#   include_dirs     - Optional INCLUDE_DIRS list (defaults to src_dir).
+#   compile_defs     - Optional COMPILE_DEFINITIONS list (e.g. ``Add_``).
+#   exclude_re       - Optional EXCLUDE_REGEX passed to list(FILTER).
+function(add_standard_c_library name src_dir)
+    cmake_parse_arguments(_std "" "EXCLUDE_REGEX"
+        "COMPILE_DEFINITIONS;INCLUDE_DIRS" ${ARGN})
+    if(NOT IS_DIRECTORY "${src_dir}")
+        message(STATUS "${name} (standard): ${src_dir} not found — skipping")
+        return()
+    endif()
+    file(GLOB _srcs CONFIGURE_DEPENDS ${src_dir}/*.c)
+    if(_std_EXCLUDE_REGEX)
+        list(FILTER _srcs EXCLUDE REGEX "${_std_EXCLUDE_REGEX}")
+    endif()
+    if(NOT _srcs)
+        message(STATUS "${name} (standard): no C sources under ${src_dir} — skipping")
+        return()
+    endif()
+    add_library(${name} STATIC ${_srcs})
+    if(_std_INCLUDE_DIRS)
+        target_include_directories(${name} PUBLIC ${_std_INCLUDE_DIRS})
+    else()
+        target_include_directories(${name} PUBLIC $<BUILD_INTERFACE:${src_dir}>)
+    endif()
+    if(_std_COMPILE_DEFINITIONS)
+        target_compile_definitions(${name} PRIVATE ${_std_COMPILE_DEFINITIONS})
+    endif()
+    if(MPI_C_FOUND)
+        target_link_libraries(${name} PRIVATE MPI::MPI_C)
+        target_link_libraries(${name} INTERFACE $<LINK_ONLY:MPI::MPI_C>)
+    endif()
+endfunction()
+
+
 function(add_migrated_fortran_library lib_name)
     set(_dir ${CMAKE_CURRENT_SOURCE_DIR}/${lib_name})
     if(NOT EXISTS "${_dir}/manifest.cmake")
@@ -352,28 +436,120 @@ endfunction()
 
 # ── Libraries in dependency order ────────────────────────────────────
 
-# 1. BLAS (no deps)
+# 1. BLAS (no deps).
+#
+# Standard-precision archive ``blas`` is built from the vendored Netlib
+# BLAS sources (staged into ``_refblas_src/`` by ``pyengine stage``).
+# The migrated archive ``${LIB_PREFIX}blas`` carries only Q/X/E/Y/M/W
+# clones and PUBLIC-links the standard archive so downstreams resolve
+# the S/D/C/Z entry points (DGEMM_, ZGEMM_, ...) through one link line.
+# Cross-precision routines (dsdot, sdsdot) are excluded — the migrator
+# also skips them (see recipes/blas.yaml).
+add_standard_fortran_library(blas
+    ${CMAKE_CURRENT_SOURCE_DIR}/_refblas_src
+    EXCLUDE_REGEX "/(dsdot|sdsdot)\\.f9?0?$")
 add_migrated_fortran_library(blas)
+if(TARGET ${LIB_PREFIX}blas AND TARGET blas)
+    target_link_libraries(${LIB_PREFIX}blas PUBLIC blas)
+endif()
 
-# 2. BLACS (no library deps, needs MPI)
+# 2. BLACS (no library deps, needs MPI).
+#
+# Standard archive ``blacs`` is built from the vendored upstream BLACS
+# C sources (staged into ``_blacs_src/``). ``-DAdd_`` selects the
+# Fortran-symbol-mangling convention gfortran emits (lowercase + trailing
+# underscore), matching what the migrated archive expects. The build
+# only stages the Fortran-callable entry points; the dual C-callable
+# entry points (Cblacs_*, Cdgesd2d, ...) needed by the migrated
+# scalapack_c clones are produced by the migrated archive's
+# DUAL_INTERFACE_SOURCES path — the std archive doesn't replicate them.
+add_standard_c_library(blacs
+    ${CMAKE_CURRENT_SOURCE_DIR}/_blacs_src
+    COMPILE_DEFINITIONS Add_)
+# BLACS sources gate their entry-point signature on
+# ``INTFACE == C_CALL`` / ``CallFromC`` so each .c file produces two
+# distinct ABI surfaces: the Fortran-callable ``blacs_*_`` set
+# (default compile) and the C-callable ``Cblacs_*`` set
+# (-DCallFromC). The migrated archive's add_migrated_c_library
+# handles this via DUAL_INTERFACE_SOURCES; mirror it for the std
+# archive by compiling the same sources a second time with
+# CallFromC defined and folding the resulting objects into ``blacs``.
+if(TARGET blacs)
+    file(GLOB _blacs_dual_srcs CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/_blacs_src/*.c)
+    add_library(blacs_c_api OBJECT ${_blacs_dual_srcs})
+    target_compile_definitions(blacs_c_api PRIVATE Add_ CallFromC)
+    target_include_directories(blacs_c_api PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_blacs_src>)
+    if(MPI_C_FOUND)
+        target_link_libraries(blacs_c_api PRIVATE MPI::MPI_C)
+    endif()
+    target_sources(blacs PRIVATE $<TARGET_OBJECTS:blacs_c_api>)
+endif()
 add_migrated_c_library(blacs)
 if(TARGET ${LIB_PREFIX}blacs AND NEEDS_MULTIFLOATS AND TARGET multifloats_mpi)
     target_link_libraries(${LIB_PREFIX}blacs PUBLIC multifloats_mpi)
 endif()
+if(TARGET ${LIB_PREFIX}blacs AND TARGET blacs)
+    target_link_libraries(${LIB_PREFIX}blacs PUBLIC blacs)
+endif()
 
-# 3. LAPACK (depends on BLAS)
+# 3. LAPACK (depends on BLAS).
+#
+# Standard archive ``lapack`` is built from the vendored Netlib LAPACK
+# sources (staged into ``_reflapack_src/``). Mixed-precision bridge
+# routines (dsgesv, zcgesv, dsposv, zcposv, dsgels, zcgels, dlag2s,
+# slag2d, zlag2c, clag2z, dlat2s, zlat2c) are excluded — they don't
+# promote under -freal-8-real-16, but the whole point of the standard
+# archive is to NOT promote, so these are simply left out for parity
+# with the migrated archive's skip list. Extended-precision-only
+# helper modules (la_constants_ep / la_xisnan_ep / la_constants_mf /
+# la_xisnan_mf) are excluded — they only make sense in the migrated
+# archive since they reference quad / multifloats kinds.
+add_standard_fortran_library(lapack
+    ${CMAKE_CURRENT_SOURCE_DIR}/_reflapack_src
+    EXCLUDE_REGEX "/(dsgesv|zcgesv|dsposv|zcposv|dsgels|zcgels|dlag2s|slag2d|zlag2c|clag2z|dlat2s|zlat2c|la_constants_ep|la_constants_mf|la_xisnan_ep|la_xisnan_mf)\\.([fF]|[fF]90)$")
+if(TARGET lapack AND TARGET blas)
+    target_link_libraries(lapack PUBLIC blas)
+endif()
 add_migrated_fortran_library(lapack)
 if(TARGET ${LIB_PREFIX}lapack AND TARGET ${LIB_PREFIX}blas)
     target_link_libraries(${LIB_PREFIX}lapack PUBLIC ${LIB_PREFIX}blas)
 endif()
+if(TARGET ${LIB_PREFIX}lapack AND TARGET lapack)
+    target_link_libraries(${LIB_PREFIX}lapack PUBLIC lapack)
+endif()
+# The migrated lapack_common archive holds the extended-precision-only
+# helpers (la_constants_ep, la_xisnan_ep) which ``USE`` the standard
+# la_constants / la_xisnan modules supplied by the std ``lapack``
+# archive. The link is needed so gfortran resolves ``la_xisnan.mod``
+# during compilation, not just at final link time.
+if(TARGET lapack_common AND TARGET lapack)
+    target_link_libraries(lapack_common PUBLIC lapack)
+endif()
 
-# 4. PTZBLAS (depends on BLAS)
+# 4. PTZBLAS (depends on BLAS).
+#
+# Standard archive ``ptzblas`` is built from PBLAS/PTZBLAS/. Fortran
+# kernels reference ZZDOTC/ZZDOTU (defined in scalapack/TOOLS/) — those
+# resolve through std ``scalapack`` at final link time, mirroring the
+# upstream layering.
+add_standard_fortran_library(ptzblas
+    ${CMAKE_CURRENT_SOURCE_DIR}/_ptzblas_src)
 add_migrated_fortran_library(ptzblas)
 if(TARGET ${LIB_PREFIX}ptzblas AND TARGET ${LIB_PREFIX}blas)
     target_link_libraries(${LIB_PREFIX}ptzblas PUBLIC ${LIB_PREFIX}blas)
 endif()
+if(TARGET ${LIB_PREFIX}ptzblas AND TARGET ptzblas)
+    target_link_libraries(${LIB_PREFIX}ptzblas PUBLIC ptzblas)
+endif()
 
-# 5. PBBLAS (depends on BLAS, BLACS)
+# 5. PBBLAS (depends on BLAS, BLACS).
+#
+# Standard archive ``pbblas`` is built from PBLAS/PBBLAS/. Pure Fortran;
+# no extra dependencies beyond BLAS+BLACS at link time.
+add_standard_fortran_library(pbblas
+    ${CMAKE_CURRENT_SOURCE_DIR}/_pbblas_src)
 add_migrated_fortran_library(pbblas)
 if(TARGET ${LIB_PREFIX}pbblas)
     foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs)
@@ -382,11 +558,37 @@ if(TARGET ${LIB_PREFIX}pbblas)
         endif()
     endforeach()
 endif()
+if(TARGET ${LIB_PREFIX}pbblas AND TARGET pbblas)
+    target_link_libraries(${LIB_PREFIX}pbblas PUBLIC pbblas)
+endif()
 
-# 6. PBLAS (depends on BLAS, BLACS, PTZBLAS, PBBLAS; C library)
-# PBLAS C entry points call into PTZBLAS kernels (e.g. qvasum_, qvvdotc_)
-# and PBBLAS kernels (pbqmatadd_, pbqtran_) at runtime, so both must be
-# in the link graph alongside BLAS and BLACS.
+# 6. PBLAS (depends on BLAS, BLACS, PTZBLAS, PBBLAS; C library).
+#
+# Standard archive ``pblas`` is built from PBLAS/SRC/*.c plus
+# PBLAS/SRC/PTOOLS/*.c (the helper directory the migrated archive
+# pulls in via ``extra_c_dirs``). pilaenv.f (a precision-independent
+# Fortran block-size query) is added too. ``-DAdd_`` selects the
+# Fortran symbol-mangling convention.
+add_standard_c_library(pblas
+    ${CMAKE_CURRENT_SOURCE_DIR}/_pblas_src
+    COMPILE_DEFINITIONS Add_
+    INCLUDE_DIRS
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_pblas_src>)
+if(TARGET pblas)
+    # PTOOLS sources live under _pblas_src/PTOOLS/ (matching upstream's
+    # PBLAS/SRC/PTOOLS layout) so ``#include "../pblas.h"`` resolves
+    # relative to the file's own directory back into _pblas_src/.
+    file(GLOB _pblas_ptools_srcs CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/_pblas_src/PTOOLS/*.c)
+    if(_pblas_ptools_srcs)
+        target_sources(pblas PRIVATE ${_pblas_ptools_srcs})
+    endif()
+    set(_pblas_pilaenv ${CMAKE_CURRENT_SOURCE_DIR}/_pblas_src/pilaenv.f)
+    if(EXISTS ${_pblas_pilaenv})
+        target_sources(pblas PRIVATE ${_pblas_pilaenv})
+        # pilaenv.f is fixed-form Fortran; CMake auto-detects from .f.
+    endif()
+endif()
 add_migrated_c_library(pblas)
 if(TARGET ${LIB_PREFIX}pblas)
     foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs
@@ -396,8 +598,32 @@ if(TARGET ${LIB_PREFIX}pblas)
         endif()
     endforeach()
 endif()
+if(TARGET ${LIB_PREFIX}pblas AND TARGET pblas)
+    target_link_libraries(${LIB_PREFIX}pblas PUBLIC pblas)
+endif()
 
-# 7. ScaLAPACK (depends on LAPACK, BLACS, PBLAS)
+# 7. ScaLAPACK (depends on LAPACK, BLACS, PBLAS).
+#
+# Standard archive ``scalapack`` is built from SRC/*.f (Fortran entry
+# points) plus TOOLS/*.f / *.f90 (descriptor/grid/communication
+# helpers — descinit_, numroc_, iceil_, the pd*/pz* element accessors,
+# zzdotc_/zzdotu_, ...). Mixed-precision iterative drivers are
+# excluded for parity with the migrated recipe — they're not
+# expressible in extended precision and the std archive has no need
+# to ship them either.
+add_standard_fortran_library(scalapack
+    ${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_src
+    EXCLUDE_REGEX "/(zcgesv|dsgesv|zcposv|dsposv|zcgels|dsgels|dlag2s|slag2d|clag2z|zlag2c)\\.[fF]9?0?$")
+if(TARGET scalapack)
+    file(GLOB _scalapack_tools_f
+         CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_tools_src/*.f)
+    file(GLOB _scalapack_tools_f90
+         CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_tools_src/*.f90)
+    set(_scalapack_tools ${_scalapack_tools_f} ${_scalapack_tools_f90})
+    if(_scalapack_tools)
+        target_sources(scalapack PRIVATE ${_scalapack_tools})
+    endif()
+endif()
 add_migrated_fortran_library(scalapack)
 if(TARGET ${LIB_PREFIX}scalapack)
     foreach(_dep ${LIB_PREFIX}lapack ${LIB_PREFIX}blacs ${LIB_PREFIX}pblas)
@@ -406,8 +632,34 @@ if(TARGET ${LIB_PREFIX}scalapack)
         endif()
     endforeach()
 endif()
+if(TARGET ${LIB_PREFIX}scalapack AND TARGET scalapack)
+    target_link_libraries(${LIB_PREFIX}scalapack PUBLIC scalapack)
+endif()
 
 # 8. ScaLAPACK C (depends on LAPACK, BLACS, PBLAS, ScaLAPACK).
+#
+# Standard archive ``scalapack_c`` is built from the small number of
+# C entry points under SRC/*.c (clamov, dlamov, pdlaiect, pcrot, ...)
+# plus REDIST/SRC/*.c (pdgemr2d_, pztrmr2d_, ...) and TOOLS/*.c
+# (sl_gridreshape, reshape). ``-DAdd_`` selects the Fortran symbol
+# mangling matching gfortran's emit convention.
+add_standard_c_library(scalapack_c
+    ${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_src
+    COMPILE_DEFINITIONS Add_)
+if(TARGET scalapack_c)
+    file(GLOB _scalapack_c_redist
+         CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_redist_src/*.c)
+    file(GLOB _scalapack_c_tools
+         CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_tools_src/*.c)
+    if(_scalapack_c_redist OR _scalapack_c_tools)
+        target_sources(scalapack_c PRIVATE
+            ${_scalapack_c_redist} ${_scalapack_c_tools})
+    endif()
+    target_include_directories(scalapack_c PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_src>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_redist_src>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_tools_src>)
+endif()
 add_migrated_c_library(scalapack_c)
 if(TARGET ${LIB_PREFIX}scalapack_c)
     # REDIST/SRC sources select their Fortran-call entry-point naming
@@ -424,6 +676,9 @@ if(TARGET ${LIB_PREFIX}scalapack_c)
             target_link_libraries(${LIB_PREFIX}scalapack_c PUBLIC ${_dep})
         endif()
     endforeach()
+    if(TARGET scalapack_c)
+        target_link_libraries(${LIB_PREFIX}scalapack_c PUBLIC scalapack_c)
+    endif()
     # Reverse dep: ScaLAPACK's Fortran routines call qlamov_/xlamov_
     # (and the redistribution entry points pqgemr2d_/pxgemr2d_) which
     # live in ${LIB_PREFIX}scalapack_c. Downstream test link cycles
@@ -462,6 +717,14 @@ function(_install_library_pair lib_name)
         if(_fc_moddir)
             fortran_install_modules(${_common_target})
         endif()
+    endif()
+
+    # Bundle the standard-precision archive of the same library into
+    # the same export so the migrated target's PUBLIC link dependency
+    # is exportable. Standard archives use the bare library name (e.g.
+    # ``blas``); they always go alongside their migrated sibling.
+    if(TARGET ${lib_name} AND NOT "${lib_name}" STREQUAL "${_precision_target}")
+        fortran_install_library(${lib_name} EXPORT ${_export})
     endif()
 endfunction()
 

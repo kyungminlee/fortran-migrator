@@ -253,7 +253,14 @@ header_patches:
 # pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent
 # Fortran file (pilaenv.f). All originals are retained so the resulting
 # library still exposes the standard S/D/C/Z names.
-copy_all_originals: true
+# copy_all_originals removed: PBLAS/SRC's 123 precision-specific C
+# entry points (pdgemm_, pzhemm_, pcsscal_, ...) plus the precision-
+# independent PTOOLS helpers (PB_C*) live in the standard-precision
+# archive ``pblas`` built directly from external/scalapack-2.2.3/
+# PBLAS/SRC/. The migrated archive ``${LIB_PREFIX}pblas`` ships only
+# the Q/X/E/Y/M/W clones (pqgemm_, pxhemm_, ...) and PUBLIC-links the
+# standard archive so consumers resolve both symbol families through
+# a single link line.
 
 # pilaenv.f is the only Fortran file in PBLAS/SRC/ — a precision-independent
 # block-size query called by PB_Cplascal / PB_Cpsymm* / PB_Cptrmm* /

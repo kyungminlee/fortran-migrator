@@ -1107,57 +1107,84 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     # compile as C++ (mpicxx).
     _skip = skip_files or set()
     _copy = copy_files or set()
-    if copy_originals:
-        for d in all_src_dirs:
-            for f in sorted(d.iterdir()):
-                stem_upper = (f.stem[:-1] if f.stem.endswith('_')
-                              else f.stem).upper()
-                is_c_or_h = f.suffix.lower() in ('.c', '.h')
-                # Non-C files are only staged when explicitly listed in
-                # ``copy_files`` — used for precision-independent Fortran
-                # helpers that live alongside C entry points (e.g.
-                # PBLAS/SRC/pilaenv.f called by PB_Cplascal and friends).
-                is_copy = stem_upper in _copy
-                if not (is_c_or_h or is_copy):
-                    continue
-                if stem_upper in _skip:
-                    continue
-                text = f.read_text(errors='replace')
-                if is_copy and not is_c_or_h:
-                    # Fortran copy-files are staged verbatim: no include
-                    # rewrites, no K&R conversion, no stdc-ifdef folding.
-                    (output_dir / f.name).write_text(text)
-                    continue
-                if d != src_dir:
-                    text = re.sub(
-                        r'#include\s*"\.\./([^"]+)"',
-                        r'#include "\1"', text)
-                if f.suffix.lower() == '.c':
-                    text = _resolve_stdc_ifdefs(text)
-                    text = _convert_kr_to_ansi(text)
-                    # Aliases (cmplx16 → cmplxQ, (double*) → (REAL_TYPE*))
-                    # apply to:
-                    #   (a) precision-independent dispatchers (not in
-                    #       rename_map, e.g. PB_Cconjg, PB_Ctzher2k) —
-                    #       on EVERY target, because cloned entry points
-                    #       call them and need the wider types.
-                    #   (b) precision-prefixed originals (in rename_map,
-                    #       e.g. pdgemm_, pcamax_, PB_Cdtypeset) — only on
-                    #       KIND-based targets, where -freal-8-real-16
-                    #       promotion means the original is still called
-                    #       with quad-stride args and its body must
-                    #       widen too. On multifloats targets the
-                    #       precision-prefixed originals are dead (callers
-                    #       route through clones) and their native
-                    #       double*/float* signatures must stay so the
-                    #       body still compiles as C++ (struct types
-                    #       cannot assign to native scalar lvalues).
-                    is_dispatcher = stem_upper not in rename_map
-                    if is_dispatcher or target_mode.is_kind_based:
-                        text = _apply_aliases_to_original(
-                            text, template_vars, c_type_aliases,
-                            c_pointer_cast_aliases)
+    # Headers, copy_files entries, AND precision-independent dispatcher
+    # .c files are always staged into the migrated output_dir, even
+    # when ``copy_originals`` is False. The std archive (built directly
+    # from upstream sources by the CMake side) carries the S/D/C/Z
+    # entry points; the migrated archive carries the Q/X/E/Y/M/W
+    # clones plus the dispatchers (PB_Cconjg, PB_CpswapNN, BI_BlacsErr,
+    # ...) — files whose stems are NOT in rename_map. Dispatchers must
+    # ride in the migrated archive because the migrator's
+    # _apply_aliases_to_original pass widens their ``(double*)`` /
+    # ``(float*)`` pointer-casts to ``(QREAL*)`` / ``(EREAL*)`` /
+    # ``(float64x2_t*)`` for KIND targets, so the byte-stride
+    # arithmetic matches the wider type carried by callers. The std
+    # archive's untouched ``(double*)`` copies would corrupt strides
+    # when the migrated entry points dispatch through them.
+    for d in all_src_dirs:
+        for f in sorted(d.iterdir()):
+            stem_upper = (f.stem[:-1] if f.stem.endswith('_')
+                          else f.stem).upper()
+            is_c_or_h = f.suffix.lower() in ('.c', '.h')
+            is_header = f.suffix.lower() == '.h'
+            is_copy = stem_upper in _copy
+            # A .c file is a "dispatcher" iff it is NOT precision-
+            # prefixed: stem not in rename_map AND not matching the
+            # ``p<sdcz><root>`` pattern that ``_redist_clone_stem``
+            # uses to clone files whose Fortran-callable exports live
+            # behind ``#define`` macros (REDIST/SRC entry points like
+            # pdgemr.c, pztrmr2.c, ScaLAPACK orphan helpers like
+            # pdlaiect.c). Both classes are owned by the std archive;
+            # only true dispatchers (PB_Cconjg, BI_BlacsErr, ...) ride
+            # in the migrated archive.
+            is_dispatcher = False
+            if (f.suffix.lower() == '.c'
+                    and stem_upper not in (rename_map or {})):
+                if _redist_clone_stem(f.stem, target_mode) is None:
+                    is_dispatcher = True
+            if not (is_c_or_h or is_copy):
+                continue
+            if stem_upper in _skip:
+                continue
+            if (not copy_originals and not is_header and not is_copy
+                    and not is_dispatcher):
+                continue
+            text = f.read_text(errors='replace')
+            if is_copy and not is_c_or_h:
+                # Fortran copy-files are staged verbatim: no include
+                # rewrites, no K&R conversion, no stdc-ifdef folding.
                 (output_dir / f.name).write_text(text)
+                continue
+            if d != src_dir:
+                text = re.sub(
+                    r'#include\s*"\.\./([^"]+)"',
+                    r'#include "\1"', text)
+            if f.suffix.lower() == '.c':
+                text = _resolve_stdc_ifdefs(text)
+                text = _convert_kr_to_ansi(text)
+                # Aliases (cmplx16 → cmplxQ, (double*) → (REAL_TYPE*))
+                # apply to:
+                #   (a) precision-independent dispatchers (not in
+                #       rename_map, e.g. PB_Cconjg, PB_Ctzher2k) —
+                #       on EVERY target, because cloned entry points
+                #       call them and need the wider types.
+                #   (b) precision-prefixed originals (in rename_map,
+                #       e.g. pdgemm_, pcamax_, PB_Cdtypeset) — only on
+                #       KIND-based targets, where -freal-8-real-16
+                #       promotion means the original is still called
+                #       with quad-stride args and its body must
+                #       widen too. On multifloats targets the
+                #       precision-prefixed originals are dead (callers
+                #       route through clones) and their native
+                #       double*/float* signatures must stay so the
+                #       body still compiles as C++ (struct types
+                #       cannot assign to native scalar lvalues).
+                is_dispatcher = stem_upper not in rename_map
+                if is_dispatcher or target_mode.is_kind_based:
+                    text = _apply_aliases_to_original(
+                        text, template_vars, c_type_aliases,
+                        c_pointer_cast_aliases)
+            (output_dir / f.name).write_text(text)
 
     # Apply recipe-declared header patches to the copied originals so
     # later clones can reference the newly introduced typedefs.
@@ -1321,10 +1348,29 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy all originals first
-    if copy_originals:
-        for f in sorted(src_dir.iterdir()):
-            if f.suffix.lower() in ('.c', '.h'):
+    # Copy headers always; copy precision-prefixed .c originals only
+    # when copy_originals; copy precision-independent dispatcher .c
+    # files always (BI_BlacsErr, BI_GetBuff, blacs_setup_, ...). The
+    # dispatchers ride in the migrated archive because callers reach
+    # them through the BLACS-style symbol map; the std archive picks
+    # them up too via the upstream source dir, but the linker only
+    # ever pulls one definition (whichever resolves an undefined
+    # symbol first), so duplication is benign and the migrated copies
+    # match the precision the migrated bodies expect.
+    def _is_blacs_precision_prefix(stem: str) -> bool:
+        # Mirrors the d/z clone discovery in the loops below.
+        if stem.startswith(('d', 'z')) and not stem.startswith(('BI_',)):
+            return True
+        if stem.startswith(('BI_d', 'BI_z')):
+            return True
+        return False
+
+    for f in sorted(src_dir.iterdir()):
+        ext = f.suffix.lower()
+        if ext == '.h':
+            shutil.copy2(f, output_dir / f.name)
+        elif ext == '.c':
+            if copy_originals or not _is_blacs_precision_prefix(f.stem):
                 shutil.copy2(f, output_dir / f.name)
 
     cloned = []

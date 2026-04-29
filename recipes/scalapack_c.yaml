@@ -73,7 +73,21 @@ c_type_aliases:
   - from: [Czgelacpy]
     to: 'C{CP}gelacpy'
 
-copy_all_originals: true
+# copy_all_originals removed: the upstream S/D/C/Z entry points
+# (pdgemr2d_, pztrmr2d_, pdlaiectb_, ...) and precision-independent
+# helpers live in the standard-precision archive ``scalapack_c``
+# built directly from external/scalapack-2.2.3/SRC/*.c +
+# REDIST/SRC/*.c + TOOLS/*.c. The migrated archive
+# ``${LIB_PREFIX}scalapack_c`` ships only the Q/X/E/Y/M/W clones plus
+# the precision-independent dispatchers (PB-style helpers whose
+# pointer-cast strides are widened to match the extended type) and
+# PUBLIC-links the standard archive so consumers resolve both symbol
+# families through one link line. The pdlaiectb_/pdlaiectl_ symbol
+# clash that previously affected RANGE-selector eigensolvers
+# (PDSYEVX / PZHEEVX / PDSTEBZ) dissolves naturally — those symbols
+# now live only in the standard archive, the migrated archive's
+# clones come out as pqlaiectb_/pqlaiectl_ and there is no longer
+# a duplicate definition.
 
 header_patches:
   - file: pblas.h
@@ -97,6 +111,20 @@ header_patches:
     before: '#ifdef T3D'
     insert: |
       #include "multifloats_bridge.h"
+
+# Force-rename pdlaiectb_/pdlaiectl_ in migrated output. The single-
+# precision sibling pslaiect.c only exports pslaiect_ (no b/l variants
+# — the IEEE big/little-endian sign-bit hack is double-precision only),
+# so the prefix classifier cannot pair the b/l variants into a family
+# and they would otherwise stay un-renamed in the migrated clone. The
+# upstream pdlaiectb_/pdlaiectl_ live in the standard archive
+# ``scalapack_c``; this rename makes the migrated clone export
+# pqlaiectb_/pqlaiectl_ (etc. for the other targets) so the migrated
+# Fortran callers (pqstebz/pqsyevx) reach the extended-precision body
+# instead of the standard-precision one.
+extra_renames:
+  PDLAIECTB: P{RPU}LAIECTB
+  PDLAIECTL: P{RPU}LAIECTL
 
 overrides:
   multifloats:

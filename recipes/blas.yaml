@@ -9,8 +9,17 @@ symbols:
 prefix:
   style: direct
 
-# Cross-precision routines — these mix single and double precision
-# (e.g., double result from single inputs). No single-kind target.
+# Files dropped entirely from the migrated archive:
+#  - DSDOT / SDSDOT — cross-precision routines (single+double mixed).
+#    No single-kind target; not migratable to extended precision.
+#  - LSAME / XERBLA / XERBLA_ARRAY — precision-independent helpers.
+#    They live in the standard-precision archive ``blas`` (built from
+#    the same Netlib sources without -freal-8-real-16) which the
+#    migrated archive PUBLIC-links — no need to ship a duplicate copy
+#    in the extended-precision archive.
 skip_files:
-  - DSDOT    # double result from single·single dot product
-  - SDSDOT   # single result with double accumulator
+  - DSDOT
+  - SDSDOT
+  - LSAME
+  - XERBLA
+  - XERBLA_ARRAY

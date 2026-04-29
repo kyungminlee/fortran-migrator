@@ -69,6 +69,7 @@ module target_scalapack
     public :: target_pdstedc
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
+    public :: target_pdstebz, target_pdsyevx, target_pzheevx
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
     public :: target_pdgelqf, target_pdorglq, target_pdormlq
     public :: target_pdgeqlf, target_pdorgql, target_pdormql
@@ -735,6 +736,50 @@ $:IMPORT_R()
             integer,   intent(out) :: m, nz
             ${target_real}$, intent(out)   :: w(*), Z(*), work(*)
             integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${R}$stebz(ictxt, range, order, n, vl, vu, il, iu, &
+                              abstol, d, e, m, nsplit, w, iblock, isplit, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            integer,   intent(in)  :: ictxt, n, il, iu, lwork, liwork
+            character, intent(in)  :: range, order
+            ${target_real}$, intent(in)    :: vl, vu, abstol
+            ${target_real}$, intent(in)    :: d(*), e(*)
+            integer,   intent(out) :: m, nsplit
+            ${target_real}$, intent(out)   :: w(*), work(*)
+            integer,   intent(out) :: iblock(*), isplit(*), iwork(*), info
+        end subroutine
+
+        subroutine ${R}$syevx(jobz, range, uplo, n, A, ia, ja, desca, &
+                              vl, vu, il, iu, abstol, m, nz, w, orfac, &
+                              Z, iz, jz, descZ, work, lwork, iwork, liwork, &
+                              ifail, iclustr, gap, info)
+$:IMPORT_R()
+            character, intent(in)  :: jobz, range, uplo
+            integer,   intent(in)  :: n, ia, ja, il, iu, iz, jz, lwork, liwork
+            integer,   intent(in)  :: desca(9), descZ(9)
+            ${target_real}$, intent(in)    :: vl, vu, abstol, orfac
+            ${target_real}$, intent(inout) :: A(*)
+            integer,   intent(out) :: m, nz
+            ${target_real}$, intent(out)   :: w(*), Z(*), work(*), gap(*)
+            integer,   intent(out) :: iwork(*), ifail(*), iclustr(*), info
+        end subroutine
+
+        subroutine ${C}$heevx(jobz, range, uplo, n, A, ia, ja, desca, &
+                              vl, vu, il, iu, abstol, m, nz, w, orfac, &
+                              Z, iz, jz, descZ, work, lwork, rwork, lrwork, &
+                              iwork, liwork, ifail, iclustr, gap, info)
+$:IMPORT_RC()
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, ia, ja, il, iu, iz, jz, lwork, lrwork, liwork
+            integer,     intent(in)    :: desca(9), descZ(9)
+            ${target_real}$, intent(in)    :: vl, vu, abstol, orfac
+            ${target_complex}$, intent(inout) :: A(*)
+            integer,     intent(out)   :: m, nz
+            ${target_real}$,    intent(out) :: w(*), rwork(*), gap(*)
+            ${target_complex}$, intent(out) :: Z(*), work(*)
+            integer,     intent(out)   :: iwork(*), ifail(*), iclustr(*), info
         end subroutine
 
         subroutine ${C}$heevr(jobz, range, uplo, n, A, ia, ja, desca, &
@@ -2999,6 +3044,137 @@ contains
                              work_t, lwt, rwork_t, lrt, iwork, liwork, info)
             w(1:n) = t2q_r(wt)
             Z(1:nzz) = t2q_c(Zt)
+        end if
+    end subroutine
+
+    subroutine target_pdstebz(ictxt, range, order, n, vl, vu, il, iu, &
+                                abstol, d, e, m, nsplit, w, iblock, isplit, &
+                                work, lwork, iwork, liwork, info)
+        integer,   intent(in)    :: ictxt, n, il, iu, lwork, liwork
+        character, intent(in)    :: range, order
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(in)    :: d(*), e(*)
+        integer,   intent(out)   :: m, nsplit
+        real(ep),  intent(out)   :: w(*), work(*)
+        integer,   intent(out)   :: iblock(*), isplit(*), iwork(*), info
+        integer :: lwt
+        ${target_real}$, allocatable :: dt(:), et(:), wt(:), work_t(:)
+        ${target_real}$ :: vl_t, vu_t, abstol_t
+        if (lwork == -1) then
+            allocate(dt(1), et(1), wt(1), work_t(1))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu); abstol_t = q2t_r(abstol)
+            call ${R}$stebz(ictxt, range, order, n, vl_t, vu_t, il, iu, &
+                             abstol_t, dt, et, m, nsplit, wt, iblock, isplit, &
+                             work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(dt(n), et(n), wt(n), work_t(lwt))
+            dt = q2t_r(d(1:n)); et = q2t_r(e(1:n))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu); abstol_t = q2t_r(abstol)
+            call ${R}$stebz(ictxt, range, order, n, vl_t, vu_t, il, iu, &
+                             abstol_t, dt, et, m, nsplit, wt, iblock, isplit, &
+                             work_t, lwt, iwork, liwork, info)
+            w(1:n) = t2q_r(wt)
+        end if
+    end subroutine
+
+    subroutine target_pdsyevx(jobz, range, uplo, n, A, ia, ja, desca, &
+                               vl, vu, il, iu, abstol, m, nz, w, orfac, &
+                               Z, iz, jz, descZ, work, lwork, iwork, liwork, &
+                               ifail, iclustr, gap, info)
+        ! ICLUSTR length 2*P; GAP length P (P = NPROW*NPCOL); IFAIL length N.
+        character, intent(in)    :: jobz, range, uplo
+        integer,   intent(in)    :: n, ia, ja, il, iu, iz, jz, lwork, liwork
+        integer,   intent(in)    :: desca(9), descZ(9)
+        real(ep),  intent(in)    :: vl, vu, abstol, orfac
+        real(ep),  intent(inout) :: A(*)
+        integer,   intent(out)   :: m, nz
+        real(ep),  intent(out)   :: w(*), Z(*), work(*), gap(*)
+        integer,   intent(out)   :: iwork(*), ifail(*), iclustr(*), info
+        integer :: na, nzz, lwt, np
+        ${target_real}$, allocatable :: At(:), wt(:), Zt(:), work_t(:), gap_t(:)
+        ${target_real}$ :: vl_t, vu_t, abstol_t, orfac_t
+        na = nloc(desca); nzz = nloc(descZ)
+        block
+            integer :: nprow, npcol, myrow, mycol
+            call blacs_gridinfo(desca(2), nprow, npcol, myrow, mycol)
+            np = max(1, nprow * npcol)
+        end block
+        if (lwork == -1) then
+            allocate(At(max(1,na)), wt(max(1,n)), Zt(max(1,nzz)), &
+                     work_t(1), gap_t(np))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu)
+            abstol_t = q2t_r(abstol); orfac_t = q2t_r(orfac)
+            call ${R}$syevx(jobz, range, uplo, n, At, ia, ja, desca, &
+                             vl_t, vu_t, il, iu, abstol_t, m, nz, wt, orfac_t, &
+                             Zt, iz, jz, descZ, work_t, -1, iwork, liwork, &
+                             ifail, iclustr, gap_t, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), wt(n), Zt(max(1,nzz)), work_t(lwt), gap_t(np))
+            At = q2t_r(A(1:na))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu)
+            abstol_t = q2t_r(abstol); orfac_t = q2t_r(orfac)
+            call ${R}$syevx(jobz, range, uplo, n, At, ia, ja, desca, &
+                             vl_t, vu_t, il, iu, abstol_t, m, nz, wt, orfac_t, &
+                             Zt, iz, jz, descZ, work_t, lwt, iwork, liwork, &
+                             ifail, iclustr, gap_t, info)
+            w(1:n) = t2q_r(wt)
+            Z(1:nzz) = t2q_r(Zt)
+            gap(1:np) = t2q_r(gap_t)
+        end if
+    end subroutine
+
+    subroutine target_pzheevx(jobz, range, uplo, n, A, ia, ja, desca, &
+                               vl, vu, il, iu, abstol, m, nz, w, orfac, &
+                               Z, iz, jz, descZ, work, lwork, rwork, lrwork, &
+                               iwork, liwork, ifail, iclustr, gap, info)
+        character,   intent(in)    :: jobz, range, uplo
+        integer,     intent(in)    :: n, ia, ja, il, iu, iz, jz, lwork, lrwork, liwork
+        integer,     intent(in)    :: desca(9), descZ(9)
+        real(ep),    intent(in)    :: vl, vu, abstol, orfac
+        complex(ep), intent(inout) :: A(*)
+        integer,     intent(out)   :: m, nz
+        real(ep),    intent(out)   :: w(*), rwork(*), gap(*)
+        complex(ep), intent(out)   :: Z(*), work(*)
+        integer,     intent(out)   :: iwork(*), ifail(*), iclustr(*), info
+        integer :: na, nzz, lwt, lrt, np
+        ${target_real}$,    allocatable :: wt(:), rwork_t(:), gap_t(:)
+        ${target_complex}$, allocatable :: At(:), Zt(:), work_t(:)
+        ${target_real}$ :: vl_t, vu_t, abstol_t, orfac_t
+        na = nloc(desca); nzz = nloc(descZ)
+        block
+            integer :: nprow, npcol, myrow, mycol
+            call blacs_gridinfo(desca(2), nprow, npcol, myrow, mycol)
+            np = max(1, nprow * npcol)
+        end block
+        if (lwork == -1) then
+            allocate(At(max(1,na)), wt(max(1,n)), Zt(max(1,nzz)), &
+                     work_t(1), rwork_t(1), gap_t(np))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu)
+            abstol_t = q2t_r(abstol); orfac_t = q2t_r(orfac)
+            call ${C}$heevx(jobz, range, uplo, n, At, ia, ja, desca, &
+                             vl_t, vu_t, il, iu, abstol_t, m, nz, wt, orfac_t, &
+                             Zt, iz, jz, descZ, work_t, -1, rwork_t, -1, &
+                             iwork, liwork, ifail, iclustr, gap_t, info)
+            work(1) = t2q_c(work_t(1))
+            rwork(1) = t2q_r(rwork_t(1))
+        else
+            lwt = max(1, lwork); lrt = max(1, lrwork)
+            allocate(At(na), wt(n), Zt(max(1,nzz)), &
+                     work_t(lwt), rwork_t(lrt), gap_t(np))
+            At = q2t_c(A(1:na))
+            vl_t = q2t_r(vl); vu_t = q2t_r(vu)
+            abstol_t = q2t_r(abstol); orfac_t = q2t_r(orfac)
+            call ${C}$heevx(jobz, range, uplo, n, At, ia, ja, desca, &
+                             vl_t, vu_t, il, iu, abstol_t, m, nz, wt, orfac_t, &
+                             Zt, iz, jz, descZ, work_t, lwt, rwork_t, lrt, &
+                             iwork, liwork, ifail, iclustr, gap_t, info)
+            w(1:n) = t2q_r(wt)
+            Z(1:nzz) = t2q_c(Zt)
+            gap(1:np) = t2q_r(gap_t)
         end if
     end subroutine
 
