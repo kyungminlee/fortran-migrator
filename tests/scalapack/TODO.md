@@ -55,35 +55,33 @@ issue is fixed outside `tests/scalapack/`.
   eigenvectors) might be testable in isolation without the broken
   cleanup.
 
-## pdlanhs / pxlanhs (Hessenberg matrix norms)
+## pdlanhs / pxlanhs — FIXED
 
-- **Symptom**: For NORM='1' / 'F' / 'M' on n in {32,64,96}, the
-  migrated `pdlanhs` / `pxlanhs` disagree with quad `dlanhs` /
-  `zlanhs` at order 0.1 (only NORM='I' matches). Even after
-  zeroing the input matrix below the first subdiagonal so the
-  matrix is genuinely Hessenberg, the disagreement persists.
-- **Diagnosis**: Likely a scaling or norm-of-norms bug specific to
-  the migrated `pdlanhs` family — `pdlange`, `pdlansy`, `pdlantr`,
-  `pzlange`, `pzlanhe`, `pzlantr` all agree to >30 digits with the
-  same scaffold, so the harness is fine.
-- **Action**: Re-enable `tests/scalapack/auxiliary/test_pdlanhs.f90`
-  / `test_pzlanhs.f90` once the migrated `lanhs` family is fixed.
-  Wrappers `target_pdlanhs` / `target_pzlanhs` remain in the
-  template for later re-instatement.
+- Root cause was an upstream ScaLAPACK 2.2.3 bug in pdlanhs.f /
+  pzlanhs.f: the NPROW=1 path failed to advance ``II`` after the
+  first column block, so the inner-loop bound ``MIN(II+LL-JJ+1,
+  IIA+NP-1)`` collapsed to row 2 for every column past the first
+  MB. M-norm passed by luck (max element typically lay in the kept
+  range); 1/F/I norms underestimated by 10-20%. Fixed via
+  ``source_overrides`` in recipes/scalapack.yaml — the patched
+  upstream bodies live in recipes/scalapack/source_overrides/ and
+  go through the normal migration pipeline.
+- Test drivers: tests/scalapack/auxiliary/test_pdlanhs.f90 /
+  test_pzlanhs.f90 (both PASS to full target precision on all 3
+  targets).
 
-## pxhetrd (complex Hermitian tridiagonal reduction)
+## pxhetrd / pxheev — FIXED
 
-- **Symptom**: A `test_pzhetrd` driver returns matrix-element errors of
-  order 1 (`max_rel_err ~ 2.7-4.5`) on n in {32,64,96}, 2x2 grid,
-  mb=nb=8 — totally wrong output. The real-symmetric counterpart
-  `pdsytrd` passes to >32 digits on the same scaffold.
-- **Diagnosis**: `pxhetrd` is the Hermitian analog of `pdsytrd` and
-  is the back-end for `pxheev`. The same defect that makes `pxheev`
-  return garbage eigenvalues likely lives here at the reduction
-  level.
-- **Action**: Re-enable `tests/scalapack/factorization/test_pzhetrd.f90`
-  (wrapper `target_pzhetrd` is already in the template) when the
-  underlying `pxhetrd` Householder path is fixed upstream.
+Originally these returned garbage (rel err ~3-5) on the Hermitian
+side while their real-symmetric counterparts (pdsytrd / pdsyev) passed
+cleanly. Root cause was the precision-independent PBLAS dispatcher
+files (PB_C* helpers) shipping with stale ``(double*)`` pointer-cast
+strides on KIND targets — fixed by the std/extension archive split,
+which routes the alias-widened dispatcher through the migrated
+archive while the standard double-precision body lives separately.
+Both ``test_pzhetrd`` (matrix-element residual) and ``test_pzheev``
+(eigenvalue + residual on JOBZ='V') now pass to full target
+precision (32+ digits on kind16).
 
 ## pdgecon / pdpocon (condition-number estimators)
 
@@ -100,20 +98,4 @@ issue is fixed outside `tests/scalapack/`.
   `kappa_true / 3 <= kappa_est <= kappa_true`. Deferred until that
   helper exists; the wrappers remain exposed.
 
-## pxheev (complex Hermitian eigensolver, JOBZ='N' or 'V')
-
-- **Symptom**: A test driver of the same shape as `test_pdsyev.f90`,
-  hermitizing a random complex matrix and comparing eigenvalues
-  against quad `zheev`, sees `max_rel_err ≈ 1–5` on eigenvalues and
-  residual `||A·Z − Z·diag(W)||/||A|| ≈ 7–16` for both `JOBZ='N'`
-  and `JOBZ='V'` across n ∈ {32, 64, 96}, 2×2 grid, mb=nb=8.
-- **Diagnosis**: `target_pzheev` (the wrapper) is faithful to the
-  ScaLAPACK 2.2 `PZHEEV` interface — `LWORK`/`LRWORK` are queried
-  and obeyed; the input is correctly Hermitian. `pdsyev` with the
-  identical scaffold passes to >32 digits, ruling out the harness.
-  The eigenvalues returned by migrated `pxheev` simply do not agree
-  with reference `zheev` on the same matrix.
-- **Action**: Re-enable `tests/scalapack/eigenvalue/test_pzheev.f90`
-  once the migrated `pxheev` is verified or replaced with the
-  divide-and-conquer driver (`pxheevd`, also exposed but untested).
-  Do not edit migrator/ from within this suite.
+(pzheev fix folded into the pxhetrd/pxheev entry above.)

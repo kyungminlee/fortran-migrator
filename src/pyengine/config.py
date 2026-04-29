@@ -153,6 +153,16 @@ class RecipeConfig:
     # the upstream (un-migrated) entry points keep their original
     # symbol names and link cleanly alongside the renamed clones.
     extra_renames: dict[str, str] = field(default_factory=dict)
+    # Map of upstream filename → replacement source path (resolved
+    # relative to ``recipe_dir``). When the migrator iterates source
+    # files and encounters a name in this map, it reads from the
+    # override path instead of ``source_dir / name``. The override
+    # file is written in upstream-shape (DOUBLE PRECISION, pd*/dz*
+    # naming, dgemm call sites, etc.) and goes through the normal
+    # migration pipeline — so a single override produces correctly-
+    # renamed/promoted output for every target. Used to carry small
+    # bug fixes for upstream source without touching ``external/``.
+    source_overrides: dict[str, Path] = field(default_factory=dict)
 
 
 def load_recipe(recipe_path: Path,
@@ -254,5 +264,9 @@ def load_recipe(recipe_path: Path,
         extra_renames={
             str(k).upper(): str(v)
             for k, v in (data.get('extra_renames') or {}).items()
+        },
+        source_overrides={
+            str(k): (recipe_path.parent / str(v)).resolve()
+            for k, v in (data.get('source_overrides') or {}).items()
         },
     )

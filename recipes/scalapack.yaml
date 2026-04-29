@@ -134,6 +134,14 @@ skip_files: []
 prefer_source:
   - PCUNGQL   # fixes restore bug in pzungql.f:292-293
   - PCUNML2   # fixes restore bug in pzunml2.f:394-395
+  # Pin the D/Z half as canonical so the source_overrides on
+  # pdlanhs.f / pzlanhs.f win convergence (the canonical-rank
+  # picker doesn't recognize ScaLAPACK's pd*/pz* prefix shape, so
+  # without an explicit pin it sorts pclanhs.f alphabetically first
+  # and that un-fixed copy becomes canonical). The corresponding
+  # source_overrides entries supply the bug-fixed PD/PZ bodies.
+  - PDLANHS
+  - PZLANHS
 
 # Mirror the scalapack_c.yaml rename for pdlaiectb_/pdlaiectl_: the
 # Fortran callers PDSTEBZ / PDSYEVX / PDSYGVX / PZHEEVX / PZHEGVX
@@ -143,6 +151,15 @@ prefer_source:
 extra_renames:
   PDLAIECTB: P{RPU}LAIECTB
   PDLAIECTL: P{RPU}LAIECTL
+
+# Override upstream ScaLAPACK 2.2.3 sources whose contents we patch
+# locally (without editing external/). The replacement file is in
+# upstream shape (DOUBLE PRECISION names, dgemm-style call sites) and
+# goes through the normal migration pipeline, so a single override
+# produces correctly-renamed/promoted output for every target.
+source_overrides:
+  pdlanhs.f: scalapack/source_overrides/pdlanhs.f
+  pzlanhs.f: scalapack/source_overrides/pzlanhs.f
 
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix
