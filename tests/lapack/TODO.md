@@ -123,14 +123,90 @@ uv run python -m pyengine stage /tmp/stg-q --target kind16 --libraries blas lapa
 #   undefined reference to `blas_zsymv_x_'
 ```
 
-Resolution path: extend the recipe (or add an override) to either
-(a) vendor XBLAS into `qlapack` and the migrated targets, or
-(b) exclude `xla_*_extended.f` from the qlapack/migrated builds and stub
-out the xx callers.
+Until XBLAS lands, **do not** add interfaces or wrappers for any xx routine —
+the wrapper module pulls in the xla_* objects at link time even if no test
+uses the wrapper, breaking the whole test suite.
 
-Until then, **do not** add interfaces or wrappers for any xx routine —
-the wrapper module pulls in the xla_* objects at link time even if no
-test uses the wrapper, breaking the whole test suite.
+**Resolution: vendor XBLAS as a separate library, opt-in via a build flag.**
+
+#### Scope (what to vendor)
+
+The xx family has 28 LAPACK helper files that reach into XBLAS:
+
+```
+{s,d,c,z}la_{gerfsx,gbrfsx,porfsx,syrfsx}_extended.f      (16 files)
+{c,z}la_herfsx_extended.f                                 (2 files)
+{s,d,c,z}la_{gercond,gbrcond,porcond,syrcond}_x.f         (8 files — internal only, no XBLAS)
+{c,z}la_hercond_x.f                                       (2 files — internal only, no XBLAS)
+```
+
+The 16 `*la_*rfsx_extended.f` files plus the 2 Hermitian variants call
+exactly **28 XBLAS entry points** — every one is a Level-2 matvec:
+
+```
+BLAS_{S,D,C,Z}{GEMV,GBMV,SYMV}_X  + matching 2_X  variants   (24 routines)
+BLAS_{C,Z}HEMV_X                  + matching 2_X  variants   (4 routines)
+```
+
+(The `*cond_x.f` files only call internal LAPACK helpers — `*la_lin_berr`,
+`*la_geamv`, etc. — no XBLAS.)
+
+#### Precision strategy per target
+
+XBLAS does residual refinement in *higher* precision than the working
+precision via a (head, tail) accumulator pair.  The migrator promotes the
+internal extension precision per target:
+
+| Target       | Working precision | Extension (head, tail)                |
+|--------------|-------------------|---------------------------------------|
+| kind16       | `real128` (quad)  | `(real128, real128)` — DD-on-quad     |
+| kind10       | `real(kind=10)`   | `(real(kind=10), real(kind=10))`      |
+| multifloats  | `real64x2` (DD)   | `(real64x2, real64)` — keep DD as     |
+|              |                   | head, one extra `real64` for the tail |
+
+Note for multifloats: do **not** introduce a `real64x3` triple-double type.
+The (head, tail) decomposition uses the existing DD type for `head` and one
+plain `real64` scalar for `tail`.  This matches XBLAS's existing internal
+pattern and reuses the DD building blocks already in `multifloats.hh`.
+
+#### Recipe shape
+
+- New `external/xblas-1.0.248/` (or current Netlib XBLAS release) — the
+  ~28 entry-point Fortran sources plus the internal helpers they call.
+  Public domain license.
+- New `recipes/xblas.yaml` mirroring the structure of `recipes/blas.yaml`.
+  Goes through the same precision-substitution pipeline as BLAS so each
+  target gets its own `libxblas-*.a` (and `libqxblas-*.a` for the kind16
+  reference).
+- Optional: a sweep of which Netlib XBLAS sources are transitively
+  reachable from the 28 entry points; this trims the recipe to the
+  minimal vendored subset.
+
+#### Opt-in build flag
+
+Two layers need the same gate:
+
+1. **Recipe / build flag** — e.g. `-DBUILD_XBLAS=ON` at top-level cmake
+   configure.  When OFF: skip building libxblas, exclude `*la_*_extended.f`
+   from the LAPACK builds (else qlapack still has unresolved XBLAS refs
+   even though no test uses them — `liblapack_test_target.a` poisoning
+   recurs).  When ON: ship libxblas and include the xla_* objects in
+   `liblapack`/`libqlapack`.
+2. **Test glob in `tests/lapack/CMakeLists.txt`** — gate the xx-family
+   `test_*.f90` files on the same flag, *and* gate the wrapper definitions
+   in `target_lapack_body.fypp` (e.g. `#:if BUILD_XBLAS` blocks) so the xx
+   `target_*` symbols don't even appear in `liblapack_test_target.a` when
+   the flag is off.
+
+Default state of the flag, naming convention, and whether it lives at
+top-level or per-recipe are open and should follow whatever the migrator
+team prefers.
+
+Once that lands, the xx tests follow the standard pattern (interfaces in
+`ref_quad_lapack.f90` + wrappers in `target_lapack_body.fypp` + per-routine
+`test_*.f90` files comparing X / RCOND / berr / err_bnds_norm /
+err_bnds_comp).  The signatures and partial wrapper code from this
+session's aborted attempt are recoverable from the git reflog if useful.
 
 ### P22 — Dynamic mode decomposition (4 routines)
 
