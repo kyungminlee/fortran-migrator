@@ -4448,6 +4448,198 @@ module ref_quad_lapack
             complex(ep), intent(out) :: AP(*)
             integer,     intent(out) :: info
         end subroutine ztrttp
+
+        ! P-misc — small utilities & unblocked apply/generate Householder
+
+        logical function disnan(din)
+            import :: ep
+            real(ep), intent(in) :: din
+        end function disnan
+
+        subroutine drscl(n, sa, sx, incx)
+            import :: ep
+            integer,  intent(in)    :: n, incx
+            real(ep), intent(in)    :: sa
+            real(ep), intent(inout) :: sx(*)
+        end subroutine drscl
+
+        subroutine zdrscl(n, sa, sx, incx)
+            import :: ep
+            integer,     intent(in)    :: n, incx
+            real(ep),    intent(in)    :: sa
+            complex(ep), intent(inout) :: sx(*)
+        end subroutine zdrscl
+
+        subroutine zrscl(n, a, x, incx)
+            import :: ep
+            integer,     intent(in)    :: n, incx
+            complex(ep), intent(in)    :: a
+            complex(ep), intent(inout) :: x(*)
+        end subroutine zrscl
+
+        subroutine zrot(n, cx, incx, cy, incy, c, s)
+            import :: ep
+            integer,     intent(in)    :: n, incx, incy
+            real(ep),    intent(in)    :: c
+            complex(ep), intent(in)    :: s
+            complex(ep), intent(inout) :: cx(*), cy(*)
+        end subroutine zrot
+
+        subroutine dorg2l(m, n, k, A, lda, tau, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorg2l
+
+        subroutine zung2l(m, n, k, A, lda, tau, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zung2l
+
+        subroutine dorg2r(m, n, k, A, lda, tau, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorg2r
+
+        subroutine zung2r(m, n, k, A, lda, tau, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zung2r
+
+        subroutine dorm2l(side, trans, m, n, k, A, lda, tau, C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorm2l
+
+        subroutine zunm2l(side, trans, m, n, k, A, lda, tau, C, ldc, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunm2l
+
+        subroutine dorm2r(side, trans, m, n, k, A, lda, tau, C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorm2r
+
+        subroutine zunm2r(side, trans, m, n, k, A, lda, tau, C, ldc, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunm2r
+
+        subroutine dormlq(side, trans, m, n, k, A, lda, tau, C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormlq
+
+        subroutine zunmlq(side, trans, m, n, k, A, lda, tau, C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmlq
+
+        subroutine dormhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, ilo, ihi, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormhr
+
+        subroutine zunmhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, ilo, ihi, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmhr
+
+        subroutine dtzrzf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dtzrzf
+
+        subroutine ztzrzf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztzrzf
+
+        subroutine dormrz(side, trans, m, n, k, l, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormrz
+
+        subroutine zunmrz(side, trans, m, n, k, l, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, l, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmrz
     end interface
 
 end module ref_quad_lapack
