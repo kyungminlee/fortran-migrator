@@ -71,3 +71,23 @@ do compare the full result.
 If migrator changes (or recipe overrides) ever pin both paths to the
 same blocking heuristic, the factor-side comparisons could be
 strengthened to compare the full A and T arrays.
+
+## Phase P6/P7 — zgesvdq runtime crash
+
+`tests/lapack/svd/test_zgesvdq.f90` builds but crashes at runtime on the
+kind16 differential test with a Fortran runtime "Expected INTEGER for item 3
+in formatted transfer, got CHARACTER" error originating after the call to
+`zgesvdq` returns. Suspect: the migrated `xgesvdq` corrupts an integer workspace
+size or `info` argument, which then trips a downstream WRITE statement.
+
+Reproduce:
+```bash
+cd /home/kyungminlee/Code/fortran-migrator/src
+uv run python -m pyengine stage /tmp/stg-q --target kind16 --libraries blas lapack
+cmake -S /tmp/stg-q -B /tmp/stg-q/build && cmake --build /tmp/stg-q/build -j8 --target test_zgesvdq
+/tmp/stg-q/build/tests/lapack/test_zgesvdq
+```
+
+dgesvdq passes on the same target; the bug is specific to the complex variant.
+Test left in place; needs migrator-side investigation of the
+`xgesvdq` call sequence vs `dgesvdq`.

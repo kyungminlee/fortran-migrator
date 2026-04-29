@@ -258,6 +258,10 @@ module target_lapack
     public :: target_dbbcsd, target_zbbcsd
     public :: target_dorbdb, target_zunbdb
     public :: target_dorcsd, target_zuncsd
+    ! P6/P7 — modern SVD + banded bidiag reduction
+    public :: target_dgesvdq, target_zgesvdq
+    public :: target_dgesvdx, target_zgesvdx
+    public :: target_dgbbrd, target_zgbbrd
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -13840,6 +13844,163 @@ $:CPACK_INV('zsptri', C + 'sptri')
         A(1:lda, 1:ncols) = t2q_c(At)
         tau(1:min(m,n)) = t2q_c(taut)
         maxc2nrmk = t2q_r(m2k); relmaxc2nrmk = t2q_r(rm2k)
+    end subroutine
+
+    ! ----- P6/P7 modern SVD + banded bidiag reduction -----
+
+    subroutine target_dgesvdq(joba, jobp, jobr, jobu, jobv, m, n, A, lda, &
+                              S, U, ldu, V, ldv, numrank, info)
+        character, intent(in)    :: joba, jobp, jobr, jobu, jobv
+        integer,   intent(in)    :: m, n, lda, ldu, ldv
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: S(*), U(ldu,*), V(ldv,*)
+        integer,   intent(out)   :: numrank, info
+        ${target_real}$, allocatable :: At(:,:), St(:), Ut(:,:), Vt(:,:), work(:), rwork(:)
+        ${target_real}$ :: wopt(1), ropt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, lrwork, liwork
+        liwork = max(m + n, 1)
+        allocate(At(lda, n), St(min(m, n)), Ut(ldu, n), Vt(ldv, n), iwork(liwork))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gesvdq(joba, jobp, jobr, jobu, jobv, m, n, At, lda, &
+                         St, Ut, ldu, Vt, ldv, numrank, iwork, -1, &
+                         wopt, -1, ropt, -1, info)
+        lwork  = max(1, int(real(t2q_r(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(ropt(1))))
+        liwork = max(liwork, iwork(1))
+        deallocate(iwork); allocate(iwork(liwork), work(lwork), rwork(lrwork))
+        call ${R}$gesvdq(joba, jobp, jobr, jobu, jobv, m, n, At, lda, &
+                         St, Ut, ldu, Vt, ldv, numrank, iwork, liwork, &
+                         work, lwork, rwork, lrwork, info)
+        A(1:lda, 1:n) = t2q_r(At); S(1:min(m,n)) = t2q_r(St)
+        U(1:ldu, 1:n) = t2q_r(Ut); V(1:ldv, 1:n) = t2q_r(Vt)
+    end subroutine
+
+    subroutine target_zgesvdq(joba, jobp, jobr, jobu, jobv, m, n, A, lda, &
+                              S, U, ldu, V, ldv, numrank, info)
+        character,   intent(in)    :: joba, jobp, jobr, jobu, jobv
+        integer,     intent(in)    :: m, n, lda, ldu, ldv
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: S(*)
+        complex(ep), intent(out)   :: U(ldu,*), V(ldv,*)
+        integer,     intent(out)   :: numrank, info
+        ${target_complex}$, allocatable :: At(:,:), Ut(:,:), Vt(:,:), cwork(:)
+        ${target_real}$,    allocatable :: St(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: ropt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lcwork, lrwork, liwork
+        liwork = max(m + n, 1)
+        allocate(At(lda, n), St(min(m, n)), Ut(ldu, n), Vt(ldv, n), iwork(liwork))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gesvdq(joba, jobp, jobr, jobu, jobv, m, n, At, lda, &
+                         St, Ut, ldu, Vt, ldv, numrank, iwork, -1, &
+                         wopt, -1, ropt, -1, info)
+        lcwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(ropt(1))))
+        liwork = max(liwork, iwork(1))
+        deallocate(iwork); allocate(iwork(liwork), cwork(lcwork), rwork(lrwork))
+        call ${C}$gesvdq(joba, jobp, jobr, jobu, jobv, m, n, At, lda, &
+                         St, Ut, ldu, Vt, ldv, numrank, iwork, liwork, &
+                         cwork, lcwork, rwork, lrwork, info)
+        A(1:lda, 1:n) = t2q_c(At); S(1:min(m,n)) = t2q_r(St)
+        U(1:ldu, 1:n) = t2q_c(Ut); V(1:ldv, 1:n) = t2q_c(Vt)
+    end subroutine
+
+    subroutine target_dgesvdx(jobu, jobvt, range, m, n, A, lda, vl, vu, il, iu, &
+                              ns, S, U, ldu, Vt, ldvt, info)
+        character, intent(in)    :: jobu, jobvt, range
+        integer,   intent(in)    :: m, n, il, iu, lda, ldu, ldvt
+        real(ep),  intent(in)    :: vl, vu
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: ns, info
+        real(ep),  intent(out)   :: S(*), U(ldu,*), Vt(ldvt,*)
+        ${target_real}$, allocatable :: At(:,:), St(:), Ut(:,:), Vtt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork
+        allocate(At(lda, n), St(min(m, n)), Ut(ldu, min(m, n)), Vtt(ldvt, n), iwork(12*min(m, n)))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gesvdx(jobu, jobvt, range, m, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                         il, iu, ns, St, Ut, ldu, Vtt, ldvt, wopt, -1, iwork, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$gesvdx(jobu, jobvt, range, m, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                         il, iu, ns, St, Ut, ldu, Vtt, ldvt, work, lwork, iwork, info)
+        A(1:lda, 1:n) = t2q_r(At); S(1:ns) = t2q_r(St(1:ns))
+        if (jobu /= 'N' .and. jobu /= 'n' .and. ns > 0) U(1:ldu, 1:ns) = t2q_r(Ut(1:ldu, 1:ns))
+        if (jobvt /= 'N' .and. jobvt /= 'n' .and. ns > 0) Vt(1:ldvt, 1:n) = t2q_r(Vtt)
+    end subroutine
+
+    subroutine target_zgesvdx(jobu, jobvt, range, m, n, A, lda, vl, vu, il, iu, &
+                              ns, S, U, ldu, Vt, ldvt, info)
+        character,   intent(in)    :: jobu, jobvt, range
+        integer,     intent(in)    :: m, n, il, iu, lda, ldu, ldvt
+        real(ep),    intent(in)    :: vl, vu
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: ns, info
+        real(ep),    intent(out)   :: S(*)
+        complex(ep), intent(out)   :: U(ldu,*), Vt(ldvt,*)
+        ${target_complex}$, allocatable :: At(:,:), Ut(:,:), Vtt(:,:), work(:)
+        ${target_real}$,    allocatable :: St(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork
+        allocate(At(lda, n), St(min(m, n)), Ut(ldu, min(m, n)), Vtt(ldvt, n), &
+                 rwork(min(m, n)*(min(m, n)*2+15*min(m, n))), iwork(12*min(m, n)))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gesvdx(jobu, jobvt, range, m, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                         il, iu, ns, St, Ut, ldu, Vtt, ldvt, wopt, -1, rwork, iwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$gesvdx(jobu, jobvt, range, m, n, At, lda, q2t_r(vl), q2t_r(vu), &
+                         il, iu, ns, St, Ut, ldu, Vtt, ldvt, work, lwork, rwork, iwork, info)
+        A(1:lda, 1:n) = t2q_c(At); S(1:ns) = t2q_r(St(1:ns))
+        if (jobu /= 'N' .and. jobu /= 'n' .and. ns > 0) U(1:ldu, 1:ns) = t2q_c(Ut(1:ldu, 1:ns))
+        if (jobvt /= 'N' .and. jobvt /= 'n' .and. ns > 0) Vt(1:ldvt, 1:n) = t2q_c(Vtt)
+    end subroutine
+
+    subroutine target_dgbbrd(vect, m, n, ncc, kl, ku, AB, ldab, D, E, &
+                             Q, ldq, Pt, ldpt, C, ldc, info)
+        character, intent(in)    :: vect
+        integer,   intent(in)    :: m, n, ncc, kl, ku, ldab, ldq, ldpt, ldc
+        real(ep),  intent(inout) :: AB(ldab,*), C(ldc,*)
+        real(ep),  intent(out)   :: D(*), E(*), Q(ldq,*), Pt(ldpt,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: ABt(:,:), Dt(:), Et(:), Qt(:,:), Ptt(:,:), Ct(:,:), work(:)
+        allocate(ABt(ldab, n), Dt(min(m, n)), Et(max(1, min(m, n)-1)), &
+                 Qt(ldq, m), Ptt(ldpt, n), Ct(ldc, ncc), work(2*max(m, n)))
+        ABt = q2t_r(AB(1:ldab, 1:n))
+        if (ncc > 0) Ct = q2t_r(C(1:ldc, 1:ncc))
+        call ${R}$gbbrd(vect, m, n, ncc, kl, ku, ABt, ldab, Dt, Et, &
+                        Qt, ldq, Ptt, ldpt, Ct, ldc, work, info)
+        AB(1:ldab, 1:n) = t2q_r(ABt)
+        D(1:min(m,n)) = t2q_r(Dt); if (min(m,n) > 1) E(1:min(m,n)-1) = t2q_r(Et)
+        if (vect == 'Q' .or. vect == 'B') Q(1:ldq, 1:m) = t2q_r(Qt)
+        if (vect == 'P' .or. vect == 'B') Pt(1:ldpt, 1:n) = t2q_r(Ptt)
+        if (ncc > 0) C(1:ldc, 1:ncc) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zgbbrd(vect, m, n, ncc, kl, ku, AB, ldab, D, E, &
+                             Q, ldq, Pt, ldpt, C, ldc, info)
+        character,   intent(in)    :: vect
+        integer,     intent(in)    :: m, n, ncc, kl, ku, ldab, ldq, ldpt, ldc
+        complex(ep), intent(inout) :: AB(ldab,*), C(ldc,*)
+        real(ep),    intent(out)   :: D(*), E(*)
+        complex(ep), intent(out)   :: Q(ldq,*), Pt(ldpt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: ABt(:,:), Qt(:,:), Ptt(:,:), Ct(:,:), work(:)
+        ${target_real}$,    allocatable :: Dt(:), Et(:), rwork(:)
+        allocate(ABt(ldab, n), Dt(min(m, n)), Et(max(1, min(m, n)-1)), &
+                 Qt(ldq, m), Ptt(ldpt, n), Ct(ldc, ncc), &
+                 work(max(m, n)), rwork(max(m, n)))
+        ABt = q2t_c(AB(1:ldab, 1:n))
+        if (ncc > 0) Ct = q2t_c(C(1:ldc, 1:ncc))
+        call ${C}$gbbrd(vect, m, n, ncc, kl, ku, ABt, ldab, Dt, Et, &
+                        Qt, ldq, Ptt, ldpt, Ct, ldc, work, rwork, info)
+        AB(1:ldab, 1:n) = t2q_c(ABt)
+        D(1:min(m,n)) = t2q_r(Dt); if (min(m,n) > 1) E(1:min(m,n)-1) = t2q_r(Et)
+        if (vect == 'Q' .or. vect == 'B') Q(1:ldq, 1:m) = t2q_c(Qt)
+        if (vect == 'P' .or. vect == 'B') Pt(1:ldpt, 1:n) = t2q_c(Ptt)
+        if (ncc > 0) C(1:ldc, 1:ncc) = t2q_c(Ct)
     end subroutine
 
     ! ----- P15 CS decomposition + bdsvdx -----

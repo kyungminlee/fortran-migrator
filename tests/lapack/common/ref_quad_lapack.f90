@@ -5129,6 +5129,74 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: rwork(*)
             integer,     intent(out)   :: iwork(*), info
         end subroutine zuncsd
+
+        ! P6/P7 — modern SVD + banded bidiag reduction
+        subroutine dgesvdq(joba, jobp, jobr, jobu, jobv, m, n, A, lda, &
+                           S, U, ldu, V, ldv, numrank, iwork, liwork, &
+                           work, lwork, rwork, lrwork, info)
+            import :: ep
+            character, intent(in)    :: joba, jobp, jobr, jobu, jobv
+            integer,   intent(in)    :: m, n, lda, ldu, ldv, liwork, lwork, lrwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: S(*), U(ldu,*), V(ldv,*), work(*), rwork(*)
+            integer,   intent(out)   :: numrank, iwork(*), info
+        end subroutine dgesvdq
+
+        subroutine zgesvdq(joba, jobp, jobr, jobu, jobv, m, n, A, lda, &
+                           S, U, ldu, V, ldv, numrank, iwork, liwork, &
+                           cwork, lcwork, rwork, lrwork, info)
+            import :: ep
+            character,   intent(in)    :: joba, jobp, jobr, jobu, jobv
+            integer,     intent(in)    :: m, n, lda, ldu, ldv, liwork, lcwork, lrwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: S(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), V(ldv,*), cwork(*)
+            integer,     intent(out)   :: numrank, iwork(*), info
+        end subroutine zgesvdq
+
+        subroutine dgesvdx(jobu, jobvt, range, m, n, A, lda, vl, vu, il, iu, &
+                           ns, S, U, ldu, Vt, ldvt, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: jobu, jobvt, range
+            integer,   intent(in)    :: m, n, il, iu, lda, ldu, ldvt, lwork
+            real(ep),  intent(in)    :: vl, vu
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ns, iwork(*), info
+            real(ep),  intent(out)   :: S(*), U(ldu,*), Vt(ldvt,*), work(*)
+        end subroutine dgesvdx
+
+        subroutine zgesvdx(jobu, jobvt, range, m, n, A, lda, vl, vu, il, iu, &
+                           ns, S, U, ldu, Vt, ldvt, work, lwork, rwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobvt, range
+            integer,     intent(in)    :: m, n, il, iu, lda, ldu, ldvt, lwork
+            real(ep),    intent(in)    :: vl, vu
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ns, iwork(*), info
+            real(ep),    intent(out)   :: S(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), Vt(ldvt,*), work(*)
+        end subroutine zgesvdx
+
+        subroutine dgbbrd(vect, m, n, ncc, kl, ku, AB, ldab, D, E, &
+                          Q, ldq, Pt, ldpt, C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: vect
+            integer,   intent(in)    :: m, n, ncc, kl, ku, ldab, ldq, ldpt, ldc
+            real(ep),  intent(inout) :: AB(ldab,*), C(ldc,*)
+            real(ep),  intent(out)   :: D(*), E(*), Q(ldq,*), Pt(ldpt,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgbbrd
+
+        subroutine zgbbrd(vect, m, n, ncc, kl, ku, AB, ldab, D, E, &
+                          Q, ldq, Pt, ldpt, C, ldc, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: vect
+            integer,     intent(in)    :: m, n, ncc, kl, ku, ldab, ldq, ldpt, ldc
+            complex(ep), intent(inout) :: AB(ldab,*), C(ldc,*)
+            real(ep),    intent(out)   :: D(*), E(*), rwork(*)
+            complex(ep), intent(out)   :: Q(ldq,*), Pt(ldpt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbbrd
     end interface
 
 end module ref_quad_lapack
