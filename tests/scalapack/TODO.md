@@ -99,3 +99,61 @@ precision (32+ digits on kind16).
   helper exists; the wrappers remain exposed.
 
 (pzheev fix folded into the pxhetrd/pxheev entry above.)
+
+## pdormrz / pzunmrz — descriptor-alignment failure
+
+- **Symptom**: A test driver that invokes pdtzrzf followed by pdormrz('L', 'N', n_a, ncc, m_a, n_a-m_a, …) aborts in the internal PBETRAN dispatcher with "parameter number 11 had an illegal value", suggesting the m-by-n trapezoidal A's column distribution must align with C's row distribution in a way the simple "same MB/NB" descriptor pair doesn't satisfy.
+- **Action**: Defer until the descA/descC alignment study is done. The wrappers are exposed (target_pdormrz / target_pzunmrz) and compile, so re-enabling is just a driver-shape fix.
+
+## *trsv (single-half banded/tridiag triangular solves) — driver semantics
+
+- **Status**: Wrappers exist for pdpttrsv/pzpttrsv, pddttrsv/pzdttrsv,
+  pdpbtrsv/pzpbtrsv, pddbtrsv/pzdbtrsv (interface signatures match
+  upstream — UPLO/TRANS/etc.).
+- **Symptom**: A naïve "verify pdpttrsv(L) ∘ pdpttrsv(U) ≡ pdpttrs"
+  test fails by 60-200x — the trsv routines do NOT compose to the
+  full LDL^T solve; the implicit D^-1 step lives only in the *trs
+  driver, not in the half-solves.
+- **Action**: Build a meaningful test by applying *trsv to a vector
+  built from the factor (forward-substitute against the L stored in
+  AF), or by rebuilding T from D/E/AF on rank 0 and checking
+  T_L * X_got ≡ B_orig directly. Deferred until an upstream-doc
+  read pins down exactly what each *trsv variant computes.
+
+## pdposvx / pzposvx — fail via internal pdpocon / pzpocon
+
+- **Status**: pdposvx and pzposvx wrappers exist. Drivers reliably
+  abort with "On entry to P{Q,Y}POCON parameter number 10 had an
+  illegal value", and on kind16 the gathered X disagrees with the
+  reference by 10^3. pdgesvx / pzgesvx pass cleanly on all targets.
+- **Diagnosis**: both *posvx drivers funnel through pd/pzpocon for
+  rcond. Param 10 is the work pointer; the workspace size that
+  *posvx passes into *pocon does not match upstream's expectations
+  (or upstream's pocon workspace contract is wrong). Same root
+  cause as the existing pdpocon/pzpocon entry above.
+- **Action**: Fix or sandbox pd/pzpocon workspace handling, then
+  re-enable a *posvx driver. Wrappers remain exposed.
+
+## pdtrsen — heap corruption on every call
+
+- **Status**: target_pdtrsen wrapper exists and the precision result
+  is correct (sorted eigenvalue spectrum agrees bit-equally with
+  LAPACK dtrsen), but every PDTRSEN call leaves the heap in a
+  corrupted state — `free(): invalid pointer` aborts on the next
+  deallocate. Same family as pdsyevx (heap corruption via internal
+  workspace bookkeeping).
+- **Action**: Either fix the upstream PDTRSEN workspace handling
+  or run pdtrsen in a sandbox so a single-call result can be reported
+  without the cleanup crash. Wrapper remains exposed; pdtrord (the
+  reorder-only sibling) does NOT exhibit the issue and ships a
+  passing driver.
+
+## pdormrz / pzunmrz update — semantic mismatch with dormrz/zunmrz
+
+- Followup attempt with SIDE='R' (which side-steps the SIDE='L'
+  PBETRAN parameter-11 abort) produces a numerically clean run
+  (no abort) but the gathered C disagrees with LAPACK dormrz by
+  factors of ~1.3 — same magnitude regardless of TRANS='N' vs 'T'.
+  Either pdormrz stores the reflectors with a different sign/scale
+  convention than dormrz, or the K/L semantics differ. Defer until
+  a careful upstream-doc walkthrough.

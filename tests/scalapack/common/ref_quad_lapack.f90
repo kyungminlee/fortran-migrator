@@ -374,6 +374,131 @@ module ref_quad_lapack
             integer,  intent(out)   :: info
         end subroutine dgebrd
 
+        subroutine dormbr(vect, side, trans, m, n, k, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: vect, side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormbr
+
+        subroutine dtzrzf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dtzrzf
+
+        subroutine dormrz(side, trans, m, n, k, l, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormrz
+
+        subroutine dggqrf(n, m, p, A, lda, taua, B, ldb, taub, &
+                          work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, m, p, lda, ldb, lwork
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dggqrf
+
+        subroutine dggrqf(m, p, n, A, lda, taua, B, ldb, taub, &
+                          work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, p, n, lda, ldb, lwork
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dggrqf
+
+        subroutine dtrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo, trans, diag
+            integer,   intent(in)  :: n, nrhs, lda, ldb, ldx
+            real(ep),  intent(in)  :: A(lda,*), B(ldb,*), X(ldx,*)
+            real(ep),  intent(out) :: ferr(*), berr(*), work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtrrfs
+
+        subroutine dtrcon(norm, uplo, diag, n, A, lda, rcond, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm, uplo, diag
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtrcon
+
+        subroutine ztrcon(norm, uplo, diag, n, A, lda, rcond, &
+                          work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm, uplo, diag
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            complex(ep), intent(out) :: work(*)
+            real(ep),    intent(out) :: rcond, rwork(*)
+            integer,     intent(out) :: info
+        end subroutine ztrcon
+
+        subroutine ztrevc(side, howmny, select, n, T, ldt, &
+                          VL, ldvl, VR, ldvr, mm, m, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: side, howmny
+            logical,     intent(in)    :: select(*)
+            integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm
+            complex(ep), intent(in)    :: T(ldt,*)
+            complex(ep), intent(inout) :: VL(ldvl,*), VR(ldvr,*)
+            integer,     intent(out)   :: m
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine ztrevc
+
+        subroutine dtrsen(job, compq, select, n, T, ldt, Q, ldq, &
+                          WR, WI, m, S, SEP, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: job, compq
+            logical,   intent(in)    :: select(*)
+            integer,   intent(in)    :: n, ldt, ldq, lwork, liwork
+            real(ep),  intent(inout) :: T(ldt,*), Q(ldq,*)
+            real(ep),  intent(out)   :: WR(*), WI(*), S, SEP, work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtrsen
+
+        subroutine dhseqr(job, compz, n, ilo, ihi, H, ldh, WR, WI, &
+                          Z, ldz, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: job, compz
+            integer,   intent(in)    :: n, ilo, ihi, ldh, ldz, lwork
+            real(ep),  intent(inout) :: H(ldh,*), Z(ldz,*)
+            real(ep),  intent(out)   :: WR(*), WI(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dhseqr
+
+        subroutine ztrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo, trans, diag
+            integer,     intent(in)  :: n, nrhs, lda, ldb, ldx
+            complex(ep), intent(in)  :: A(lda,*), B(ldb,*), X(ldx,*)
+            complex(ep), intent(out) :: work(*)
+            real(ep),    intent(out) :: ferr(*), berr(*), rwork(*)
+            integer,     intent(out) :: info
+        end subroutine ztrrfs
+
         subroutine dgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
             import :: ep
             integer,  intent(in)    :: n, ilo, ihi, lda, lwork
@@ -561,6 +686,15 @@ module ref_quad_lapack
             integer,     intent(out)   :: info
         end subroutine zposv
 
+        subroutine zhegst(itype, uplo, n, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: itype, n, lda, ldb
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhegst
+
         subroutine zpotrf(uplo, n, A, lda, info)
             import :: ep
             character,   intent(in)    :: uplo
@@ -663,6 +797,65 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: tau(*), work(*)
             integer,     intent(out)   :: info
         end subroutine zhetrd
+
+        subroutine zunmbr(vect, side, trans, m, n, k, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: vect, side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmbr
+
+        subroutine ztzrzf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztzrzf
+
+        subroutine zunmrz(side, trans, m, n, k, l, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, l, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmrz
+
+        subroutine zggqrf(n, m, p, A, lda, taua, B, ldb, taub, &
+                          work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, m, p, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggqrf
+
+        subroutine zggrqf(m, p, n, A, lda, taua, B, ldb, taub, &
+                          work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, p, n, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggrqf
+
+        subroutine zunmtr(side, uplo, trans, m, n, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, uplo, trans
+            integer,     intent(in)    :: m, n, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmtr
 
         subroutine zunmhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
                           C, ldc, work, lwork, info)
@@ -792,6 +985,15 @@ module ref_quad_lapack
             real(ep) :: work(*)
             real(ep) :: r
         end function zlanhe
+
+        function zlansy(norm, uplo, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlansy
 
         function zlanhs(norm, n, A, lda, work) result(r)
             import :: ep
