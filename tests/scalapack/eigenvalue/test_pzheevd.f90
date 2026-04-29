@@ -68,8 +68,14 @@ program test_pzheevd
         call gather_matrix_z(n, n, mb, nb, Z_loc, Z_glob)
 
         if (my_rank == 0) then
-            allocate(A_ref(n, n), w_ref(n), work_ref(max(1, n * 64)), &
-                     rwork_ref(max(1, 3 * n)), iwork_ref(max(1, 5 * n + 3)))
+            ! zheevd JOBZ='V' wants LWORK >= 2*N + N**2; LRWORK >=
+            ! 1 + 5*N + 2*N**2; LIWORK >= 3 + 5*N. Earlier "n*64" sizing
+            ! was undersized at n=32, so zheevd returned info=-8 and
+            ! the report_case calls below never fired (JSON header-only).
+            allocate(A_ref(n, n), w_ref(n), &
+                     work_ref(max(1, 2 * n + n * n)), &
+                     rwork_ref(max(1, 1 + 5 * n + 2 * n * n)), &
+                     iwork_ref(max(1, 3 + 5 * n)))
             A_ref = A_herm
             call zheevd(jobz, uplos(i), n, A_ref, n, w_ref, &
                         work_ref, size(work_ref), rwork_ref, size(rwork_ref), &

@@ -27,33 +27,34 @@ suite but cannot pass with the current toolchain. Each entry documents
 the symptom so a future pass can re-enable a test once the underlying
 issue is fixed outside `tests/scalapack/`.
 
-## pdsyevx / pzheevx / pdsygvx / pzhegvx (RANGE-selector eigensolvers)
+## pdsyevx / pzheevx — FIXED
 
-- **Status**: The pdlaiect symbol clash that originally blocked these
-  tests has been dissolved by the std/extension archive split (see
-  the commit history around recipes/scalapack_c.yaml's `extra_renames`
-  field). Standard archive `scalapack_c` now owns the upstream
-  `pdlaiectb_/pdlaiectl_`; migrated archive `${LIB_PREFIX}scalapack_c`
-  owns the renamed `pqlaiectb_/pqlaiectl_` (etc.). The wrappers
-  `target_pdsyevx`/`target_pzheevx`/`target_pdstebz` are now in the
-  shared template (`tests/scalapack/common/target_scalapack_body.fypp`).
-- **Remaining symptom**: A `test_pdsyevx` driver computes eigenvalues
-  to full target precision (n=32 reports max_rel_err ≈ 1e-33 on
-  kind16, ~1e-19 on kind10, ~4e-32 on multifloats — all PASS the
-  precision check) but every PDSYEVX call leaves the heap in a
-  corrupted state — `free(): invalid pointer` aborts on first
-  deallocate after the call. The corruption is per-call (does not
-  require multiple sizes to surface) and target-independent. PDSYEV /
-  PDSYEVR / PDSYEVD on the same scaffold pass cleanly on all sizes,
-  so the issue is specific to PDSYEVX's bisection + inverse-iteration
-  workspace handling.
-- **Action**: Either find the upstream bug (likely an out-of-bounds
-  write in PDSYEVX's eigenvalue-cluster bookkeeping that corrupts
-  glibc's malloc free-lists) or write a custom safety harness that
-  catches/sandboxes the corruption so the test can still report
-  precision results. PDSTEBZ alone (the eigenvalue-only piece, no
-  eigenvectors) might be testable in isolation without the broken
-  cleanup.
+Root cause was upstream PJLAENV's strict S/D/C/Z precision-letter gate
+(external/scalapack-2.2.3/SRC/pjlaenv.f line 201-204) that returns the
+function result *uninitialised* when the routine name doesn't start
+with one of those letters. After migration, callers pass names like
+'PESYTTRD' / 'PXHETTRD' / 'PMSYTTRD' — the gate trips, ANB picks up a
+stack-resident garbage integer, NSYTRD_LWOPT overflows to INT32_MIN,
+the caller allocates a tiny WORK and the next call scribbles past it.
+Fixed via PJLAENV_EP (recipes/scalapack/extras/pjlaenv_ep.f) +
+extra_renames PJLAENV → PJLAENV_EP in scalapack.yaml. The same
+upstream bug affects LAPACK's ILAENV / ILAENV2STAGE / IPARAM2STAGE;
+those got the parallel ILAENV_EP / ILAENV2STAGE_EP / IPARAM2STAGE_EP
+treatment in lapack.yaml.
+
+A second (independent) bug surfaced after PJLAENV_EP unblocked the
+workspace query: target_pdsyevx and target_pzheevx allocated WORK_T(1)
+(or RWORK_T(1)) for the LQUERY call, but upstream P{D,Z}SYEVX writes
+WORK(1:3) on rank 0 (ABSTOL/VL/VU broadcast) before reporting the
+optimal size. AddressSanitizer caught it; bumped to (R)WORK_T(3) in
+the wrapper.
+
+Test drivers: tests/scalapack/eigenvalue/test_pdsyevx.f90 and
+test_pzheevx.f90 (RANGE='A', JOBZ='N'). Both PASS on kind10 / kind16 /
+multifloats to ~18 digits.
+
+pdsygvx / pzhegvx (the generalized eigensolver siblings) sit on the
+same code path and are unblocked by the same fix; drivers TBD.
 
 ## pdlanhs / pxlanhs — FIXED
 

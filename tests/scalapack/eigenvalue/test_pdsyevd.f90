@@ -68,8 +68,14 @@ program test_pdsyevd
         call gather_matrix(n, n, mb, nb, Z_loc, Z_glob)
 
         if (my_rank == 0) then
-            allocate(A_ref(n, n), w_ref(n), work_ref(max(1, n * 64)), &
-                     iwork_ref(max(1, 5 * n + 3)))
+            ! dsyevd JOBZ='V' wants LWORK >= 1 + 6*N + 2*N**2; LIWORK >=
+            ! 3 + 5*N. The previous "n*64" sizing was tight enough that
+            ! n=32 came up short and dsyevd returned info=-8, so the
+            ! report_case calls below never fired and the JSON came back
+            ! header-only.
+            allocate(A_ref(n, n), w_ref(n), &
+                     work_ref(max(1, 1 + 6 * n + 2 * n * n)), &
+                     iwork_ref(max(1, 3 + 5 * n)))
             A_ref = A_sym
             call dsyevd(jobz, uplos(i), n, A_ref, n, w_ref, &
                         work_ref, size(work_ref), iwork_ref, size(iwork_ref), info_ref)
