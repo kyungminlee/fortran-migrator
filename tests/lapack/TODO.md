@@ -91,3 +91,67 @@ cmake -S /tmp/stg-q -B /tmp/stg-q/build && cmake --build /tmp/stg-q/build -j8 --
 dgesvdq passes on the same target; the bug is specific to the complex variant.
 Test left in place; needs migrator-side investigation of the
 `xgesvdq` call sequence vs `dgesvdq`.
+
+## Remaining user-facing routines without test drivers (as of session end)
+
+The following user-facing entries from `tests/RESULT.md` still need test drivers.
+They are grouped by the original phase plan in `~/.claude/plans/i-want-to-merge-dynamic-crab.md`.
+
+### P8/P9/P10 — Bunch–Kaufman variants + Z-symmetric fillers
+
+D-only:
+  sytrf_aa, sytrf_aa_2stage, sytrf_rk, sytrf_rook,
+  sytf2_rk, sytf2_rook,
+  sytri, sytri2x, sytri_3x, sytri_rook, sycon_rook,
+  sytrs_aa, sytrs_aa_2stage, sytrs_rook, syswapr,
+  syconv, syconvf, syconvf_rook,
+  sysv_aa, sysv_aa_2stage, sysv_rk, sysv_rook,
+  sytrd_2stage, sytrd_sy2sb, sb2st_kernels
+
+Z-Hermitian (mirror set):
+  hetrf_aa, hetrf_aa_2stage, hetrf_rk, hetrf_rook,
+  hetf2_rk, hetf2_rook,
+  hetri, hetri2x, hetri_3x, hetri_rook, hecon_rook,
+  hetrs_aa, hetrs_aa_2stage, hetrs_rook, heswapr,
+  syconv (Z), syconvf (Z), syconvf_rook (Z),
+  hesv_aa, hesv_aa_2stage, hesv_rk, hesv_rook,
+  hetrd_2stage, hetrd_he2hb, hb2st_kernels
+
+Z-symmetric fillers:
+  zsymv, zsyr, zspmv, zspr, zsysv, zsyrfs, zsytrf, zsytri, zsytrs, zsycon,
+  zhpcon, zhprfs, zhpsvx, zspsvx
+
+Pattern is mostly a clone-and-modify of the existing `dsytrf` / `dsytrs` /
+`dsycon` / `dsyrfs` tests with the appropriate uplo/_aa/_rk/_rook variant
+specifier.  The test setup uses a deterministic SPD or Hermitian PD matrix
+and compares the ipiv vector + factor element-wise; both implementations
+follow the same pivot rule on inputs without ties.
+
+### P17 — Extra-precise expert drivers + gtsv/ptsv family
+
+  d/z × gbsvxx, gesvxx, posvxx, gerfsx, gbrfsx, porfsx, syrfsx, gtsvx, ptsvx, trsna
+  d × gtsv, d × ptsv
+
+The xx variants (`gesvxx`, `gerfsxx`, etc.) are the extra-precise iterative
+refinement family and are likely to be sensitive on `multifloats`; expect
+TODO entries during implementation.
+
+### P22 — Dynamic mode decomposition
+
+  d/z × gedmd, gedmdq
+
+DMD has a wide parameter surface (jobs/jobz/jobr/jobf/whtsvd) -- start with
+WHTSVD=1, JOBS='N', JOBZ='V', JOBR='F', JOBF='N' for a basic eigenvalue check.
+
+### Audit pending
+
+After all phases land, run the audit:
+
+```bash
+awk 'NR>=89 && NR<=1107 && /^\| ✓ \|/ {gsub(/^\| ✓ \| /,""); split($0,a,/ \|/); print a[1]}' tests/RESULT.md \
+  | while read r; do
+      ls tests/lapack/*/test_${r}.f90 >/dev/null 2>&1 || echo "MISSING: $r"
+    done
+```
+
+Expected output: empty (all user-facing routines covered).
