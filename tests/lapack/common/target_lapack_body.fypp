@@ -15872,13 +15872,13 @@ $:CPACK_INV('zsptri', C + 'sptri')
         integer,   intent(out)   :: info
         ${target_real}$, allocatable :: At(:,:), ABt(:,:), taut(:), work(:)
         integer :: lwork
-        allocate(At(lda, n), ABt(ldab, n), taut(max(1,n-kd-1)))
+        allocate(At(lda, n), ABt(ldab, n), taut(max(1,n-kd)))
         At = q2t_r(A(1:lda, 1:n))
         lwork = max(1, 4*kd*kd*n + 4*n*n)
         allocate(work(lwork))
         call ${R}$sytrd_sy2sb(uplo, n, kd, At, lda, ABt, ldab, taut, work, lwork, info)
         A(1:lda, 1:n) = t2q_r(At); AB(1:ldab, 1:n) = t2q_r(ABt)
-        tau(1:max(1,n-kd-1)) = t2q_r(taut)
+        tau(1:max(1,n-kd)) = t2q_r(taut)
     end subroutine
 
     subroutine target_zhetrd_he2hb(uplo, n, kd, A, lda, AB, ldab, tau, info)
@@ -15889,13 +15889,13 @@ $:CPACK_INV('zsptri', C + 'sptri')
         integer,     intent(out)   :: info
         ${target_complex}$, allocatable :: At(:,:), ABt(:,:), taut(:), work(:)
         integer :: lwork
-        allocate(At(lda, n), ABt(ldab, n), taut(max(1,n-kd-1)))
+        allocate(At(lda, n), ABt(ldab, n), taut(max(1,n-kd)))
         At = q2t_c(A(1:lda, 1:n))
         lwork = max(1, 4*kd*kd*n + 4*n*n)
         allocate(work(lwork))
         call ${C}$hetrd_he2hb(uplo, n, kd, At, lda, ABt, ldab, taut, work, lwork, info)
         A(1:lda, 1:n) = t2q_c(At); AB(1:ldab, 1:n) = t2q_c(ABt)
-        tau(1:max(1,n-kd-1)) = t2q_c(taut)
+        tau(1:max(1,n-kd)) = t2q_c(taut)
     end subroutine
 
 end module target_lapack
