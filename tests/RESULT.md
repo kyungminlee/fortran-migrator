@@ -1175,7 +1175,7 @@ _55 of 61 migrated entries have a dedicated test driver. 61 are user-facing (✓
 
 ## ScaLAPACK
 
-_141 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_144 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -1295,7 +1295,7 @@ _141 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 |  | pdormr2 | — | — | — |
 |  | pdormr3 | — | — | — |
 | ✓ | pdormrq | 18.29 | 33.06 | 31.03 |
-| ✓ | pdormrz | — | — | — |
+| ✓ | pdormrz | -0.17 ✗ | — | — |
 | ✓ | pdormtr | 14.37 | 27.48 | 26.10 |
 | ✓ | pdpbsv | 18.70 | 33.44 | 31.33 |
 | ✓ | pdpbtrf | 18.56 | 33.33 | 31.25 |
@@ -1338,7 +1338,7 @@ _141 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 |  | pdtrti2 | — | — | — |
 | ✓ | pdtrtri | 18.38 | 32.96 | 30.93 |
 | ✓ | pdtrtrs | 18.47 | 33.26 | 31.36 |
-| ✓ | pdtzrzf | — | — | — |
+| ✓ | pdtzrzf | 18.70 | 33.43 | 31.32 |
 |  | pdzsum1 | — | — | — |
 | ✓ | pzdbsv | 18.78 | exact | 31.36 |
 | ✓ | pzdbtrf | 18.76 | exact | 31.46 |
@@ -1458,7 +1458,7 @@ _141 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 |  | pztrti2 | — | — | — |
 | ✓ | pztrtri | 17.84 | 32.47 | 30.80 |
 | ✓ | pztrtrs | 18.53 | 33.39 | 31.28 |
-| ✓ | pztzrzf | — | — | — |
+| ✓ | pztzrzf | 18.64 | 33.24 | 31.39 |
 | ✓ | pzung2l | 18.14 | 32.69 | 30.81 |
 | ✓ | pzung2r | 18.09 | 32.78 | 30.85 |
 |  | pzungl2 | — | — | — |
