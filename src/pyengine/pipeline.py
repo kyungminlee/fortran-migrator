@@ -1103,7 +1103,9 @@ def run_c_convergence_report(recipe_path: Path, output_dir: Path,
 
     rename_map: dict[str, str] | None = None
     classification = None
-    if config.prefix_style == 'scalapack':
+    # Every C recipe except BLACS uses the rename-map-driven path —
+    # see the matching gate in run_migration().
+    if config.library != 'blacs':
         symbols = _collect_all_symbols(config, project_root)
         classification = classify_symbols(symbols)
         rename_map = classification.build_rename_map(target_mode)
@@ -1333,15 +1335,21 @@ def run_migration(recipe_path: Path, output_dir: Path,
                 if len(result['divergences']) > 10:
                     print(f'    ... ({len(result["divergences"]) - 10} more)')
     elif config.language == 'c':
-        # ScaLAPACK-style C libraries (PBLAS) use rename-map-driven
-        # cloning; BLACS-style (prefix 'direct') keeps the legacy path.
-        if config.prefix_style == 'scalapack':
+        # BLACS keeps the legacy hardcoded-pattern migrator (it carries
+        # MPI typedef patches, Bdef.h rewrites, MPI_REAL16 check
+        # generation, and BLACS-specific Cd*/BI_d* routine patterns
+        # that have no analogue in other C libraries). Every other C
+        # recipe (PBLAS / ScaLAPACK_C / XBLAS / future libraries) uses
+        # the generic rename-map-driven cloner — the prefix classifier
+        # discovers slot positions empirically, so the cloner is
+        # naming-convention-agnostic.
+        if config.library == 'blacs':
+            result = run_c_migration(config, output_dir, target_mode, dry_run)
+        else:
             result = run_c_migration(
                 config, output_dir, target_mode, dry_run,
                 classification=classification, rename_map=rename_map,
             )
-        else:
-            result = run_c_migration(config, output_dir, target_mode, dry_run)
         if not dry_run:
             print(f'\n  Cloned: {len(result["cloned"])} files')
             if result.get('divergences'):
