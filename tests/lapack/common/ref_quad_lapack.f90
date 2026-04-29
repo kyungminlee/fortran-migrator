@@ -5383,6 +5383,121 @@ module ref_quad_lapack
             integer,     intent(out)   :: ipiv(*), info
             complex(ep), intent(out)   :: work(*)
         end subroutine zhesv_rook
+
+        ! ── Bunch–Kaufman _rk / _3x family ─────────────────────────────
+        subroutine dsytrf_rk(uplo, n, A, lda, e, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: e(*), work(*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsytrf_rk
+
+        subroutine dsytf2_rk(uplo, n, A, lda, e, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: e(*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsytf2_rk
+
+        subroutine dsysv_rk(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: e(*), work(*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsysv_rk
+
+        subroutine dsytri_3x(uplo, n, A, lda, e, ipiv, work, nb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, nb
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(in)    :: e(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(n+nb+1, nb+3)
+            integer,   intent(out)   :: info
+        end subroutine dsytri_3x
+
+        subroutine zhetrf_rk(uplo, n, A, lda, e, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: e(*), work(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhetrf_rk
+
+        subroutine zhetf2_rk(uplo, n, A, lda, e, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: e(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhetf2_rk
+
+        subroutine zhesv_rk(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: e(*), work(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhesv_rk
+
+        subroutine zhetri_3x(uplo, n, A, lda, e, ipiv, work, nb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, nb
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: e(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(n+nb+1, nb+3)
+            integer,     intent(out)   :: info
+        end subroutine zhetri_3x
+
+        subroutine zsytrf_rk(uplo, n, A, lda, e, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: e(*), work(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsytrf_rk
+
+        subroutine zsytf2_rk(uplo, n, A, lda, e, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: e(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsytf2_rk
+
+        subroutine zsysv_rk(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: e(*), work(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsysv_rk
+
+        subroutine zsytri_3x(uplo, n, A, lda, e, ipiv, work, nb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, nb
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: e(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(n+nb+1, nb+3)
+            integer,     intent(out)   :: info
+        end subroutine zsytri_3x
     end interface
 
 end module ref_quad_lapack
