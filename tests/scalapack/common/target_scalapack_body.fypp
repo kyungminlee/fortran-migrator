@@ -81,7 +81,7 @@ module target_scalapack
     public :: target_pdtrrfs, target_pztrrfs
     public :: target_pdtrcon, target_pztrcon
     public :: target_pztrevc
-    public :: target_pdtrord
+    public :: target_pdtrord, target_pdtrsen
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdstebz, target_pdsyevx, target_pzheevx
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -574,6 +574,20 @@ $:IMPORT_R()
             integer,   intent(in)    :: descT(*), descQ(*)
             ${target_real}$, intent(inout) :: T(*), Q(*)
             ${target_real}$, intent(out)   :: WR(*), WI(*), work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine
+
+        subroutine ${R}$trsen(job, compq, select, para, n, T, it, jt, descT, &
+                              Q, iq, jq, descQ, WR, WI, m, S, SEP, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: job, compq
+            integer,   intent(in)    :: select(*)
+            integer,   intent(in)    :: para(6)
+            integer,   intent(in)    :: n, it, jt, iq, jq, lwork, liwork
+            integer,   intent(in)    :: descT(*), descQ(*)
+            ${target_real}$, intent(inout) :: T(*), Q(*)
+            ${target_real}$, intent(out)   :: WR(*), WI(*), S, SEP, work(*)
             integer,   intent(out)   :: m, iwork(*), info
         end subroutine
 
@@ -3198,6 +3212,42 @@ contains
             T(1:nt) = t2q_r(Tt)
             if (compq == 'V' .or. compq == 'v') Q(1:nq) = t2q_r(Qt)
             WR(1:n) = t2q_r(WRt); WI(1:n) = t2q_r(WIt)
+        end if
+    end subroutine
+
+    subroutine target_pdtrsen(job, compq, select, para, n, T, it, jt, descT, &
+                              Q, iq, jq, descQ, WR, WI, m, S, SEP, &
+                              work, lwork, iwork, liwork, info)
+        character, intent(in)    :: job, compq
+        integer,   intent(in)    :: select(*)
+        integer,   intent(in)    :: para(6)
+        integer,   intent(in)    :: n, it, jt, iq, jq, lwork, liwork
+        integer,   intent(in)    :: descT(9), descQ(9)
+        real(ep),  intent(inout) :: T(*), Q(*)
+        real(ep),  intent(out)   :: WR(*), WI(*), S, SEP, work(*)
+        integer,   intent(out)   :: m, iwork(*), info
+        integer :: nt, nq, lwt
+        ${target_real}$, allocatable :: Tt(:), Qt(:), WRt(:), WIt(:), work_t(:)
+        ${target_real}$ :: S_t, SEP_t
+        nt = nloc(descT); nq = nloc(descQ)
+        if (lwork == -1) then
+            allocate(Tt(max(1,nt)), Qt(max(1,nq)), WRt(max(1,n)), WIt(max(1,n)), work_t(1))
+            call ${R}$trsen(job, compq, select, para, n, Tt, it, jt, descT, &
+                             Qt, iq, jq, descQ, WRt, WIt, m, S_t, SEP_t, &
+                             work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(Tt(nt), Qt(nq), WRt(n), WIt(n), work_t(lwt))
+            Tt = q2t_r(T(1:nt))
+            if (compq == 'V' .or. compq == 'v') Qt = q2t_r(Q(1:nq))
+            call ${R}$trsen(job, compq, select, para, n, Tt, it, jt, descT, &
+                             Qt, iq, jq, descQ, WRt, WIt, m, S_t, SEP_t, &
+                             work_t, lwt, iwork, liwork, info)
+            T(1:nt) = t2q_r(Tt)
+            if (compq == 'V' .or. compq == 'v') Q(1:nq) = t2q_r(Qt)
+            WR(1:n) = t2q_r(WRt); WI(1:n) = t2q_r(WIt)
+            S = t2q_r(S_t); SEP = t2q_r(SEP_t)
         end if
     end subroutine
 

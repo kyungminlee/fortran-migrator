@@ -133,3 +133,17 @@ precision (32+ digits on kind16).
   cause as the existing pdpocon/pzpocon entry above.
 - **Action**: Fix or sandbox pd/pzpocon workspace handling, then
   re-enable a *posvx driver. Wrappers remain exposed.
+
+## pdtrsen — heap corruption on every call
+
+- **Status**: target_pdtrsen wrapper exists and the precision result
+  is correct (sorted eigenvalue spectrum agrees bit-equally with
+  LAPACK dtrsen), but every PDTRSEN call leaves the heap in a
+  corrupted state — `free(): invalid pointer` aborts on the next
+  deallocate. Same family as pdsyevx (heap corruption via internal
+  workspace bookkeeping).
+- **Action**: Either fix the upstream PDTRSEN workspace handling
+  or run pdtrsen in a sandbox so a single-call result can be reported
+  without the cleanup crash. Wrapper remains exposed; pdtrord (the
+  reorder-only sibling) does NOT exhibit the issue and ships a
+  passing driver.
