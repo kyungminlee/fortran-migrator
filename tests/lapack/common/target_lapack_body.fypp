@@ -120,6 +120,8 @@ module target_lapack
     public :: target_dgtsv, target_dptsv
     public :: target_dgtsvx, target_zgtsvx, target_dptsvx, target_zptsvx
     public :: target_dtrsna, target_ztrsna
+    public :: target_dsytrd_2stage, target_zhetrd_2stage
+    public :: target_dsytrd_sy2sb, target_zhetrd_he2hb
     public :: target_dpbcon, target_zpbcon, target_dppcon, target_zppcon
     public :: target_dptcon, target_zptcon
     public :: target_dspcon, target_zhpcon, target_zspcon
@@ -15817,6 +15819,83 @@ $:CPACK_INV('zsptri', C + 'sptri')
         call ${C}$trsna(job, howmny, sel, n, Tt, ldt, VLt, ldvl, VRt, ldvr, &
                         St, SEPt, mm, m, work, ldwork, rwork, info)
         S(1:mm) = t2q_r(St); SEP(1:mm) = t2q_r(SEPt)
+    end subroutine
+
+    ! ── 2-stage tridiag reductions ─────────────────────────────────
+    subroutine target_dsytrd_2stage(vect, uplo, n, A, lda, D, E, tau, info)
+        character, intent(in)    :: vect, uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: D(*), E(*), tau(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Dt(:), Et(:), taut(:), hous2(:), work(:)
+        ${target_real}$ :: hopt(1), wopt(1)
+        integer :: lhous2, lwork
+        allocate(At(lda, n), Dt(n), Et(max(1,n-1)), taut(max(1,n-1)))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$sytrd_2stage(vect, uplo, n, At, lda, Dt, Et, taut, hopt, -1, wopt, -1, info)
+        lhous2 = max(1, int(t2q_r(hopt(1))))
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        allocate(hous2(lhous2), work(lwork))
+        call ${R}$sytrd_2stage(vect, uplo, n, At, lda, Dt, Et, taut, hous2, lhous2, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et); tau(1:max(1,n-1)) = t2q_r(taut)
+    end subroutine
+
+    subroutine target_zhetrd_2stage(vect, uplo, n, A, lda, D, E, tau, info)
+        character,   intent(in)    :: vect, uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        real(ep),    intent(out)   :: D(*), E(*)
+        complex(ep), intent(out)   :: tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), taut(:), hous2(:), work(:)
+        ${target_real}$,    allocatable :: Dt(:), Et(:)
+        ${target_complex}$ :: hopt(1), wopt(1)
+        integer :: lhous2, lwork
+        allocate(At(lda, n), Dt(n), Et(max(1,n-1)), taut(max(1,n-1)))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$hetrd_2stage(vect, uplo, n, At, lda, Dt, Et, taut, hopt, -1, wopt, -1, info)
+        lhous2 = max(1, int(real(t2q_c(hopt(1)), ep)))
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(hous2(lhous2), work(lwork))
+        call ${C}$hetrd_2stage(vect, uplo, n, At, lda, Dt, Et, taut, hous2, lhous2, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        D(1:n) = t2q_r(Dt); E(1:max(1,n-1)) = t2q_r(Et); tau(1:max(1,n-1)) = t2q_c(taut)
+    end subroutine
+
+    subroutine target_dsytrd_sy2sb(uplo, n, kd, A, lda, AB, ldab, tau, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, kd, lda, ldab
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(out)   :: AB(ldab,*), tau(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), ABt(:,:), taut(:), work(:)
+        integer :: lwork
+        allocate(At(lda, n), ABt(ldab, n), taut(max(1,n-kd-1)))
+        At = q2t_r(A(1:lda, 1:n))
+        lwork = max(1, 4*kd*kd*n + 4*n*n)
+        allocate(work(lwork))
+        call ${R}$sytrd_sy2sb(uplo, n, kd, At, lda, ABt, ldab, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At); AB(1:ldab, 1:n) = t2q_r(ABt)
+        tau(1:max(1,n-kd-1)) = t2q_r(taut)
+    end subroutine
+
+    subroutine target_zhetrd_he2hb(uplo, n, kd, A, lda, AB, ldab, tau, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, kd, lda, ldab
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(out)   :: AB(ldab,*), tau(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), ABt(:,:), taut(:), work(:)
+        integer :: lwork
+        allocate(At(lda, n), ABt(ldab, n), taut(max(1,n-kd-1)))
+        At = q2t_c(A(1:lda, 1:n))
+        lwork = max(1, 4*kd*kd*n + 4*n*n)
+        allocate(work(lwork))
+        call ${C}$hetrd_he2hb(uplo, n, kd, At, lda, ABt, ldab, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At); AB(1:ldab, 1:n) = t2q_c(ABt)
+        tau(1:max(1,n-kd-1)) = t2q_c(taut)
     end subroutine
 
 end module target_lapack

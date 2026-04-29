@@ -92,56 +92,56 @@ dgesvdq passes on the same target; the bug is specific to the complex variant.
 Test left in place; needs migrator-side investigation of the
 `xgesvdq` call sequence vs `dgesvdq`.
 
-## Remaining user-facing routines without test drivers (as of session end)
+## Remaining user-facing routines without test drivers (as of 2026-04-29)
 
-The following user-facing entries from `tests/RESULT.md` still need test drivers.
-They are grouped by the original phase plan in `~/.claude/plans/i-want-to-merge-dynamic-crab.md`.
+The Bunch–Kaufman / Z-symmetric / packed / utility / 2-stage tridiag /
+gtsvx / ptsvx / trsna families are now covered (Phases P8a–P8f + 2-stage
+tridiag).  26 routines remain — they cluster into three categories of
+non-trivial work:
 
-### P8/P9/P10 — Bunch–Kaufman variants + Z-symmetric fillers
+### P17xx — Extra-precise iterative-refinement family (18 routines)
 
-D-only:
-  sytrf_aa, sytrf_aa_2stage, sytrf_rk, sytrf_rook,
-  sytf2_rk, sytf2_rook,
-  sytri, sytri2x, sytri_3x, sytri_rook, sycon_rook,
-  sytrs_aa, sytrs_aa_2stage, sytrs_rook, syswapr,
-  syconv, syconvf, syconvf_rook,
-  sysv_aa, sysv_aa_2stage, sysv_rk, sysv_rook,
-  sytrd_2stage, sytrd_sy2sb, sb2st_kernels
+  d/z × gbrfsx, gbsvxx, gerfsx, gesvxx, porfsx, posvxx, syrfsx, sysvxx
+  z × herfsx, hesvxx
 
-Z-Hermitian (mirror set):
-  hetrf_aa, hetrf_aa_2stage, hetrf_rk, hetrf_rook,
-  hetf2_rk, hetf2_rook,
-  hetri, hetri2x, hetri_3x, hetri_rook, hecon_rook,
-  hetrs_aa, hetrs_aa_2stage, hetrs_rook, heswapr,
-  syconv (Z), syconvf (Z), syconvf_rook (Z),
-  hesv_aa, hesv_aa_2stage, hesv_rk, hesv_rook,
-  hetrd_2stage, hetrd_he2hb, hb2st_kernels
+These have ~25-argument signatures including ERR_BNDS_NORM, ERR_BNDS_COMP,
+N_ERR_BNDS, NPARAMS, PARAMS for the extra-precise residual refinement.  The
+xx routines are also known sensitive on `multifloats`.  Expect to need
+careful workspace shapes and per-target tolerance bumps.
 
-Z-symmetric fillers:
-  zsymv, zsyr, zspmv, zspr, zsysv, zsyrfs, zsytrf, zsytri, zsytrs, zsycon,
-  zhpcon, zhprfs, zhpsvx, zspsvx
-
-Pattern is mostly a clone-and-modify of the existing `dsytrf` / `dsytrs` /
-`dsycon` / `dsyrfs` tests with the appropriate uplo/_aa/_rk/_rook variant
-specifier.  The test setup uses a deterministic SPD or Hermitian PD matrix
-and compares the ipiv vector + factor element-wise; both implementations
-follow the same pivot rule on inputs without ties.
-
-### P17 — Extra-precise expert drivers + gtsv/ptsv family
-
-  d/z × gbsvxx, gesvxx, posvxx, gerfsx, gbrfsx, porfsx, syrfsx, gtsvx, ptsvx, trsna
-  d × gtsv, d × ptsv
-
-The xx variants (`gesvxx`, `gerfsxx`, etc.) are the extra-precise iterative
-refinement family and are likely to be sensitive on `multifloats`; expect
-TODO entries during implementation.
-
-### P22 — Dynamic mode decomposition
+### P22 — Dynamic mode decomposition (4 routines)
 
   d/z × gedmd, gedmdq
 
-DMD has a wide parameter surface (jobs/jobz/jobr/jobf/whtsvd) -- start with
-WHTSVD=1, JOBS='N', JOBZ='V', JOBR='F', JOBF='N' for a basic eigenvalue check.
+DMD has a wide parameter surface (jobs/jobz/jobr/jobf/whtsvd).  Suggested
+starting point: WHTSVD=1, JOBS='N', JOBZ='V', JOBR='F', JOBF='N' for a
+basic eigenvalue check.
+
+### 2-stage band reductions (4 routines)
+
+  dsytrd_sy2sb, zhetrd_he2hb     — symmetric/Hermitian to banded
+  dsb2st_kernels, zhb2st_kernels — band-to-tridiag SBR kernels
+
+`dsytrd_sy2sb` workspace query returns invalid LWORK in the quad reference
+build (`ILAENV2STAGE` returns 0 / negative for the kind16 reference
+configuration), causing a `Fatal glibc error: malloc.c assertion failed`
+when the routine writes out-of-bounds in the workspace setup.  The same
+crash reproduces with a hand-sized large workspace (`4*kd*kd*n+4*n*n`),
+pointing to a deeper interaction between the migrator output and
+`ILAENV2STAGE`/blocking choices for these routines.
+
+`*sb2st_kernels` are the SBR (Successive Band Reduction) inner kernels and
+are normally driven by `*sb2st` / `*hb2st`.  Testing them in isolation
+requires constructing a partial band-reduction state that matches the
+kernel's mid-stream invariants — non-trivial, may not be worth standalone
+coverage if the orchestrator paths are tested.
+
+Reproduce sy2sb crash:
+```bash
+cd /home/kyungminlee/Code/fortran-migrator/src
+uv run python -m pyengine stage /tmp/stg-q --target kind16 --libraries blas lapack
+cmake --build /tmp/stg-q/build -j8 --target test_dsytrd_sy2sb   # would require restoring removed test
+```
 
 ### Audit pending
 

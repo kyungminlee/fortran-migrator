@@ -6084,6 +6084,44 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(ldwork,*)
             integer,     intent(out)   :: m, info
         end subroutine ztrsna
+
+        ! ── 2-stage tridiag reductions ──────────────────────────────
+        subroutine dsytrd_2stage(vect, uplo, n, A, lda, D, E, tau, hous2, lhous2, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: vect, uplo
+            integer,   intent(in)    :: n, lda, lhous2, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: D(*), E(*), tau(*), hous2(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrd_2stage
+
+        subroutine zhetrd_2stage(vect, uplo, n, A, lda, D, E, tau, hous2, lhous2, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: vect, uplo
+            integer,     intent(in)    :: n, lda, lhous2, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: tau(*), hous2(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrd_2stage
+
+        subroutine dsytrd_sy2sb(uplo, n, kd, A, lda, AB, ldab, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, lda, ldab, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: AB(ldab,*), tau(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrd_sy2sb
+
+        subroutine zhetrd_he2hb(uplo, n, kd, A, lda, AB, ldab, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, lda, ldab, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: AB(ldab,*), tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrd_he2hb
     end interface
 
 end module ref_quad_lapack
