@@ -4339,6 +4339,115 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: Z(ldz,*), work(*)
             integer,     intent(out)   :: m, iwork(*), ifail(*), info
         end subroutine zhegvx
+
+        ! P12 — RFP / packed / triangular-full storage conversion
+        subroutine dtfttp(transr, uplo, n, ARF, AP, info)
+            import :: ep
+            character, intent(in)  :: transr, uplo
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: ARF(0:*)
+            real(ep),  intent(out) :: AP(0:*)
+            integer,   intent(out) :: info
+        end subroutine dtfttp
+
+        subroutine ztfttp(transr, uplo, n, ARF, AP, info)
+            import :: ep
+            character,   intent(in)  :: transr, uplo
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: ARF(0:*)
+            complex(ep), intent(out) :: AP(0:*)
+            integer,     intent(out) :: info
+        end subroutine ztfttp
+
+        subroutine dtfttr(transr, uplo, n, ARF, A, lda, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(in)    :: ARF(0:*)
+            real(ep),  intent(inout) :: A(0:lda-1, 0:*)
+            integer,   intent(out)   :: info
+        end subroutine dtfttr
+
+        subroutine ztfttr(transr, uplo, n, ARF, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(in)    :: ARF(0:*)
+            complex(ep), intent(inout) :: A(0:lda-1, 0:*)
+            integer,     intent(out)   :: info
+        end subroutine ztfttr
+
+        subroutine dtpttf(transr, uplo, n, AP, ARF, info)
+            import :: ep
+            character, intent(in)  :: transr, uplo
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: AP(0:*)
+            real(ep),  intent(out) :: ARF(0:*)
+            integer,   intent(out) :: info
+        end subroutine dtpttf
+
+        subroutine ztpttf(transr, uplo, n, AP, ARF, info)
+            import :: ep
+            character,   intent(in)  :: transr, uplo
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: AP(0:*)
+            complex(ep), intent(out) :: ARF(0:*)
+            integer,     intent(out) :: info
+        end subroutine ztpttf
+
+        subroutine dtpttr(uplo, n, AP, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(in)    :: AP(*)
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dtpttr
+
+        subroutine ztpttr(uplo, n, AP, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(in)    :: AP(*)
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine ztpttr
+
+        subroutine dtrttf(transr, uplo, n, A, lda, ARF, info)
+            import :: ep
+            character, intent(in)  :: transr, uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(0:lda-1, 0:*)
+            real(ep),  intent(out) :: ARF(0:*)
+            integer,   intent(out) :: info
+        end subroutine dtrttf
+
+        subroutine ztrttf(transr, uplo, n, A, lda, ARF, info)
+            import :: ep
+            character,   intent(in)  :: transr, uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(0:lda-1, 0:*)
+            complex(ep), intent(out) :: ARF(0:*)
+            integer,     intent(out) :: info
+        end subroutine ztrttf
+
+        subroutine dtrttp(uplo, n, A, lda, AP, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*)
+            real(ep),  intent(out) :: AP(*)
+            integer,   intent(out) :: info
+        end subroutine dtrttp
+
+        subroutine ztrttp(uplo, n, A, lda, AP, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            complex(ep), intent(out) :: AP(*)
+            integer,     intent(out) :: info
+        end subroutine ztrttp
     end interface
 
 end module ref_quad_lapack
