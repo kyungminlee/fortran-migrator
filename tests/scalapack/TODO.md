@@ -119,3 +119,17 @@ precision (32+ digits on kind16).
   AF), or by rebuilding T from D/E/AF on rank 0 and checking
   T_L * X_got ≡ B_orig directly. Deferred until an upstream-doc
   read pins down exactly what each *trsv variant computes.
+
+## pdposvx / pzposvx — fail via internal pdpocon / pzpocon
+
+- **Status**: pdposvx and pzposvx wrappers exist. Drivers reliably
+  abort with "On entry to P{Q,Y}POCON parameter number 10 had an
+  illegal value", and on kind16 the gathered X disagrees with the
+  reference by 10^3. pdgesvx / pzgesvx pass cleanly on all targets.
+- **Diagnosis**: both *posvx drivers funnel through pd/pzpocon for
+  rcond. Param 10 is the work pointer; the workspace size that
+  *posvx passes into *pocon does not match upstream's expectations
+  (or upstream's pocon workspace contract is wrong). Same root
+  cause as the existing pdpocon/pzpocon entry above.
+- **Action**: Fix or sandbox pd/pzpocon workspace handling, then
+  re-enable a *posvx driver. Wrappers remain exposed.
