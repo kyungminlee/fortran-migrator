@@ -158,6 +158,28 @@ _KR_DECL_RE = re.compile(
 )
 
 
+# XBLAS f2c-bridge file naming: ``BLAS_dgemv_x-f2c.c`` carries the
+# Fortran-callable wrapper for the C routine ``BLAS_dgemv_x``. The
+# bridge files share the routine's stem with a ``-f2c`` decoration,
+# so they need the same precision-prefix rewrite as their parent
+# routine. The migrator keys on routine stems though, so we strip
+# this decoration before the rename-map lookup and re-append it on
+# the way out.
+_C_FILE_DECORATIONS: tuple[str, ...] = ('-f2c',)
+
+
+def _strip_decoration(stem: str) -> tuple[str, str]:
+    """Split ``BLAS_dgemv_x-f2c`` into (``BLAS_dgemv_x``, ``-f2c``).
+
+    Returns (base_stem, decoration). Returns (stem, '') if no known
+    decoration is present.
+    """
+    for deco in _C_FILE_DECORATIONS:
+        if stem.endswith(deco):
+            return stem[: -len(deco)], deco
+    return stem, ''
+
+
 def _redist_clone_stem(routine: str,
                        target_mode: TargetMode | None) -> str | None:
     """Clone-stem fallback for REDIST/SRC-style C files whose stems are
@@ -336,9 +358,15 @@ def _convert_kr_to_ansi(text: str) -> str:
                 body_start = k
                 break
         if body_start < 0:
-            # No opening brace found within file — bail out.
+            # No opening-brace-on-its-own-line found within file — bail
+            # out. We must not skip past ``j`` here because the
+            # signature might have been a false positive (e.g. an
+            # ``extern void FC_FUNC_(...)`` macro call in an XBLAS
+            # f2c-bridge whose real parameter list is on the *next*
+            # line). Resume at i+1 so subsequent lines still go
+            # through the loop.
             result.extend(sig_lines)
-            i = j + 1
+            i += 1
             continue
         decl_region_end = body_start
         decl_blob = '\n'.join(lines[j:body_start])
@@ -1125,6 +1153,13 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         for f in sorted(d.iterdir()):
             stem_upper = (f.stem[:-1] if f.stem.endswith('_')
                           else f.stem).upper()
+            # Also consider the decoration-stripped stem for skip
+            # matching. ``BLAS_cdot_c_s-f2c.c`` is a bridge for the
+            # already-skipped ``BLAS_cdot_c_s.c``; both should drop.
+            base_stem_for_skip, _deco_for_skip = _strip_decoration(
+                f.stem[:-1] if f.stem.endswith('_') else f.stem
+            )
+            base_stem_upper = base_stem_for_skip.upper()
             is_c_or_h = f.suffix.lower() in ('.c', '.h')
             is_header = f.suffix.lower() == '.h'
             is_copy = stem_upper in _copy
@@ -1140,11 +1175,24 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
             is_dispatcher = False
             if (f.suffix.lower() == '.c'
                     and stem_upper not in (rename_map or {})):
-                if _redist_clone_stem(f.stem, target_mode) is None:
+                # XBLAS f2c-bridge files (``BLAS_dgemv_x-f2c.c``) are
+                # not in rename_map under their decorated stem, but
+                # the cloning loop knows how to rewrite them via
+                # ``_strip_decoration``. Don't classify them as
+                # dispatchers; the cloning pass will produce the
+                # correctly-renamed output and the original copy
+                # would just collide with that.
+                base_stem, deco = _strip_decoration(
+                    f.stem[:-1] if f.stem.endswith('_') else f.stem
+                )
+                if (deco
+                        and base_stem.upper() in (rename_map or {})):
+                    pass  # cloned by the rename-map pass
+                elif _redist_clone_stem(f.stem, target_mode) is None:
                     is_dispatcher = True
             if not (is_c_or_h or is_copy):
                 continue
-            if stem_upper in _skip:
+            if stem_upper in _skip or base_stem_upper in _skip:
                 continue
             if (not copy_originals and not is_header and not is_copy
                     and not is_dispatcher):
@@ -1278,9 +1326,14 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     for f in entries:
         has_underscore = f.stem.endswith('_')
         routine = f.stem[:-1] if has_underscore else f.stem
-        upper_routine = routine.upper()
+        # XBLAS bridge files (``BLAS_dgemv_x-f2c.c``) share the
+        # routine stem of their parent ``BLAS_dgemv_x`` plus a
+        # decoration; strip it for the rename-map lookup and reapply
+        # to the output filename.
+        base_routine, decoration = _strip_decoration(routine)
+        upper_routine = base_routine.upper()
 
-        if upper_routine in _skip:
+        if upper_routine in _skip or routine.upper() in _skip:
             continue
 
         # REDIST-style files like ``pdgemr.c`` / ``pdgemr2.c`` /
@@ -1292,11 +1345,12 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
         # directly via the target's precision-family map.
         if (upper_routine in rename_map
                 and classification.get_family(upper_routine) is not None):
-            new_stem = rename_map[upper_routine].lower()
+            new_stem = rename_map[upper_routine].lower() + decoration
         else:
-            new_stem = _redist_clone_stem(routine, target_mode)
+            new_stem = _redist_clone_stem(base_routine, target_mode)
             if new_stem is None:
                 continue
+            new_stem = new_stem + decoration
         new_name = new_stem + ('_' if has_underscore else '') + f.suffix
         new_path = output_dir / new_name
 
