@@ -99,3 +99,8 @@ precision (32+ digits on kind16).
   helper exists; the wrappers remain exposed.
 
 (pzheev fix folded into the pxhetrd/pxheev entry above.)
+
+## pdormrz / pzunmrz — descriptor-alignment failure
+
+- **Symptom**: A test driver that invokes pdtzrzf followed by pdormrz('L', 'N', n_a, ncc, m_a, n_a-m_a, …) aborts in the internal PBETRAN dispatcher with "parameter number 11 had an illegal value", suggesting the m-by-n trapezoidal A's column distribution must align with C's row distribution in a way the simple "same MB/NB" descriptor pair doesn't satisfy.
+- **Action**: Defer until the descA/descC alignment study is done. The wrappers are exposed (target_pdormrz / target_pzunmrz) and compile, so re-enabling is just a driver-shape fix.

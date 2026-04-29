@@ -68,6 +68,7 @@ module target_scalapack
     public :: target_pdrscl, target_pzdrscl
     public :: target_pdrot
     public :: target_pzhegst
+    public :: target_pdtzrzf, target_pdormrz, target_pztzrzf, target_pzunmrz
     public :: target_pdstedc
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
@@ -921,6 +922,27 @@ $:IMPORT_R()
             ${target_real}$, intent(out)   :: work(*)
         end subroutine
 
+        subroutine ${R}$tzrzf(m, n, A, ia, ja, desca, tau, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${R}$ormrz(side, trans, m, n, k, l, A, ia, ja, desca, &
+                              tau, C, ic, jc, descc, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, ia, ja, ic, jc, lwork
+            integer,   intent(in)    :: desca(9), descc(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(in)    :: A(*), tau(*)
+            ${target_real}$, intent(inout) :: C(*)
+            ${target_real}$, intent(out)   :: work(*)
+        end subroutine
+
         subroutine ${R}$gelqf(m, n, A, ia, ja, desca, tau, work, lwork, info)
 $:IMPORT_R()
             integer, intent(in)    :: m, n, ia, ja, lwork
@@ -1385,6 +1407,27 @@ $:IMPORT_C()
 $:IMPORT_C()
             character, intent(in)    :: vect, side, trans
             integer,   intent(in)    :: m, n, k, ia, ja, ic, jc, lwork
+            integer,   intent(in)    :: desca(9), descc(9)
+            integer,   intent(out)   :: info
+            ${target_complex}$, intent(in)    :: A(*), tau(*)
+            ${target_complex}$, intent(inout) :: C(*)
+            ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$tzrzf(m, n, A, ia, ja, desca, tau, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: m, n, ia, ja, lwork
+            integer, intent(in)    :: desca(9)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*)
+            ${target_complex}$, intent(out)   :: tau(*), work(*)
+        end subroutine
+
+        subroutine ${C}$unmrz(side, trans, m, n, k, l, A, ia, ja, desca, &
+                              tau, C, ic, jc, descc, work, lwork, info)
+$:IMPORT_C()
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, ia, ja, ic, jc, lwork
             integer,   intent(in)    :: desca(9), descc(9)
             integer,   intent(out)   :: info
             ${target_complex}$, intent(in)    :: A(*), tau(*)
@@ -3601,6 +3644,57 @@ contains
         end if
     end subroutine
 
+    subroutine target_pdtzrzf(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        integer,  intent(in)    :: m, n, ia, ja, lwork
+        integer,  intent(in)    :: desca(9)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*)
+        real(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_real}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${R}$tzrzf(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$tzrzf(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            A(1:na) = t2q_r(At)
+            tau(1:ntau) = t2q_r(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pdormrz(side, trans, m, n, k, l, A, ia, ja, desca, &
+                              tau, C, ic, jc, descc, work, lwork, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, k, l, ia, ja, ic, jc, lwork
+        integer,   intent(in)    :: desca(9), descc(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(in)    :: A(*), tau(*)
+        real(ep),  intent(inout) :: C(*)
+        real(ep),  intent(out)   :: work(*)
+        integer :: na, nc, ntau, lwt
+        ${target_real}$, allocatable :: At(:), Ct(:), tau_t(:), work_t(:)
+        na = nloc(desca); nc = nloc(descc); ntau = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Ct(max(1,nc)), tau_t(ntau), work_t(1))
+            call ${R}$ormrz(side, trans, m, n, k, l, At, ia, ja, desca, &
+                             tau_t, Ct, ic, jc, descc, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Ct(nc), tau_t(ntau), work_t(lwt))
+            At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
+            tau_t(1:ntau) = q2t_r(tau(1:ntau))
+            call ${R}$ormrz(side, trans, m, n, k, l, At, ia, ja, desca, &
+                             tau_t, Ct, ic, jc, descc, work_t, lwt, info)
+            C(1:nc) = t2q_r(Ct)
+        end if
+    end subroutine
+
     subroutine target_pdgelqf(m, n, A, ia, ja, desca, tau, work, lwork, info)
         integer,  intent(in)    :: m, n, ia, ja, lwork
         integer,  intent(in)    :: desca(9)
@@ -4778,6 +4872,57 @@ contains
             At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
             tau_t(1:ntau) = q2t_c(tau(1:ntau))
             call ${C}$unmtr(side, uplo, trans, m, n, At, ia, ja, desca, &
+                             tau_t, Ct, ic, jc, descc, work_t, lwt, info)
+            C(1:nc) = t2q_c(Ct)
+        end if
+    end subroutine
+
+    subroutine target_pztzrzf(m, n, A, ia, ja, desca, tau, work, lwork, info)
+        integer,     intent(in)    :: m, n, ia, ja, lwork
+        integer,     intent(in)    :: desca(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*)
+        complex(ep), intent(out)   :: tau(*), work(*)
+        integer :: na, ntau, lwt
+        ${target_complex}$, allocatable :: At(:), tau_t(:), work_t(:)
+        na = nloc(desca); ntau = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), tau_t(ntau), work_t(1))
+            call ${C}$tzrzf(m, n, At, ia, ja, desca, tau_t, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), tau_t(ntau), work_t(lwt))
+            At = q2t_c(A(1:na))
+            call ${C}$tzrzf(m, n, At, ia, ja, desca, tau_t, work_t, lwt, info)
+            A(1:na) = t2q_c(At)
+            tau(1:ntau) = t2q_c(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pzunmrz(side, trans, m, n, k, l, A, ia, ja, desca, &
+                              tau, C, ic, jc, descc, work, lwork, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, k, l, ia, ja, ic, jc, lwork
+        integer,     intent(in)    :: desca(9), descc(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(in)    :: A(*), tau(*)
+        complex(ep), intent(inout) :: C(*)
+        complex(ep), intent(out)   :: work(*)
+        integer :: na, nc, ntau, lwt
+        ${target_complex}$, allocatable :: At(:), Ct(:), tau_t(:), work_t(:)
+        na = nloc(desca); nc = nloc(descc); ntau = max(1, locrows(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Ct(max(1,nc)), tau_t(ntau), work_t(1))
+            call ${C}$unmrz(side, trans, m, n, k, l, At, ia, ja, desca, &
+                             tau_t, Ct, ic, jc, descc, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Ct(nc), tau_t(ntau), work_t(lwt))
+            At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
+            tau_t(1:ntau) = q2t_c(tau(1:ntau))
+            call ${C}$unmrz(side, trans, m, n, k, l, At, ia, ja, desca, &
                              tau_t, Ct, ic, jc, descc, work_t, lwt, info)
             C(1:nc) = t2q_c(Ct)
         end if
