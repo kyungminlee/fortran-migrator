@@ -104,3 +104,18 @@ precision (32+ digits on kind16).
 
 - **Symptom**: A test driver that invokes pdtzrzf followed by pdormrz('L', 'N', n_a, ncc, m_a, n_a-m_a, …) aborts in the internal PBETRAN dispatcher with "parameter number 11 had an illegal value", suggesting the m-by-n trapezoidal A's column distribution must align with C's row distribution in a way the simple "same MB/NB" descriptor pair doesn't satisfy.
 - **Action**: Defer until the descA/descC alignment study is done. The wrappers are exposed (target_pdormrz / target_pzunmrz) and compile, so re-enabling is just a driver-shape fix.
+
+## *trsv (single-half banded/tridiag triangular solves) — driver semantics
+
+- **Status**: Wrappers exist for pdpttrsv/pzpttrsv, pddttrsv/pzdttrsv,
+  pdpbtrsv/pzpbtrsv, pddbtrsv/pzdbtrsv (interface signatures match
+  upstream — UPLO/TRANS/etc.).
+- **Symptom**: A naïve "verify pdpttrsv(L) ∘ pdpttrsv(U) ≡ pdpttrs"
+  test fails by 60-200x — the trsv routines do NOT compose to the
+  full LDL^T solve; the implicit D^-1 step lives only in the *trs
+  driver, not in the half-solves.
+- **Action**: Build a meaningful test by applying *trsv to a vector
+  built from the factor (forward-substitute against the L stored in
+  AF), or by rebuilding T from D/E/AF on rank 0 and checking
+  T_L * X_got ≡ B_orig directly. Deferred until an upstream-doc
+  read pins down exactly what each *trsv variant computes.
