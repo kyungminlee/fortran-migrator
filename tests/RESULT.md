@@ -1175,7 +1175,7 @@ _55 of 61 migrated entries have a dedicated test driver. 61 are user-facing (✓
 
 ## ScaLAPACK
 
-_150 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_151 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -1313,7 +1313,7 @@ _150 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pdptsv | 18.96 | 33.84 | 31.61 |
 | ✓ | pdpttrf | 19.17 | exact | 31.70 |
 | ✓ | pdpttrs | 18.98 | 33.84 | 31.40 |
-| ✓ | pdpttrsv | — | — | — |
+| ✓ | pdpttrsv | -2.28 ✗ | — | — |
 | ✓ | pdrot | 19.11 | exact | 31.89 |
 | ✓ | pdrscl | 19.17 | 33.74 | 31.72 |
 | ✓ | pdstebz | 18.86 | 33.80 | 31.62 |
