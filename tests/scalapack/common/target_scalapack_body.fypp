@@ -95,6 +95,7 @@ module target_scalapack
     public :: target_pdgeql2, target_pdgelq2, target_pdgerq2
     public :: target_pdgehrd, target_pdormhr, target_pdgehd2
     public :: target_pdsytrd, target_pdsygst, target_pdormtr
+    public :: target_pdsyntrd, target_pdsyttrd
     public :: target_pdgels
     public :: target_pdposv, target_pdpotri, target_pdgetri, target_pdtrtri
     public :: target_pdgebrd
@@ -1379,6 +1380,28 @@ $:IMPORT_R()
 
         subroutine ${R}$sytrd(uplo, n, A, ia, ja, desca, d, e, tau, &
                               work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja, lwork
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: d(*), e(*), tau(*), work(*)
+        end subroutine
+
+        subroutine ${R}$syntrd(uplo, n, A, ia, ja, desca, d, e, tau, &
+                               work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ia, ja, lwork
+            integer,   intent(in)    :: desca(9)
+            integer,   intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*)
+            ${target_real}$, intent(out)   :: d(*), e(*), tau(*), work(*)
+        end subroutine
+
+        subroutine ${R}$syttrd(uplo, n, A, ia, ja, desca, d, e, tau, &
+                               work, lwork, info)
 $:IMPORT_R()
             character, intent(in)    :: uplo
             integer,   intent(in)    :: n, ia, ja, lwork
@@ -5147,6 +5170,64 @@ contains
             At = q2t_r(A(1:na))
             call ${R}$sytrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
                              work_t, lwt, info)
+            A(1:na) = t2q_r(At)
+            d(1:nv) = t2q_r(dt); e(1:nv) = t2q_r(et)
+            tau(1:nv) = t2q_r(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pdsyntrd(uplo, n, A, ia, ja, desca, d, e, tau, &
+                               work, lwork, info)
+        ! 2-stage prototype tridiag reduction. Same signature as pdsytrd.
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, ia, ja, lwork
+        integer,   intent(in)    :: desca(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(inout) :: A(*)
+        real(ep),  intent(out)   :: d(*), e(*), tau(*), work(*)
+        integer :: na, nv, lwt
+        ${target_real}$, allocatable :: At(:), dt(:), et(:), tau_t(:), work_t(:)
+        na = nloc(desca); nv = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), dt(nv), et(nv), tau_t(nv), work_t(1))
+            call ${R}$syntrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
+                              work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), dt(nv), et(nv), tau_t(nv), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$syntrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
+                              work_t, lwt, info)
+            A(1:na) = t2q_r(At)
+            d(1:nv) = t2q_r(dt); e(1:nv) = t2q_r(et)
+            tau(1:nv) = t2q_r(tau_t)
+        end if
+    end subroutine
+
+    subroutine target_pdsyttrd(uplo, n, A, ia, ja, desca, d, e, tau, &
+                               work, lwork, info)
+        ! 2-stage tailored tridiag reduction. Same signature as pdsytrd.
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, ia, ja, lwork
+        integer,   intent(in)    :: desca(9)
+        integer,   intent(out)   :: info
+        real(ep),  intent(inout) :: A(*)
+        real(ep),  intent(out)   :: d(*), e(*), tau(*), work(*)
+        integer :: na, nv, lwt
+        ${target_real}$, allocatable :: At(:), dt(:), et(:), tau_t(:), work_t(:)
+        na = nloc(desca); nv = max(1, loccols(desca))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), dt(nv), et(nv), tau_t(nv), work_t(1))
+            call ${R}$syttrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
+                              work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), dt(nv), et(nv), tau_t(nv), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$syttrd(uplo, n, At, ia, ja, desca, dt, et, tau_t, &
+                              work_t, lwt, info)
             A(1:na) = t2q_r(At)
             d(1:nv) = t2q_r(dt); e(1:nv) = t2q_r(et)
             tau(1:nv) = t2q_r(tau_t)
