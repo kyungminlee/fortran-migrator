@@ -453,6 +453,40 @@ if(TARGET ${LIB_PREFIX}blas AND TARGET blas)
     target_link_libraries(${LIB_PREFIX}blas PUBLIC blas)
 endif()
 
+# 1.5. XBLAS (depends on BLAS).
+#
+# Netlib's Extra-Precise BLAS (1.0.248) is a C library that exposes
+# Level 1/2/3 BLAS-like entry points with an additional ``prec``
+# parameter selecting the internal accumulation precision
+# (single / double / extra). The migrated archive ``${LIB_PREFIX}xblas``
+# carries Q/X/E/Y clones (BLAS_qgemv_x, BLAS_xgemv_x, ...) of every
+# uniform-precision _x routine; mixed-input variants
+# (BLAS_dgemv_d_s_x, ...) are skipped by the recipe — they're not
+# expressible in a single extended-precision target and unreachable
+# from LAPACK.
+#
+# There is no standard-precision archive for XBLAS in this build:
+# nothing in the project links the regular C XBLAS today (LAPACK's
+# *_extended.f routines that *would* call into it are deferred to a
+# follow-up that adds a -DBUILD_XBLAS gate). We can revive a
+# standard archive when that need lands.
+add_migrated_c_library(xblas)
+if(TARGET ${LIB_PREFIX}xblas)
+    # f2c-bridge.h defaults to no Fortran-symbol mangling. gfortran
+    # emits lowercase + trailing underscore (the "Add_" convention),
+    # so define CONFIG_FC_UNDERSCORE to make the bridge produce
+    # ``blas_qgemv_x_`` etc. — matching what Fortran callers expect.
+    target_compile_definitions(${LIB_PREFIX}xblas PRIVATE
+        CONFIG_FC_UNDERSCORE)
+    if(TARGET xblas_common)
+        target_compile_definitions(xblas_common PRIVATE
+            CONFIG_FC_UNDERSCORE)
+    endif()
+    if(TARGET ${LIB_PREFIX}blas)
+        target_link_libraries(${LIB_PREFIX}xblas PUBLIC ${LIB_PREFIX}blas)
+    endif()
+endif()
+
 # 2. BLACS (no library deps, needs MPI).
 #
 # Standard archive ``blacs`` is built from the vendored upstream BLACS

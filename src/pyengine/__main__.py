@@ -713,6 +713,7 @@ def cmd_run(args):
 # Each entry is (library_name, recipe_filename).
 LIBRARY_ORDER = [
     ('blas',        'blas.yaml'),
+    ('xblas',       'xblas.yaml'),
     ('blacs',       'blacs.yaml'),
     ('lapack',      'lapack.yaml'),
     ('ptzblas',     'ptzblas.yaml'),
