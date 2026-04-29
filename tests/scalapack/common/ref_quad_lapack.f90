@@ -467,6 +467,27 @@ module ref_quad_lapack
             integer,     intent(out)   :: info
         end subroutine ztrevc
 
+        subroutine dtrsen(job, compq, select, n, T, ldt, Q, ldq, &
+                          WR, WI, m, S, SEP, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: job, compq
+            logical,   intent(in)    :: select(*)
+            integer,   intent(in)    :: n, ldt, ldq, lwork, liwork
+            real(ep),  intent(inout) :: T(ldt,*), Q(ldq,*)
+            real(ep),  intent(out)   :: WR(*), WI(*), S, SEP, work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtrsen
+
+        subroutine dhseqr(job, compz, n, ilo, ihi, H, ldh, WR, WI, &
+                          Z, ldz, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: job, compz
+            integer,   intent(in)    :: n, ilo, ihi, ldh, ldz, lwork
+            real(ep),  intent(inout) :: H(ldh,*), Z(ldz,*)
+            real(ep),  intent(out)   :: WR(*), WI(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dhseqr
+
         subroutine ztrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, &
                           X, ldx, ferr, berr, work, rwork, info)
             import :: ep
