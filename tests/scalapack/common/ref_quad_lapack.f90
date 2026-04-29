@@ -453,6 +453,20 @@ module ref_quad_lapack
             integer,     intent(out) :: info
         end subroutine ztrcon
 
+        subroutine ztrevc(side, howmny, select, n, T, ldt, &
+                          VL, ldvl, VR, ldvr, mm, m, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: side, howmny
+            logical,     intent(in)    :: select(*)
+            integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm
+            complex(ep), intent(in)    :: T(ldt,*)
+            complex(ep), intent(inout) :: VL(ldvl,*), VR(ldvr,*)
+            integer,     intent(out)   :: m
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine ztrevc
+
         subroutine ztrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, &
                           X, ldx, ferr, berr, work, rwork, info)
             import :: ep

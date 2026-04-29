@@ -80,6 +80,7 @@ module target_scalapack
     public :: target_pdgesvx, target_pdposvx, target_pzgesvx, target_pzposvx
     public :: target_pdtrrfs, target_pztrrfs
     public :: target_pdtrcon, target_pztrcon
+    public :: target_pztrevc
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdstebz, target_pdsyevx, target_pzheevx
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -543,6 +544,21 @@ $:IMPORT_RC()
             ${target_complex}$, intent(in)    :: A(*)
             ${target_complex}$, intent(out)   :: work(*)
             ${target_real}$,    intent(out)   :: rcond, rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$trevc(side, howmny, select, n, T, descT, &
+                              VL, descVL, VR, descVR, mm, m, work, rwork, info)
+$:IMPORT_RC()
+            character,   intent(in)    :: side, howmny
+            logical,     intent(in)    :: select(*)
+            integer,     intent(in)    :: n, mm
+            integer,     intent(in)    :: descT(9), descVL(9), descVR(9)
+            ${target_complex}$, intent(in)    :: T(*)
+            ${target_complex}$, intent(inout) :: VL(*), VR(*)
+            integer,     intent(out)   :: m
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: rwork(*)
             integer,     intent(out)   :: info
         end subroutine
 
@@ -3103,6 +3119,37 @@ contains
                              work_t, lwt, rwork_t, lrwt, info)
             rcond = t2q_r(rcond_t)
         end if
+    end subroutine
+
+    subroutine target_pztrevc(side, howmny, select, n, T, descT, &
+                              VL, descVL, VR, descVR, mm, m, work, rwork, info)
+        character,   intent(in)    :: side, howmny
+        logical,     intent(in)    :: select(*)
+        integer,     intent(in)    :: n, mm
+        integer,     intent(in)    :: descT(9), descVL(9), descVR(9)
+        complex(ep), intent(in)    :: T(*)
+        complex(ep), intent(inout) :: VL(*), VR(*)
+        integer,     intent(out)   :: m
+        complex(ep), intent(out)   :: work(*)
+        real(ep),    intent(out)   :: rwork(*)
+        integer,     intent(out)   :: info
+        integer :: nt, nvl, nvr, lw, lrw
+        ${target_complex}$, allocatable :: Tt(:), VLt(:), VRt(:), work_t(:)
+        ${target_real}$,    allocatable :: rwork_t(:)
+        nt  = nloc(descT)
+        nvl = nloc(descVL); nvr = nloc(descVR)
+        ! pztrevc workspace: WORK length 2*N (complex), RWORK length N (real).
+        lw  = max(1, 2 * n); lrw = max(1, n)
+        allocate(Tt(max(1,nt)), VLt(max(1,nvl)), VRt(max(1,nvr)), &
+                 work_t(lw), rwork_t(lrw))
+        Tt = q2t_c(T(1:nt))
+        if (side == 'L' .or. side == 'B') VLt = q2t_c(VL(1:nvl))
+        if (side == 'R' .or. side == 'B') VRt = q2t_c(VR(1:nvr))
+        call ${C}$trevc(side, howmny, select, n, Tt, descT, &
+                         VLt, descVL, VRt, descVR, mm, m, &
+                         work_t, rwork_t, info)
+        if (side == 'L' .or. side == 'B') VL(1:nvl) = t2q_c(VLt)
+        if (side == 'R' .or. side == 'B') VR(1:nvr) = t2q_c(VRt)
     end subroutine
 
     subroutine target_pddbsv(n, bwl, bwu, nrhs, A, ja, desca, &
