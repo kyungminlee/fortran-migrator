@@ -6006,6 +6006,84 @@ module ref_quad_lapack
             real(ep), intent(inout) :: d(*), e(*), B(ldb,*)
             integer,  intent(out)   :: info
         end subroutine dptsv
+
+        ! ── gtsvx / ptsvx / trsna ────────────────────────────────────
+        subroutine dgtsvx(fact, trans, n, nrhs, dl, d, du, dlf, df, duf, du2, ipiv, &
+                          B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: dl(*), d(*), du(*), B(ldb,*)
+            real(ep),  intent(inout) :: dlf(*), df(*), duf(*), du2(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgtsvx
+
+        subroutine zgtsvx(fact, trans, n, nrhs, dl, d, du, dlf, df, duf, du2, ipiv, &
+                          B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: dl(*), d(*), du(*), B(ldb,*)
+            complex(ep), intent(inout) :: dlf(*), df(*), duf(*), du2(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgtsvx
+
+        subroutine dptsvx(fact, n, nrhs, d, e, df, ef, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, info)
+            import :: ep
+            character, intent(in)    :: fact
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: d(*), e(*), B(ldb,*)
+            real(ep),  intent(inout) :: df(*), ef(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dptsvx
+
+        subroutine zptsvx(fact, n, nrhs, d, e, df, ef, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),    intent(in)    :: d(*)
+            complex(ep), intent(in)    :: e(*), B(ldb,*)
+            real(ep),    intent(inout) :: df(*)
+            complex(ep), intent(inout) :: ef(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zptsvx
+
+        subroutine dtrsna(job, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                          S, SEP, mm, m, work, ldwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: job, howmny
+            logical,   intent(in)    :: sel(*)
+            integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm, ldwork
+            real(ep),  intent(in)    :: T(ldt,*), VL(ldvl,*), VR(ldvr,*)
+            real(ep),  intent(out)   :: S(*), SEP(*), work(ldwork,*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtrsna
+
+        subroutine ztrsna(job, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                          S, SEP, mm, m, work, ldwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: job, howmny
+            logical,     intent(in)    :: sel(*)
+            integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm, ldwork
+            complex(ep), intent(in)    :: T(ldt,*), VL(ldvl,*), VR(ldvr,*)
+            real(ep),    intent(out)   :: S(*), SEP(*), rwork(*)
+            complex(ep), intent(out)   :: work(ldwork,*)
+            integer,     intent(out)   :: m, info
+        end subroutine ztrsna
     end interface
 
 end module ref_quad_lapack
