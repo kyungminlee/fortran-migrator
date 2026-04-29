@@ -5498,6 +5498,178 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(n+nb+1, nb+3)
             integer,     intent(out)   :: info
         end subroutine zsytri_3x
+
+        ! ── Aasen _aa / _aa_2stage family ──────────────────────────────
+        subroutine dsytrf_aa(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsytrf_aa
+
+        subroutine dsytrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(in)    :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs_aa
+
+        subroutine dsysv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsysv_aa
+
+        subroutine dsytrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, ltb, lwork
+            real(ep),  intent(inout) :: A(lda,*), TB(*)
+            integer,   intent(out)   :: ipiv(*), ipiv2(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsytrf_aa_2stage
+
+        subroutine dsytrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ltb, ldb
+            real(ep),  intent(in)    :: A(lda,*), TB(*)
+            integer,   intent(in)    :: ipiv(*), ipiv2(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs_aa_2stage
+
+        subroutine dsysv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ltb, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), TB(*)
+            integer,   intent(out)   :: ipiv(*), ipiv2(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsysv_aa_2stage
+
+        subroutine zhetrf_aa(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhetrf_aa
+
+        subroutine zhetrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrs_aa
+
+        subroutine zhesv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhesv_aa
+
+        subroutine zhetrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, ltb, lwork
+            complex(ep), intent(inout) :: A(lda,*), TB(*)
+            integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhetrf_aa_2stage
+
+        subroutine zhetrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ltb, ldb
+            complex(ep), intent(in)    :: A(lda,*), TB(*)
+            integer,     intent(in)    :: ipiv(*), ipiv2(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrs_aa_2stage
+
+        subroutine zhesv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ltb, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), TB(*)
+            integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhesv_aa_2stage
+
+        subroutine zsytrf_aa(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsytrf_aa
+
+        subroutine zsytrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsytrs_aa
+
+        subroutine zsysv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsysv_aa
+
+        subroutine zsytrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, ltb, lwork
+            complex(ep), intent(inout) :: A(lda,*), TB(*)
+            integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsytrf_aa_2stage
+
+        subroutine zsytrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ltb, ldb
+            complex(ep), intent(in)    :: A(lda,*), TB(*)
+            integer,     intent(in)    :: ipiv(*), ipiv2(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zsytrs_aa_2stage
+
+        subroutine zsysv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ltb, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), TB(*)
+            integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsysv_aa_2stage
     end interface
 
 end module ref_quad_lapack

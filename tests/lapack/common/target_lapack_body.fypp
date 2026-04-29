@@ -102,6 +102,12 @@ module target_lapack
     public :: target_dsytrf_rk, target_dsytf2_rk, target_dsysv_rk, target_dsytri_3x
     public :: target_zhetrf_rk, target_zhetf2_rk, target_zhesv_rk, target_zhetri_3x
     public :: target_zsytrf_rk, target_zsytf2_rk, target_zsysv_rk, target_zsytri_3x
+    public :: target_dsytrf_aa, target_dsytrs_aa, target_dsysv_aa
+    public :: target_dsytrf_aa_2stage, target_dsytrs_aa_2stage, target_dsysv_aa_2stage
+    public :: target_zhetrf_aa, target_zhetrs_aa, target_zhesv_aa
+    public :: target_zhetrf_aa_2stage, target_zhetrs_aa_2stage, target_zhesv_aa_2stage
+    public :: target_zsytrf_aa, target_zsytrs_aa, target_zsysv_aa
+    public :: target_zsytrf_aa_2stage, target_zsytrs_aa_2stage, target_zsysv_aa_2stage
     public :: target_dpbcon, target_zpbcon, target_dppcon, target_zppcon
     public :: target_dptcon, target_zptcon
     public :: target_dspcon, target_zhpcon, target_zspcon
@@ -14799,6 +14805,334 @@ $:CPACK_INV('zsptri', C + 'sptri')
         At = q2t_c(A(1:lda, 1:n)); et = q2t_c(e(1:n))
         call ${C}$sytri_3x(uplo, n, At, lda, et, ipiv, work, nb, info)
         A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    ! ── Aasen _aa wrappers ─────────────────────────────────────────
+    subroutine target_dsytrf_aa(uplo, n, A, lda, ipiv, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: At(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$sytrf_aa(uplo, n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sytrf_aa(uplo, n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_dsytrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ldb
+        real(ep),  intent(in)    :: A(lda,*)
+        integer,   intent(in)    :: ipiv(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$sytrs_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sytrs_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, lwork, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dsysv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ldb
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        integer,   intent(out)   :: ipiv(*), info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$sysv_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sysv_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dsytrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, lda, ltb
+        real(ep),  intent(inout) :: A(lda,*), TB(*)
+        integer,   intent(out)   :: ipiv(*), ipiv2(*), info
+        ${target_real}$, allocatable :: At(:,:), TBt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), TBt(ltb))
+        At = q2t_r(A(1:lda, 1:n))
+        TBt = q2t_r(TB(1:ltb))
+        call ${R}$sytrf_aa_2stage(uplo, n, At, lda, TBt, ltb, ipiv, ipiv2, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sytrf_aa_2stage(uplo, n, At, lda, TBt, ltb, ipiv, ipiv2, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        TB(1:ltb) = t2q_r(TBt)
+    end subroutine
+
+    subroutine target_dsytrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ltb, ldb
+        real(ep),  intent(in)    :: A(lda,*), TB(*)
+        integer,   intent(in)    :: ipiv(*), ipiv2(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), TBt(:), Bt(:,:)
+        allocate(At(lda, n), TBt(ltb), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n))
+        TBt = q2t_r(TB(1:ltb))
+        Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$sytrs_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_dsysv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ltb, ldb
+        real(ep),  intent(inout) :: A(lda,*), TB(*), B(ldb,*)
+        integer,   intent(out)   :: ipiv(*), ipiv2(*), info
+        ${target_real}$, allocatable :: At(:,:), TBt(:), Bt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), TBt(ltb), Bt(ldb, nrhs))
+        At = q2t_r(A(1:lda, 1:n))
+        TBt = q2t_r(TB(1:ltb))
+        Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$sysv_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sysv_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+        TB(1:ltb) = t2q_r(TBt)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_zhetrf_aa(uplo, n, A, lda, ipiv, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$hetrf_aa(uplo, n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hetrf_aa(uplo, n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zhetrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(in)    :: A(lda,*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$hetrs_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hetrs_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, lwork, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zhesv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$hesv_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hesv_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zhetrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda, ltb
+        complex(ep), intent(inout) :: A(lda,*), TB(*)
+        integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+        ${target_complex}$, allocatable :: At(:,:), TBt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), TBt(ltb))
+        At = q2t_c(A(1:lda, 1:n))
+        TBt = q2t_c(TB(1:ltb))
+        call ${C}$hetrf_aa_2stage(uplo, n, At, lda, TBt, ltb, ipiv, ipiv2, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hetrf_aa_2stage(uplo, n, At, lda, TBt, ltb, ipiv, ipiv2, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        TB(1:ltb) = t2q_c(TBt)
+    end subroutine
+
+    subroutine target_zhetrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ltb, ldb
+        complex(ep), intent(in)    :: A(lda,*), TB(*)
+        integer,     intent(in)    :: ipiv(*), ipiv2(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), TBt(:), Bt(:,:)
+        allocate(At(lda, n), TBt(ltb), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n))
+        TBt = q2t_c(TB(1:ltb))
+        Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$hetrs_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zhesv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ltb, ldb
+        complex(ep), intent(inout) :: A(lda,*), TB(*), B(ldb,*)
+        integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+        ${target_complex}$, allocatable :: At(:,:), TBt(:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), TBt(ltb), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n))
+        TBt = q2t_c(TB(1:ltb))
+        Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$hesv_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$hesv_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        TB(1:ltb) = t2q_c(TBt)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zsytrf_aa(uplo, n, A, lda, ipiv, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$sytrf_aa(uplo, n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$sytrf_aa(uplo, n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_zsytrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(in)    :: A(lda,*)
+        integer,     intent(in)    :: ipiv(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$sytrs_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$sytrs_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, lwork, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zsysv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        integer,     intent(out)   :: ipiv(*), info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$sysv_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$sysv_aa(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zsytrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda, ltb
+        complex(ep), intent(inout) :: A(lda,*), TB(*)
+        integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+        ${target_complex}$, allocatable :: At(:,:), TBt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), TBt(ltb))
+        At = q2t_c(A(1:lda, 1:n))
+        TBt = q2t_c(TB(1:ltb))
+        call ${C}$sytrf_aa_2stage(uplo, n, At, lda, TBt, ltb, ipiv, ipiv2, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$sytrf_aa_2stage(uplo, n, At, lda, TBt, ltb, ipiv, ipiv2, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        TB(1:ltb) = t2q_c(TBt)
+    end subroutine
+
+    subroutine target_zsytrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ltb, ldb
+        complex(ep), intent(in)    :: A(lda,*), TB(*)
+        integer,     intent(in)    :: ipiv(*), ipiv2(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), TBt(:), Bt(:,:)
+        allocate(At(lda, n), TBt(ltb), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n))
+        TBt = q2t_c(TB(1:ltb))
+        Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$sytrs_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_zsysv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ltb, ldb
+        complex(ep), intent(inout) :: A(lda,*), TB(*), B(ldb,*)
+        integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+        ${target_complex}$, allocatable :: At(:,:), TBt(:), Bt(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), TBt(ltb), Bt(ldb, nrhs))
+        At = q2t_c(A(1:lda, 1:n))
+        TBt = q2t_c(TB(1:ltb))
+        Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$sysv_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$sysv_aa_2stage(uplo, n, nrhs, At, lda, TBt, ltb, ipiv, ipiv2, Bt, ldb, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+        TB(1:ltb) = t2q_c(TBt)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
     end subroutine
 
 end module target_lapack
