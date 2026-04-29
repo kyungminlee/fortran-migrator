@@ -131,7 +131,11 @@ extra_migrate_files:
 prefix:
   style: scalapack  # P + S/D/C/Z
 
-skip_files: []
+skip_files:
+  # PJLAENV is replaced in the migrated archive by PJLAENV_EP (see
+  # extras/pjlaenv_ep.f and the extra_renames entry below). Skip the
+  # upstream file so it doesn't get migrated to a duplicate symbol.
+  - PJLAENV
 
 # Override D/Z-first canonical selection for pairs where the Z half
 # carries an upstream bug that the C half does not. PZUNGQL / PZUNML2
@@ -159,6 +163,14 @@ prefer_source:
 extra_renames:
   PDLAIECTB: P{RPU}LAIECTB
   PDLAIECTL: P{RPU}LAIECTL
+  # Reroute every PJLAENV call site to PJLAENV_EP, the extended-
+  # precision-aware variant shipped from recipes/scalapack/extras/.
+  # Upstream PJLAENV's strict S/D/C/Z gate returns uninitialised for
+  # migrated names like 'PESYTTRD' / 'PXHETTRD'. PJLAENV is added to
+  # skip_files below so the upstream pjlaenv.f isn't migrated
+  # (otherwise its FUNCTION PJLAENV declaration would be renamed to
+  # FUNCTION PJLAENV_EP and clash with our extras file).
+  PJLAENV: PJLAENV_EP
 
 # Override upstream ScaLAPACK 2.2.3 sources whose contents we patch
 # locally (without editing external/). The replacement file is in
@@ -168,25 +180,6 @@ extra_renames:
 source_overrides:
   pdlanhs.f: scalapack/source_overrides/pdlanhs.f
   pzlanhs.f: scalapack/source_overrides/pzlanhs.f
-  # Reroute every routine that calls PJLAENV with its own (now-migrated)
-  # subroutine name through PJLAENV_EP, the extended-precision-aware
-  # variant defined in recipes/scalapack/extras/pjlaenv_ep.f. Upstream
-  # PJLAENV's strict S/D/C/Z precision-letter gate would early-return
-  # uninitialized for migrated names like 'PESYTTRD' / 'PXHETTRD' /
-  # 'PQSYTTRD', leaking garbage block-size advice that overflows LWORK
-  # downstream and corrupts the heap on the next call. PJLAENV_EP
-  # accepts E/Q/M (real) and Y/X/W (complex) on top of S/D/C/Z and
-  # initializes its result to 0 as a safety net.
-  pdsyevr.f:  scalapack/source_overrides/pdsyevr.f
-  pdsyevx.f:  scalapack/source_overrides/pdsyevx.f
-  pdsygvx.f:  scalapack/source_overrides/pdsygvx.f
-  pzheevr.f:  scalapack/source_overrides/pzheevr.f
-  pzheevx.f:  scalapack/source_overrides/pzheevx.f
-  pzhegvx.f:  scalapack/source_overrides/pzhegvx.f
-  pdsyntrd.f: scalapack/source_overrides/pdsyntrd.f
-  pdsyttrd.f: scalapack/source_overrides/pdsyttrd.f
-  pzhentrd.f: scalapack/source_overrides/pzhentrd.f
-  pzhettrd.f: scalapack/source_overrides/pzhettrd.f
 
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix

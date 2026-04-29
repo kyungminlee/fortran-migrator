@@ -1,4 +1,4 @@
-*> \brief \b IPARAM2STAGE
+*> \brief \b IPARAM2STAGE_EP
 *
 *  =========== DOCUMENTATION ===========
 *
@@ -6,7 +6,7 @@
 *            http://www.netlib.org/lapack/explore-html/
 *
 *> \htmlonly
-*> Download IPARAM2STAGE + dependencies
+*> Download IPARAM2STAGE_EP + dependencies
 *> <a href="http://www.netlib.org/cgi-bin/netlibfiles.tgz?format=tgz&filename=/lapack/lapack_routine/iparam2stage.F">
 *> [TGZ]</a>
 *> <a href="http://www.netlib.org/cgi-bin/netlibfiles.zip?format=zip&filename=/lapack/lapack_routine/iparam2stage.F">
@@ -18,7 +18,7 @@
 *  Definition:
 *  ===========
 *
-*       INTEGER FUNCTION IPARAM2STAGE( ISPEC, NAME, OPTS,
+*       INTEGER FUNCTION IPARAM2STAGE_EP( ISPEC, NAME, OPTS,
 *                                    NI, NBI, IBI, NXI )
 *       #if defined(_OPENMP)
 *           use omp_lib
@@ -38,7 +38,7 @@
 *>      useful for xHETRD_2STAGE, xHETRD_HE2HB, xHETRD_HB2ST,
 *>      xGEBRD_2STAGE, xGEBRD_GE2GB, xGEBRD_GB2BD
 *>      and related subroutines for eigenvalue problems.
-*>      It is called whenever ILAENV is called with 17 <= ISPEC <= 21.
+*>      It is called whenever ILAENV_EP is called with 17 <= ISPEC <= 21.
 *>      It is called whenever ILAENV2STAGE is called with 1 <= ISPEC <= 5
 *>      with a direct conversion ISPEC + 16.
 *> \endverbatim
@@ -49,7 +49,7 @@
 *> \param[in] ISPEC
 *> \verbatim
 *>          ISPEC is integer scalar
-*>              ISPEC specifies which tunable parameter IPARAM2STAGE should
+*>              ISPEC specifies which tunable parameter IPARAM2STAGE_EP should
 *>              return.
 *>
 *>              ISPEC=17: the optimal blocksize nb for the reduction to
@@ -150,7 +150,7 @@
 *> \endverbatim
 *>
 *  =====================================================================
-      INTEGER FUNCTION IPARAM2STAGE( ISPEC, NAME, OPTS,
+      INTEGER FUNCTION IPARAM2STAGE_EP( ISPEC, NAME, OPTS,
      $                              NI, NBI, IBI, NXI )
 #if defined(_OPENMP)
       use omp_lib
@@ -177,16 +177,19 @@
       INTRINSIC          CHAR, ICHAR, MAX
 *     ..
 *     .. External Functions ..
-      INTEGER            ILAENV
+      INTEGER            ILAENV_EP
       LOGICAL            LSAME
-      EXTERNAL           ILAENV, LSAME
+      EXTERNAL           ILAENV_EP, LSAME
 *     ..
 *     .. Executable Statements ..
+*
+*     Safety: initialize the result so we can never return uninitialized.
+      IPARAM2STAGE_EP = 0
 *
 *     Invalid value for ISPEC
 *
       IF( (ISPEC.LT.17).OR.(ISPEC.GT.21) ) THEN
-          IPARAM2STAGE = -1
+          IPARAM2STAGE_EP = -1
           RETURN
       ENDIF
 *
@@ -204,7 +207,7 @@
 *
 *        Convert NAME to upper case if the first character is lower case.
 *
-         IPARAM2STAGE = -1
+         IPARAM2STAGE_EP = -1
          SUBNAM = NAME
          IC = ICHAR( SUBNAM( 1: 1 ) )
          IZ = ICHAR( 'Z' )
@@ -253,33 +256,19 @@
          END IF
 *
          PREC  = SUBNAM( 1: 1 )
-*
-*        fortran-migrator UB-03 patch: extended-precision targets
-*        (kind10 / kind16 / multifloats) clone DSYTRD_2STAGE et al.
-*        with their own real/complex prefixes, and the migrator
-*        rewrites the string literal passed in NAME to match. Map
-*        those prefixes back to the canonical S/D/C/Z so the
-*        precision check below accepts them and the SUBNAM(1:1)+
-*        'GEQRF' construction at the bottom dispatches via ILAENV.
-*        Real prefixes:    Q (kind16), E (kind10), M (multifloats) -> D
-*        Complex prefixes: X (kind16), Y (kind10), W (multifloats) -> Z
-*
-         IF( PREC.EQ.'Q' .OR. PREC.EQ.'E' .OR. PREC.EQ.'M' ) THEN
-            PREC = 'D'
-            SUBNAM( 1:1 ) = 'D'
-         ELSE IF( PREC.EQ.'X' .OR. PREC.EQ.'Y' .OR. PREC.EQ.'W' ) THEN
-            PREC = 'Z'
-            SUBNAM( 1:1 ) = 'Z'
-         END IF
          ALGO  = SUBNAM( 4: 6 )
          STAG  = SUBNAM( 8:12 )
-         RPREC = PREC.EQ.'S' .OR. PREC.EQ.'D'
-         CPREC = PREC.EQ.'C' .OR. PREC.EQ.'Z'
+*        Recognize migrated extended-precision letters in addition to
+*        S/D/C/Z (see ilaenv_ep.f for the rationale).
+         RPREC = PREC.EQ.'S' .OR. PREC.EQ.'D' .OR.
+     $           PREC.EQ.'E' .OR. PREC.EQ.'Q' .OR. PREC.EQ.'M'
+         CPREC = PREC.EQ.'C' .OR. PREC.EQ.'Z' .OR.
+     $           PREC.EQ.'Y' .OR. PREC.EQ.'X' .OR. PREC.EQ.'W'
 *
 *        Invalid value for PRECISION
 *
          IF( .NOT.( RPREC .OR. CPREC ) ) THEN
-             IPARAM2STAGE = -1
+             IPARAM2STAGE_EP = -1
              RETURN
          ENDIF
       ENDIF
@@ -318,8 +307,8 @@
                IB = 16
             ENDIF
          ENDIF
-         IF( ISPEC.EQ.17 ) IPARAM2STAGE = KD
-         IF( ISPEC.EQ.18 ) IPARAM2STAGE = IB
+         IF( ISPEC.EQ.17 ) IPARAM2STAGE_EP = KD
+         IF( ISPEC.EQ.18 ) IPARAM2STAGE_EP = IB
 *
       ELSE IF ( ISPEC .EQ. 19 ) THEN
 *
@@ -336,9 +325,9 @@
             LHOUS = MAX( 1, 4*NI ) + IBI
          ENDIF
          IF( LHOUS.GE.0 ) THEN
-            IPARAM2STAGE = LHOUS
+            IPARAM2STAGE_EP = LHOUS
          ELSE
-            IPARAM2STAGE = -1
+            IPARAM2STAGE_EP = -1
          ENDIF
 *
       ELSE IF ( ISPEC .EQ. 20 ) THEN
@@ -359,9 +348,9 @@
          LWORK        = -1
          SUBNAM(1:1)  = PREC
          SUBNAM(2:6)  = 'GEQRF'
-         QROPTNB      = ILAENV( 1, SUBNAM, ' ', NI, NBI, -1, -1 )
+         QROPTNB      = ILAENV_EP( 1, SUBNAM, ' ', NI, NBI, -1, -1 )
          SUBNAM(2:6)  = 'GELQF'
-         LQOPTNB      = ILAENV( 1, SUBNAM, ' ', NBI, NI, -1, -1 )
+         LQOPTNB      = ILAENV_EP( 1, SUBNAM, ' ', NBI, NI, -1, -1 )
 *        Could be QR or LQ for TRD and the max for BRD
          FACTOPTNB    = MAX(QROPTNB, LQOPTNB)
          IF( ALGO.EQ.'TRD' ) THEN
@@ -388,17 +377,17 @@
          LWORK = MAX ( 1, LWORK )
 
          IF( LWORK.GT.0 ) THEN
-            IPARAM2STAGE = LWORK
+            IPARAM2STAGE_EP = LWORK
          ELSE
-            IPARAM2STAGE = -1
+            IPARAM2STAGE_EP = -1
          ENDIF
 *
       ELSE IF ( ISPEC .EQ. 21 ) THEN
 *
 *     ISPEC = 21 for future use
-         IPARAM2STAGE = NXI
+         IPARAM2STAGE_EP = NXI
       ENDIF
 *
-*     ==== End of IPARAM2STAGE ====
+*     ==== End of IPARAM2STAGE_EP ====
 *
       END

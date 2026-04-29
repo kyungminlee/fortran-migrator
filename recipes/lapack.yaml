@@ -21,6 +21,18 @@ extra_symbol_dirs:
 extra_migrate_files:
   - external/lapack-3.12.1/INSTALL/dlamch.f
   - external/lapack-3.12.1/INSTALL/droundup_lwork.f
+  # ILAENV_EP / ILAENV2STAGE_EP / IPARAM2STAGE_EP — extended-precision-
+  # aware variants of the LAPACK environmental-inquiry helpers. Lives
+  # under recipes/lapack/extras/ rather than external/ because they
+  # are new symbols introduced by the migrator (no upstream
+  # counterpart). The migrator post-pass automatically rewrites every
+  # call site of ILAENV / ILAENV2STAGE / IPARAM2STAGE in migrated
+  # files to the *_EP variants — sidestepping the upstream S/D/C/Z
+  # precision-letter gate that returns uninitialised for migrated
+  # routine names like 'EGEMM'/'PESYTTRD'/'YHETRD'.
+  - recipes/lapack/extras/ilaenv_ep.f
+  - recipes/lapack/extras/ilaenv2stage_ep.f
+  - recipes/lapack/extras/iparam2stage_ep.F
 
 prefix:
   style: direct
@@ -74,28 +86,19 @@ copy_files:
   - LA_XISNAN_EP
   - LA_XISNAN_MF
 
-# Hand-patched overrides. With multifloats prefixes M (real) and W
-# (complex), no BLAS routine renames collide with LAPACK locals, so
-# the per-routine overrides previously needed for T/V (TSCAL collisions
-# in *latbs/*latps/*latrs and VCOPY collisions in pXlahqr/pXlaqr1) are
-# no longer required. Only the iparam2stage gate still needs patching
-# so 2-stage routines get a non-bogus LWORK back; without it, the
-# migrated name `'MSYTRD_2STAGE'` falls through iparam2stage's S/D/C/Z
-# gate and IPARAM2STAGE returns -1 → LWMIN < actual workspace.
-overrides:
-  multifloats:
-    src_dir: lapack/mf_overrides
-    files:
-      - iparam2stage.F
-  # Same iparam2stage patch is needed for kind16 (prefixes Q/X) and
-  # kind10 (E/Y). Reuse the file from lapack/mf_overrides since the
-  # patched logic recognizes all six migrator prefixes — the file is
-  # not target-specific, only the wiring is.
-  kind16:
-    src_dir: lapack/mf_overrides
-    files:
-      - iparam2stage.F
-  kind10:
-    src_dir: lapack/mf_overrides
-    files:
-      - iparam2stage.F
+# Reroute every ILAENV / ILAENV2STAGE / IPARAM2STAGE call site in
+# migrated source to the *_EP variants shipped from
+# recipes/lapack/extras/. The upstream env-inquiry helpers gate on
+# the routine name's precision letter being one of S/D/C/Z; for
+# migrated names like 'EGEMM' / 'PESYTTRD' / 'MSYTRD_2STAGE' the gate
+# fires and the function returns *uninitialised* (ILAENV/ILAENV2STAGE)
+# or -1 (IPARAM2STAGE). The *_EP variants accept E/Q/M (real) and
+# Y/X/W (complex) on top of S/D/C/Z and initialise their result to 0
+# as a safety net. See recipes/lapack/extras/*.f for the patched
+# bodies. The original ILAENV/ILAENV2STAGE/IPARAM2STAGE entries are
+# already in skip_files above, so this rename does not duplicate
+# upstream symbols in the migrated archive.
+extra_renames:
+  ILAENV: ILAENV_EP
+  ILAENV2STAGE: ILAENV2STAGE_EP
+  IPARAM2STAGE: IPARAM2STAGE_EP
