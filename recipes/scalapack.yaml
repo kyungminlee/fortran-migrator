@@ -29,6 +29,14 @@ extra_symbol_dirs:
 # excluded so the final link isn't ambushed by duplicate xxdotc_/
 # xxdotu_ symbols across two archives.
 extra_migrate_files:
+  # PJLAENV_EP — extended-precision-aware variant of PJLAENV. Lives
+  # under recipes/scalapack/extras/ rather than external/ because it
+  # is a new symbol introduced by the migrator (not a swap of an
+  # upstream file). The 10 callers that pass their own migrated name
+  # to PJLAENV are rerouted via source_overrides below to call
+  # PJLAENV_EP instead, sidestepping upstream PJLAENV's strict
+  # S/D/C/Z precision-letter gate.
+  - recipes/scalapack/extras/pjlaenv_ep.f
   - external/scalapack-2.2.3/TOOLS/ccdotc.f
   - external/scalapack-2.2.3/TOOLS/ccdotu.f
   - external/scalapack-2.2.3/TOOLS/chk1mat.f
@@ -160,6 +168,25 @@ extra_renames:
 source_overrides:
   pdlanhs.f: scalapack/source_overrides/pdlanhs.f
   pzlanhs.f: scalapack/source_overrides/pzlanhs.f
+  # Reroute every routine that calls PJLAENV with its own (now-migrated)
+  # subroutine name through PJLAENV_EP, the extended-precision-aware
+  # variant defined in recipes/scalapack/extras/pjlaenv_ep.f. Upstream
+  # PJLAENV's strict S/D/C/Z precision-letter gate would early-return
+  # uninitialized for migrated names like 'PESYTTRD' / 'PXHETTRD' /
+  # 'PQSYTTRD', leaking garbage block-size advice that overflows LWORK
+  # downstream and corrupts the heap on the next call. PJLAENV_EP
+  # accepts E/Q/M (real) and Y/X/W (complex) on top of S/D/C/Z and
+  # initializes its result to 0 as a safety net.
+  pdsyevr.f:  scalapack/source_overrides/pdsyevr.f
+  pdsyevx.f:  scalapack/source_overrides/pdsyevx.f
+  pdsygvx.f:  scalapack/source_overrides/pdsygvx.f
+  pzheevr.f:  scalapack/source_overrides/pzheevr.f
+  pzheevx.f:  scalapack/source_overrides/pzheevx.f
+  pzhegvx.f:  scalapack/source_overrides/pzhegvx.f
+  pdsyntrd.f: scalapack/source_overrides/pdsyntrd.f
+  pdsyttrd.f: scalapack/source_overrides/pdsyttrd.f
+  pzhentrd.f: scalapack/source_overrides/pzhentrd.f
+  pzhettrd.f: scalapack/source_overrides/pzhettrd.f
 
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix
