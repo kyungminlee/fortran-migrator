@@ -5032,6 +5032,103 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: maxc2nrmk, relmaxc2nrmk, rwork(*)
             complex(ep), intent(out)   :: tau(*), work(*)
         end subroutine zgeqp3rk
+
+        ! P15 — CS decomposition + bdsvdx + bbcsd
+        subroutine dbdsvdx(uplo, jobz, range, n, D, E, vl, vu, il, iu, &
+                           ns, S, Z, ldz, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo, jobz, range
+            integer,   intent(in)  :: n, il, iu, ldz
+            real(ep),  intent(in)  :: D(*), E(*), vl, vu
+            integer,   intent(out) :: ns, iwork(*), info
+            real(ep),  intent(out) :: S(*), Z(ldz,*), work(*)
+        end subroutine dbdsvdx
+
+        subroutine dbbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                          theta, phi, U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                          B11d, B11e, B12d, B12e, B21d, B21e, B22d, B22e, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans
+            integer,   intent(in)    :: m, p, q, ldu1, ldu2, ldv1t, ldv2t, lwork
+            real(ep),  intent(inout) :: theta(*), phi(*)
+            real(ep),  intent(inout) :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+            real(ep),  intent(out)   :: B11d(*), B11e(*), B12d(*), B12e(*)
+            real(ep),  intent(out)   :: B21d(*), B21e(*), B22d(*), B22e(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dbbcsd
+
+        subroutine zbbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                          theta, phi, U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                          B11d, B11e, B12d, B12e, B21d, B21e, B22d, B22e, &
+                          rwork, lrwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans
+            integer,     intent(in)    :: m, p, q, ldu1, ldu2, ldv1t, ldv2t, lrwork
+            real(ep),    intent(inout) :: theta(*), phi(*)
+            complex(ep), intent(inout) :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+            real(ep),    intent(out)   :: B11d(*), B11e(*), B12d(*), B12e(*)
+            real(ep),    intent(out)   :: B21d(*), B21e(*), B22d(*), B22e(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zbbcsd
+
+        subroutine dorbdb(trans, signs, m, p, q, X11, ldx11, X12, ldx12, &
+                          X21, ldx21, X22, ldx22, theta, phi, &
+                          taup1, taup2, tauq1, tauq2, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans, signs
+            integer,   intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22, lwork
+            real(ep),  intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+            real(ep),  intent(out)   :: theta(*), phi(*), taup1(*), taup2(*), tauq1(*), tauq2(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorbdb
+
+        subroutine zunbdb(trans, signs, m, p, q, X11, ldx11, X12, ldx12, &
+                          X21, ldx21, X22, ldx22, theta, phi, &
+                          taup1, taup2, tauq1, tauq2, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans, signs
+            integer,     intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22, lwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+            real(ep),    intent(out)   :: theta(*), phi(*)
+            complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), tauq2(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunbdb
+
+        recursive subroutine dorcsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
+                                    m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, &
+                                    X22, ldx22, theta, U1, ldu1, U2, ldu2, &
+                                    V1t, ldv1t, V2t, ldv2t, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans, signs
+            integer,   intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+            integer,   intent(in)    :: ldu1, ldu2, ldv1t, ldv2t, lwork
+            real(ep),  intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+            real(ep),  intent(out)   :: theta(*)
+            real(ep),  intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dorcsd
+
+        recursive subroutine zuncsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
+                                    m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, &
+                                    X22, ldx22, theta, U1, ldu1, U2, ldu2, &
+                                    V1t, ldv1t, V2t, ldv2t, &
+                                    work, lwork, rwork, lrwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans, signs
+            integer,     intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+            integer,     intent(in)    :: ldu1, ldu2, ldv1t, ldv2t, lwork, lrwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+            real(ep),    intent(out)   :: theta(*)
+            complex(ep), intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zuncsd
     end interface
 
 end module ref_quad_lapack

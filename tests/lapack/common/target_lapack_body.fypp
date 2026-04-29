@@ -253,6 +253,11 @@ module target_lapack
     public :: target_dorhr_col, target_zunhr_col
     public :: target_dgetsqrhrt, target_zgetsqrhrt
     public :: target_dgeqp3rk, target_zgeqp3rk
+    ! P15 — CS decomposition + bdsvdx + bbcsd
+    public :: target_dbdsvdx
+    public :: target_dbbcsd, target_zbbcsd
+    public :: target_dorbdb, target_zunbdb
+    public :: target_dorcsd, target_zuncsd
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -13835,6 +13840,264 @@ $:CPACK_INV('zsptri', C + 'sptri')
         A(1:lda, 1:ncols) = t2q_c(At)
         tau(1:min(m,n)) = t2q_c(taut)
         maxc2nrmk = t2q_r(m2k); relmaxc2nrmk = t2q_r(rm2k)
+    end subroutine
+
+    ! ----- P15 CS decomposition + bdsvdx -----
+
+    subroutine target_dbdsvdx(uplo, jobz, range, n, D, E, vl, vu, il, iu, &
+                              ns, S, Z, ldz, info)
+        character, intent(in)  :: uplo, jobz, range
+        integer,   intent(in)  :: n, il, iu, ldz
+        real(ep),  intent(in)  :: D(*), E(*), vl, vu
+        integer,   intent(out) :: ns, info
+        real(ep),  intent(out) :: S(*), Z(ldz,*)
+        ${target_real}$, allocatable :: Dt(:), Et(:), St(:), Zt(:,:), work(:)
+        integer, allocatable :: iwork(:)
+        integer :: lw
+        allocate(Dt(n), Et(max(1, n-1)), St(2*n), Zt(ldz, 2*n+1), work(14*n), iwork(12*n))
+        Dt = q2t_r(D(1:n)); if (n > 1) Et = q2t_r(E(1:n-1))
+        lw = 14*n
+        call ${R}$bdsvdx(uplo, jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), &
+                         il, iu, ns, St, Zt, ldz, work, iwork, info)
+        S(1:ns) = t2q_r(St(1:ns))
+        if (jobz /= 'N' .and. jobz /= 'n' .and. ns > 0) Z(1:ldz, 1:2*ns) = t2q_r(Zt(1:ldz, 1:2*ns))
+    end subroutine
+
+    subroutine target_dbbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                             theta, phi, U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                             B11d, B11e, B12d, B12e, B21d, B21e, B22d, B22e, info)
+        character, intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans
+        integer,   intent(in)    :: m, p, q, ldu1, ldu2, ldv1t, ldv2t
+        real(ep),  intent(inout) :: theta(*), phi(*)
+        real(ep),  intent(inout) :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+        real(ep),  intent(out)   :: B11d(*), B11e(*), B12d(*), B12e(*)
+        real(ep),  intent(out)   :: B21d(*), B21e(*), B22d(*), B22e(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: thetat(:), phit(:)
+        ${target_real}$, allocatable :: U1t(:,:), U2t(:,:), V1tt(:,:), V2tt(:,:)
+        ${target_real}$, allocatable :: B11dt(:), B11et(:), B12dt(:), B12et(:)
+        ${target_real}$, allocatable :: B21dt(:), B21et(:), B22dt(:), B22et(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(thetat(q), phit(max(1, q-1)), U1t(ldu1, p), U2t(ldu2, m-p), &
+                 V1tt(ldv1t, q), V2tt(ldv2t, m-q), &
+                 B11dt(q), B11et(q), B12dt(q), B12et(q), &
+                 B21dt(q), B21et(q), B22dt(q), B22et(q))
+        thetat = q2t_r(theta(1:q)); if (q > 1) phit = q2t_r(phi(1:q-1))
+        U1t = q2t_r(U1(1:ldu1, 1:p)); U2t = q2t_r(U2(1:ldu2, 1:m-p))
+        V1tt = q2t_r(V1t(1:ldv1t, 1:q)); V2tt = q2t_r(V2t(1:ldv2t, 1:m-q))
+        call ${R}$bbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                        thetat, phit, U1t, ldu1, U2t, ldu2, V1tt, ldv1t, V2tt, ldv2t, &
+                        B11dt, B11et, B12dt, B12et, B21dt, B21et, B22dt, B22et, &
+                        wopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$bbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                        thetat, phit, U1t, ldu1, U2t, ldu2, V1tt, ldv1t, V2tt, ldv2t, &
+                        B11dt, B11et, B12dt, B12et, B21dt, B21et, B22dt, B22et, &
+                        work, lwork, info)
+        theta(1:q) = t2q_r(thetat); if (q > 1) phi(1:q-1) = t2q_r(phit)
+        U1(1:ldu1, 1:p) = t2q_r(U1t); U2(1:ldu2, 1:m-p) = t2q_r(U2t)
+        V1t(1:ldv1t, 1:q) = t2q_r(V1tt); V2t(1:ldv2t, 1:m-q) = t2q_r(V2tt)
+        B11d(1:q) = t2q_r(B11dt); B11e(1:q) = t2q_r(B11et)
+        B12d(1:q) = t2q_r(B12dt); B12e(1:q) = t2q_r(B12et)
+        B21d(1:q) = t2q_r(B21dt); B21e(1:q) = t2q_r(B21et)
+        B22d(1:q) = t2q_r(B22dt); B22e(1:q) = t2q_r(B22et)
+    end subroutine
+
+    subroutine target_zbbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                             theta, phi, U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                             B11d, B11e, B12d, B12e, B21d, B21e, B22d, B22e, info)
+        character,   intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans
+        integer,     intent(in)    :: m, p, q, ldu1, ldu2, ldv1t, ldv2t
+        real(ep),    intent(inout) :: theta(*), phi(*)
+        complex(ep), intent(inout) :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+        real(ep),    intent(out)   :: B11d(*), B11e(*), B12d(*), B12e(*)
+        real(ep),    intent(out)   :: B21d(*), B21e(*), B22d(*), B22e(*)
+        integer,     intent(out)   :: info
+        ${target_real}$, allocatable :: thetat(:), phit(:), rwork(:)
+        ${target_complex}$, allocatable :: U1t(:,:), U2t(:,:), V1tt(:,:), V2tt(:,:)
+        ${target_real}$, allocatable :: B11dt(:), B11et(:), B12dt(:), B12et(:)
+        ${target_real}$, allocatable :: B21dt(:), B21et(:), B22dt(:), B22et(:)
+        ${target_real}$ :: ropt(1)
+        integer :: lrwork
+        allocate(thetat(q), phit(max(1, q-1)), U1t(ldu1, p), U2t(ldu2, m-p), &
+                 V1tt(ldv1t, q), V2tt(ldv2t, m-q), &
+                 B11dt(q), B11et(q), B12dt(q), B12et(q), &
+                 B21dt(q), B21et(q), B22dt(q), B22et(q))
+        thetat = q2t_r(theta(1:q)); if (q > 1) phit = q2t_r(phi(1:q-1))
+        U1t = q2t_c(U1(1:ldu1, 1:p)); U2t = q2t_c(U2(1:ldu2, 1:m-p))
+        V1tt = q2t_c(V1t(1:ldv1t, 1:q)); V2tt = q2t_c(V2t(1:ldv2t, 1:m-q))
+        call ${C}$bbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                        thetat, phit, U1t, ldu1, U2t, ldu2, V1tt, ldv1t, V2tt, ldv2t, &
+                        B11dt, B11et, B12dt, B12et, B21dt, B21et, B22dt, B22et, &
+                        ropt, -1, info)
+        lrwork = max(1, int(t2q_r(ropt(1)))); allocate(rwork(lrwork))
+        call ${C}$bbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                        thetat, phit, U1t, ldu1, U2t, ldu2, V1tt, ldv1t, V2tt, ldv2t, &
+                        B11dt, B11et, B12dt, B12et, B21dt, B21et, B22dt, B22et, &
+                        rwork, lrwork, info)
+        theta(1:q) = t2q_r(thetat); if (q > 1) phi(1:q-1) = t2q_r(phit)
+        U1(1:ldu1, 1:p) = t2q_c(U1t); U2(1:ldu2, 1:m-p) = t2q_c(U2t)
+        V1t(1:ldv1t, 1:q) = t2q_c(V1tt); V2t(1:ldv2t, 1:m-q) = t2q_c(V2tt)
+        B11d(1:q) = t2q_r(B11dt); B11e(1:q) = t2q_r(B11et)
+        B12d(1:q) = t2q_r(B12dt); B12e(1:q) = t2q_r(B12et)
+        B21d(1:q) = t2q_r(B21dt); B21e(1:q) = t2q_r(B21et)
+        B22d(1:q) = t2q_r(B22dt); B22e(1:q) = t2q_r(B22et)
+    end subroutine
+
+    subroutine target_dorbdb(trans, signs, m, p, q, X11, ldx11, X12, ldx12, &
+                             X21, ldx21, X22, ldx22, theta, phi, &
+                             taup1, taup2, tauq1, tauq2, info)
+        character, intent(in)    :: trans, signs
+        integer,   intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+        real(ep),  intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+        real(ep),  intent(out)   :: theta(*), phi(*), taup1(*), taup2(*), tauq1(*), tauq2(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: X11t(:,:), X12t(:,:), X21t(:,:), X22t(:,:)
+        ${target_real}$, allocatable :: thetat(:), phit(:), tp1(:), tp2(:), tq1(:), tq2(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, c11, c12, c21, c22
+        if (trans == 'N' .or. trans == 'n') then
+            c11 = q;     c12 = m - q; c21 = q;     c22 = m - q
+        else
+            c11 = p;     c12 = p;     c21 = m - p; c22 = m - p
+        end if
+        allocate(X11t(ldx11, c11), X12t(ldx12, c12), X21t(ldx21, c21), X22t(ldx22, c22), &
+                 thetat(q), phit(max(1, q-1)), tp1(p), tp2(m-p), tq1(q), tq2(m-q))
+        X11t = q2t_r(X11(1:ldx11, 1:c11)); X12t = q2t_r(X12(1:ldx12, 1:c12))
+        X21t = q2t_r(X21(1:ldx21, 1:c21)); X22t = q2t_r(X22(1:ldx22, 1:c22))
+        call ${R}$orbdb(trans, signs, m, p, q, X11t, ldx11, X12t, ldx12, &
+                        X21t, ldx21, X22t, ldx22, thetat, phit, tp1, tp2, tq1, tq2, &
+                        wopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$orbdb(trans, signs, m, p, q, X11t, ldx11, X12t, ldx12, &
+                        X21t, ldx21, X22t, ldx22, thetat, phit, tp1, tp2, tq1, tq2, &
+                        work, lwork, info)
+        X11(1:ldx11, 1:c11) = t2q_r(X11t); X12(1:ldx12, 1:c12) = t2q_r(X12t)
+        X21(1:ldx21, 1:c21) = t2q_r(X21t); X22(1:ldx22, 1:c22) = t2q_r(X22t)
+        theta(1:q) = t2q_r(thetat); if (q > 1) phi(1:q-1) = t2q_r(phit)
+        taup1(1:p) = t2q_r(tp1); taup2(1:m-p) = t2q_r(tp2)
+        tauq1(1:q) = t2q_r(tq1); tauq2(1:m-q) = t2q_r(tq2)
+    end subroutine
+
+    subroutine target_zunbdb(trans, signs, m, p, q, X11, ldx11, X12, ldx12, &
+                             X21, ldx21, X22, ldx22, theta, phi, &
+                             taup1, taup2, tauq1, tauq2, info)
+        character,   intent(in)    :: trans, signs
+        integer,     intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+        complex(ep), intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+        real(ep),    intent(out)   :: theta(*), phi(*)
+        complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), tauq2(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: X11t(:,:), X12t(:,:), X21t(:,:), X22t(:,:)
+        ${target_complex}$, allocatable :: tp1(:), tp2(:), tq1(:), tq2(:), work(:)
+        ${target_real}$, allocatable :: thetat(:), phit(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, c11, c12, c21, c22
+        if (trans == 'N' .or. trans == 'n') then
+            c11 = q;     c12 = m - q; c21 = q;     c22 = m - q
+        else
+            c11 = p;     c12 = p;     c21 = m - p; c22 = m - p
+        end if
+        allocate(X11t(ldx11, c11), X12t(ldx12, c12), X21t(ldx21, c21), X22t(ldx22, c22), &
+                 thetat(q), phit(max(1, q-1)), tp1(p), tp2(m-p), tq1(q), tq2(m-q))
+        X11t = q2t_c(X11(1:ldx11, 1:c11)); X12t = q2t_c(X12(1:ldx12, 1:c12))
+        X21t = q2t_c(X21(1:ldx21, 1:c21)); X22t = q2t_c(X22(1:ldx22, 1:c22))
+        call ${C}$unbdb(trans, signs, m, p, q, X11t, ldx11, X12t, ldx12, &
+                        X21t, ldx21, X22t, ldx22, thetat, phit, tp1, tp2, tq1, tq2, &
+                        wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$unbdb(trans, signs, m, p, q, X11t, ldx11, X12t, ldx12, &
+                        X21t, ldx21, X22t, ldx22, thetat, phit, tp1, tp2, tq1, tq2, &
+                        work, lwork, info)
+        X11(1:ldx11, 1:c11) = t2q_c(X11t); X12(1:ldx12, 1:c12) = t2q_c(X12t)
+        X21(1:ldx21, 1:c21) = t2q_c(X21t); X22(1:ldx22, 1:c22) = t2q_c(X22t)
+        theta(1:q) = t2q_r(thetat); if (q > 1) phi(1:q-1) = t2q_r(phit)
+        taup1(1:p) = t2q_c(tp1); taup2(1:m-p) = t2q_c(tp2)
+        tauq1(1:q) = t2q_c(tq1); tauq2(1:m-q) = t2q_c(tq2)
+    end subroutine
+
+    subroutine target_dorcsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
+                             m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, &
+                             X22, ldx22, theta, U1, ldu1, U2, ldu2, &
+                             V1t, ldv1t, V2t, ldv2t, info)
+        character, intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans, signs
+        integer,   intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+        integer,   intent(in)    :: ldu1, ldu2, ldv1t, ldv2t
+        real(ep),  intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+        real(ep),  intent(out)   :: theta(*)
+        real(ep),  intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: X11t(:,:), X12t(:,:), X21t(:,:), X22t(:,:)
+        ${target_real}$, allocatable :: thetat(:), U1t(:,:), U2t(:,:), V1tt(:,:), V2tt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, c11, c12, c21, c22
+        if (trans == 'N' .or. trans == 'n') then
+            c11 = q;     c12 = m - q; c21 = q;     c22 = m - q
+        else
+            c11 = p;     c12 = p;     c21 = m - p; c22 = m - p
+        end if
+        allocate(X11t(ldx11, c11), X12t(ldx12, c12), X21t(ldx21, c21), X22t(ldx22, c22), &
+                 thetat(q), U1t(ldu1, p), U2t(ldu2, m-p), V1tt(ldv1t, q), V2tt(ldv2t, m-q), &
+                 iwork(m))
+        X11t = q2t_r(X11(1:ldx11, 1:c11)); X12t = q2t_r(X12(1:ldx12, 1:c12))
+        X21t = q2t_r(X21(1:ldx21, 1:c21)); X22t = q2t_r(X22(1:ldx22, 1:c22))
+        call ${R}$orcsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, m, p, q, &
+                        X11t, ldx11, X12t, ldx12, X21t, ldx21, X22t, ldx22, thetat, &
+                        U1t, ldu1, U2t, ldu2, V1tt, ldv1t, V2tt, ldv2t, &
+                        wopt, -1, iwork, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); allocate(work(lwork))
+        call ${R}$orcsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, m, p, q, &
+                        X11t, ldx11, X12t, ldx12, X21t, ldx21, X22t, ldx22, thetat, &
+                        U1t, ldu1, U2t, ldu2, V1tt, ldv1t, V2tt, ldv2t, &
+                        work, lwork, iwork, info)
+        theta(1:q) = t2q_r(thetat)
+        U1(1:ldu1, 1:p) = t2q_r(U1t); U2(1:ldu2, 1:m-p) = t2q_r(U2t)
+        V1t(1:ldv1t, 1:q) = t2q_r(V1tt); V2t(1:ldv2t, 1:m-q) = t2q_r(V2tt)
+    end subroutine
+
+    subroutine target_zuncsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
+                             m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, &
+                             X22, ldx22, theta, U1, ldu1, U2, ldu2, &
+                             V1t, ldv1t, V2t, ldv2t, info)
+        character,   intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans, signs
+        integer,     intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+        integer,     intent(in)    :: ldu1, ldu2, ldv1t, ldv2t
+        complex(ep), intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+        real(ep),    intent(out)   :: theta(*)
+        complex(ep), intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: X11t(:,:), X12t(:,:), X21t(:,:), X22t(:,:)
+        ${target_complex}$, allocatable :: U1t(:,:), U2t(:,:), V1tt(:,:), V2tt(:,:), work(:)
+        ${target_real}$, allocatable :: thetat(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: ropt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, lrwork, c11, c12, c21, c22
+        if (trans == 'N' .or. trans == 'n') then
+            c11 = q;     c12 = m - q; c21 = q;     c22 = m - q
+        else
+            c11 = p;     c12 = p;     c21 = m - p; c22 = m - p
+        end if
+        allocate(X11t(ldx11, c11), X12t(ldx12, c12), X21t(ldx21, c21), X22t(ldx22, c22), &
+                 thetat(q), U1t(ldu1, p), U2t(ldu2, m-p), V1tt(ldv1t, q), V2tt(ldv2t, m-q), &
+                 iwork(m))
+        X11t = q2t_c(X11(1:ldx11, 1:c11)); X12t = q2t_c(X12(1:ldx12, 1:c12))
+        X21t = q2t_c(X21(1:ldx21, 1:c21)); X22t = q2t_c(X22(1:ldx22, 1:c22))
+        call ${C}$uncsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, m, p, q, &
+                        X11t, ldx11, X12t, ldx12, X21t, ldx21, X22t, ldx22, thetat, &
+                        U1t, ldu1, U2t, ldu2, V1tt, ldv1t, V2tt, ldv2t, &
+                        wopt, -1, ropt, -1, iwork, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        lrwork = max(1, int(t2q_r(ropt(1))));            allocate(rwork(lrwork))
+        call ${C}$uncsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, m, p, q, &
+                        X11t, ldx11, X12t, ldx12, X21t, ldx21, X22t, ldx22, thetat, &
+                        U1t, ldu1, U2t, ldu2, V1tt, ldv1t, V2tt, ldv2t, &
+                        work, lwork, rwork, lrwork, iwork, info)
+        theta(1:q) = t2q_r(thetat)
+        U1(1:ldu1, 1:p) = t2q_c(U1t); U2(1:ldu2, 1:m-p) = t2q_c(U2t)
+        V1t(1:ldv1t, 1:q) = t2q_c(V1tt); V2t(1:ldv2t, 1:m-q) = t2q_c(V2tt)
     end subroutine
 
     subroutine target_ztprfb(side, trans, direct, storev, m, n, k, l, &
