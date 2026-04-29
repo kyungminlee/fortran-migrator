@@ -422,6 +422,27 @@ module ref_quad_lapack
             integer,  intent(out)   :: info
         end subroutine dggrqf
 
+        subroutine dtrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo, trans, diag
+            integer,   intent(in)  :: n, nrhs, lda, ldb, ldx
+            real(ep),  intent(in)  :: A(lda,*), B(ldb,*), X(ldx,*)
+            real(ep),  intent(out) :: ferr(*), berr(*), work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtrrfs
+
+        subroutine ztrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo, trans, diag
+            integer,     intent(in)  :: n, nrhs, lda, ldb, ldx
+            complex(ep), intent(in)  :: A(lda,*), B(ldb,*), X(ldx,*)
+            complex(ep), intent(out) :: work(*)
+            real(ep),    intent(out) :: ferr(*), berr(*), rwork(*)
+            integer,     intent(out) :: info
+        end subroutine ztrrfs
+
         subroutine dgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
             import :: ep
             integer,  intent(in)    :: n, ilo, ihi, lda, lwork

@@ -78,6 +78,7 @@ module target_scalapack
     public :: target_pdpbtrsv, target_pzpbtrsv
     public :: target_pddbtrsv, target_pzdbtrsv
     public :: target_pdgesvx, target_pdposvx, target_pzgesvx, target_pzposvx
+    public :: target_pdtrrfs, target_pztrrfs
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdstebz, target_pdsyevx, target_pzheevx
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -493,6 +494,31 @@ $:IMPORT_RC()
             ${target_real}$,    intent(inout) :: SR(*), SC(*)
             ${target_complex}$, intent(out)   :: X(*), work(*)
             ${target_real}$,    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$trrfs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
+                              B, ib, jb, descb, X, ix, jx, descx, ferr, berr, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb, ix, jx, lwork, liwork
+            integer,   intent(in)    :: desca(9), descb(9), descx(9)
+            ${target_real}$, intent(in)    :: A(*), B(*), X(*)
+            ${target_real}$, intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$trrfs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
+                              B, ib, jb, descb, X, ix, jx, descx, ferr, berr, &
+                              work, lwork, rwork, lrwork, info)
+$:IMPORT_RC()
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, nrhs, ia, ja, ib, jb, ix, jx, lwork, lrwork
+            integer,     intent(in)    :: desca(9), descb(9), descx(9)
+            ${target_complex}$, intent(in)    :: A(*), B(*), X(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
             integer,     intent(out)   :: info
         end subroutine
 
@@ -2925,6 +2951,73 @@ contains
             SR(1:n) = t2q_r(SRt); SC(1:n) = t2q_r(SCt)
             X(1:nx) = t2q_c(Xt)
             rcond = t2q_r(rcond_t)
+            ferr(1:nrhs) = t2q_r(ferr_t); berr(1:nrhs) = t2q_r(berr_t)
+        end if
+    end subroutine
+
+    subroutine target_pdtrrfs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
+                              B, ib, jb, descb, X, ix, jx, descx, ferr, berr, &
+                              work, lwork, iwork, liwork, info)
+        character, intent(in)    :: uplo, trans, diag
+        integer,   intent(in)    :: n, nrhs, ia, ja, ib, jb, ix, jx, lwork, liwork
+        integer,   intent(in)    :: desca(9), descb(9), descx(9)
+        real(ep),  intent(in)    :: A(*), B(*), X(*)
+        real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+        integer,   intent(out)   :: iwork(*), info
+        integer :: na, nb, nx, lwt
+        ${target_real}$, allocatable :: At(:), Bt(:), Xt(:), ferr_t(:), berr_t(:), work_t(:)
+        na = nloc(desca); nb = nloc(descb); nx = nloc(descx)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Bt(max(1,nb)), Xt(max(1,nx)), &
+                     ferr_t(max(1,nrhs)), berr_t(max(1,nrhs)), work_t(1))
+            call ${R}$trrfs(uplo, trans, diag, n, nrhs, At, ia, ja, desca, &
+                             Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferr_t, berr_t, work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Bt(nb), Xt(nx), &
+                     ferr_t(nrhs), berr_t(nrhs), work_t(lwt))
+            At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb)); Xt = q2t_r(X(1:nx))
+            call ${R}$trrfs(uplo, trans, diag, n, nrhs, At, ia, ja, desca, &
+                             Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferr_t, berr_t, work_t, lwt, iwork, liwork, info)
+            ferr(1:nrhs) = t2q_r(ferr_t); berr(1:nrhs) = t2q_r(berr_t)
+        end if
+    end subroutine
+
+    subroutine target_pztrrfs(uplo, trans, diag, n, nrhs, A, ia, ja, desca, &
+                              B, ib, jb, descb, X, ix, jx, descx, ferr, berr, &
+                              work, lwork, rwork, lrwork, info)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, nrhs, ia, ja, ib, jb, ix, jx, lwork, lrwork
+        integer,     intent(in)    :: desca(9), descb(9), descx(9)
+        complex(ep), intent(in)    :: A(*), B(*), X(*)
+        complex(ep), intent(out)   :: work(*)
+        real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+        integer,     intent(out)   :: info
+        integer :: na, nb, nx, lwt, lrwt
+        ${target_complex}$, allocatable :: At(:), Bt(:), Xt(:), work_t(:)
+        ${target_real}$,    allocatable :: ferr_t(:), berr_t(:), rwork_t(:)
+        na = nloc(desca); nb = nloc(descb); nx = nloc(descx)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Bt(max(1,nb)), Xt(max(1,nx)), &
+                     ferr_t(max(1,nrhs)), berr_t(max(1,nrhs)), &
+                     work_t(1), rwork_t(1))
+            call ${C}$trrfs(uplo, trans, diag, n, nrhs, At, ia, ja, desca, &
+                             Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferr_t, berr_t, work_t, -1, rwork_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+            rwork(1) = t2q_r(rwork_t(1))
+        else
+            lwt = max(1, lwork); lrwt = max(1, lrwork)
+            allocate(At(na), Bt(nb), Xt(nx), &
+                     ferr_t(nrhs), berr_t(nrhs), &
+                     work_t(lwt), rwork_t(lrwt))
+            At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb)); Xt = q2t_c(X(1:nx))
+            call ${C}$trrfs(uplo, trans, diag, n, nrhs, At, ia, ja, desca, &
+                             Bt, ib, jb, descb, Xt, ix, jx, descx, &
+                             ferr_t, berr_t, work_t, lwt, rwork_t, lrwt, info)
             ferr(1:nrhs) = t2q_r(ferr_t); berr(1:nrhs) = t2q_r(berr_t)
         end if
     end subroutine
