@@ -1175,7 +1175,7 @@ _55 of 61 migrated entries have a dedicated test driver. 61 are user-facing (✓
 
 ## ScaLAPACK
 
-_151 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
+_156 of 301 migrated entries have a dedicated test driver. 166 are user-facing (✓ in the first column); the rest are internal auxiliaries called only from user-facing drivers._
 
 | user | entry | kind10 | kind16 | multifloats |
 |------|-------|--------|--------|--------|
@@ -1213,7 +1213,7 @@ _151 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pdgerqf | 18.74 | 33.28 | 31.36 |
 | ✓ | pdgesv | 18.28 | 33.38 | 31.14 |
 | ✓ | pdgesvd | 17.99 | 32.37 | 29.80 |
-| ✓ | pdgesvx | — | — | — |
+| ✓ | pdgesvx | 18.51 | 32.94 | 31.26 |
 |  | pdgetf2 | — | — | — |
 | ✓ | pdgetrf | 18.23 | exact | 31.17 |
 | ✓ | pdgetri | 18.11 | 33.55 | 31.07 |
@@ -1305,7 +1305,7 @@ _151 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pdpoequ | 19.05 | exact | 31.52 |
 | ✓ | pdporfs | 18.97 | 33.15 | 31.75 |
 | ✓ | pdposv | 18.30 | 33.06 | 31.06 |
-| ✓ | pdposvx | — | — | — |
+| ✓ | pdposvx | 19.24 | -3.02 ✗ | — |
 |  | pdpotf2 | — | — | — |
 | ✓ | pdpotrf | 19.04 | 33.59 | 31.74 |
 | ✓ | pdpotri | 18.58 | 32.94 | 31.17 |
@@ -1333,7 +1333,7 @@ _151 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pdsyttrd | — | — | — |
 | ✓ | pdtrcon | — | — | — |
 | ✓ | pdtrord | — | — | — |
-| ✓ | pdtrrfs | — | — | — |
+| ✓ | pdtrrfs | exact | exact | exact |
 | ✓ | pdtrsen | — | — | — |
 |  | pdtrti2 | — | — | — |
 | ✓ | pdtrtri | 18.38 | 32.96 | 30.93 |
@@ -1371,7 +1371,7 @@ _151 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pzgerqf | 18.52 | 33.25 | 31.25 |
 | ✓ | pzgesv | 18.31 | 33.20 | 31.03 |
 | ✓ | pzgesvd | 17.92 | 32.49 | 29.92 |
-| ✓ | pzgesvx | — | — | — |
+| ✓ | pzgesvx | 18.56 | 32.94 | 31.24 |
 |  | pzgetf2 | — | — | — |
 | ✓ | pzgetrf | 18.35 | exact | 31.14 |
 | ✓ | pzgetri | 18.14 | 34.02 | 30.94 |
@@ -1454,7 +1454,7 @@ _151 of 301 migrated entries have a dedicated test driver. 166 are user-facing (
 | ✓ | pzstein | 21.37 | 33.65 | 33.77 |
 | ✓ | pztrcon | — | — | — |
 | ✓ | pztrevc | — | — | — |
-| ✓ | pztrrfs | — | — | — |
+| ✓ | pztrrfs | exact | exact | exact |
 |  | pztrti2 | — | — | — |
 | ✓ | pztrtri | 17.84 | 32.47 | 30.80 |
 | ✓ | pztrtrs | 18.53 | 33.39 | 31.28 |
