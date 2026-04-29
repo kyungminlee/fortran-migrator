@@ -404,6 +404,24 @@ module ref_quad_lapack
             integer,   intent(out)   :: info
         end subroutine dormrz
 
+        subroutine dggqrf(n, m, p, A, lda, taua, B, ldb, taub, &
+                          work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, m, p, lda, ldb, lwork
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dggqrf
+
+        subroutine dggrqf(m, p, n, A, lda, taua, B, ldb, taub, &
+                          work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, p, n, lda, ldb, lwork
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dggrqf
+
         subroutine dgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
             import :: ep
             integer,  intent(in)    :: n, ilo, ihi, lda, lwork
@@ -732,6 +750,24 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zunmrz
+
+        subroutine zggqrf(n, m, p, A, lda, taua, B, ldb, taub, &
+                          work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, m, p, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggqrf
+
+        subroutine zggrqf(m, p, n, A, lda, taua, B, ldb, taub, &
+                          work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, p, n, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggrqf
 
         subroutine zunmtr(side, uplo, trans, m, n, A, lda, tau, &
                           C, ldc, work, lwork, info)

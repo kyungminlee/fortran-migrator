@@ -69,6 +69,7 @@ module target_scalapack
     public :: target_pdrot
     public :: target_pzhegst
     public :: target_pdtzrzf, target_pdormrz, target_pztzrzf, target_pzunmrz
+    public :: target_pdggqrf, target_pdggrqf, target_pzggqrf, target_pzggrqf
     public :: target_pdstedc
     public :: target_pdstein
     public :: target_pdsyevr, target_pzheevr
@@ -943,6 +944,26 @@ $:IMPORT_R()
             ${target_real}$, intent(out)   :: work(*)
         end subroutine
 
+        subroutine ${R}$ggqrf(n, m, p, A, ia, ja, desca, taua, &
+                              B, ib, jb, descb, taub, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: n, m, p, ia, ja, ib, jb, lwork
+            integer, intent(in)    :: desca(9), descb(9)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*), B(*)
+            ${target_real}$, intent(out)   :: taua(*), taub(*), work(*)
+        end subroutine
+
+        subroutine ${R}$ggrqf(m, p, n, A, ia, ja, desca, taua, &
+                              B, ib, jb, descb, taub, work, lwork, info)
+$:IMPORT_R()
+            integer, intent(in)    :: m, p, n, ia, ja, ib, jb, lwork
+            integer, intent(in)    :: desca(9), descb(9)
+            integer, intent(out)   :: info
+            ${target_real}$, intent(inout) :: A(*), B(*)
+            ${target_real}$, intent(out)   :: taua(*), taub(*), work(*)
+        end subroutine
+
         subroutine ${R}$gelqf(m, n, A, ia, ja, desca, tau, work, lwork, info)
 $:IMPORT_R()
             integer, intent(in)    :: m, n, ia, ja, lwork
@@ -1433,6 +1454,26 @@ $:IMPORT_C()
             ${target_complex}$, intent(in)    :: A(*), tau(*)
             ${target_complex}$, intent(inout) :: C(*)
             ${target_complex}$, intent(out)   :: work(*)
+        end subroutine
+
+        subroutine ${C}$ggqrf(n, m, p, A, ia, ja, desca, taua, &
+                              B, ib, jb, descb, taub, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: n, m, p, ia, ja, ib, jb, lwork
+            integer, intent(in)    :: desca(9), descb(9)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*), B(*)
+            ${target_complex}$, intent(out)   :: taua(*), taub(*), work(*)
+        end subroutine
+
+        subroutine ${C}$ggrqf(m, p, n, A, ia, ja, desca, taua, &
+                              B, ib, jb, descb, taub, work, lwork, info)
+$:IMPORT_C()
+            integer, intent(in)    :: m, p, n, ia, ja, ib, jb, lwork
+            integer, intent(in)    :: desca(9), descb(9)
+            integer, intent(out)   :: info
+            ${target_complex}$, intent(inout) :: A(*), B(*)
+            ${target_complex}$, intent(out)   :: taua(*), taub(*), work(*)
         end subroutine
 
         subroutine ${C}$unmtr(side, uplo, trans, m, n, A, ia, ja, desca, &
@@ -3695,6 +3736,64 @@ contains
         end if
     end subroutine
 
+    subroutine target_pdggqrf(n, m, p, A, ia, ja, desca, taua, &
+                              B, ib, jb, descb, taub, work, lwork, info)
+        integer,  intent(in)    :: n, m, p, ia, ja, ib, jb, lwork
+        integer,  intent(in)    :: desca(9), descb(9)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*), B(*)
+        real(ep), intent(out)   :: taua(*), taub(*), work(*)
+        integer :: na, nb, ntau_a, ntau_b, lwt
+        ${target_real}$, allocatable :: At(:), Bt(:), taua_t(:), taub_t(:), work_t(:)
+        na = nloc(desca); nb = nloc(descb)
+        ntau_a = max(1, loccols(desca)); ntau_b = max(1, locrows(descb))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Bt(max(1,nb)), &
+                     taua_t(ntau_a), taub_t(ntau_b), work_t(1))
+            call ${R}$ggqrf(n, m, p, At, ia, ja, desca, taua_t, &
+                             Bt, ib, jb, descb, taub_t, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Bt(nb), taua_t(ntau_a), taub_t(ntau_b), work_t(lwt))
+            At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
+            call ${R}$ggqrf(n, m, p, At, ia, ja, desca, taua_t, &
+                             Bt, ib, jb, descb, taub_t, work_t, lwt, info)
+            A(1:na) = t2q_r(At); B(1:nb) = t2q_r(Bt)
+            taua(1:ntau_a) = t2q_r(taua_t)
+            taub(1:ntau_b) = t2q_r(taub_t)
+        end if
+    end subroutine
+
+    subroutine target_pdggrqf(m, p, n, A, ia, ja, desca, taua, &
+                              B, ib, jb, descb, taub, work, lwork, info)
+        integer,  intent(in)    :: m, p, n, ia, ja, ib, jb, lwork
+        integer,  intent(in)    :: desca(9), descb(9)
+        integer,  intent(out)   :: info
+        real(ep), intent(inout) :: A(*), B(*)
+        real(ep), intent(out)   :: taua(*), taub(*), work(*)
+        integer :: na, nb, ntau_a, ntau_b, lwt
+        ${target_real}$, allocatable :: At(:), Bt(:), taua_t(:), taub_t(:), work_t(:)
+        na = nloc(desca); nb = nloc(descb)
+        ntau_a = max(1, locrows(desca)); ntau_b = max(1, locrows(descb))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Bt(max(1,nb)), &
+                     taua_t(ntau_a), taub_t(ntau_b), work_t(1))
+            call ${R}$ggrqf(m, p, n, At, ia, ja, desca, taua_t, &
+                             Bt, ib, jb, descb, taub_t, work_t, -1, info)
+            work(1) = t2q_r(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Bt(nb), taua_t(ntau_a), taub_t(ntau_b), work_t(lwt))
+            At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
+            call ${R}$ggrqf(m, p, n, At, ia, ja, desca, taua_t, &
+                             Bt, ib, jb, descb, taub_t, work_t, lwt, info)
+            A(1:na) = t2q_r(At); B(1:nb) = t2q_r(Bt)
+            taua(1:ntau_a) = t2q_r(taua_t)
+            taub(1:ntau_b) = t2q_r(taub_t)
+        end if
+    end subroutine
+
     subroutine target_pdgelqf(m, n, A, ia, ja, desca, tau, work, lwork, info)
         integer,  intent(in)    :: m, n, ia, ja, lwork
         integer,  intent(in)    :: desca(9)
@@ -4925,6 +5024,64 @@ contains
             call ${C}$unmrz(side, trans, m, n, k, l, At, ia, ja, desca, &
                              tau_t, Ct, ic, jc, descc, work_t, lwt, info)
             C(1:nc) = t2q_c(Ct)
+        end if
+    end subroutine
+
+    subroutine target_pzggqrf(n, m, p, A, ia, ja, desca, taua, &
+                              B, ib, jb, descb, taub, work, lwork, info)
+        integer,     intent(in)    :: n, m, p, ia, ja, ib, jb, lwork
+        integer,     intent(in)    :: desca(9), descb(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*), B(*)
+        complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+        integer :: na, nb, ntau_a, ntau_b, lwt
+        ${target_complex}$, allocatable :: At(:), Bt(:), taua_t(:), taub_t(:), work_t(:)
+        na = nloc(desca); nb = nloc(descb)
+        ntau_a = max(1, loccols(desca)); ntau_b = max(1, locrows(descb))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Bt(max(1,nb)), &
+                     taua_t(ntau_a), taub_t(ntau_b), work_t(1))
+            call ${C}$ggqrf(n, m, p, At, ia, ja, desca, taua_t, &
+                             Bt, ib, jb, descb, taub_t, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Bt(nb), taua_t(ntau_a), taub_t(ntau_b), work_t(lwt))
+            At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
+            call ${C}$ggqrf(n, m, p, At, ia, ja, desca, taua_t, &
+                             Bt, ib, jb, descb, taub_t, work_t, lwt, info)
+            A(1:na) = t2q_c(At); B(1:nb) = t2q_c(Bt)
+            taua(1:ntau_a) = t2q_c(taua_t)
+            taub(1:ntau_b) = t2q_c(taub_t)
+        end if
+    end subroutine
+
+    subroutine target_pzggrqf(m, p, n, A, ia, ja, desca, taua, &
+                              B, ib, jb, descb, taub, work, lwork, info)
+        integer,     intent(in)    :: m, p, n, ia, ja, ib, jb, lwork
+        integer,     intent(in)    :: desca(9), descb(9)
+        integer,     intent(out)   :: info
+        complex(ep), intent(inout) :: A(*), B(*)
+        complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+        integer :: na, nb, ntau_a, ntau_b, lwt
+        ${target_complex}$, allocatable :: At(:), Bt(:), taua_t(:), taub_t(:), work_t(:)
+        na = nloc(desca); nb = nloc(descb)
+        ntau_a = max(1, locrows(desca)); ntau_b = max(1, locrows(descb))
+        if (lwork == -1) then
+            allocate(At(max(1,na)), Bt(max(1,nb)), &
+                     taua_t(ntau_a), taub_t(ntau_b), work_t(1))
+            call ${C}$ggrqf(m, p, n, At, ia, ja, desca, taua_t, &
+                             Bt, ib, jb, descb, taub_t, work_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), Bt(nb), taua_t(ntau_a), taub_t(ntau_b), work_t(lwt))
+            At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
+            call ${C}$ggrqf(m, p, n, At, ia, ja, desca, taua_t, &
+                             Bt, ib, jb, descb, taub_t, work_t, lwt, info)
+            A(1:na) = t2q_c(At); B(1:nb) = t2q_c(Bt)
+            taua(1:ntau_a) = t2q_c(taua_t)
+            taub(1:ntau_b) = t2q_c(taub_t)
         end if
     end subroutine
 
