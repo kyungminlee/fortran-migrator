@@ -1,26 +1,16 @@
 # tests/scalapack — known upstream / migrator gaps
 
-## Banded solver families (packed-banded layout helper)
+## Banded solver families — DELIVERED
 
-- **Status**: Tridiagonal piece landed. The 1D BLACS context and
-  `descinit_1d` helper were added to `pblas_grid.f90`; tests cover
-  `pddtsv` and `pdptsv` (general + PD tridiagonal). The remaining
-  banded entries (`pdgbsv`/`pdgbtrf`/`pdgbtrs`, `pdpbsv`/`pdpbtrf`/
-  `pdpbtrs`, `pddbsv`/`pddbtrf`/`pddbtrs`, plus complex mirrors) are
-  still deferred.
-- **What's needed for banded**: ScaLAPACK's banded format stores `A`
-  in `(2*bwl+2*bwu+1) × LOCc` packed strips with extra rows reserved
-  for fill-in during D&C factorisation, which differs from the LAPACK
-  banded layout. A small layout helper that packs from the natural
-  diagonal-by-diagonal representation into ScaLAPACK's storage (and
-  unpacks the reference LAPACK layout for `dgbsv`/`dpbsv` comparison)
-  would unblock those tests.
-- **Action**: Implement the packed-banded helper as a sibling to
-  `descinit_1d`, then add per-family drivers (general → PD → DD
-  banded). Each pulls in the same 1D scaffold the tridiagonal tests
-  use.
-
-
+Tridiagonal piece (`pddtsv`/`pdptsv`) plus all 22 banded drivers
+(`p[dz]gb{sv,trf,trs}`, `p[dz]pb{sv,trf,trs,trsv}`,
+`p[dz]db{sv,trf,trs,trsv}`) landed in phases 45/46/55/56. Each driver
+inlines its own packing — no shared `banded_pack` module materialized;
+the per-driver loops are 3 lines and vary in `bw` vs `bwl/bwu` vs
+`uplo`, so consolidation has no payoff. Diagonal row in PDGBTRF
+storage: `BWL+2*BWU+1` (verified in `test_pdgbsv.f90`); PDDBTRF /
+PDPBTRF use the standard LAPACK packing (diagonal at `BWU+1` /
+`BW+1`).
 
 Routines whose differential-precision test would otherwise live in this
 suite but cannot pass with the current toolchain. Each entry documents

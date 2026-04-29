@@ -9,6 +9,7 @@ module test_data
     public :: pack_sym_band_quad, pack_herm_band_quad
     public :: pack_sym_packed_quad, pack_herm_packed_quad
     public :: gen_complex_symmetric_quad
+    public :: gen_orthogonal_quad
 
 contains
 
@@ -249,5 +250,34 @@ contains
             end do
         end if
     end subroutine pack_herm_packed_quad
+
+    ! Random orthogonal n x n matrix via modified Gram-Schmidt on a
+    ! uniform random seed matrix. Sign-fixed so the diagonal of the
+    ! implicit upper-triangular factor R is non-negative — eliminates
+    ! seed-to-seed sign drift in U columns.
+    subroutine gen_orthogonal_quad(n, U, seed)
+        integer,  intent(in)  :: n, seed
+        real(ep), intent(out), allocatable :: U(:,:)
+        real(ep), allocatable :: Z(:,:)
+        real(ep) :: nrm, dotp, sgn
+        integer :: j, k
+
+        call gen_matrix_quad(n, n, Z, seed)
+        allocate(U(n, n))
+        do j = 1, n
+            U(:, j) = Z(:, j)
+            do k = 1, j - 1
+                dotp = dot_product(U(:, k), U(:, j))
+                U(:, j) = U(:, j) - dotp * U(:, k)
+            end do
+            nrm = sqrt(dot_product(U(:, j), U(:, j)))
+            if (nrm > tiny(1.0_ep)) then
+                U(:, j) = U(:, j) / nrm
+            end if
+            sgn = 1.0_ep
+            if (U(maxloc(abs(U(:, j)), dim=1), j) < 0.0_ep) sgn = -1.0_ep
+            U(:, j) = sgn * U(:, j)
+        end do
+    end subroutine gen_orthogonal_quad
 
 end module test_data

@@ -6122,6 +6122,73 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: AB(ldab,*), tau(*), work(*)
             integer,     intent(out)   :: info
         end subroutine zhetrd_he2hb
+
+        subroutine dgedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, X, ldx, Y, ldy, &
+                          nrnk, tol, k, reig, imeig, Z, ldz, res, B, ldb,        &
+                          W, ldw, S, lds, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobs, jobz, jobr, jobf
+            integer,   intent(in)    :: whtsvd, m, n, ldx, ldy, nrnk, ldz, ldb, &
+                                         ldw, lds, lwork, liwork
+            real(ep),  intent(in)    :: tol
+            real(ep),  intent(inout) :: X(ldx,*), Y(ldy,*)
+            integer,   intent(out)   :: k, info
+            real(ep),  intent(out)   :: reig(*), imeig(*), Z(ldz,*), res(*),    &
+                                         B(ldb,*), W(ldw,*), S(lds,*), work(*)
+            integer,   intent(out)   :: iwork(*)
+        end subroutine dgedmd
+
+        subroutine zgedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, X, ldx, Y, ldy, &
+                          nrnk, tol, k, eigs, Z, ldz, res, B, ldb,               &
+                          W, ldw, S, lds, zwork, lzwork, rwork, lrwork,          &
+                          iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobs, jobz, jobr, jobf
+            integer,     intent(in)    :: whtsvd, m, n, ldx, ldy, nrnk, ldz, ldb, &
+                                           ldw, lds, lzwork, lrwork, liwork
+            real(ep),    intent(in)    :: tol
+            complex(ep), intent(inout) :: X(ldx,*), Y(ldy,*)
+            integer,     intent(out)   :: k, info
+            complex(ep), intent(out)   :: eigs(*), Z(ldz,*), B(ldb,*), W(ldw,*), &
+                                           S(lds,*), zwork(*)
+            real(ep),    intent(out)   :: res(*), rwork(*)
+            integer,     intent(out)   :: iwork(*)
+        end subroutine zgedmd
+
+        subroutine dgedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd, m, n,    &
+                            F, ldf, X, ldx, Y, ldy, nrnk, tol, k, reig, imeig,  &
+                            Z, ldz, res, B, ldb, V, ldv, S, lds,                 &
+                            work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobs, jobz, jobr, jobq, jobt, jobf
+            integer,   intent(in)    :: whtsvd, m, n, ldf, ldx, ldy, nrnk, ldz,  &
+                                         ldb, ldv, lds, lwork, liwork
+            real(ep),  intent(in)    :: tol
+            real(ep),  intent(inout) :: F(ldf,*)
+            integer,   intent(out)   :: k, info
+            real(ep),  intent(out)   :: X(ldx,*), Y(ldy,*), Z(ldz,*), B(ldb,*),  &
+                                         V(ldv,*), S(lds,*), reig(*), imeig(*),  &
+                                         res(*), work(*)
+            integer,   intent(out)   :: iwork(*)
+        end subroutine dgedmdq
+
+        subroutine zgedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd, m, n,    &
+                            F, ldf, X, ldx, Y, ldy, nrnk, tol, k, eigs,          &
+                            Z, ldz, res, B, ldb, V, ldv, S, lds,                 &
+                            zwork, lzwork, work, lwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobs, jobz, jobr, jobq, jobt, jobf
+            integer,     intent(in)    :: whtsvd, m, n, ldf, ldx, ldy, nrnk,     &
+                                           ldz, ldb, ldv, lds, lzwork, lwork,    &
+                                           liwork
+            real(ep),    intent(in)    :: tol
+            complex(ep), intent(inout) :: F(ldf,*)
+            integer,     intent(out)   :: k, info
+            complex(ep), intent(out)   :: X(ldx,*), Y(ldy,*), Z(ldz,*), B(ldb,*), &
+                                           V(ldv,*), S(lds,*), eigs(*), zwork(*)
+            real(ep),    intent(out)   :: res(*), work(*)
+            integer,     intent(out)   :: iwork(*)
+        end subroutine zgedmdq
     end interface
 
 end module ref_quad_lapack

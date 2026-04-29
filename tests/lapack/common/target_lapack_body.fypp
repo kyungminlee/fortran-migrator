@@ -293,6 +293,9 @@ module target_lapack
     public :: target_dstegr, target_zstegr
     public :: target_dstemr, target_zstemr
     public :: target_dstein, target_zstein
+    ! P22 — Dynamic mode decomposition
+    public :: target_dgedmd, target_zgedmd
+    public :: target_dgedmdq, target_zgedmdq
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -4617,6 +4620,79 @@ $:IMPORT_C()
             ${target_real}$,    intent(out)   :: w(*), rwork(*)
             ${target_complex}$, intent(out)   :: Z(ldz,*), work(*)
             integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine
+
+        subroutine ${R}$gedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, X, ldx,    &
+                              Y, ldy, nrnk, tol, k, reig, imeig, Z, ldz, res, &
+                              B, ldb, W, ldw, S, lds,                          &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobs, jobz, jobr, jobf
+            integer,   intent(in)    :: whtsvd, m, n, ldx, ldy, nrnk, ldz, ldb, &
+                                         ldw, lds, lwork, liwork
+            ${target_real}$, intent(in)    :: tol
+            ${target_real}$, intent(inout) :: X(ldx,*), Y(ldy,*)
+            integer,   intent(out)   :: k, info
+            ${target_real}$, intent(out)   :: reig(*), imeig(*), Z(ldz,*),     &
+                                               res(*), B(ldb,*), W(ldw,*),    &
+                                               S(lds,*), work(*)
+            integer,   intent(out)   :: iwork(*)
+        end subroutine
+
+        subroutine ${C}$gedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, X, ldx,    &
+                              Y, ldy, nrnk, tol, k, eigs, Z, ldz, res,         &
+                              B, ldb, W, ldw, S, lds, zwork, lzwork,           &
+                              rwork, lrwork, iwork, liwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: jobs, jobz, jobr, jobf
+            integer,     intent(in)    :: whtsvd, m, n, ldx, ldy, nrnk, ldz,   &
+                                           ldb, ldw, lds, lzwork, lrwork,      &
+                                           liwork
+            ${target_real}$,    intent(in)    :: tol
+            ${target_complex}$, intent(inout) :: X(ldx,*), Y(ldy,*)
+            integer,     intent(out)   :: k, info
+            ${target_complex}$, intent(out)   :: eigs(*), Z(ldz,*), B(ldb,*),  &
+                                                   W(ldw,*), S(lds,*), zwork(*)
+            ${target_real}$,    intent(out)   :: res(*), rwork(*)
+            integer,     intent(out)   :: iwork(*)
+        end subroutine
+
+        subroutine ${R}$gedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd,     &
+                                m, n, F, ldf, X, ldx, Y, ldy, nrnk, tol, k,    &
+                                reig, imeig, Z, ldz, res, B, ldb, V, ldv,      &
+                                S, lds, work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: jobs, jobz, jobr, jobq, jobt, jobf
+            integer,   intent(in)    :: whtsvd, m, n, ldf, ldx, ldy, nrnk,     &
+                                         ldz, ldb, ldv, lds, lwork, liwork
+            ${target_real}$, intent(in)    :: tol
+            ${target_real}$, intent(inout) :: F(ldf,*)
+            integer,   intent(out)   :: k, info
+            ${target_real}$, intent(out)   :: X(ldx,*), Y(ldy,*), Z(ldz,*),    &
+                                               B(ldb,*), V(ldv,*), S(lds,*),   &
+                                               reig(*), imeig(*), res(*),       &
+                                               work(*)
+            integer,   intent(out)   :: iwork(*)
+        end subroutine
+
+        subroutine ${C}$gedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd,     &
+                                m, n, F, ldf, X, ldx, Y, ldy, nrnk, tol, k,    &
+                                eigs, Z, ldz, res, B, ldb, V, ldv, S, lds,     &
+                                zwork, lzwork, work, lwork, iwork, liwork,     &
+                                info)
+$:IMPORT_C()
+            character,   intent(in)    :: jobs, jobz, jobr, jobq, jobt, jobf
+            integer,     intent(in)    :: whtsvd, m, n, ldf, ldx, ldy, nrnk,   &
+                                           ldz, ldb, ldv, lds, lzwork, lwork,  &
+                                           liwork
+            ${target_real}$,    intent(in)    :: tol
+            ${target_complex}$, intent(inout) :: F(ldf,*)
+            integer,     intent(out)   :: k, info
+            ${target_complex}$, intent(out)   :: X(ldx,*), Y(ldy,*), Z(ldz,*), &
+                                                   B(ldb,*), V(ldv,*), S(lds,*), &
+                                                   eigs(*), zwork(*)
+            ${target_real}$,    intent(out)   :: res(*), work(*)
+            integer,     intent(out)   :: iwork(*)
         end subroutine
     end interface
 
@@ -15896,6 +15972,202 @@ $:CPACK_INV('zsptri', C + 'sptri')
         call ${C}$hetrd_he2hb(uplo, n, kd, At, lda, ABt, ldab, taut, work, lwork, info)
         A(1:lda, 1:n) = t2q_c(At); AB(1:ldab, 1:n) = t2q_c(ABt)
         tau(1:max(1,n-kd)) = t2q_c(taut)
+    end subroutine
+
+    ! ── P22 — Dynamic mode decomposition ─────────────────────────────
+    subroutine target_dgedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, X, ldx,    &
+                              Y, ldy, nrnk, tol, k, reig, imeig, Z, ldz, res, &
+                              B, ldb, W, ldw, S, lds, info)
+        character, intent(in)    :: jobs, jobz, jobr, jobf
+        integer,   intent(in)    :: whtsvd, m, n, ldx, ldy, nrnk, ldz, ldb, ldw, lds
+        real(ep),  intent(in)    :: tol
+        real(ep),  intent(inout) :: X(ldx,*), Y(ldy,*)
+        integer,   intent(out)   :: k, info
+        real(ep),  intent(out)   :: reig(*), imeig(*), Z(ldz,*), res(*),       &
+                                     B(ldb,*), W(ldw,*), S(lds,*)
+        ${target_real}$, allocatable :: Xt(:,:), Yt(:,:), Zt(:,:), Bt(:,:),   &
+                                         Wt(:,:), St(:,:), reigt(:), imeigt(:), &
+                                         rest(:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(2), tol_t
+        integer :: iwopt(2), lwork, liwork, kt
+        allocate(Xt(ldx, n), Yt(ldy, n), Zt(ldz, n), Bt(ldb, n),               &
+                 Wt(ldw, n), St(lds, n), reigt(n), imeigt(n), rest(n))
+        Xt = q2t_r(X(1:ldx, 1:n))
+        Yt = q2t_r(Y(1:ldy, 1:n))
+        tol_t = q2t_r(tol)
+        call ${R}$gedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, Xt, ldx, Yt, ldy, &
+                        nrnk, tol_t, kt, reigt, imeigt, Zt, ldz, rest,         &
+                        Bt, ldb, Wt, ldw, St, lds,                              &
+                        wopt, -1, iwopt, -1, info)
+        if (info /= 0) return
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$gedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, Xt, ldx, Yt, ldy, &
+                        nrnk, tol_t, kt, reigt, imeigt, Zt, ldz, rest,         &
+                        Bt, ldb, Wt, ldw, St, lds,                              &
+                        work, lwork, iwork, liwork, info)
+        k = kt
+        X(1:ldx, 1:n) = t2q_r(Xt)
+        Y(1:ldy, 1:n) = t2q_r(Yt)
+        Z(1:ldz, 1:n) = t2q_r(Zt)
+        B(1:ldb, 1:n) = t2q_r(Bt)
+        W(1:ldw, 1:n) = t2q_r(Wt)
+        S(1:lds, 1:n) = t2q_r(St)
+        reig(1:n)     = t2q_r(reigt)
+        imeig(1:n)    = t2q_r(imeigt)
+        res(1:n)      = t2q_r(rest)
+    end subroutine
+
+    subroutine target_zgedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, X, ldx,    &
+                              Y, ldy, nrnk, tol, k, eigs, Z, ldz, res,         &
+                              B, ldb, W, ldw, S, lds, info)
+        character,   intent(in)    :: jobs, jobz, jobr, jobf
+        integer,     intent(in)    :: whtsvd, m, n, ldx, ldy, nrnk, ldz, ldb, ldw, lds
+        real(ep),    intent(in)    :: tol
+        complex(ep), intent(inout) :: X(ldx,*), Y(ldy,*)
+        integer,     intent(out)   :: k, info
+        complex(ep), intent(out)   :: eigs(*), Z(ldz,*), B(ldb,*), W(ldw,*),   &
+                                       S(lds,*)
+        real(ep),    intent(out)   :: res(*)
+        ${target_complex}$, allocatable :: Xt(:,:), Yt(:,:), Zt(:,:), Bt(:,:), &
+                                            Wt(:,:), St(:,:), eigst(:), zwork(:)
+        ${target_real}$,    allocatable :: rest(:), rwork(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: wopt(2)
+        ${target_real}$ :: rwopt(2), tol_t
+        integer :: iwopt(2), lzwork, lrwork, liwork, kt
+        allocate(Xt(ldx, n), Yt(ldy, n), Zt(ldz, n), Bt(ldb, n),               &
+                 Wt(ldw, n), St(lds, n), eigst(n), rest(n))
+        Xt = q2t_c(X(1:ldx, 1:n))
+        Yt = q2t_c(Y(1:ldy, 1:n))
+        tol_t = q2t_r(tol)
+        call ${C}$gedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, Xt, ldx, Yt, ldy, &
+                        nrnk, tol_t, kt, eigst, Zt, ldz, rest,                  &
+                        Bt, ldb, Wt, ldw, St, lds,                              &
+                        wopt, -1, rwopt, -1, iwopt, -1, info)
+        if (info /= 0) return
+        lzwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        lrwork = max(1, int(t2q_r(rwopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(zwork(lzwork), rwork(lrwork), iwork(liwork))
+        call ${C}$gedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, Xt, ldx, Yt, ldy, &
+                        nrnk, tol_t, kt, eigst, Zt, ldz, rest,                  &
+                        Bt, ldb, Wt, ldw, St, lds,                              &
+                        zwork, lzwork, rwork, lrwork, iwork, liwork, info)
+        k = kt
+        X(1:ldx, 1:n) = t2q_c(Xt)
+        Y(1:ldy, 1:n) = t2q_c(Yt)
+        Z(1:ldz, 1:n) = t2q_c(Zt)
+        B(1:ldb, 1:n) = t2q_c(Bt)
+        W(1:ldw, 1:n) = t2q_c(Wt)
+        S(1:lds, 1:n) = t2q_c(St)
+        eigs(1:n)     = t2q_c(eigst)
+        res(1:n)      = t2q_r(rest)
+    end subroutine
+
+    subroutine target_dgedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd,     &
+                               m, n, F, ldf, X, ldx, Y, ldy, nrnk, tol, k,     &
+                               reig, imeig, Z, ldz, res, B, ldb, V, ldv,       &
+                               S, lds, info)
+        character, intent(in)    :: jobs, jobz, jobr, jobq, jobt, jobf
+        integer,   intent(in)    :: whtsvd, m, n, ldf, ldx, ldy, nrnk, ldz,    &
+                                     ldb, ldv, lds
+        real(ep),  intent(in)    :: tol
+        real(ep),  intent(inout) :: F(ldf,*)
+        integer,   intent(out)   :: k, info
+        real(ep),  intent(out)   :: X(ldx,*), Y(ldy,*), Z(ldz,*), B(ldb,*),    &
+                                     V(ldv,*), S(lds,*), reig(*), imeig(*),    &
+                                     res(*)
+        ${target_real}$, allocatable :: Ft(:,:), Xt(:,:), Yt(:,:), Zt(:,:),    &
+                                         Bt(:,:), Vt(:,:), St(:,:),             &
+                                         reigt(:), imeigt(:), rest(:), work(:)
+        integer,         allocatable :: iwork(:)
+        ${target_real}$ :: wopt(2), tol_t
+        integer :: iwopt(2), lwork, liwork, kt, mn1
+        mn1 = max(1, min(m, n))
+        allocate(Ft(ldf, n), Xt(ldx, mn1), Yt(ldy, mn1), Zt(ldz, mn1),         &
+                 Bt(ldb, mn1), Vt(ldv, mn1), St(lds, mn1),                      &
+                 reigt(mn1), imeigt(mn1), rest(mn1))
+        Ft = q2t_r(F(1:ldf, 1:n))
+        tol_t = q2t_r(tol)
+        call ${R}$gedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd,            &
+                         m, n, Ft, ldf, Xt, ldx, Yt, ldy, nrnk, tol_t, kt,      &
+                         reigt, imeigt, Zt, ldz, rest, Bt, ldb, Vt, ldv,        &
+                         St, lds, wopt, -1, iwopt, -1, info)
+        if (info /= 0) return
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$gedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd,            &
+                         m, n, Ft, ldf, Xt, ldx, Yt, ldy, nrnk, tol_t, kt,      &
+                         reigt, imeigt, Zt, ldz, rest, Bt, ldb, Vt, ldv,        &
+                         St, lds, work, lwork, iwork, liwork, info)
+        k = kt
+        F(1:ldf, 1:n)   = t2q_r(Ft)
+        X(1:ldx, 1:mn1) = t2q_r(Xt)
+        Y(1:ldy, 1:mn1) = t2q_r(Yt)
+        Z(1:ldz, 1:mn1) = t2q_r(Zt)
+        B(1:ldb, 1:mn1) = t2q_r(Bt)
+        V(1:ldv, 1:mn1) = t2q_r(Vt)
+        S(1:lds, 1:mn1) = t2q_r(St)
+        reig(1:mn1)     = t2q_r(reigt)
+        imeig(1:mn1)    = t2q_r(imeigt)
+        res(1:mn1)      = t2q_r(rest)
+    end subroutine
+
+    subroutine target_zgedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd,     &
+                               m, n, F, ldf, X, ldx, Y, ldy, nrnk, tol, k,     &
+                               eigs, Z, ldz, res, B, ldb, V, ldv,              &
+                               S, lds, info)
+        character,   intent(in)    :: jobs, jobz, jobr, jobq, jobt, jobf
+        integer,     intent(in)    :: whtsvd, m, n, ldf, ldx, ldy, nrnk, ldz,  &
+                                       ldb, ldv, lds
+        real(ep),    intent(in)    :: tol
+        complex(ep), intent(inout) :: F(ldf,*)
+        integer,     intent(out)   :: k, info
+        complex(ep), intent(out)   :: X(ldx,*), Y(ldy,*), Z(ldz,*), B(ldb,*),  &
+                                       V(ldv,*), S(lds,*), eigs(*)
+        real(ep),    intent(out)   :: res(*)
+        ${target_complex}$, allocatable :: Ft(:,:), Xt(:,:), Yt(:,:), Zt(:,:), &
+                                            Bt(:,:), Vt(:,:), St(:,:), eigst(:), &
+                                            zwork(:)
+        ${target_real}$,    allocatable :: rest(:), work(:)
+        integer,            allocatable :: iwork(:)
+        ${target_complex}$ :: zwopt(2)
+        ${target_real}$ :: wopt(2), tol_t
+        integer :: iwopt(2), lzwork, lwork, liwork, kt, mn1
+        mn1 = max(1, min(m, n))
+        allocate(Ft(ldf, n), Xt(ldx, mn1), Yt(ldy, mn1), Zt(ldz, mn1),         &
+                 Bt(ldb, mn1), Vt(ldv, mn1), St(lds, mn1),                      &
+                 eigst(mn1), rest(mn1))
+        Ft = q2t_c(F(1:ldf, 1:n))
+        tol_t = q2t_r(tol)
+        call ${C}$gedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd,            &
+                         m, n, Ft, ldf, Xt, ldx, Yt, ldy, nrnk, tol_t, kt,      &
+                         eigst, Zt, ldz, rest, Bt, ldb, Vt, ldv,                &
+                         St, lds, zwopt, -1, wopt, -1, iwopt, -1, info)
+        if (info /= 0) return
+        lzwork = max(1, int(real(t2q_c(zwopt(1)), ep)))
+        lwork  = max(1, int(t2q_r(wopt(1))))
+        liwork = max(1, iwopt(1))
+        allocate(zwork(lzwork), work(lwork), iwork(liwork))
+        call ${C}$gedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd,            &
+                         m, n, Ft, ldf, Xt, ldx, Yt, ldy, nrnk, tol_t, kt,      &
+                         eigst, Zt, ldz, rest, Bt, ldb, Vt, ldv,                &
+                         St, lds, zwork, lzwork, work, lwork, iwork, liwork,    &
+                         info)
+        k = kt
+        F(1:ldf, 1:n)   = t2q_c(Ft)
+        X(1:ldx, 1:mn1) = t2q_c(Xt)
+        Y(1:ldy, 1:mn1) = t2q_c(Yt)
+        Z(1:ldz, 1:mn1) = t2q_c(Zt)
+        B(1:ldb, 1:mn1) = t2q_c(Bt)
+        V(1:ldv, 1:mn1) = t2q_c(Vt)
+        S(1:lds, 1:mn1) = t2q_c(St)
+        eigs(1:mn1)     = t2q_c(eigst)
+        res(1:mn1)      = t2q_r(rest)
     end subroutine
 
 end module target_lapack

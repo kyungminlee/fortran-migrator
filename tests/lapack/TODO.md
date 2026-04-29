@@ -92,12 +92,69 @@ dgesvdq passes on the same target; the bug is specific to the complex variant.
 Test left in place; needs migrator-side investigation of the
 `xgesvdq` call sequence vs `dgesvdq`.
 
+## Phase P22 — complex DMD precision divergence (kind16 / multifloats)
+
+`tests/lapack/eigenvalue/test_zgedmd.f90` and
+`tests/lapack/eigenvalue/test_zgedmdq.f90` fail layer-(a) (sorted Ritz
+spectrum) on kind16 and multifloats: the migrated target (`xgedmd` /
+`xgedmdq`) disagrees with the quad reference (`zgedmd` / `zgedmdq`
+compiled with `-freal-8-real-16`) by ~1-5 ULPs at *double* precision
+(max_rel_err 1.9e-17 .. 4.6e-17). On kind10 the tolerance window absorbs
+the divergence and tests pass. Layer-(b) (residual differential) tracks
+the layer-(a) divergence — fails on the same targets, passes on kind10.
+
+| Target      | test_dgedmd | test_zgedmd | test_dgedmdq | test_zgedmdq |
+|-------------|-------------|-------------|--------------|--------------|
+| kind16      | 48/48 PASS  | 12/48       | 32/32 PASS   | 0/32         |
+| kind10      | 48/48 PASS  | 48/48 PASS  | 32/32 PASS   | 32/32 PASS   |
+| multifloats | 48/48 PASS  | 12/48       | 32/32 PASS   | 0/32         |
+
+Real siblings `test_dgedmd` and `test_dgedmdq` pass cleanly on all
+three targets, so the bug is specific to the complex prefix migration.
+
+Hypothesis: a fp64-precision step inside `xgedmd` / `xgedmdq` not present
+in `xgesvd` / `xgeev` themselves (those are bit-exact on kind16 against
+their references — verified via `test_zgesvd` / `test_zgeev`). The
+migration diff between `external/lapack-3.12.1/SRC/zgedmd.f90` and
+`lapack/src/xgedmd.f90` is mechanical (Z→X / D→Q / DBLE→REAL(.,KIND=16))
+with no obvious fp64 leak — the bug likely lives in one of the migrated
+helpers transitively reachable from `xgedmd` / `xgedmdq` but not from
+the leaf SVD/eigenvalue routines (candidates: `xlassq` chain, `xlascl`
+for the Rayleigh-quotient build, or a CMPLX/REAL-style intrinsic call
+that resolves to the wrong kind in the complex path).
+
+Reproduce:
+```bash
+cd /home/kyungminlee/Code/fortran-migrator/src
+uv run python -m pyengine stage /tmp/stg-q --target kind16 --libraries blas lapack
+cmake -S /tmp/stg-q -B /tmp/stg-q/build
+cmake --build /tmp/stg-q/build -j8 --target test_zgedmd test_zgedmdq
+/tmp/stg-q/build/tests/lapack/test_zgedmd
+/tmp/stg-q/build/tests/lapack/test_zgedmdq
+```
+
+Tests left in place per the failing-test-stays-visible convention.
+
+Test design notes (for future tightening once the bug is fixed):
+
+  - Sizes for `*gedmdq` capped at `(12, 8)` (two-size sweep instead of
+    the design's `(24, 16)`): single-trajectory snapshot conditioning
+    `κ(F) ∝ |λ_max/λ_min|^N` collapses fast, so larger N loses
+    precision on kind10/multifloats even with relaxed tolerance.
+  - Layer-(a) tolerance: `100 * n^2 * eps` for `*gedmd`, `10000 * n^2 * eps`
+    for `*gedmdq` (trajectory data needs the bump).
+  - Layer-(b) is the differential `‖res_got − res_ref‖∞ / max(‖A‖_F, eps)`
+    rather than a relative-to-zero ratio, which collapses on near-zero
+    residuals (multifloats target manifests this most clearly).
+  - Layer-(c) (reconstruction `‖Y − Z·diag(λ)·Z⁺·X‖_F / ‖Y‖_F`) is not
+    implemented in v1; it would catch additional Z-discrepancy modes.
+
 ## Remaining user-facing routines without test drivers (as of 2026-04-29)
 
 The Bunch–Kaufman / Z-symmetric / packed / utility / 2-stage tridiag (incl.
-sy2sb/he2hb) / gtsvx / ptsvx / trsna families are now covered (Phases
-P8a–P8h).  24 routines remain — they cluster into three categories of
-non-trivial work:
+sy2sb/he2hb) / gtsvx / ptsvx / trsna / DMD (gedmd/gedmdq) families are now
+covered (Phases P8a–P8h, P22).  20 routines remain — they cluster into
+two categories, both of which are blocked or deferred:
 
 ### P17xx — Extra-precise iterative-refinement family (18 routines) — BLOCKED on XBLAS
 
@@ -208,116 +265,18 @@ Once that lands, the xx tests follow the standard pattern (interfaces in
 err_bnds_comp).  The signatures and partial wrapper code from this
 session's aborted attempt are recoverable from the git reflog if useful.
 
-### P22 — Dynamic mode decomposition (4 routines) — pending, rich coverage required
+### P22 — Dynamic mode decomposition (4 routines) — DELIVERED
 
   d/z × gedmd, gedmdq
 
-User has requested **rich coverage** (not minimal smoke).  DMD does not
-depend on XBLAS — independent of the P17xx blocker.
-
-#### Routine signatures (LAPACK 3.12.1)
-
-```
-DGEDMD  ( JOBS, JOBZ, JOBR, JOBF, WHTSVD,
-          M, N, X, LDX, Y, LDY, NRNK, TOL,
-          K, REIG, IMEIG, Z, LDZ, RES,
-          B, LDB, W, LDW, S, LDS,
-          WORK, LWORK, IWORK, LIWORK, INFO )            -- 31 args
-
-DGEDMDQ ( JOBS, JOBZ, JOBR, JOBQ, JOBT, JOBF, WHTSVD,
-          M, N, F, LDF, X, LDX, Y, LDY, NRNK, TOL,
-          K, REIG, IMEIG, Z, LDZ, RES,
-          B, LDB, V, LDV, S, LDS,
-          WORK, LWORK, IWORK, LIWORK, INFO )            -- 35 args
-
-ZGEDMD / ZGEDMDQ : same arg lists; eigenvalues come out in EIGS(*) (complex)
-                   instead of the (REIG, IMEIG) real pair.
-```
-
-#### Sources of harmless ref/target divergence
-
-1. **WHTSVD selection** rotates SVD vectors differently across LAPACK's
-   four SVD backends (1=GESVD, 2=GESDD, 3=GESVDQ, 4=GEJSV).  Pin
-   WHTSVD=1 across ref and target so both call GESVD.
-2. **Eigenvalue ordering** — internal Schur problem returns spectrum in
-   implementation-dependent order; compare on a sorted set.
-3. **Conjugate-pair sign ambiguity** for the D variant — REIG/IMEIG
-   pair order within a complex-conjugate cluster is not canonical.
-4. **Eigenvector phase / scaling** — Z columns differ by a unit
-   complex scalar (D: real ±1 modulo conjugate-pair convention).
-
-#### Test design (rich coverage)
-
-Three comparison layers per case:
-
-  **(a)** Spectrum check — assemble eigenvalues as `complex` (D: from
-  REIG+i·IMEIG; Z: from EIGS), sort lexicographically by (Re, Im) on
-  both sides, and compare via `max_rel_err_vec_z`.
-
-  **(b)** Residual norm (RES output) — RES(j) is the LAPACK-reported
-  ‖A·z_j − λ_j·z_j‖₂.  Just verify `RES(j) <= tol_res * ‖A‖_F` for
-  the target — phase-invariant, no sorting needed.
-
-  **(c)** Reconstruction check (when JOBZ='V', JOBF='N') —
-  ‖Y − Z · diag(λ) · (Z⁺ X)‖_F / ‖Y‖_F bounded.  Also phase-invariant.
-
-#### Parameter sweep
-
-For each of `gedmd` and `gedmdq`, run the cross-product:
-
-  - sizes:    `(M, N) ∈ {(8,5), (12,8), (24,16)}`  (m≥n required)
-  - JOBS:    `{'N', 'S'}`              (no scaling, column scaling)
-  - JOBZ:    `{'N', 'V'}`              (skip Z, full Z)
-  - JOBR:    `{'F', 'S'}`              (no residual, residuals)
-  - JOBF:    `{'N', 'E'}`              (no exact-DMD, exact-DMD modes)
-  - WHTSVD:  `1` only (pinned for cross-impl agreement)
-  - NRNK:    `-1` (auto rank from TOL); TOL = 10·target_eps
-  - For `gedmdq`: JOBQ ∈ {'F'}, JOBT ∈ {'F'}, JOBF as above
-
-For each combo, apply layers (a)+(b)+(c) where the chosen JOB flags
-make the relevant outputs available.  Skip (c) when JOBZ='N'.
-
-#### Tolerances
-
-  - Spectrum (layer a):  `tol_eig = 100 * n^2 * target_eps`
-  - Residual (layer b):  `tol_res = 100 * n   * target_eps`
-  - Reconstruction (c):  `tol_rec = 100 * n^2 * target_eps`
-
-(Conservative; tighten after first kind16 pass if `err << tol`.)
-
-#### Test data generation
-
-Build A with controlled spectrum:
-  `A = U · diag(λ) · U⁻¹` with random orthogonal U from
-  `gen_orthogonal_quad`, λ chosen with at least one complex pair
-  (D variant) and one near-zero magnitude.
-Snapshots: `X = random m×n`, `Y = A · X`.  Ensures the spectrum
-the routine recovers is known up to sort order, which is useful for
-debugging when (a) fails.
-
-#### File layout
-
-  - `tests/lapack/eigenvalue/test_dgedmd.f90`
-  - `tests/lapack/eigenvalue/test_zgedmd.f90`
-  - `tests/lapack/eigenvalue/test_dgedmdq.f90`
-  - `tests/lapack/eigenvalue/test_zgedmdq.f90`
-  - `ref_quad_lapack.f90` — 4 new explicit interfaces
-  - `target_lapack_body.fypp` — 4 new `target_*` wrappers (q2t/t2q on
-    X, Y, F, output Z, eigenvalues, RES, B, W, V, S as appropriate)
-
-#### Risks / open items
-
-  - `gedmdq` outputs an extra `T` matrix (N×N small upper-triangular
-    snapshot) under JOBT='F'; verify whether T is canonical or
-    impl-defined.  If non-canonical, skip layer-(c) check that would
-    rely on T.
-  - `JOBF='E'` returns "exact DMD" Koopman modes in B; sign/phase
-    convention may diverge across SVD backends even at WHTSVD=1.
-    First implementation should report B with phase-invariant norms,
-    not elementwise.
-  - Workspace queries: WORK(1)/LWORK and IWORK(1)/LIWORK must be sized
-    via the documented LWORK=-1 query path; the wrapper allocates from
-    the query result, never a hardcoded floor.
+Tests landed in `tests/lapack/eigenvalue/test_{d,z}gedmd{,q}.f90` plus
+helpers (`gen_orthogonal_quad` in `test_data.f90`, `sort_eig_lex_z` in
+`compare.f90`), 4 ref interfaces in `ref_quad_lapack.f90`, and 4 fypp
+wrappers in `target_lapack_body.fypp`.  Layer-(a) spectrum + layer-(b)
+differential residuals; layer-(c) reconstruction not implemented (would
+be a future tightening).  Real variants pass on all three targets;
+complex variants surface the migrator-side fp64 leak documented in the
+"Phase P22 — complex DMD precision divergence" section above.
 
 ### sb2st kernels (2 routines)
 
