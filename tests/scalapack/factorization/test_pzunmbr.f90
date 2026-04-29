@@ -56,7 +56,7 @@ program test_pzunmbr
     if (my_rank == 0) then
         allocate(A_ref(m_a, n_a), d_ref(mn), e_ref(mn), &
                  tauq_ref(mn), taup_ref(mn), &
-                 work_ref(max(1, max(m_a, n_a) * 64)))
+                 work_ref(max(1, (m_a + n_a) * 64)))
         A_ref = A_glob
         call zgebrd(m_a, n_a, A_ref, m_a, d_ref, e_ref, tauq_ref, taup_ref, &
                     work_ref, size(work_ref), info_ref)
