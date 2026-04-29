@@ -432,6 +432,27 @@ module ref_quad_lapack
             integer,   intent(out) :: iwork(*), info
         end subroutine dtrrfs
 
+        subroutine dtrcon(norm, uplo, diag, n, A, lda, rcond, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm, uplo, diag
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtrcon
+
+        subroutine ztrcon(norm, uplo, diag, n, A, lda, rcond, &
+                          work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm, uplo, diag
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            complex(ep), intent(out) :: work(*)
+            real(ep),    intent(out) :: rcond, rwork(*)
+            integer,     intent(out) :: info
+        end subroutine ztrcon
+
         subroutine ztrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, &
                           X, ldx, ferr, berr, work, rwork, info)
             import :: ep

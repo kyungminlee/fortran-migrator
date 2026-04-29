@@ -79,6 +79,7 @@ module target_scalapack
     public :: target_pddbtrsv, target_pzdbtrsv
     public :: target_pdgesvx, target_pdposvx, target_pzgesvx, target_pzposvx
     public :: target_pdtrrfs, target_pztrrfs
+    public :: target_pdtrcon, target_pztrcon
     public :: target_pdsyevr, target_pzheevr
     public :: target_pdstebz, target_pdsyevx, target_pzheevx
     public :: target_pdgeqrf, target_pdgeqr2, target_pdorgqr, target_pdormqr
@@ -519,6 +520,29 @@ $:IMPORT_RC()
             ${target_complex}$, intent(in)    :: A(*), B(*), X(*)
             ${target_complex}$, intent(out)   :: work(*)
             ${target_real}$,    intent(out)   :: ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$trcon(norm, uplo, diag, n, A, ia, ja, desca, rcond, &
+                              work, lwork, iwork, liwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: norm, uplo, diag
+            integer,   intent(in)    :: n, ia, ja, lwork, liwork
+            integer,   intent(in)    :: desca(9)
+            ${target_real}$, intent(in)    :: A(*)
+            ${target_real}$, intent(out)   :: rcond, work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$trcon(norm, uplo, diag, n, A, ia, ja, desca, rcond, &
+                              work, lwork, rwork, lrwork, info)
+$:IMPORT_RC()
+            character,   intent(in)    :: norm, uplo, diag
+            integer,     intent(in)    :: n, ia, ja, lwork, lrwork
+            integer,     intent(in)    :: desca(9)
+            ${target_complex}$, intent(in)    :: A(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            ${target_real}$,    intent(out)   :: rcond, rwork(*)
             integer,     intent(out)   :: info
         end subroutine
 
@@ -3019,6 +3043,65 @@ contains
                              Bt, ib, jb, descb, Xt, ix, jx, descx, &
                              ferr_t, berr_t, work_t, lwt, rwork_t, lrwt, info)
             ferr(1:nrhs) = t2q_r(ferr_t); berr(1:nrhs) = t2q_r(berr_t)
+        end if
+    end subroutine
+
+    subroutine target_pdtrcon(norm, uplo, diag, n, A, ia, ja, desca, rcond, &
+                              work, lwork, iwork, liwork, info)
+        character, intent(in)    :: norm, uplo, diag
+        integer,   intent(in)    :: n, ia, ja, lwork, liwork
+        integer,   intent(in)    :: desca(9)
+        real(ep),  intent(in)    :: A(*)
+        real(ep),  intent(out)   :: rcond, work(*)
+        integer,   intent(out)   :: iwork(*), info
+        integer :: na, lwt
+        ${target_real}$, allocatable :: At(:), work_t(:)
+        ${target_real}$ :: rcond_t
+        na = nloc(desca)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), work_t(1))
+            call ${R}$trcon(norm, uplo, diag, n, At, ia, ja, desca, rcond_t, &
+                             work_t, -1, iwork, liwork, info)
+            work(1) = t2q_r(work_t(1))
+            rcond = t2q_r(rcond_t)
+        else
+            lwt = max(1, lwork)
+            allocate(At(na), work_t(lwt))
+            At = q2t_r(A(1:na))
+            call ${R}$trcon(norm, uplo, diag, n, At, ia, ja, desca, rcond_t, &
+                             work_t, lwt, iwork, liwork, info)
+            rcond = t2q_r(rcond_t)
+        end if
+    end subroutine
+
+    subroutine target_pztrcon(norm, uplo, diag, n, A, ia, ja, desca, rcond, &
+                              work, lwork, rwork, lrwork, info)
+        character,   intent(in)    :: norm, uplo, diag
+        integer,     intent(in)    :: n, ia, ja, lwork, lrwork
+        integer,     intent(in)    :: desca(9)
+        complex(ep), intent(in)    :: A(*)
+        complex(ep), intent(out)   :: work(*)
+        real(ep),    intent(out)   :: rcond, rwork(*)
+        integer,     intent(out)   :: info
+        integer :: na, lwt, lrwt
+        ${target_complex}$, allocatable :: At(:), work_t(:)
+        ${target_real}$,    allocatable :: rwork_t(:)
+        ${target_real}$ :: rcond_t
+        na = nloc(desca)
+        if (lwork == -1) then
+            allocate(At(max(1,na)), work_t(1), rwork_t(1))
+            call ${C}$trcon(norm, uplo, diag, n, At, ia, ja, desca, rcond_t, &
+                             work_t, -1, rwork_t, -1, info)
+            work(1) = t2q_c(work_t(1))
+            rwork(1) = t2q_r(rwork_t(1))
+            rcond = t2q_r(rcond_t)
+        else
+            lwt = max(1, lwork); lrwt = max(1, lrwork)
+            allocate(At(na), work_t(lwt), rwork_t(lrwt))
+            At = q2t_c(A(1:na))
+            call ${C}$trcon(norm, uplo, diag, n, At, ia, ja, desca, rcond_t, &
+                             work_t, lwt, rwork_t, lrwt, info)
+            rcond = t2q_r(rcond_t)
         end if
     end subroutine
 
