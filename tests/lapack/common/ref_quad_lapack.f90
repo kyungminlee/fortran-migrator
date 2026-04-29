@@ -5197,6 +5197,76 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: Q(ldq,*), Pt(ldpt,*), work(*)
             integer,     intent(out)   :: info
         end subroutine zgbbrd
+
+        ! P16 — MRRR / inverse-iteration tridiagonal eigensolvers
+        subroutine dstegr(jobz, range, n, D, E, vl, vu, il, iu, abstol, &
+                          m, W, Z, ldz, isuppz, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range
+            integer,   intent(in)    :: n, il, iu, ldz, lwork, liwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: D(*), E(*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+        end subroutine dstegr
+
+        subroutine zstegr(jobz, range, n, D, E, vl, vu, il, iu, abstol, &
+                          m, W, Z, ldz, isuppz, work, lwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range
+            integer,     intent(in)    :: n, il, iu, ldz, lwork, liwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            real(ep),    intent(inout) :: D(*), E(*)
+            integer,     intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),    intent(out)   :: W(*), work(*)
+            complex(ep), intent(out)   :: Z(ldz,*)
+        end subroutine zstegr
+
+        subroutine dstemr(jobz, range, n, D, E, vl, vu, il, iu, &
+                          m, W, Z, ldz, nzc, isuppz, tryrac, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range
+            integer,   intent(in)    :: n, il, iu, ldz, nzc, lwork, liwork
+            logical,   intent(inout) :: tryrac
+            real(ep),  intent(in)    :: vl, vu
+            real(ep),  intent(inout) :: D(*), E(*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+        end subroutine dstemr
+
+        subroutine zstemr(jobz, range, n, D, E, vl, vu, il, iu, &
+                          m, W, Z, ldz, nzc, isuppz, tryrac, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range
+            integer,     intent(in)    :: n, il, iu, ldz, nzc, lwork, liwork
+            logical,     intent(inout) :: tryrac
+            real(ep),    intent(in)    :: vl, vu
+            real(ep),    intent(inout) :: D(*), E(*)
+            integer,     intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),    intent(out)   :: W(*), work(*)
+            complex(ep), intent(out)   :: Z(ldz,*)
+        end subroutine zstemr
+
+        subroutine dstein(n, D, E, m, W, iblock, isplit, Z, ldz, work, iwork, ifail, info)
+            import :: ep
+            integer,  intent(in)    :: n, m, ldz
+            real(ep), intent(in)    :: D(*), E(*), W(*)
+            integer,  intent(in)    :: iblock(*), isplit(*)
+            real(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,  intent(out)   :: iwork(*), ifail(*), info
+        end subroutine dstein
+
+        subroutine zstein(n, D, E, m, W, iblock, isplit, Z, ldz, work, iwork, ifail, info)
+            import :: ep
+            integer,     intent(in)    :: n, m, ldz
+            real(ep),    intent(in)    :: D(*), E(*), W(*)
+            integer,     intent(in)    :: iblock(*), isplit(*)
+            complex(ep), intent(out)   :: Z(ldz,*)
+            real(ep),    intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), ifail(*), info
+        end subroutine zstein
     end interface
 
 end module ref_quad_lapack

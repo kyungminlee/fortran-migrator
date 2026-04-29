@@ -262,6 +262,10 @@ module target_lapack
     public :: target_dgesvdq, target_zgesvdq
     public :: target_dgesvdx, target_zgesvdx
     public :: target_dgbbrd, target_zgbbrd
+    ! P16 — MRRR tridiagonal eigensolvers
+    public :: target_dstegr, target_zstegr
+    public :: target_dstemr, target_zstemr
+    public :: target_dstein, target_zstein
 
     character(len=*), parameter :: target_name = "${target_name}$"
     real(ep),         parameter :: target_eps  = ${target_eps}$
@@ -13844,6 +13848,143 @@ $:CPACK_INV('zsptri', C + 'sptri')
         A(1:lda, 1:ncols) = t2q_c(At)
         tau(1:min(m,n)) = t2q_c(taut)
         maxc2nrmk = t2q_r(m2k); relmaxc2nrmk = t2q_r(rm2k)
+    end subroutine
+
+    ! ----- P16 MRRR / inverse-iteration tridiagonal eigensolvers -----
+
+    subroutine target_dstegr(jobz, range, n, D, E, vl, vu, il, iu, abstol, &
+                             m, W, Z, ldz, isuppz, info)
+        character, intent(in)    :: jobz, range
+        integer,   intent(in)    :: n, il, iu, ldz
+        real(ep),  intent(in)    :: vl, vu, abstol
+        real(ep),  intent(inout) :: D(*), E(*)
+        integer,   intent(out)   :: m, isuppz(*), info
+        real(ep),  intent(out)   :: W(*), Z(ldz,*)
+        ${target_real}$, allocatable :: Dt(:), Et(:), Wt(:), Zt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, liwork, iopt(1)
+        allocate(Dt(n), Et(max(1, n)), Wt(n), Zt(ldz, n))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1,n)))
+        call ${R}$stegr(jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                        m, Wt, Zt, ldz, isuppz, wopt, -1, iopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); liwork = max(1, iopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$stegr(jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                        m, Wt, Zt, ldz, isuppz, work, lwork, iwork, liwork, info)
+        D(1:n) = t2q_r(Dt); if (n > 0) E(1:max(1,n)) = t2q_r(Et)
+        if (m > 0) W(1:m) = t2q_r(Wt(1:m))
+        if (jobz /= 'N' .and. jobz /= 'n' .and. m > 0) Z(1:ldz, 1:m) = t2q_r(Zt(1:ldz, 1:m))
+    end subroutine
+
+    subroutine target_zstegr(jobz, range, n, D, E, vl, vu, il, iu, abstol, &
+                             m, W, Z, ldz, isuppz, info)
+        character,   intent(in)    :: jobz, range
+        integer,     intent(in)    :: n, il, iu, ldz
+        real(ep),    intent(in)    :: vl, vu, abstol
+        real(ep),    intent(inout) :: D(*), E(*)
+        integer,     intent(out)   :: m, isuppz(*), info
+        real(ep),    intent(out)   :: W(*)
+        complex(ep), intent(out)   :: Z(ldz,*)
+        ${target_real}$, allocatable :: Dt(:), Et(:), Wt(:), work(:)
+        ${target_complex}$, allocatable :: Zt(:,:)
+        ${target_real}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, liwork, iopt(1)
+        allocate(Dt(n), Et(max(1, n)), Wt(n), Zt(ldz, n))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1,n)))
+        call ${C}$stegr(jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                        m, Wt, Zt, ldz, isuppz, wopt, -1, iopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); liwork = max(1, iopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${C}$stegr(jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), il, iu, q2t_r(abstol), &
+                        m, Wt, Zt, ldz, isuppz, work, lwork, iwork, liwork, info)
+        D(1:n) = t2q_r(Dt); if (n > 0) E(1:max(1,n)) = t2q_r(Et)
+        if (m > 0) W(1:m) = t2q_r(Wt(1:m))
+        if (jobz /= 'N' .and. jobz /= 'n' .and. m > 0) Z(1:ldz, 1:m) = t2q_c(Zt(1:ldz, 1:m))
+    end subroutine
+
+    subroutine target_dstemr(jobz, range, n, D, E, vl, vu, il, iu, &
+                             m, W, Z, ldz, nzc, isuppz, tryrac, info)
+        character, intent(in)    :: jobz, range
+        integer,   intent(in)    :: n, il, iu, ldz, nzc
+        logical,   intent(inout) :: tryrac
+        real(ep),  intent(in)    :: vl, vu
+        real(ep),  intent(inout) :: D(*), E(*)
+        integer,   intent(out)   :: m, isuppz(*), info
+        real(ep),  intent(out)   :: W(*), Z(ldz,*)
+        ${target_real}$, allocatable :: Dt(:), Et(:), Wt(:), Zt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, liwork, iopt(1)
+        allocate(Dt(n), Et(max(1, n)), Wt(n), Zt(ldz, max(1, nzc)))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1,n)))
+        call ${R}$stemr(jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), il, iu, &
+                        m, Wt, Zt, ldz, nzc, isuppz, tryrac, wopt, -1, iopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); liwork = max(1, iopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${R}$stemr(jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), il, iu, &
+                        m, Wt, Zt, ldz, nzc, isuppz, tryrac, work, lwork, iwork, liwork, info)
+        D(1:n) = t2q_r(Dt); if (n > 0) E(1:max(1,n)) = t2q_r(Et)
+        if (m > 0) W(1:m) = t2q_r(Wt(1:m))
+        if (jobz /= 'N' .and. jobz /= 'n' .and. m > 0) Z(1:ldz, 1:m) = t2q_r(Zt(1:ldz, 1:m))
+    end subroutine
+
+    subroutine target_zstemr(jobz, range, n, D, E, vl, vu, il, iu, &
+                             m, W, Z, ldz, nzc, isuppz, tryrac, info)
+        character,   intent(in)    :: jobz, range
+        integer,     intent(in)    :: n, il, iu, ldz, nzc
+        logical,     intent(inout) :: tryrac
+        real(ep),    intent(in)    :: vl, vu
+        real(ep),    intent(inout) :: D(*), E(*)
+        integer,     intent(out)   :: m, isuppz(*), info
+        real(ep),    intent(out)   :: W(*)
+        complex(ep), intent(out)   :: Z(ldz,*)
+        ${target_real}$, allocatable :: Dt(:), Et(:), Wt(:), work(:)
+        ${target_complex}$, allocatable :: Zt(:,:)
+        ${target_real}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, liwork, iopt(1)
+        allocate(Dt(n), Et(max(1, n)), Wt(n), Zt(ldz, max(1, nzc)))
+        Dt = q2t_r(D(1:n)); Et = q2t_r(E(1:max(1,n)))
+        call ${C}$stemr(jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), il, iu, &
+                        m, Wt, Zt, ldz, nzc, isuppz, tryrac, wopt, -1, iopt, -1, info)
+        lwork = max(1, int(real(t2q_r(wopt(1)), ep))); liwork = max(1, iopt(1))
+        allocate(work(lwork), iwork(liwork))
+        call ${C}$stemr(jobz, range, n, Dt, Et, q2t_r(vl), q2t_r(vu), il, iu, &
+                        m, Wt, Zt, ldz, nzc, isuppz, tryrac, work, lwork, iwork, liwork, info)
+        D(1:n) = t2q_r(Dt); if (n > 0) E(1:max(1,n)) = t2q_r(Et)
+        if (m > 0) W(1:m) = t2q_r(Wt(1:m))
+        if (jobz /= 'N' .and. jobz /= 'n' .and. m > 0) Z(1:ldz, 1:m) = t2q_c(Zt(1:ldz, 1:m))
+    end subroutine
+
+    subroutine target_dstein(n, D, E, m, W, iblock, isplit, Z, ldz, ifail, info)
+        integer,  intent(in)    :: n, m, ldz
+        real(ep), intent(in)    :: D(*), E(*), W(*)
+        integer,  intent(in)    :: iblock(*), isplit(*)
+        real(ep), intent(out)   :: Z(ldz,*)
+        integer,  intent(out)   :: ifail(*), info
+        ${target_real}$, allocatable :: Dt(:), Et(:), Wt(:), Zt(:,:), work(:)
+        integer, allocatable :: iwork(:)
+        allocate(Dt(n), Et(max(1, n-1)), Wt(m), Zt(ldz, m), work(5*n), iwork(n))
+        Dt = q2t_r(D(1:n)); if (n > 1) Et = q2t_r(E(1:n-1)); Wt = q2t_r(W(1:m))
+        call ${R}$stein(n, Dt, Et, m, Wt, iblock, isplit, Zt, ldz, work, iwork, ifail, info)
+        Z(1:ldz, 1:m) = t2q_r(Zt)
+    end subroutine
+
+    subroutine target_zstein(n, D, E, m, W, iblock, isplit, Z, ldz, ifail, info)
+        integer,     intent(in)    :: n, m, ldz
+        real(ep),    intent(in)    :: D(*), E(*), W(*)
+        integer,     intent(in)    :: iblock(*), isplit(*)
+        complex(ep), intent(out)   :: Z(ldz,*)
+        integer,     intent(out)   :: ifail(*), info
+        ${target_real}$, allocatable :: Dt(:), Et(:), Wt(:), work(:)
+        ${target_complex}$, allocatable :: Zt(:,:)
+        integer, allocatable :: iwork(:)
+        allocate(Dt(n), Et(max(1, n-1)), Wt(m), Zt(ldz, m), work(5*n), iwork(n))
+        Dt = q2t_r(D(1:n)); if (n > 1) Et = q2t_r(E(1:n-1)); Wt = q2t_r(W(1:m))
+        call ${C}$stein(n, Dt, Et, m, Wt, iblock, isplit, Zt, ldz, work, iwork, ifail, info)
+        Z(1:ldz, 1:m) = t2q_c(Zt)
     end subroutine
 
     ! ----- P6/P7 modern SVD + banded bidiag reduction -----
