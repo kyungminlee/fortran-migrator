@@ -4640,6 +4640,161 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             integer,     intent(out)   :: info
         end subroutine zunmrz
+
+        ! P11 — RFP factor / solve / triangular ops
+        subroutine dpftrf(transr, uplo, n, A, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: A(0:*)
+            integer,   intent(out)   :: info
+        end subroutine dpftrf
+
+        subroutine zpftrf(transr, uplo, n, A, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: A(0:*)
+            integer,     intent(out)   :: info
+        end subroutine zpftrf
+
+        subroutine dpftri(transr, uplo, n, A, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: A(0:*)
+            integer,   intent(out)   :: info
+        end subroutine dpftri
+
+        subroutine zpftri(transr, uplo, n, A, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: A(0:*)
+            integer,     intent(out)   :: info
+        end subroutine zpftri
+
+        subroutine dpftrs(transr, uplo, n, nrhs, A, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: A(0:*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpftrs
+
+        subroutine zpftrs(transr, uplo, n, nrhs, A, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: A(0:*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpftrs
+
+        subroutine dpstrf(uplo, n, A, lda, piv, rank, tol, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: piv(*), rank, info
+            real(ep),  intent(in)    :: tol
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dpstrf
+
+        subroutine zpstrf(uplo, n, A, lda, piv, rank, tol, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: piv(*), rank, info
+            real(ep),    intent(in)    :: tol
+            real(ep),    intent(out)   :: work(*)
+        end subroutine zpstrf
+
+        subroutine dpteqr(compz, n, D, E, Z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: compz
+            integer,   intent(in)    :: n, ldz
+            real(ep),  intent(inout) :: D(*), E(*), Z(ldz,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dpteqr
+
+        subroutine zpteqr(compz, n, D, E, Z, ldz, work, info)
+            import :: ep
+            character,   intent(in)    :: compz
+            integer,     intent(in)    :: n, ldz
+            real(ep),    intent(inout) :: D(*), E(*)
+            complex(ep), intent(inout) :: Z(ldz,*)
+            real(ep),    intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zpteqr
+
+        subroutine dpbstf(uplo, n, kd, AB, ldab, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, ldab
+            real(ep),  intent(inout) :: AB(ldab,*)
+            integer,   intent(out)   :: info
+        end subroutine dpbstf
+
+        subroutine zpbstf(uplo, n, kd, AB, ldab, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, ldab
+            complex(ep), intent(inout) :: AB(ldab,*)
+            integer,     intent(out)   :: info
+        end subroutine zpbstf
+
+        subroutine dsfrk(transr, uplo, trans, n, k, alpha, A, lda, beta, C)
+            import :: ep
+            character, intent(in)    :: transr, uplo, trans
+            integer,   intent(in)    :: n, k, lda
+            real(ep),  intent(in)    :: alpha, beta, A(lda,*)
+            real(ep),  intent(inout) :: C(0:*)
+        end subroutine dsfrk
+
+        subroutine zhfrk(transr, uplo, trans, n, k, alpha, A, lda, beta, C)
+            import :: ep
+            character,   intent(in)    :: transr, uplo, trans
+            integer,     intent(in)    :: n, k, lda
+            real(ep),    intent(in)    :: alpha, beta
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: C(0:*)
+        end subroutine zhfrk
+
+        subroutine dtfsm(transr, side, uplo, trans, diag, m, n, alpha, A, B, ldb)
+            import :: ep
+            character, intent(in)    :: transr, side, uplo, trans, diag
+            integer,   intent(in)    :: m, n, ldb
+            real(ep),  intent(in)    :: alpha, A(0:*)
+            real(ep),  intent(inout) :: B(0:ldb-1, 0:*)
+        end subroutine dtfsm
+
+        subroutine ztfsm(transr, side, uplo, trans, diag, m, n, alpha, A, B, ldb)
+            import :: ep
+            character,   intent(in)    :: transr, side, uplo, trans, diag
+            integer,     intent(in)    :: m, n, ldb
+            complex(ep), intent(in)    :: alpha, A(0:*)
+            complex(ep), intent(inout) :: B(0:ldb-1, 0:*)
+        end subroutine ztfsm
+
+        subroutine dtftri(transr, uplo, diag, n, A, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo, diag
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: A(0:*)
+            integer,   intent(out)   :: info
+        end subroutine dtftri
+
+        subroutine ztftri(transr, uplo, diag, n, A, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo, diag
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: A(0:*)
+            integer,     intent(out)   :: info
+        end subroutine ztftri
     end interface
 
 end module ref_quad_lapack
