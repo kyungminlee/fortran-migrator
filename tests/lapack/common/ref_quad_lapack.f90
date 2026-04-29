@@ -5829,6 +5829,183 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(n+nb+1, nb+3)
             integer,     intent(out)   :: info
         end subroutine zsytri2x
+
+        ! ── BLAS-style Z-symmetric / Z-packed fillers ───────────────────
+        subroutine zsymv(uplo, n, alpha, A, lda, x, incx, beta, y, incy)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, incx, incy
+            complex(ep), intent(in)    :: alpha, beta, A(lda,*), x(*)
+            complex(ep), intent(inout) :: y(*)
+        end subroutine zsymv
+
+        subroutine zsyr(uplo, n, alpha, x, incx, A, lda)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, incx
+            complex(ep), intent(in)    :: alpha, x(*)
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zsyr
+
+        subroutine zspmv(uplo, n, alpha, AP, x, incx, beta, y, incy)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, incx, incy
+            complex(ep), intent(in)    :: alpha, beta, AP(*), x(*)
+            complex(ep), intent(inout) :: y(*)
+        end subroutine zspmv
+
+        subroutine zspr(uplo, n, alpha, x, incx, AP)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, incx
+            complex(ep), intent(in)    :: alpha, x(*)
+            complex(ep), intent(inout) :: AP(*)
+        end subroutine zspr
+
+        subroutine dsyswapr(uplo, n, A, lda, i1, i2)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, i1, i2
+            real(ep),  intent(inout) :: A(lda,*)
+        end subroutine dsyswapr
+
+        subroutine zheswapr(uplo, n, A, lda, i1, i2)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, i1, i2
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zheswapr
+
+        subroutine zsyswapr(uplo, n, A, lda, i1, i2)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, i1, i2
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zsyswapr
+
+        subroutine dsyconv(uplo, way, n, A, lda, ipiv, e, info)
+            import :: ep
+            character, intent(in)    :: uplo, way
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: e(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyconv
+
+        subroutine dsyconvf(uplo, way, n, A, lda, e, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo, way
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*), e(*)
+            integer,   intent(inout) :: ipiv(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyconvf
+
+        subroutine dsyconvf_rook(uplo, way, n, A, lda, e, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo, way
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*), e(*)
+            integer,   intent(in)    :: ipiv(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyconvf_rook
+
+        subroutine zsyconv(uplo, way, n, A, lda, ipiv, e, info)
+            import :: ep
+            character,   intent(in)    :: uplo, way
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: e(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyconv
+
+        subroutine zsyconvf(uplo, way, n, A, lda, e, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo, way
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*), e(*)
+            integer,     intent(inout) :: ipiv(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyconvf
+
+        subroutine zsyconvf_rook(uplo, way, n, A, lda, e, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo, way
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*), e(*)
+            integer,     intent(in)    :: ipiv(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyconvf_rook
+
+        subroutine zhprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhprfs
+
+        subroutine zhpsvx(fact, uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), B(ldb,*)
+            complex(ep), intent(inout) :: AFP(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhpsvx
+
+        subroutine zspsvx(fact, uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), B(ldb,*)
+            complex(ep), intent(inout) :: AFP(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zspsvx
+
+        subroutine dspsvx(fact, uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: AP(*), B(ldb,*)
+            real(ep),  intent(inout) :: AFP(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dspsvx
+
+        subroutine dgtsv(n, nrhs, dl, d, du, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb
+            real(ep), intent(inout) :: dl(*), d(*), du(*), B(ldb,*)
+            integer,  intent(out)   :: info
+        end subroutine dgtsv
+
+        subroutine dptsv(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb
+            real(ep), intent(inout) :: d(*), e(*), B(ldb,*)
+            integer,  intent(out)   :: info
+        end subroutine dptsv
     end interface
 
 end module ref_quad_lapack
