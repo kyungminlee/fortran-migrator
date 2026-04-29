@@ -94,20 +94,43 @@ Test left in place; needs migrator-side investigation of the
 
 ## Remaining user-facing routines without test drivers (as of 2026-04-29)
 
-The Bunch–Kaufman / Z-symmetric / packed / utility / 2-stage tridiag /
-gtsvx / ptsvx / trsna families are now covered (Phases P8a–P8f + 2-stage
-tridiag).  26 routines remain — they cluster into three categories of
+The Bunch–Kaufman / Z-symmetric / packed / utility / 2-stage tridiag (incl.
+sy2sb/he2hb) / gtsvx / ptsvx / trsna families are now covered (Phases
+P8a–P8h).  24 routines remain — they cluster into three categories of
 non-trivial work:
 
-### P17xx — Extra-precise iterative-refinement family (18 routines)
+### P17xx — Extra-precise iterative-refinement family (18 routines) — BLOCKED on XBLAS
 
   d/z × gbrfsx, gbsvxx, gerfsx, gesvxx, porfsx, posvxx, syrfsx, sysvxx
   z × herfsx, hesvxx
 
-These have ~25-argument signatures including ERR_BNDS_NORM, ERR_BNDS_COMP,
-N_ERR_BNDS, NPARAMS, PARAMS for the extra-precise residual refinement.  The
-xx routines are also known sensitive on `multifloats`.  Expect to need
-careful workspace shapes and per-target tolerance bumps.
+**Blocker:** the xx family in LAPACK delegates to `xla_*_extended` helper
+routines, which in turn call XBLAS extended-precision BLAS
+(`blas_zhemv2_x_`, `blas_zhemv_x_`, `blas_zsymv2_x_`, `blas_zsymv_x_`,
+etc.).  XBLAS is a separate library that the migrator/recipe does not
+currently provide for either the `qlapack` (kind16) reference build or
+the migrated targets.  Adding tests for any xx routine surfaces the
+missing XBLAS symbols at link time and breaks **all** other tests by
+poisoning `liblapack_test_target.a`.
+
+Reproduce link error:
+```bash
+cd /home/kyungminlee/Code/fortran-migrator/src
+uv run python -m pyengine stage /tmp/stg-q --target kind16 --libraries blas lapack
+# Add even a stub test target_dgesvxx wrapper in target_lapack_body.fypp,
+# rebuild liblapack_test_target.a — then any test executable fails to link:
+#   undefined reference to `blas_zhemv2_x_'
+#   undefined reference to `blas_zsymv_x_'
+```
+
+Resolution path: extend the recipe (or add an override) to either
+(a) vendor XBLAS into `qlapack` and the migrated targets, or
+(b) exclude `xla_*_extended.f` from the qlapack/migrated builds and stub
+out the xx callers.
+
+Until then, **do not** add interfaces or wrappers for any xx routine —
+the wrapper module pulls in the xla_* objects at link time even if no
+test uses the wrapper, breaking the whole test suite.
 
 ### P22 — Dynamic mode decomposition (4 routines)
 
@@ -115,33 +138,16 @@ careful workspace shapes and per-target tolerance bumps.
 
 DMD has a wide parameter surface (jobs/jobz/jobr/jobf/whtsvd).  Suggested
 starting point: WHTSVD=1, JOBS='N', JOBZ='V', JOBR='F', JOBF='N' for a
-basic eigenvalue check.
+basic eigenvalue check.  Not attempted yet; should be doable once the
+above XBLAS issue is sorted (DMD does not depend on XBLAS).
 
-### 2-stage band reductions (4 routines)
+### sb2st kernels (2 routines)
 
-  dsytrd_sy2sb, zhetrd_he2hb     — symmetric/Hermitian to banded
-  dsb2st_kernels, zhb2st_kernels — band-to-tridiag SBR kernels
-
-`dsytrd_sy2sb` workspace query returns invalid LWORK in the quad reference
-build (`ILAENV2STAGE` returns 0 / negative for the kind16 reference
-configuration), causing a `Fatal glibc error: malloc.c assertion failed`
-when the routine writes out-of-bounds in the workspace setup.  The same
-crash reproduces with a hand-sized large workspace (`4*kd*kd*n+4*n*n`),
-pointing to a deeper interaction between the migrator output and
-`ILAENV2STAGE`/blocking choices for these routines.
-
-`*sb2st_kernels` are the SBR (Successive Band Reduction) inner kernels and
-are normally driven by `*sb2st` / `*hb2st`.  Testing them in isolation
-requires constructing a partial band-reduction state that matches the
-kernel's mid-stream invariants — non-trivial, may not be worth standalone
-coverage if the orchestrator paths are tested.
-
-Reproduce sy2sb crash:
-```bash
-cd /home/kyungminlee/Code/fortran-migrator/src
-uv run python -m pyengine stage /tmp/stg-q --target kind16 --libraries blas lapack
-cmake --build /tmp/stg-q/build -j8 --target test_dsytrd_sy2sb   # would require restoring removed test
-```
+  dsb2st_kernels, zhb2st_kernels — SBR (Successive Band Reduction) inner
+  kernels, normally driven by `*sb2st` / `*hb2st`.  Testing them in
+  isolation requires constructing a partial band-reduction state that
+  matches the kernel's mid-stream invariants — non-trivial, may not be
+  worth standalone coverage if the orchestrator paths are tested.
 
 ### Audit pending
 
