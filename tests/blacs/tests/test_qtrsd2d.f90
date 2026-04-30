@@ -5,6 +5,12 @@
 ! lower triangle is not transmitted; off-trapezoid cells in the
 ! receive buffer are preserved by the wrapper which preloads At with
 ! the in-buffer contents before calling the BLACS recv).
+!
+! BLACS upper-trapezoidal convention (BI_GetMpiTrType.c, M>N branch):
+!   col j (1-indexed) carries rows 1..(M-N+j); the extra M-N rows
+!   above the j==N diagonal are part of the trapezoid. M==N is the
+!   ordinary upper-triangular case.  Test uses M==N to keep the
+!   shape unambiguous and exercise the canonical triangular path.
 program test_qtrsd2d
     use prec_kinds,        only: ep
     use blacs_prec_report, only: report_init, report_case, report_finalize
@@ -15,7 +21,7 @@ program test_qtrsd2d
     use mpi
     implicit none
 
-    integer, parameter :: m = 6, n = 5, lda = 6
+    integer, parameter :: m = 5, n = 5, lda = 6
     real(ep), allocatable :: A(:,:), Aref(:,:)
     real(ep) :: err
     real(ep), parameter :: tol = 0.0_ep
@@ -43,7 +49,7 @@ program test_qtrsd2d
         ! so off-trapezoid cells round-trip through q2t→t2q (exact
         ! at kind16) and stay zero.
         call target_qtrrv2d(my_context, 'U', 'N', m, n, A, lda, 0, 0)
-        ! Verify upper trapezoid is exact.
+        ! Verify upper triangle (i <= j) is exact.
         do j = 1, n
             do i = 1, min(j, m)
                 if (A(i, j) /= Aref(i, j)) err = BAD

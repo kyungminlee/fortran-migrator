@@ -6,7 +6,11 @@
 !
 ! BLACS_GET(ICONTXT=-1, WHAT=0, VAL) retrieves the default system
 ! context derived from MPI_COMM_WORLD; calling it with WHAT=10
-! retrieves the topology for broadcasts (a small integer).
+! (SGET_BLACSCONTXT) retrieves the BLACS-internal handle for the
+! given context (an opaque integer; for the Fortran interface it's
+! MPI_Comm_c2f of the underlying MPI communicator). The probe just
+! checks the call returns idempotently and that the returned value
+! survives a second BLACS_GET round-trip.
 !
 ! This program runs after grid_init() has already configured a grid;
 ! the probes here exercise the bare BLACS-API contract independently
@@ -30,7 +34,7 @@ program test_blacs_pinfo
         end subroutine
     end interface
 
-    integer :: rk1, rk2, np1, np2, ctxt_default, topo
+    integer :: rk1, rk2, np1, np2, ctxt_default, h1, h2
     real(ep) :: err
     real(ep), parameter :: tol = 0.0_ep
     real(ep), parameter :: BAD = huge(0.0_ep)
@@ -55,13 +59,14 @@ program test_blacs_pinfo
     if (ctxt_default == -1) err = BAD
     if (my_rank == 0) call report_case('get_default_context', err, tol)
 
-    ! ── BLACS_GET WHAT=10: broadcast topology. Returns the default
-    !    topology character code (as INTEGER). Must be representable.
-    call blacs_get(my_context, 10, topo)
+    ! ── BLACS_GET WHAT=10 (SGET_BLACSCONTXT): BLACS-internal handle
+    !    for the given context. Opaque integer; only meaningful contract
+    !    is idempotency.
+    call blacs_get(my_context, 10, h1)
+    call blacs_get(my_context, 10, h2)
     err = 0.0_ep
-    ! topo is a printable ASCII character code; accept any 0..127.
-    if (topo < 0 .or. topo > 127) err = BAD
-    if (my_rank == 0) call report_case('get_broadcast_topology', err, tol)
+    if (h1 /= h2) err = BAD
+    if (my_rank == 0) call report_case('get_blacs_handle_idempotent', err, tol)
 
     call report_finalize()
     call grid_exit()

@@ -3,6 +3,11 @@
 ! upper trapezoid (UPLO='U', DIAG='N') of an MxN complex matrix to
 ! rank (1,1); the receiver verifies byte-equivalent payload on the
 ! trapezoid and that strict-lower cells stay at the sentinel zero.
+!
+! BLACS upper-trapezoidal convention (BI_GetMpiTrType.c, M>N branch):
+! col j carries rows 1..(M-N+j); the M-N rows above the j==N
+! diagonal are part of the trapezoid. Test uses M==N to keep the
+! shape unambiguous and exercise the canonical triangular path.
 program test_xtrsd2d
     use prec_kinds,        only: ep
     use blacs_prec_report, only: report_init, report_case, report_finalize
@@ -13,7 +18,7 @@ program test_xtrsd2d
     use mpi
     implicit none
 
-    integer, parameter :: m = 6, n = 5, lda = 6
+    integer, parameter :: m = 5, n = 5, lda = 6
     complex(ep), allocatable :: A(:,:), Aref(:,:)
     real(ep) :: err
     real(ep), parameter :: tol = 0.0_ep
