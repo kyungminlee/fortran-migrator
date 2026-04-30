@@ -500,7 +500,8 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                         overrides: list[tuple[Path, str]] | None = None,
                         extra_c_dirs: list[Path] | None = None,
                         skip_files: set[str] | None = None,
-                        copy_files: set[str] | None = None) -> dict:
+                        copy_files: set[str] | None = None,
+                        source_overrides: dict[str, Path] | None = None) -> dict:
     """Migrate a C source directory by cloning real/complex variants.
 
     Two modes:
@@ -536,6 +537,7 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             extra_c_dirs=extra_c_dirs,
             skip_files=skip_files,
             copy_files=copy_files,
+            source_overrides=source_overrides,
         )
     else:
         result = _migrate_blacs_c_directory(
@@ -1111,7 +1113,8 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                                  header_patches: list[dict] | None = None,
                                  extra_c_dirs: list[Path] | None = None,
                                  skip_files: set[str] | None = None,
-                                 copy_files: set[str] | None = None) -> dict:
+                                 copy_files: set[str] | None = None,
+                                 source_overrides: dict[str, Path] | None = None) -> dict:
     """Rename-map-driven C migration for ScaLAPACK-style libraries.
 
     A file ``foo_.c`` is cloned iff its routine ``FOO`` is a D- or
@@ -1131,6 +1134,20 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     all_src_dirs: list[Path] = [src_dir]
     if extra_c_dirs:
         all_src_dirs.extend(extra_c_dirs)
+
+    # ``source_overrides`` swaps the upstream copy of a named file with
+    # a recipe-supplied replacement at the start of the migration
+    # pipeline. The override is in upstream shape (S/D/C/Z naming,
+    # ``double`` types, etc.) and goes through the normal C migration
+    # so it produces correctly-renamed output for every target. Used
+    # for upstream-bug patches that affect specific routines in the
+    # SRC tree — e.g. ScaLAPACK PBLAS p[dz]atrmv_.c's missing ALPHA
+    # in the L,T branch (commit 4b2d5ee fixed the test driver; the
+    # migrator-side fix lives here).
+    _source_overrides = source_overrides or {}
+
+    def _apply_src_override(p: Path) -> Path:
+        return _source_overrides.get(p.name, p)
 
     # Copy all originals first (keeps S/D/C/Z entry points available).
     # When extra_c_dirs sources contain `#include "../foo.h"` paths
@@ -1155,7 +1172,7 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     # archive's untouched ``(double*)`` copies would corrupt strides
     # when the migrated entry points dispatch through them.
     for d in all_src_dirs:
-        for f in sorted(d.iterdir()):
+        for f in (_apply_src_override(p) for p in sorted(d.iterdir())):
             stem_upper = (f.stem[:-1] if f.stem.endswith('_')
                           else f.stem).upper()
             # Also consider the decoration-stripped stem for skip
@@ -1295,7 +1312,9 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
 
     all_c_files: list[Path] = []
     for d in all_src_dirs:
-        all_c_files.extend(f for f in d.iterdir() if f.suffix.lower() == '.c')
+        all_c_files.extend(_apply_src_override(f)
+                            for f in d.iterdir()
+                            if f.suffix.lower() == '.c')
     entries = sorted(
         all_c_files,
         key=lambda f: (
