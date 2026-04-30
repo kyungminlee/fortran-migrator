@@ -996,6 +996,19 @@ set(STAGED_LIBRARIES {staged_list})
         # collective/comm primitive that requires multi-rank coordination
         # is invoked, so libseq is NPROCS=1-only by construction.
         ('_mpiseq_src',    'MUMPS_5.8.2/libseq'),
+        # MUMPS upstream src/ + include/. The recipe (which is fortran-
+        # only) skips every *MUMPS_C / MUMPS_C_TYPES header and every
+        # *.c file, so the migrated qmumps archive ships without a C
+        # interface. tests/mumps's C-bridge build re-uses upstream
+        # mumps_c.c (compiled twice with quad-precision type overrides
+        # supplied from tests/mumps/c/include/, see B2 in
+        # tests/mumps/TODO.md), plus mumps_common.c, mumps_addr.c, and
+        # the IO/save/thread/metis/pord/scotch helpers, all of which are
+        # type-agnostic and compile verbatim. Staging the whole src/
+        # tree (including the .F siblings we don't need here) is
+        # cheaper than per-file plumbing and matches the convention.
+        ('_mumps_upstream_src',     'MUMPS_5.8.2/src'),
+        ('_mumps_upstream_include', 'MUMPS_5.8.2/include'),
     ]
     for dst_name, rel_src in _std_dirs:
         src = proj_root / 'external' / rel_src
