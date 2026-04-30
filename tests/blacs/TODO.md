@@ -74,20 +74,28 @@ variant is exercised in `test_qtrsd2d`; complex variant is exercised
 in `test_xtrsd2d` (added — `target_xtrsd2d`/`target_xtrrv2d` wrappers
 declared in `common/target_blacs_body.fypp`).
 
-### `qgamn2d` / `xgamn2d` / `qgsum2d` / `xgsum2d` row/column scopes
+### `qgamn2d` / `xgamn2d` / `qgsum2d` / `xgsum2d` row/column scopes — RESOLVED
 
-`test_qgamx2d` / `test_xgamx2d` cover `'A'` scope max+min. Per-row
-and per-column scopes (`'R'`/`'C'`) are not covered for any of the
-reductions (sum, amx, amn). Add them mirroring the broadcast scope
-loops in `test_qgebs2d` / `test_qtrbs2d`.
+Row ('R') and column ('C') scopes are now covered:
 
-### `blacs_set` / `blacs_pinfo` direct probes
+- Real-prefix sum: `test_qgsum2d_rc.f90`
+- Real-prefix amx/amn: `test_qgamx2d_rc.f90`
+- Complex-prefix sum: `test_xgsum2d_rc.f90`
+- Complex-prefix amx/amn: `test_xgamx2d_rc.f90` (added 2026-04-30)
 
-`blacs_set` is only exercised indirectly via `grid_init`; its
-documented `WHAT` parameters (`SGET_NR_BS`, `SGET_TOPSREPEAT`, …) are
-not individually checked. `blacs_pinfo` is exercised inside
-`pblas_grid` at startup but the test program never calls it twice to
-verify idempotency.
+Each program runs amx in row scope and amn in column scope (the
+reverse pattern is symmetric and skipped to keep run time bounded).
+
+### `blacs_set` / `blacs_pinfo` direct probes — RESOLVED
+
+`tests/blacs/tests/test_blacs_set.f90` exercises the four settable
+WHAT codes (`SGET_NR_BS`, `SGET_NR_CO`, `SGET_TOPSREPEAT`,
+`SGET_TOPSCOHRNT`) and verifies the value round-trips through
+`blacs_get`. `tests/blacs/tests/test_blacs_pinfo.f90` exercises
+`blacs_pinfo` idempotency (two consecutive calls return identical
+values, both matching what `grid_init` recorded) and `blacs_get`
+with WHAT=0 (default system context) and WHAT=10 (default broadcast
+topology).
 
 ## Cross-tree follow-ups (NOT to be edited from here)
 
