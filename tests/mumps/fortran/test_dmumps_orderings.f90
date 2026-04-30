@@ -80,6 +80,7 @@ program test_dmumps_orderings
         call report_case(trim(label), err, tol)
 
         deallocate(id%IRN, id%JCN, id%A, id%RHS, x_solve)
+        nullify(id%IRN, id%JCN, id%A, id%RHS)
         id%JOB = -2
         call target_qmumps(id)
     end do

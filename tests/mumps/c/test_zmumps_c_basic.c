@@ -73,7 +73,7 @@ static __float128 cabs_q(mumps_double_complex z)
 
 int main(int argc, char **argv)
 {
-    XMUMPS_STRUC_C id;
+    XMUMPS_STRUC_C id = {0};   /* L-5 — see test_dmumps_c_basic.c */
     enum { N = 4 };
 
     /* Diagonally-dominant complex unsymmetric A. Hand-built so the

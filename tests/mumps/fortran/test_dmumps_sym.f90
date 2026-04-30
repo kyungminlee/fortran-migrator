@@ -83,6 +83,7 @@ program test_dmumps_sym
         call report_case(trim(label), err, tol)
 
         deallocate(id%IRN, id%JCN, id%A, id%RHS)
+        nullify(id%IRN, id%JCN, id%A, id%RHS)
         id%JOB = -2
         call target_qmumps(id)
 

@@ -70,7 +70,11 @@ static int report_status_c(void) { return gAnyFail; }
 
 int main(int argc, char **argv)
 {
-    QMUMPS_STRUC_C id;
+    /* L-5: zero-init avoids uninit-load of metis_options[40] on the
+     * first JOB=-1 call (mumps_c.c reads &id.metis_options before
+     * MUMPS_INI_DRIVER overwrites it with defaults). Functionally
+     * harmless today but flagged by sanitizers. */
+    QMUMPS_STRUC_C id = {0};
     int n = 4;
     /* Diagonally-dominant unsymmetric A (column-major triplet). */
     MUMPS_INT  irn[16];

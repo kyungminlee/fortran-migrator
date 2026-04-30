@@ -87,6 +87,7 @@ program test_dmumps_basic
 
         ! Cleanup before next iteration.
         deallocate(id%IRN, id%JCN, id%A, id%RHS)
+        nullify(id%IRN, id%JCN, id%A, id%RHS)  ! L-2: defensive — decouple from MUMPS_INI_DRIVER's NULLIFY contract
         id%JOB = -2
         call target_qmumps(id)
 

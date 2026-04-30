@@ -66,7 +66,7 @@ static int qmumps_solve(int sym, MUMPS_INT n, MUMPS_INT8 nnz,
                          MUMPS_INT *irn, MUMPS_INT *jcn,
                          __float128 *a_vals, __float128 *rhs)
 {
-    QMUMPS_STRUC_C id;
+    QMUMPS_STRUC_C id = {0};   /* L-5 — see test_dmumps_c_basic.c */
     id.par = 1;
     id.sym = sym;
     id.comm_fortran = MPI_Comm_c2f(MPI_COMM_WORLD);

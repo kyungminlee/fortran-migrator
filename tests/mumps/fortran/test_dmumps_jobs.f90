@@ -21,7 +21,6 @@ program test_dmumps_jobs
     integer,  allocatable :: irn(:), jcn(:)
     real(ep), allocatable :: A_trip(:)
     real(ep), allocatable :: x_combined(:), x_phased(:)
-    type(dmumps_struc)    :: id
     real(ep)              :: err, tol
 
     call MPI_INIT(ierr)
@@ -46,10 +45,13 @@ program test_dmumps_jobs
     err = max_rel_err_vec(x_phased, x_true)
     call report_case('phased-vs-truth', err, tol)
 
-    ! And the two paths against each other — should agree to O(eps).
+    ! And the two paths against each other. JOB=6 dispatches the same
+    ! analysis/factor/solve internals as JOB=1+2+3 on the same struct,
+    ! so the result is bit-identical — any non-zero divergence
+    ! would indicate the two phased entries take a different
+    ! floating-point path (state shuffling, BLAS reordering, etc.).
     err = max_rel_err_vec(x_phased, x_combined)
-    call report_case('phased-vs-combined', err, &
-                     16.0_ep * real(n, ep) * target_eps)
+    call report_case('phased-vs-combined', err, 0.0_ep)
 
     deallocate(A, x_true, b, irn, jcn, A_trip, x_combined, x_phased)
     call report_finalize()
@@ -99,6 +101,7 @@ contains
         x_solve = idl%RHS
 
         deallocate(idl%IRN, idl%JCN, idl%A, idl%RHS)
+        nullify(idl%IRN, idl%JCN, idl%A, idl%RHS)
         idl%JOB = -2
         call target_qmumps(idl)
     end subroutine mumps_solve_jobs

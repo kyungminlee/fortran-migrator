@@ -23,7 +23,6 @@ program test_dmumps_nrhs
     real(ep), allocatable :: A_trip(:)
     real(ep), allocatable :: B_multi(:,:), X_multi_true(:,:)
     real(ep), allocatable :: x_single(:), x_multi_col(:)
-    type(dmumps_struc)    :: id
     real(ep)              :: err, tol
     character(len=48)     :: label
 
@@ -70,8 +69,10 @@ program test_dmumps_nrhs
                                  A_trip=A_trip, B_in=b_col, X_out_buf=single_col)
                 err = max_rel_err_vec(X_multi(:, j), single_col(:, 1))
                 write(label, '(a,i0)') 'multi-vs-single-col=', j
-                call report_case(trim(label), err, &
-                                 16.0_ep * real(n, ep) * target_eps)
+                ! Multi-RHS solve substitutes each column independently;
+                ! per-column result must be bit-identical to a single-
+                ! RHS run on that column.
+                call report_case(trim(label), err, 0.0_ep)
                 deallocate(single_col, b_col)
             end block
         end do
@@ -129,6 +130,7 @@ contains
         end do
 
         deallocate(idl%IRN, idl%JCN, idl%A, idl%RHS)
+        nullify(idl%IRN, idl%JCN, idl%A, idl%RHS)
         idl%JOB = -2
         call target_qmumps(idl)
     end subroutine mumps_solve
