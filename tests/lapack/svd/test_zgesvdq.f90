@@ -14,7 +14,8 @@ program test_zgesvdq
     complex(ep), allocatable :: A0(:,:), A_r(:,:), A_g(:,:), U(:,:), V(:,:), cwork(:)
     real(ep),    allocatable :: S_r(:), S_g(:), rwork(:)
     integer, allocatable :: iwork(:)
-    complex(ep) :: wopt(1)
+    ! zgesvdq workspace query writes CWORK(1) and CWORK(2); allocate at least 2.
+    complex(ep) :: wopt(2)
     real(ep) :: ropt(1), err, tol
     character(len=48) :: label
 

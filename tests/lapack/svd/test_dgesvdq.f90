@@ -13,7 +13,8 @@ program test_dgesvdq
     integer :: i, m, n, info, numrank_r, numrank_g, lwork, lrwork, liwork
     real(ep), allocatable :: A0(:,:), A_r(:,:), A_g(:,:), S_r(:), S_g(:), U(:,:), V(:,:), work(:), rwork(:)
     integer, allocatable :: iwork(:)
-    real(ep) :: wopt(1), ropt(1), err, tol
+    ! dgesvdq workspace query writes WORK(1) and WORK(2); allocate at least 2.
+    real(ep) :: wopt(2), ropt(2), err, tol
     character(len=48) :: label
 
     call report_init('dgesvdq', target_name)

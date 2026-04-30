@@ -14100,7 +14100,8 @@ $:CPACK_INV('zsptri', C + 'sptri')
         real(ep),  intent(out)   :: S(*), U(ldu,*), V(ldv,*)
         integer,   intent(out)   :: numrank, info
         ${target_real}$, allocatable :: At(:,:), St(:), Ut(:,:), Vt(:,:), work(:), rwork(:)
-        ${target_real}$ :: wopt(1), ropt(1)
+        ! ?gesvdq workspace query writes WORK(1) and WORK(2); allocate at least 2.
+        ${target_real}$ :: wopt(2), ropt(2)
         integer, allocatable :: iwork(:)
         integer :: lwork, lrwork, liwork
         liwork = max(m + n, 1)
@@ -14130,8 +14131,9 @@ $:CPACK_INV('zsptri', C + 'sptri')
         integer,     intent(out)   :: numrank, info
         ${target_complex}$, allocatable :: At(:,:), Ut(:,:), Vt(:,:), cwork(:)
         ${target_real}$,    allocatable :: St(:), rwork(:)
-        ${target_complex}$ :: wopt(1)
-        ${target_real}$ :: ropt(1)
+        ! ?gesvdq workspace query writes CWORK(1) and CWORK(2); allocate at least 2.
+        ${target_complex}$ :: wopt(2)
+        ${target_real}$ :: ropt(2)
         integer, allocatable :: iwork(:)
         integer :: lcwork, lrwork, liwork
         liwork = max(m + n, 1)
