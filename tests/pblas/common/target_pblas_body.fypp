@@ -50,6 +50,7 @@
 module target_pblas
     use prec_kinds, only: ep
     use target_conv, only: q2t_r, t2q_r, q2t_c, t2q_c
+    use pblas_grid, only: numroc_local
 #:if target == 'multifloats'
     use multifloats, only: real64x2, cmplx64x2
 #:endif
@@ -686,6 +687,22 @@ $:IMPORT_C()
 
 contains
 
+    ! Local-buffer size implied by a ScaLAPACK descriptor: LLD ×
+    ! locn(N, NB, mycol, csrc, npcol). Replaces the naive `desc(9) *
+    ! desc(4)` (which is LLD × full-N) used by older wrappers — the
+    ! latter overshoots the actual local buffer whenever the matrix is
+    ! distributed across more than one process column. The naive form
+    ! happened to work under singleton MPI (npcol=1 → locn=N) but
+    ! triggers a heap OOB read in q2t_r / q2t_c on a real 2×2 grid.
+    function desc_buf_size(desc) result(sz)
+        integer, intent(in) :: desc(9)
+        integer :: sz
+        integer :: nprow, npcol, myrow, mycol, locn
+        call blacs_gridinfo(desc(2), nprow, npcol, myrow, mycol)
+        locn = numroc_local(desc(4), desc(6), mycol, desc(8), npcol)
+        sz = desc(9) * max(1, locn)
+    end function desc_buf_size
+
     ! ── Level 1 — real ───────────────────────────────────────────────
     subroutine target_pddot(n, dot, x, ix, jx, descx, incx, y, iy, jy, descy, incy)
         integer,  intent(in)  :: n, ix, jx, incx, iy, jy, incy
@@ -695,7 +712,7 @@ contains
         integer :: nx, ny
         ${target_real}$, allocatable :: xt(:), yt(:)
         ${target_real}$ :: dot_t
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
         call ${R}$dot(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
@@ -710,7 +727,7 @@ contains
         integer :: nx
         ${target_real}$, allocatable :: xt(:)
         ${target_real}$ :: norm_t
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_r(x(1:nx))
         call ${R}$nrm2(n, norm_t, xt, ix, jx, descx, incx)
@@ -725,7 +742,7 @@ contains
         integer :: nx
         ${target_real}$, allocatable :: xt(:)
         ${target_real}$ :: asum_t
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_r(x(1:nx))
         call ${R}$asum(n, asum_t, xt, ix, jx, descx, incx)
@@ -739,7 +756,7 @@ contains
         real(ep), intent(inout) :: x(*)
         integer :: nx
         ${target_real}$, allocatable :: xt(:)
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_r(x(1:nx))
         call ${R}$scal(n, q2t_r(alpha), xt, ix, jx, descx, incx)
@@ -753,7 +770,7 @@ contains
         real(ep), intent(inout) :: y(*)
         integer :: nx, ny
         ${target_real}$, allocatable :: xt(:), yt(:)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
         call ${R}$axpy(n, q2t_r(alpha), xt, ix, jx, descx, incx, &
@@ -768,7 +785,7 @@ contains
         real(ep), intent(out) :: y(*)
         integer :: nx, ny
         ${target_real}$, allocatable :: xt(:), yt(:)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_r(x(1:nx))
         call ${R}$copy(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
@@ -781,7 +798,7 @@ contains
         real(ep), intent(inout) :: x(*), y(*)
         integer :: nx, ny
         ${target_real}$, allocatable :: xt(:), yt(:)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
         call ${R}$swap(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
@@ -797,7 +814,7 @@ contains
         integer :: nx
         ${target_real}$, allocatable :: xt(:)
         ${target_real}$ :: amax_t
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_r(x(1:nx))
         call ${R}$amax(n, amax_t, indx, xt, ix, jx, descx, incx)
@@ -816,7 +833,7 @@ contains
         integer :: nx
         ${target_complex}$, allocatable :: xt(:)
         ${target_real}$ :: asum_t
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_c(x(1:nx))
         asum_t = q2t_r(0.0_ep)
@@ -832,7 +849,7 @@ contains
         integer :: nx
         ${target_complex}$, allocatable :: xt(:)
         ${target_real}$ :: norm_t
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_c(x(1:nx))
         call ${RC}$nrm2(n, norm_t, xt, ix, jx, descx, incx)
@@ -848,7 +865,7 @@ contains
         integer :: nx, ny
         ${target_complex}$, allocatable :: xt(:), yt(:)
         ${target_complex}$ :: dot_t
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
         call ${C}$dotc(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
@@ -862,7 +879,7 @@ contains
         complex(ep), intent(inout) :: y(*)
         integer :: nx, ny
         ${target_complex}$, allocatable :: xt(:), yt(:)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
         call ${C}$axpy(n, q2t_c(alpha), xt, ix, jx, descx, incx, &
@@ -878,7 +895,7 @@ contains
         integer :: nx, ny
         ${target_complex}$, allocatable :: xt(:), yt(:)
         ${target_complex}$ :: dot_t
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
         call ${C}$dotu(n, dot_t, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
@@ -892,7 +909,7 @@ contains
         complex(ep), intent(out) :: y(*)
         integer :: nx, ny
         ${target_complex}$, allocatable :: xt(:), yt(:)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx))
         call ${C}$copy(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
@@ -905,7 +922,7 @@ contains
         complex(ep), intent(inout) :: x(*), y(*)
         integer :: nx, ny
         ${target_complex}$, allocatable :: xt(:), yt(:)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(xt(nx), yt(ny))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
         call ${C}$swap(n, xt, ix, jx, descx, incx, yt, iy, jy, descy, incy)
@@ -919,7 +936,7 @@ contains
         complex(ep), intent(inout) :: x(*)
         integer :: nx
         ${target_complex}$, allocatable :: xt(:)
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_c(x(1:nx))
         call ${C}$scal(n, q2t_c(alpha), xt, ix, jx, descx, incx)
@@ -935,7 +952,7 @@ contains
         integer :: nx
         ${target_complex}$, allocatable :: xt(:)
         ${target_complex}$ :: amax_t
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_c(x(1:nx))
         call ${C}$amax(n, amax_t, indx, xt, ix, jx, descx, incx)
@@ -950,7 +967,7 @@ contains
         complex(ep), intent(inout) :: x(*)
         integer :: nx
         ${target_complex}$, allocatable :: xt(:)
-        nx = descx(9) * descx(4)
+        nx = desc_buf_size(descx)
         allocate(xt(nx))
         xt = q2t_c(x(1:nx))
         call ${CR}$scal(n, q2t_r(alpha), xt, ix, jx, descx, incx)
@@ -967,8 +984,8 @@ contains
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
         ${target_real}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_r(A(1:na))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -986,8 +1003,8 @@ contains
         real(ep), intent(inout) :: A(*)
         integer :: na, nx, ny
         ${target_real}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_r(A(1:na))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1005,8 +1022,8 @@ contains
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
         ${target_real}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_r(A(1:na))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1025,7 +1042,7 @@ contains
         real(ep),  intent(inout) :: x(*)
         integer :: na, nx
         ${target_real}$, allocatable :: At(:), xt(:)
-        na = desca(9) * desca(4); nx = descx(9) * descx(4)
+        na = desc_buf_size(desca); nx = desc_buf_size(descx)
         allocate(At(na), xt(nx))
         At = q2t_r(A(1:na)); xt = q2t_r(x(1:nx))
         call ${R}$trsv(uplo, trans, diag, n, At, ia, ja, desca, &
@@ -1042,7 +1059,7 @@ contains
         real(ep),  intent(inout) :: x(*)
         integer :: na, nx
         ${target_real}$, allocatable :: At(:), xt(:)
-        na = desca(9) * desca(4); nx = descx(9) * descx(4)
+        na = desc_buf_size(desca); nx = desc_buf_size(descx)
         allocate(At(na), xt(nx))
         At = q2t_r(A(1:na)); xt = q2t_r(x(1:nx))
         call ${R}$trmv(uplo, trans, diag, n, At, ia, ja, desca, &
@@ -1059,7 +1076,7 @@ contains
         real(ep),  intent(inout) :: A(*)
         integer :: na, nx
         ${target_real}$, allocatable :: At(:), xt(:)
-        na = desca(9) * desca(4); nx = descx(9) * descx(4)
+        na = desc_buf_size(desca); nx = desc_buf_size(descx)
         allocate(At(na), xt(nx))
         At = q2t_r(A(1:na)); xt = q2t_r(x(1:nx))
         call ${R}$syr(uplo, n, q2t_r(alpha), xt, ix, jx, descx, incx, &
@@ -1076,8 +1093,8 @@ contains
         real(ep),  intent(inout) :: A(*)
         integer :: na, nx, ny
         ${target_real}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_r(A(1:na))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1097,8 +1114,8 @@ contains
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
         ${target_real}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_r(A(1:na))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1118,8 +1135,8 @@ contains
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
         ${target_real}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_r(A(1:na))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1139,8 +1156,8 @@ contains
         real(ep),  intent(inout) :: y(*)
         integer :: na, nx, ny
         ${target_real}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_r(A(1:na))
         xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1160,8 +1177,8 @@ contains
         complex(ep), intent(inout) :: y(*)
         integer :: na, nx, ny
         ${target_complex}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_c(A(1:na))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
@@ -1180,8 +1197,8 @@ contains
         complex(ep), intent(inout) :: y(*)
         integer :: na, nx, ny
         ${target_complex}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_c(A(1:na))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
@@ -1199,8 +1216,8 @@ contains
         complex(ep), intent(inout) :: A(*)
         integer :: na, nx, ny
         ${target_complex}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_c(A(1:na))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
@@ -1217,8 +1234,8 @@ contains
         complex(ep), intent(inout) :: A(*)
         integer :: na, nx, ny
         ${target_complex}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_c(A(1:na))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
@@ -1237,7 +1254,7 @@ contains
         complex(ep), intent(inout) :: A(*)
         integer :: na, nx
         ${target_complex}$, allocatable :: At(:), xt(:)
-        na = desca(9) * desca(4); nx = descx(9) * descx(4)
+        na = desc_buf_size(desca); nx = desc_buf_size(descx)
         allocate(At(na), xt(nx))
         At = q2t_c(A(1:na)); xt = q2t_c(x(1:nx))
         call ${C}$her(uplo, n, q2t_r(alpha), xt, ix, jx, descx, incx, &
@@ -1254,8 +1271,8 @@ contains
         complex(ep), intent(inout) :: A(*)
         integer :: na, nx, ny
         ${target_complex}$, allocatable :: At(:), xt(:), yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_c(A(1:na))
         xt = q2t_c(x(1:nx)); yt = q2t_c(y(1:ny))
@@ -1273,7 +1290,7 @@ contains
         complex(ep), intent(inout) :: x(*)
         integer :: na, nx
         ${target_complex}$, allocatable :: At(:), xt(:)
-        na = desca(9) * desca(4); nx = descx(9) * descx(4)
+        na = desc_buf_size(desca); nx = desc_buf_size(descx)
         allocate(At(na), xt(nx))
         At = q2t_c(A(1:na)); xt = q2t_c(x(1:nx))
         call ${C}$trmv(uplo, trans, diag, n, At, ia, ja, desca, &
@@ -1290,7 +1307,7 @@ contains
         complex(ep), intent(inout) :: x(*)
         integer :: na, nx
         ${target_complex}$, allocatable :: At(:), xt(:)
-        na = desca(9) * desca(4); nx = descx(9) * descx(4)
+        na = desc_buf_size(desca); nx = desc_buf_size(descx)
         allocate(At(na), xt(nx))
         At = q2t_c(A(1:na)); xt = q2t_c(x(1:nx))
         call ${C}$trsv(uplo, trans, diag, n, At, ia, ja, desca, &
@@ -1311,8 +1328,8 @@ contains
         integer :: na, nx, ny
         ${target_complex}$, allocatable :: At(:), xt(:)
         ${target_real}$,    allocatable :: yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_c(A(1:na))
         xt = q2t_c(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1334,8 +1351,8 @@ contains
         integer :: na, nx, ny
         ${target_complex}$, allocatable :: At(:), xt(:)
         ${target_real}$,    allocatable :: yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_c(A(1:na))
         xt = q2t_c(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1357,8 +1374,8 @@ contains
         integer :: na, nx, ny
         ${target_complex}$, allocatable :: At(:), xt(:)
         ${target_real}$,    allocatable :: yt(:)
-        na = desca(9) * desca(4)
-        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        na = desc_buf_size(desca)
+        nx = desc_buf_size(descx); ny = desc_buf_size(descy)
         allocate(At(na), xt(nx), yt(ny))
         At = q2t_c(A(1:na))
         xt = q2t_c(x(1:nx)); yt = q2t_r(y(1:ny))
@@ -1378,7 +1395,7 @@ contains
         real(ep),  intent(inout) :: C(*)
         integer :: na, nb, nc
         ${target_real}$, allocatable :: At(:), Bt(:), Ct(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb); nc = desc_buf_size(descc)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb)); Ct = q2t_r(C(1:nc))
         call ${R}$gemm(transa, transb, m, n, k, q2t_r(alpha), &
@@ -1396,7 +1413,7 @@ contains
         real(ep),  intent(inout) :: C(*)
         integer :: na, nb, nc
         ${target_real}$, allocatable :: At(:), Bt(:), Ct(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb); nc = desc_buf_size(descc)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb)); Ct = q2t_r(C(1:nc))
         call ${R}$symm(side, uplo, m, n, q2t_r(alpha), &
@@ -1414,7 +1431,7 @@ contains
         real(ep),  intent(inout) :: C(*)
         integer :: na, nc
         ${target_real}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
         call ${R}$syrk(uplo, trans, n, k, q2t_r(alpha), &
@@ -1431,7 +1448,7 @@ contains
         real(ep),  intent(inout) :: B(*)
         integer :: na, nb
         ${target_real}$, allocatable :: At(:), Bt(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb)
         allocate(At(na), Bt(nb))
         At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
         call ${R}$trmm(side, uplo, trans, diag, m, n, q2t_r(alpha), &
@@ -1448,7 +1465,7 @@ contains
         real(ep),  intent(inout) :: B(*)
         integer :: na, nb
         ${target_real}$, allocatable :: At(:), Bt(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb)
         allocate(At(na), Bt(nb))
         At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb))
         call ${R}$trsm(side, uplo, trans, diag, m, n, q2t_r(alpha), &
@@ -1465,7 +1482,7 @@ contains
         real(ep),  intent(inout) :: C(*)
         integer :: na, nb, nc
         ${target_real}$, allocatable :: At(:), Bt(:), Ct(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb); nc = desc_buf_size(descc)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2t_r(A(1:na)); Bt = q2t_r(B(1:nb)); Ct = q2t_r(C(1:nc))
         call ${R}$syr2k(uplo, trans, n, k, q2t_r(alpha), &
@@ -1484,7 +1501,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nb, nc
         ${target_complex}$, allocatable :: At(:), Bt(:), Ct(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb); nc = desc_buf_size(descc)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb)); Ct = q2t_c(C(1:nc))
         call ${C}$gemm(transa, transb, m, n, k, q2t_c(alpha), &
@@ -1503,7 +1520,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nc
         ${target_complex}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
         call ${C}$herk(uplo, trans, n, k, q2t_r(alpha), &
@@ -1520,7 +1537,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nb, nc
         ${target_complex}$, allocatable :: At(:), Bt(:), Ct(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb); nc = desc_buf_size(descc)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb)); Ct = q2t_c(C(1:nc))
         call ${C}$hemm(side, uplo, m, n, q2t_c(alpha), &
@@ -1538,7 +1555,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nb, nc
         ${target_complex}$, allocatable :: At(:), Bt(:), Ct(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb); nc = desc_buf_size(descc)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb)); Ct = q2t_c(C(1:nc))
         call ${C}$symm(side, uplo, m, n, q2t_c(alpha), &
@@ -1556,7 +1573,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nc
         ${target_complex}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
         call ${C}$syrk(uplo, trans, n, k, q2t_c(alpha), &
@@ -1573,7 +1590,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nb, nc
         ${target_complex}$, allocatable :: At(:), Bt(:), Ct(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb); nc = desc_buf_size(descc)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb)); Ct = q2t_c(C(1:nc))
         call ${C}$syr2k(uplo, trans, n, k, q2t_c(alpha), &
@@ -1593,7 +1610,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nb, nc
         ${target_complex}$, allocatable :: At(:), Bt(:), Ct(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb); nc = desc_buf_size(descc)
         allocate(At(na), Bt(nb), Ct(nc))
         At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb)); Ct = q2t_c(C(1:nc))
         call ${C}$her2k(uplo, trans, n, k, q2t_c(alpha), &
@@ -1611,7 +1628,7 @@ contains
         complex(ep), intent(inout) :: B(*)
         integer :: na, nb
         ${target_complex}$, allocatable :: At(:), Bt(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb)
         allocate(At(na), Bt(nb))
         At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
         call ${C}$trmm(side, uplo, trans, diag, m, n, q2t_c(alpha), &
@@ -1628,7 +1645,7 @@ contains
         complex(ep), intent(inout) :: B(*)
         integer :: na, nb
         ${target_complex}$, allocatable :: At(:), Bt(:)
-        na = desca(9) * desca(4); nb = descb(9) * descb(4)
+        na = desc_buf_size(desca); nb = desc_buf_size(descb)
         allocate(At(na), Bt(nb))
         At = q2t_c(A(1:na)); Bt = q2t_c(B(1:nb))
         call ${C}$trsm(side, uplo, trans, diag, m, n, q2t_c(alpha), &
@@ -1646,7 +1663,7 @@ contains
         real(ep),  intent(inout) :: C(*)
         integer :: na, nc
         ${target_real}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
         call ${R}$geadd(trans, m, n, q2t_r(alpha), At, ia, ja, desca, &
@@ -1662,7 +1679,7 @@ contains
         real(ep), intent(inout) :: C(*)
         integer :: na, nc
         ${target_real}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
         call ${R}$tran(m, n, q2t_r(alpha), At, ia, ja, desca, &
@@ -1679,7 +1696,7 @@ contains
         real(ep),  intent(inout) :: C(*)
         integer :: na, nc
         ${target_real}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_r(A(1:na)); Ct = q2t_r(C(1:nc))
         call ${R}$tradd(uplo, trans, m, n, q2t_r(alpha), At, ia, ja, desca, &
@@ -1697,7 +1714,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nc
         ${target_complex}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
         call ${C}$geadd(trans, m, n, q2t_c(alpha), At, ia, ja, desca, &
@@ -1713,7 +1730,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nc
         ${target_complex}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
         call ${C}$tranc(m, n, q2t_c(alpha), At, ia, ja, desca, &
@@ -1729,7 +1746,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nc
         ${target_complex}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
         call ${C}$tranu(m, n, q2t_c(alpha), At, ia, ja, desca, &
@@ -1746,7 +1763,7 @@ contains
         complex(ep), intent(inout) :: C(*)
         integer :: na, nc
         ${target_complex}$, allocatable :: At(:), Ct(:)
-        na = desca(9) * desca(4); nc = descc(9) * descc(4)
+        na = desc_buf_size(desca); nc = desc_buf_size(descc)
         allocate(At(na), Ct(nc))
         At = q2t_c(A(1:na)); Ct = q2t_c(C(1:nc))
         call ${C}$tradd(uplo, trans, m, n, q2t_c(alpha), At, ia, ja, desca, &

@@ -60,24 +60,31 @@ program test_pzahemv
             if (my_rank == 0) then
                 allocate(y_ref(n))
                 ! |Hermitian A|_{i,j} = |A_{i,j}| if (i,j) in UPLO,
-                ! else |conjg(A_{j,i})| = |A_{j,i}|. Symmetric in abs.
+                ! else |conjg(A_{j,i})|. Cabs1 (PBLAS convention,
+                ! `|Re|+|Im|`) is conjugation-invariant, so the off-
+                ! triangle reflection drops to A_{j,i} under abs.
                 do ii = 1, n
                     acc = 0.0_ep
                     do jj = 1, n
-                        if (uplo == 'U') then
-                            if (ii <= jj) then
-                                aij_abs = abs(A_glob(ii, jj))
+                        if (ii == jj) then
+                            ! Hermitian implies imag(A_jj) = 0 by
+                            ! definition. zahemv:207 reads only the
+                            ! real part of the diagonal.
+                            aij_abs = abs(real(A_glob(ii, ii)))
+                        else if (uplo == 'U') then
+                            if (ii < jj) then
+                                aij_abs = abs(real(A_glob(ii, jj))) + abs(aimag(A_glob(ii, jj)))
                             else
-                                aij_abs = abs(A_glob(jj, ii))
+                                aij_abs = abs(real(A_glob(jj, ii))) + abs(aimag(A_glob(jj, ii)))
                             end if
                         else
-                            if (ii >= jj) then
-                                aij_abs = abs(A_glob(ii, jj))
+                            if (ii > jj) then
+                                aij_abs = abs(real(A_glob(ii, jj))) + abs(aimag(A_glob(ii, jj)))
                             else
-                                aij_abs = abs(A_glob(jj, ii))
+                                aij_abs = abs(real(A_glob(jj, ii))) + abs(aimag(A_glob(jj, ii)))
                             end if
                         end if
-                        acc = acc + aij_abs * abs(x_glob(jj))
+                        acc = acc + aij_abs * (abs(real(x_glob(jj))) + abs(aimag(x_glob(jj))))
                     end do
                     y_ref(ii) = abs(alpha) * acc + abs(beta * y_glob(ii))
                 end do

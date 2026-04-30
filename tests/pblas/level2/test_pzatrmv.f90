@@ -80,11 +80,11 @@ program test_pzatrmv
                                     if (on_diag .and. diag == 'U') then
                                         aij_abs = 1.0_ep
                                     else
-                                        aij_abs = abs(A_glob(ii, jj))
+                                        aij_abs = abs(real(A_glob(ii, jj))) + abs(aimag(A_glob(ii, jj)))
                                     end if
                                 else
                                     ! TRANS='T' or 'C': read A(jj, ii); conj
-                                    ! drops out under abs.
+                                    ! drops out under Cabs1.
                                     if (uplo == 'U') then
                                         in_triangle = (jj <= ii)
                                     else
@@ -95,10 +95,10 @@ program test_pzatrmv
                                     if (on_diag .and. diag == 'U') then
                                         aij_abs = 1.0_ep
                                     else
-                                        aij_abs = abs(A_glob(jj, ii))
+                                        aij_abs = abs(real(A_glob(jj, ii))) + abs(aimag(A_glob(jj, ii)))
                                     end if
                                 end if
-                                acc = acc + aij_abs * abs(x_glob(jj))
+                                acc = acc + aij_abs * (abs(real(x_glob(jj))) + abs(aimag(x_glob(jj))))
                             end do
                             y_ref(ii) = abs(alpha) * acc + abs(beta * y_glob(ii))
                         end do

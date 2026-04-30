@@ -43,8 +43,14 @@ contains
         integer :: loc_n, ig, owner_r, il
 
         call gen_vector_quad(n, x_glob, seed)
+        ! Allocate buffer of size LLD on every rank — the descriptor's
+        ! LLD = max(1, numroc(n, mb, my_row, 0, my_nprow)) doesn't
+        ! depend on my_col, so wrappers like target_pdcopy reading
+        ! x(1:lld*nb) on non-column-0 ranks would otherwise overrun
+        ! a smaller `max(1, 0)` placeholder. Detected by valgrind under
+        ! real distributed MPI; singleton MPI never tripped it because
+        ! my_nprow=my_npcol=1 made the my_col gate inert.
         loc_n = numroc_local(n, mb, my_row, 0, my_nprow)
-        if (my_col /= 0) loc_n = 0
         allocate(x_loc(max(1, loc_n)))
         x_loc = 0.0_ep
         if (my_col == 0 .and. loc_n > 0) then
@@ -63,8 +69,11 @@ contains
         integer :: loc_n, ig, owner_c, jl
 
         call gen_vector_quad(n, x_glob, seed)
+        ! Allocate full LLD-size buffer regardless of my_row — see the
+        ! note in gen_distrib_vector for the rationale (descriptor's
+        ! LLD doesn't depend on my_row, so wrappers reading the buffer
+        ! on non-row-0 ranks must see the correct size).
         loc_n = numroc_local(n, nb, my_col, 0, my_npcol)
-        if (my_row /= 0) loc_n = 0
         allocate(x_loc(max(1, loc_n)))
         x_loc = 0.0_ep
         if (my_row == 0 .and. loc_n > 0) then
@@ -105,8 +114,9 @@ contains
         integer :: loc_n, ig, owner_r, il
 
         call gen_vector_complex(n, x_glob, seed)
+        ! Allocate full LLD-size buffer regardless of my_col — see
+        ! gen_distrib_vector for the rationale.
         loc_n = numroc_local(n, mb, my_row, 0, my_nprow)
-        if (my_col /= 0) loc_n = 0
         allocate(x_loc(max(1, loc_n)))
         x_loc = (0.0_ep, 0.0_ep)
         if (my_col == 0 .and. loc_n > 0) then
