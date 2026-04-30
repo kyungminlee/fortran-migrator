@@ -79,9 +79,10 @@ coverage level until a regression motivates digging in.
   all callers in this subtree; the divergence is documented in the
   shim's header.
 
-## Multi-target coverage
+## Multi-target coverage — RESOLVED
 
-This subtree only ships a `target_kind16/` shim. `target_kind10/` and
-`target_multifloats/` should be straightforward copies once the kind10
-and multifloats stagings are exercised — model on tests/ptzblas which
-already supports all three.
+All three target shims (`target_kind10/`, `target_kind16/`,
+`target_multifloats/`) ship in this subtree and build cleanly via
+`pbblas_test_target` on the corresponding stagings. Verified
+2026-04-30. Runtime exercise still requires real MPI (the sandbox's
+mpiexec spawns N unconnected worlds — see `tests/blacs/TODO.md`).
