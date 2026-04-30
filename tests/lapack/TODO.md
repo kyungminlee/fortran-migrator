@@ -5,20 +5,57 @@ Issues observed while adding LAPACK tests that need fixes outside
 specific routines blocked, the file(s) involved, and what would have
 to change.
 
-## Phase L5 — *gesvj returns Infinity on multifloats target only
+## Phase L5 — *gesvj returns Infinity on multifloats target only — RESOLVED
 
-`tests/lapack/svd/test_dgesvj.f90` and `test_zgesvj.f90` pass on
-`kind16` and `kind10` but fail on `multifloats` — the target's
-`tgesvj`/`vgesvj` returns `Infinity` for all singular values while
-the quad reference returns sensible values. Other Jacobi-SVD routines
-(`dgejsv`/`zgejsv`) pass on all targets.
+Status: PASS on all three targets (kind10/kind16/multifloats),
+~31 digits on multifloats.
 
-Hypothesis: the migrated `t/vgesvj` may mishandle the default
-convergence-tolerance path (`ctol=0` → routine selects own threshold)
-in the `real64x2` arithmetic — possibly in a `LAMCH`-like inquiry or
-in an internal `MAX/MIN` call that returns NaN/Infinity for the dd type.
+Root cause: upstream multifloats's Blue's-style scaling constants
+were defined inverted-in-magnitude: `DD_SBIG = 1e+50` (a SCALE-UP
+factor) and `DD_SSML = 1e-50` (a SCALE-DOWN factor) — opposite to
+LAPACK's convention where `sbig << 1` (scale-down for big values)
+and `ssml >> 1` (scale-up for small values). Compounding that, the
+1e±100 / 1e±50 magnitudes only kept `(ax * sbig)**2` representable
+for `ax` up to ~1e+104. dgesvj's protect-from-underflow up-scaling
+pass routinely produces column norms up to ~`huge(double)/sqrt(N)`
+(verified at ~4.5e+153 for the test sizes), so `(ax * sbig)**2`
+overflowed to `+Inf` on every column, and the resulting `SVA`
+accumulator carried Inf into the Ritz/eigvalue paths.
 
-To reproduce:
+Fix shape (touches three places):
+
+1. `recipes/lapack/mf_helpers/la_constants_mf.f90` — `mtsml/mtbig/
+   mssml/msbig` now compute the LAPACK formula at compile time from
+   the leading-limb double's `radix/minexponent/maxexponent/digits`,
+   instead of re-exporting upstream multifloats's `DD_*` (which were
+   wrong). Fixes the LAPACK side via `USE LA_CONSTANTS_MF` aliases
+   in mlassq / wlassq / etc.
+
+2. `recipes/blas/source_overrides/{dnrm2,dznrm2}.f90` (new) —
+   replace upstream BLAS's inline `parameter` declarations of
+   `tsml/tbig/ssml/sbig` (which the migrator's nuke-rename pass
+   substitutes with imports of broken `DD_*`) with renamed locals
+   `btsml/btbig/bssml/bsbig` initialized at first call from the
+   LAPACK formula (SAVE-vars init'd in an `if (.not. initialized)`
+   block — multifloats's `**` operator is user-defined and not
+   allowed in PARAMETER initializer expressions). The renamed
+   identifiers also dodge the migrator's nuke-rename match.
+
+3. `src/pyengine/fortran_migrator.py` — minor migrator fix in
+   `replace_intrinsic_calls` and `replace_generic_conversions`:
+   `REAL(x, wp)` was being wrapped to `real64x2(x, wp)` (a 2-arg
+   structure constructor — fails because `real64x2` has only one
+   component, `limbs`). Now drops the kind-spec second argument
+   so the result is `real64x2(x)`, which dispatches through the
+   multifloats generic interface (e.g. `dd_from_int`).
+
+| Target      | test_dgesvj      | test_zgesvj      |
+|-------------|------------------|------------------|
+| kind16      | 2/2 PASS         | 2/2 PASS         |
+| kind10      | 2/2 PASS         | 2/2 PASS         |
+| multifloats | 2/2 PASS (~31d)  | 2/2 PASS (~31d)  |
+
+Reproduce:
 ```bash
 cd /home/kyungminlee/Code/fortran-migrator/src
 uv run python -m pyengine stage /tmp/stg-mf --target multifloats --libraries blas lapack
@@ -26,8 +63,6 @@ cmake -S /tmp/stg-mf -B /tmp/stg-mf/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/stg-mf/build -j8 --target test_dgesvj test_zgesvj
 /tmp/stg-mf/build/tests/lapack/test_dgesvj
 ```
-
-Tests left in place per the failing-test-stays-visible convention.
 
 ## Phases L6..L23 — not yet started
 
@@ -72,13 +107,28 @@ If migrator changes (or recipe overrides) ever pin both paths to the
 same blocking heuristic, the factor-side comparisons could be
 strengthened to compare the full A and T arrays.
 
-## Phase P6/P7 — zgesvdq runtime crash
+## Phase P6/P7 — zgesvdq runtime crash — RESOLVED
 
-`tests/lapack/svd/test_zgesvdq.f90` builds but crashes at runtime on the
-kind16 differential test with a Fortran runtime "Expected INTEGER for item 3
-in formatted transfer, got CHARACTER" error originating after the call to
-`zgesvdq` returns. Suspect: the migrated `xgesvdq` corrupts an integer workspace
-size or `info` argument, which then trips a downstream WRITE statement.
+Status: PASS on all three targets (kind10/kind16/multifloats),
+~31-34 digits.
+
+Root cause: same migrator bug as L5 — `REAL(x, wp)` /
+`REAL(x, KIND=wp)` in upstream zgesvdq's body (e.g.
+`SQRT(REAL(M, KIND=WP))` for column-norm scaling) was being wrapped
+to a 2-arg structure constructor `real64x2(x, wp)` on multifloats,
+and the analogous wrap on kind16 sometimes corrupted an `INFO` /
+workspace-size argument because the second arg landed in the
+wrong slot. Fix landed in `replace_intrinsic_calls` and
+`replace_generic_conversions` (drop the kind-spec second argument
+when wrapping to the multifloats constructor / when emitting
+`REAL(x, KIND=...)` for kind targets). See P22 / L5 entries for
+details.
+
+| Target      | test_zgesvdq      |
+|-------------|-------------------|
+| kind16      | 2/2 PASS (~34d)   |
+| kind10      | 2/2 PASS (~18d)   |
+| multifloats | 2/2 PASS (~31d)   |
 
 Reproduce:
 ```bash
@@ -88,40 +138,40 @@ cmake -S /tmp/stg-q -B /tmp/stg-q/build && cmake --build /tmp/stg-q/build -j8 --
 /tmp/stg-q/build/tests/lapack/test_zgesvdq
 ```
 
-dgesvdq passes on the same target; the bug is specific to the complex variant.
-Test left in place; needs migrator-side investigation of the
-`xgesvdq` call sequence vs `dgesvdq`.
+## Phase P22 — complex DMD precision divergence (kind16 / multifloats) — RESOLVED
 
-## Phase P22 — complex DMD precision divergence (kind16 / multifloats)
+Status: bit-exact PASS on kind16 / kind10 / multifloats after fixing the
+**reference** path. The migrated `xgedmd` / `xgedmdq` were correct all
+along; the divergence was a latent fp64 leak in the quad-promoted
+reference.
 
-`tests/lapack/eigenvalue/test_zgedmd.f90` and
-`tests/lapack/eigenvalue/test_zgedmdq.f90` fail layer-(a) (sorted Ritz
-spectrum) on kind16 and multifloats: the migrated target (`xgedmd` /
-`xgedmdq`) disagrees with the quad reference (`zgedmd` / `zgedmdq`
-compiled with `-freal-8-real-16`) by ~1-5 ULPs at *double* precision
-(max_rel_err 1.9e-17 .. 4.6e-17). On kind10 the tolerance window absorbs
-the divergence and tests pass. Layer-(b) (residual differential) tracks
-the layer-(a) divergence — fails on the same targets, passes on kind10.
+Root cause: `external/lapack-3.12.1/SRC/zgedmd.f90:1006`
+
+```fortran
+W(i,j) = CMPLX(RWORK(N+i),ZERO,KIND=WP)*W(i,j)   ! WP = real64 = 8
+```
+
+Under `-freal-8-real-16`, gfortran 13 aliases `real(KIND=8)` *storage*
+to 16 bytes, but the explicit `CMPLX(...,KIND=8)` intrinsic still
+rounds through fp64 internally before storing into the (aliased)
+16-byte slot. That bleeds ~1 ULP at fp64 into the Rayleigh quotient,
+which the eigenvalue solver then exposes. The migrator rewrites
+`WP = real64` to `WP = 16` so the migrated form `CMPLX(...,KIND=16)`
+hits the truly-quad branch and is correct. `zgedmdq` inherits the
+leak by calling `zgedmd` recursively.
+
+Fix: a reference-only override at `tests/lapack/reflapack/overrides/zgedmd.f90`
+that uses `RWORK(N+i)*W(i,j)` (mathematically identical) to avoid the
+intrinsic. Wired into the reflapack build via a generic overrides glob
+in `tests/lapack/reflapack/CMakeLists.txt` — files in `overrides/`
+displace their same-named upstream counterparts in the source list.
+Upstream `external/` is untouched.
 
 | Target      | test_dgedmd | test_zgedmd | test_dgedmdq | test_zgedmdq |
 |-------------|-------------|-------------|--------------|--------------|
-| kind16      | 48/48 PASS  | 12/48       | 32/32 PASS   | 0/32         |
+| kind16      | 48/48 PASS  | 48/48 PASS  | 32/32 PASS   | 32/32 PASS   |
 | kind10      | 48/48 PASS  | 48/48 PASS  | 32/32 PASS   | 32/32 PASS   |
-| multifloats | 48/48 PASS  | 12/48       | 32/32 PASS   | 0/32         |
-
-Real siblings `test_dgedmd` and `test_dgedmdq` pass cleanly on all
-three targets, so the bug is specific to the complex prefix migration.
-
-Hypothesis: a fp64-precision step inside `xgedmd` / `xgedmdq` not present
-in `xgesvd` / `xgeev` themselves (those are bit-exact on kind16 against
-their references — verified via `test_zgesvd` / `test_zgeev`). The
-migration diff between `external/lapack-3.12.1/SRC/zgedmd.f90` and
-`lapack/src/xgedmd.f90` is mechanical (Z→X / D→Q / DBLE→REAL(.,KIND=16))
-with no obvious fp64 leak — the bug likely lives in one of the migrated
-helpers transitively reachable from `xgedmd` / `xgedmdq` but not from
-the leaf SVD/eigenvalue routines (candidates: `xlassq` chain, `xlascl`
-for the Rayleigh-quotient build, or a CMPLX/REAL-style intrinsic call
-that resolves to the wrong kind in the complex path).
+| multifloats | 48/48 PASS  | 48/48 PASS  | 32/32 PASS   | 32/32 PASS   |
 
 Reproduce:
 ```bash
@@ -133,9 +183,7 @@ cmake --build /tmp/stg-q/build -j8 --target test_zgedmd test_zgedmdq
 /tmp/stg-q/build/tests/lapack/test_zgedmdq
 ```
 
-Tests left in place per the failing-test-stays-visible convention.
-
-Test design notes (for future tightening once the bug is fixed):
+Test design notes (for future tightening):
 
   - Sizes for `*gedmdq` capped at `(12, 8)` (two-size sweep instead of
     the design's `(24, 16)`): single-trajectory snapshot conditioning
@@ -274,9 +322,10 @@ helpers (`gen_orthogonal_quad` in `test_data.f90`, `sort_eig_lex_z` in
 `compare.f90`), 4 ref interfaces in `ref_quad_lapack.f90`, and 4 fypp
 wrappers in `target_lapack_body.fypp`.  Layer-(a) spectrum + layer-(b)
 differential residuals; layer-(c) reconstruction not implemented (would
-be a future tightening).  Real variants pass on all three targets;
-complex variants surface the migrator-side fp64 leak documented in the
-"Phase P22 — complex DMD precision divergence" section above.
+be a future tightening).  All four variants pass bit-exact on all three
+targets after the reference-side override at
+`tests/lapack/reflapack/overrides/zgedmd.f90` (see resolved P22
+section above).
 
 ### sb2st kernels (2 routines)
 
