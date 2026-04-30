@@ -87,7 +87,10 @@ program test_pdgbsv
         lwork = (nb + bwu) * (bwl + bwu) + 6 * (bwl + bwu) * (bwl + 2 * bwu) &
               + max(nrhs * (nb + 2 * bwl + 4 * bwu), 1) + 16
         allocate(work(max(1, lwork)))
-        allocate(ipiv_loc(nb))
+        ! PDGBTRF docs say IPIV size >= DESCA(NB), but the divide-and-
+        ! conquer merge in pdgbtrf.f:1045 writes IPIV(LN+1 .. LN+BM+BMN)
+        ! with LN <= NB-BW and BM+BMN up to 2*(BW+BWU); pad to cover it.
+        allocate(ipiv_loc(nb + 2 * (bwl + bwu)))
 
         call target_pdgbsv(n, bwl, bwu, nrhs, A_loc, 1, desca, ipiv_loc, &
                            B_loc, 1, descb, work, lwork, info)

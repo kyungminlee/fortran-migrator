@@ -96,7 +96,12 @@ program test_pddbtrs
 
         call target_pddbtrs('N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                             B_loc, 1, descb, af, laf, wopt, -1, info)
-        lwork = max(1, int(wopt(1)))
+        ! pqdbtrs/pqdbtrsv WORK_SIZE_MIN = max(bwl,bwu)*nrhs, but the
+        ! local-update QLAMOV at pqdbtrsv.f:1500 writes BWU rows x NRHS
+        ! cols at stride MAX_BW+BWL starting from WORK(1+MAX_BW-BWU);
+        ! the highest index touched is NRHS*MAX_BW + (NRHS-1)*BWL.
+        lwork = max(1, int(wopt(1)), &
+                    nrhs * max(bwl, bwu) + (nrhs - 1) * (bwl + bwu))
         allocate(work(lwork))
         call target_pddbtrs('N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                             B_loc, 1, descb, af, laf, work, lwork, info)

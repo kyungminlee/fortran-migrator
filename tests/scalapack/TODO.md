@@ -4,12 +4,10 @@
 
 `cmake --preset=linux-impi` invokes Intel MPI 2021.18 with
 `I_MPI_ADJUST_REDUCE=1` injected via `MPIEXEC_PREFLAGS`. ScaLAPACK
-tests went from `0% real signal` (singleton MPI) to `90%+ pass` on a
-real 2×2 grid. 26 ScaLAPACK tests still fail (out of ~170):
+tests went from `0% real signal` (singleton MPI) to `92%+ pass` on a
+real 2×2 grid. 13 ScaLAPACK tests still fail (out of 170):
 
 ```
-banded   : pddbtrf pddbtrs pddbtrsv pdgbsv pdgbtrf pdgbtrs pdpttrf
-           pzdbtrf pzdbtrs pzdbtrsv pzgbsv pzgbtrf pzgbtrs
 refine   : pdgerfs pdporfs pdtrrfs   pzgerfs pzporfs pztrrfs
 expert   : pdgesvx                   pzgesvx
 norms    : pdlanhs                   pzlanhs
@@ -17,12 +15,37 @@ QR-fac   : pdggrqf                   pzggrqf
 equiv    :                           pzgeequ
 ```
 
-These all pass cleanly under impi's collectives once the reduce
-shortpath is bypassed; the remaining failures look like banded-matrix
-descriptor / block-size assumptions that don't hold under the real
-distributed path, plus iterative-refinement convergence checks that
-need a tolerance review now that the inner residual is computed via
-real MPI rather than a singleton fallback.
+Iterative-refinement and expert drivers likely need a tolerance review
+now that the inner residual is computed via real MPI; the remaining
+norms/QR/equiv failures need per-routine investigation. For most of
+these, the fix is in the migrated ScaLAPACK or the test reference,
+not in the harness.
+
+## Banded test sources — workspace / IPIV size fixes (2026-04-30)
+
+13 banded-family tests went from crash/FAIL to PASS on impi after
+three test-side fixes:
+
+1. **PDGBTRF / PZGBTRF IPIV under-allocation** — docs claim IPIV size
+   `>= DESCA(NB)`, but the divide-and-conquer merge step at
+   `pdgbtrf.f:1045` writes `IPIV(LN+1 .. LN+BM+BMN)` with `LN <= NB-BW`
+   and `BM+BMN` up to `2*(BW+BWU)`. Tests now allocate
+   `nb + 2*(bwl+bwu)`. (Affects `test_p[dz]gbtrf`, `test_p[dz]gbtrs`,
+   `test_p[dz]gbsv`.)
+
+2. **PDDBTRS / PZDBTRS workspace under-allocation** — upstream
+   `WORK_SIZE_MIN = max(bwl,bwu)*nrhs` is too small; the local-update
+   `QLAMOV` at `pqdbtrsv.f:1500` writes `BWU` rows × `NRHS` cols at
+   stride `MAX_BW+BWL` starting from `WORK(1+MAX_BW-BWU)`. Tests now
+   override `lwork` to `nrhs*max(bwl,bwu) + (nrhs-1)*(bwl+bwu)`.
+   (Affects `test_p[dz]dbtrf`, `test_p[dz]dbtrs`, `test_p[dz]dbtrsv`.)
+
+3. **test_pdpttrf invalid reference comparison** — original test
+   compared `d_loc, e_loc` against LAPACK `dpttrf`. PDPTTRF's modified
+   d/e are NOT LDL^T factors; multi-rank cyclic reduction stores
+   reduced-system fillin in `af`, leaving d/e in a representation only
+   PDPTTRS understands. Test now does factor+solve and compares solve
+   result, mirroring `test_pzpttrf` (which was already correct).
 
 Tracked here — these need per-routine investigation, not blanket
 preset tweaks. For most of these, the fix is in the migrated

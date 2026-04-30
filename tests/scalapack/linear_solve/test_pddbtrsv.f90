@@ -88,7 +88,12 @@ program test_pddbtrsv
 
         call target_pddbtrsv('L', 'N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                              B_loc, 1, descb, af, laf, wopt, -1, info_l)
-        lwork = max(1, int(wopt(1)))
+        ! pqdbtrsv WORK_SIZE_MIN = max(bwl,bwu)*nrhs, but the local
+        ! update at pqdbtrsv.f:1500 writes BWU rows x NRHS cols at
+        ! stride MAX_BW+BWL starting from WORK(1+MAX_BW-BWU); the
+        ! highest index touched is NRHS*MAX_BW + (NRHS-1)*(BWL+BWU).
+        lwork = max(1, int(wopt(1)), &
+                    nrhs * max(bwl, bwu) + (nrhs - 1) * (bwl + bwu))
         allocate(work(lwork))
         call target_pddbtrsv('L', 'N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                              B_loc, 1, descb, af, laf, work, lwork, info_l)
@@ -97,7 +102,8 @@ program test_pddbtrsv
         allocate(work(1))
         call target_pddbtrsv('U', 'N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                              B_loc, 1, descb, af, laf, work, -1, info_u)
-        lwork = max(1, int(work(1)))
+        lwork = max(1, int(work(1)), &
+                    nrhs * max(bwl, bwu) + (nrhs - 1) * (bwl + bwu))
         deallocate(work); allocate(work(lwork))
         call target_pddbtrsv('U', 'N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                              B_loc, 1, descb, af, laf, work, lwork, info_u)

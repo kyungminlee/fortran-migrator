@@ -93,7 +93,12 @@ program test_pzdbtrsv
 
         call target_pzdbtrsv('L', 'N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                              B_loc, 1, descb, af, laf, wopt, -1, info_l)
-        lwork = max(1, int(real(wopt(1))))
+        ! pxdbtrsv WORK_SIZE_MIN = max(bwl,bwu)*nrhs, but the local
+        ! update at pxdbtrsv.f:1500 writes BWU rows x NRHS cols at
+        ! stride MAX_BW+BWL starting from WORK(1+MAX_BW-BWU); the
+        ! highest index touched is NRHS*MAX_BW + (NRHS-1)*(BWL+BWU).
+        lwork = max(1, int(real(wopt(1))), &
+                    nrhs * max(bwl, bwu) + (nrhs - 1) * (bwl + bwu))
         allocate(work(lwork))
         call target_pzdbtrsv('L', 'N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                              B_loc, 1, descb, af, laf, work, lwork, info_l)
@@ -102,7 +107,8 @@ program test_pzdbtrsv
         allocate(work(1))
         call target_pzdbtrsv('U', 'N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                              B_loc, 1, descb, af, laf, work, -1, info_u)
-        lwork = max(1, int(real(work(1))))
+        lwork = max(1, int(real(work(1))), &
+                    nrhs * max(bwl, bwu) + (nrhs - 1) * (bwl + bwu))
         deallocate(work); allocate(work(lwork))
         call target_pzdbtrsv('U', 'N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                              B_loc, 1, descb, af, laf, work, lwork, info_u)

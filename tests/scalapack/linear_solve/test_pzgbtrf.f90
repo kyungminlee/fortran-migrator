@@ -88,7 +88,10 @@ program test_pzgbtrf
 
         laf = (nb + bwu) * (bwl + bwu) + 6 * (bwl + bwu) * (bwl + 2 * bwu) + 16
         allocate(af(laf))
-        allocate(ipiv_loc(nb))
+        ! PZGBTRF docs say IPIV size >= DESCA(NB), but the divide-and-
+        ! conquer merge in pzgbtrf.f:1045 writes IPIV(LN+1 .. LN+BM+BMN)
+        ! with LN <= NB-BW and BM+BMN up to 2*(BW+BWU); pad to cover it.
+        allocate(ipiv_loc(nb + 2 * (bwl + bwu)))
 
         call target_pzgbtrf(n, bwl, bwu, A_loc, 1, desca, ipiv_loc, &
                             af, laf, wopt, -1, info)
