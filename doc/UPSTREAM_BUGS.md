@@ -155,3 +155,153 @@ the sum-norms to a serial reference — exactly what
 Both PASS to full target precision on all three targets after the fix.
 
 **Upstream report.** Not yet filed.
+
+---
+
+## ScaLAPACK 2.2.3: `p?lanhs.f` IAROW double-advance (NPROW>1)
+
+**Symptom.** A sibling bug to the NPROW=1 one above, hiding in the
+NPROW>1 branch of the same routines. With a 2×2 (or any NPROW>1)
+grid, the 1/F/M norms of an upper-Hessenberg matrix come out 20–50%
+under-reported; I-norm sometimes matches by chance because every row
+sum is contributed exactly once (just by the wrong rank). With
+NPROW=1 the bug is silent because `MOD(_, 1) == 0` collapses the
+miscompute.
+
+**Root cause.** The first-block + per-block-iteration code maintains
+a tracked owner row `IAROW` that should advance one row per block.
+The upstream pattern is:
+
+```fortran
+INXTROW = MOD( IAROW + 1, NPROW )    ! before the first-block code
+...first-block work...
+IAROW = INXTROW                      ! step IAROW forward by one block
+IAROW = MOD( IAROW + 1, NPROW )      ! WRONG: advances IAROW *again*
+```
+
+`INXTROW` is computed once before the first-block code and never
+recomputed inside the main loop, so the second assignment is a typo
+for `INXTROW = MOD( INXTROW + 1, NPROW )`. As written, `IAROW` skips
+one row owner per iteration; for NPROW=2 this leaves `IAROW` stuck
+on row 0 forever, so half the block rows are read by the "this row
+owns the diagonal element" branch on the wrong rank. The 1/F norms
+sum the dropped contributions to zero and underestimate; the M-norm
+similarly misses entries.
+
+The pattern repeats eight times in each of `pdlanhs.f` / `pzlanhs.f`:
+once per norm (M, 1, I, F) × {first-block code, main loop body}.
+
+**Affected files.** Same set as the NPROW=1 bug above — all four
+precision halves (`p[sdcz]lanhs.f`) carry the identical pattern.
+
+**Fix.** Replace the duplicate `IAROW = MOD(IAROW+1, NPROW)` with
+`INXTROW = MOD(INXTROW+1, NPROW)` so `INXTROW` advances each
+iteration and IAROW correctly tracks the next-block owner:
+
+```fortran
+IAROW   = INXTROW
+INXTROW = MOD( INXTROW + 1, NPROW )
+```
+
+**Workaround in tree.** Same pair as the NPROW=1 fix:
+
+* `recipes/scalapack/source_overrides/pdlanhs.f`
+* `recipes/scalapack/source_overrides/pzlanhs.f`
+
+Both the NPROW=1 `II = II + JB` patch and this IAROW fix live in the
+same override file.
+
+**Why upstream's tests miss it.** The upstream LIN driver feeds
+random general matrices and matches against `DLANGE`, not against a
+hand-computed reference for genuinely upper-Hessenberg input. Since
+`PDLANHS` returns a value that's a slight underestimate on random
+matrices, the driver's "result is finite and not too far from
+DLANGE's value" assertion accepts it. Only when the matrix is
+zeroed below the first subdiagonal (so the inner-loop bound
+`II + LL - JJ + 1` actually constrains anything) does the bug
+surface, which is what our `test_p[dz]lanhs.f90` drivers do.
+
+**Upstream report.** Not yet filed.
+
+---
+
+## ScaLAPACK 2.2.3: `p?geequ.f` column-scale reduction wrong axis
+
+**Symptom.** `PDGEEQU`/`PZGEEQU` return correct row scaling and
+`AMAX` on multi-MYCOL grids, but `COLCND` and the `INFO` zero-column
+detection are computed per grid column instead of globally. For a
+2×2 grid, ranks `(_,0)` see a `COLCND` derived from columns 0..NB-1,
+2*NB..3*NB-1, ...; ranks `(_,1)` see `COLCND` from the other set.
+With our `tests/scalapack/auxiliary/test_p[dz]geequ.f90` random
+matrices the disagreement is typically ~5% on `COLCND` and on
+individual `C(j)` values that depend on the global RCMAX. The
+real-precision test passes by chance on the seeds we use; the
+complex test fails consistently.
+
+**Root cause.** The C scale-factor computation has two reductions:
+
+```fortran
+! Each rank computes max over its local column-block:
+DO J = JJA, JJA+NQ-1
+   DO I = IIA, IIA+MP-1
+      C(J) = MAX( C(J), CABS1( A(IOFFA+I) ) * R(I) )
+   END DO
+END DO
+! Combine per-column maxes across grid rows (same MYCOL):
+CALL DGAMX2D( ICTXT, 'Columnwise', COLCTOP, 1, NQ, C(JJA), 1, ...)
+
+! Now compute scalar RCMAX/RCMIN over the local NQ columns:
+DO J = JJA, JJA+NQ-1
+   RCMAX = MAX( RCMAX, C(J) )
+   RCMIN = MIN( RCMIN, C(J) )
+END DO
+! Combine across processes — this is the bug:
+CALL DGAMX2D( ICTXT, 'Columnwise', COLCTOP, 1, 1, RCMAX, 1, ...)
+CALL DGAMN2D( ICTXT, 'Columnwise', COLCTOP, 1, 1, RCMIN, 1, ...)
+```
+
+After the first `'Columnwise'` reduction on `C(JJA..)`, every rank in
+a given grid column already holds the max-folded `C` values for its
+column block. The second reduction (on the scalar `RCMAX`) is also
+`'Columnwise'` — combining across `MYROW`-with-same-`MYCOL`, ranks
+that already agree. So it's a no-op, and ranks holding *different*
+column blocks (different `MYCOL`) keep their disjoint local
+extrema, leading each grid column to compute `COLCND` from its own
+block max/min instead of the global. The `IGAMX2D` for `INFO` (zero
+column detection) has the same axis mistake.
+
+The mirror axis would be `'Rowwise'` with `ROWCTOP`, which combines
+across `MYCOL`-with-same-`MYROW` — exactly what's needed to merge
+the disjoint per-grid-column blocks into a single global value.
+
+The R scale-factor reductions are correct: after a `'Rowwise'` C(R)
+reduce across `MYCOL`, the scalar RCMAX reduce uses `'Columnwise'` to
+combine across `MYROW`, which is the right mirror.
+
+**Affected files.**
+
+* `external/scalapack-2.2.3/SRC/pdgeequ.f`
+* `external/scalapack-2.2.3/SRC/pzgeequ.f`
+* `external/scalapack-2.2.3/SRC/psgeequ.f` (same bug, untested by us)
+* `external/scalapack-2.2.3/SRC/pcgeequ.f` (same bug, untested by us)
+
+Lines (in `pdgeequ.f`): 332, 334, 346 — the three calls to
+`DGAMX2D / DGAMN2D / IGAMX2D` after the C(JJA) accumulation block.
+The same three lines exist in `pzgeequ.f` (with `DGAMX2D` /
+`DGAMN2D` / `IGAMX2D` — note the `D`, not `Z`, for the real-typed
+extrema in the complex routine).
+
+**Fix.** Change `'Columnwise'` to `'Rowwise'` and `COLCTOP` to
+`ROWCTOP` on those three calls. The patched override in
+`recipes/scalapack/source_overrides/p[dz]geequ.f` carries the fix
+plus an inline comment block explaining the mirror.
+
+**Why upstream's tests miss it.** The driver compares row/column
+scalings against an LU-based condition-number proxy, not against
+sequential `DGEEQU` directly. The block-local `COLCND` happens to
+fall in the same "no scaling needed" bucket for random matrices,
+so the no-op path through the rest of the driver agrees. A
+seed-by-seed numerical comparison surfaces the disagreement
+immediately, which is what `test_p[dz]geequ.f90` do.
+
+**Upstream report.** Not yet filed.
