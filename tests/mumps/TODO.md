@@ -50,31 +50,14 @@ Same pattern applies to other arithmetic-lettered MUMPS symbols the tests
 will touch (e.g. `QMUMPS_INTR_TYPES` module wrapping unchanged
 `DMUMPS_INTR_STRUC` type).
 
-### UNK-2 — C bridge struct layout
+### UNK-2 — C bridge struct layout — N/A under header-override approach
 
-The hand-ported `tests/mumps/c/mumps_c_bridge.c` will declare a
-`DMUMPS_STRUC_C` whose layout must match the migrated Fortran derived type
-`Q?MUMPS_STRUC` byte-for-byte. Padding and alignment around `__float128`
-fields and the `keep[500]` / `keep8[150]` / `dkeep[230]` arrays is
-non-obvious.
-
-**Action:** before checking in the bridge, run a sizeof-comparison probe:
-
-```fortran
-! In a tiny Fortran probe linked against the migrated archive:
-use iso_c_binding, only: c_sizeof
-use q?mumps_struc_def
-type(q?mumps_struc) :: id
-print *, 'fortran_size =', c_sizeof(id)
-```
-
-```c
-/* In a paired C probe: */
-#include "mumps_c_bridge.h"
-printf("c_size = %zu\n", sizeof(DMUMPS_STRUC_C));
-```
-
-Mismatch → audit field-by-field padding before any C test runs.
+Original concern was that a hand-rolled `DMUMPS_STRUC_C` would have to
+match the migrated Fortran derived type byte-for-byte. The header-
+override approach (see B2 below) sidesteps this entirely: the C struct
+is declared by upstream `dmumps_c.h` itself, and is INDEPENDENT from the
+Fortran `DMUMPS_STRUC` (upstream's `dmumps_c()` decouples them via
+field-by-field extraction). No layout match required.
 
 ### UNK-3 — `NO_SAVE_RESTORE` compile flag
 
@@ -135,33 +118,26 @@ precision.
 ICNTL(1..4) set to `-1`/`0` to silence MUMPS output. Each test program calls
 `MPI_INIT` / `MPI_FINALIZE` explicitly.
 
-### C side — hand-ported bridge
+### C side — header-override bridge (replaces earlier hand-port plan)
 
-User-chosen approach: faithful port of `external/MUMPS_5.8.2/src/mumps_c.c`
-(~700 LOC) into `tests/mumps/c/mumps_c_bridge.c`. C tests look like real
-MUMPS C usage (mirroring `external/MUMPS_5.8.2/examples/c_example.c`).
+Approach: ship a quad-precision shadow of upstream `mumps_c_types.h`
+in `tests/mumps/c/include/`, put it FIRST on the include path, then
+compile upstream `mumps_c.c`, `mumps_common.c`, `mumps_addr.c`, and
+the upstream IO/save/thread/metis/scotch/pord helpers verbatim. See
+B2 below for the resolved details and verified build/link recipe.
 
-Bridge implementation requirements:
+Why not the hand-port: with overrides, we ship ~80 lines of header
+shadow versus ~800 lines of bridge code, and we automatically inherit
+upstream's full C-side surface (assign/nullify/get pairs, OOC
+helpers, save/restore, type-size utilities). When MUMPS upstream
+upgrades, the override stays valid as long as the type-macro names
+(`DMUMPS_REAL`, `ZMUMPS_COMPLEX`, ...) and the F77 symbol name
+(`dmumps_f77_`) remain stable, which they have across MUMPS 5.x.
 
-- Compile with `-DAdd_` for trailing-underscore Fortran symbol mangling
-  (matches gfortran emit convention, same as elsewhere in this repo).
-- Shadow `DMUMPS_REAL` typedef to `__float128` when `HAVE_REAL16` (and
-  `ZMUMPS_COMPLEX` to a paired `__complex128`).
-- Pull `MUMPS_INT` / `MUMPS_INT8` typedefs verbatim from
-  `external/MUMPS_5.8.2/include/mumps_c_types.h` (text-only; no math).
-  Verify `MUMPS_INT8 = int64_t`.
-- Stub `mumps_get_mapping` / `mumps_get_pivnul_list` /
-  `mumps_get_sym_perm` / `mumps_get_uns_perm` /
-  `mumps_get_glob2loc_{rhs,sol}` to return NULL — these live in
-  `mumps_common.c` (also skipped by recipe), and the test scope doesn't
-  exercise distributed mapping or permutation retrieval.
-- Port the `KEEP(500)=1` post-init line (~line 644 in upstream
-  `mumps_c.c`) — easy to miss; silently corrupts subsequent calls if
-  omitted.
-- Match `NO_SAVE_RESTORE` per UNK-3.
-- C drivers must call `MPI_Comm_c2f(MPI_COMM_WORLD)` (or pass the magic
-  `-987654` `USE_COMM_WORLD` constant), not the C `MPI_Comm` handle
-  directly.
+C drivers must call `MPI_Comm_c2f(MPI_COMM_WORLD)` (or use the
+upstream `USE_COMM_WORLD` magic value `-987654`) for `comm_fortran`.
+Upstream's `KEEP(500)=1` post-init logic and `NO_SAVE_RESTORE` flag
+behavior are inherited unchanged.
 
 ### C-side coverage matrix (scoped, ~5 programs)
 
@@ -201,8 +177,11 @@ tests/mumps/
 │   ├── test_zmumps_sym.f90
 │   └── test_zmumps_errors.f90
 └── c/
-    ├── mumps_c_bridge.h         — port of dmumps_c.h / zmumps_c.h
-    ├── mumps_c_bridge.c         — port of mumps_c.c with renamed symbols
+    ├── include/
+    │   ├── mumps_c_types.h      — quad-precision shadow (FIRST in -I)
+    │   ├── mumps_int_def.h      — pin MUMPS_INTSIZE32
+    │   ├── qmumps_c.h           — wraps dmumps_c.h with Q renames
+    │   └── xmumps_c.h           — wraps zmumps_c.h with X renames
     ├── test_dmumps_c_basic.c
     ├── test_dmumps_c_sym.c
     ├── test_dmumps_c_errors.c
@@ -308,13 +287,118 @@ The 2026-04-29 build-pipeline integration ended up touching both:
 - `pyengine __main__.py`: `('mumps','mumps.yaml')` added to
   LIBRARY_ORDER (only lives in fortran-migrator).
 
-### B2 — C interface (mumps_c.c, *mumps_c.h) not migrated
+### B2 — C interface (mumps_c.c, *mumps_c.h) not migrated — RESOLVED 2026-04-29 via header-override bridge
 
-Recipe `skip_files` excludes all `*MUMPS_C` and `MUMPS_C_TYPES` headers, and
-`recipes/mumps.yaml` declares `language: fortran` (extensions `.F .h` only).
-C side is therefore handled in-tree via the bridge port described above.
-Distributed mapping / permutation retrieval (handled by `mumps_common.c`,
-also skipped) is not testable until upstream C-side is migrated.
+Recipe `skip_files` excludes every `*MUMPS_C` and `MUMPS_C_TYPES` header,
+and `recipes/mumps.yaml` declares `language: fortran`. The C side is
+provided in-tree by `tests/mumps/c/`:
+
+- `tests/mumps/c/include/mumps_c_types.h` — quad-precision shadow of
+  upstream's mumps_c_types.h. Sets `DMUMPS_REAL`/`ZMUMPS_REAL` to
+  `__float128` and `mumps_double_complex` to a struct of two
+  `__float128`. When the test build's include path lists
+  `tests/mumps/c/include/` BEFORE `external/MUMPS_5.8.2/include/`,
+  every consumer of `<mumps_c_types.h>` (upstream `mumps_c.c`,
+  `mumps_common.c`, `dmumps_c.h`, `zmumps_c.h`, ...) sees the quad
+  typedefs.
+- `tests/mumps/c/include/mumps_int_def.h` — pin to `MUMPS_INTSIZE32`
+  (upstream's build script generates this from a template; we don't
+  run that script here).
+- `tests/mumps/c/include/qmumps_c.h` and `xmumps_c.h` — small wrappers
+  around upstream `dmumps_c.h` / `zmumps_c.h` that macro-rename the
+  user-visible entry points (`dmumps_c → qmumps_c`,
+  `DMUMPS_STRUC_C → QMUMPS_STRUC_C`, `dmumps_f77_ → qmumps_f77_` and
+  the Z analogues).
+
+Build glue (to add when `tests/mumps/CMakeLists.txt` lands):
+
+```cmake
+set(_MUMPS_UPSTREAM ${PROJECT_SOURCE_DIR}/external/MUMPS_5.8.2)
+
+# 1. Type-agnostic C runtime (upstream sources, compiled verbatim).
+add_library(mumps_c_runtime STATIC
+    ${_MUMPS_UPSTREAM}/src/mumps_common.c
+    ${_MUMPS_UPSTREAM}/src/mumps_addr.c
+    ${_MUMPS_UPSTREAM}/src/mumps_io.c
+    ${_MUMPS_UPSTREAM}/src/mumps_io_basic.c
+    ${_MUMPS_UPSTREAM}/src/mumps_io_err.c
+    ${_MUMPS_UPSTREAM}/src/mumps_io_thread.c
+    ${_MUMPS_UPSTREAM}/src/mumps_save_restore_C.c
+    ${_MUMPS_UPSTREAM}/src/mumps_register_thread.c
+    ${_MUMPS_UPSTREAM}/src/mumps_thread.c
+    ${_MUMPS_UPSTREAM}/src/mumps_thread_affinity.c
+    ${_MUMPS_UPSTREAM}/src/mumps_numa.c
+    ${_MUMPS_UPSTREAM}/src/mumps_flytes.c
+    ${_MUMPS_UPSTREAM}/src/mumps_config_file_C.c
+    ${_MUMPS_UPSTREAM}/src/mumps_metis.c
+    ${_MUMPS_UPSTREAM}/src/mumps_metis64.c
+    ${_MUMPS_UPSTREAM}/src/mumps_metis_int.c
+    ${_MUMPS_UPSTREAM}/src/mumps_pord.c
+    ${_MUMPS_UPSTREAM}/src/mumps_scotch.c
+    ${_MUMPS_UPSTREAM}/src/mumps_scotch64.c
+    ${_MUMPS_UPSTREAM}/src/mumps_scotch_int.c
+)
+target_include_directories(mumps_c_runtime PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/c/include
+    ${_MUMPS_UPSTREAM}/include
+    ${_MUMPS_UPSTREAM}/src)
+target_compile_definitions(mumps_c_runtime PRIVATE Add_)
+target_link_libraries(mumps_c_runtime PUBLIC MPI::MPI_C)
+
+# 2. Per-arithmetic dispatch — compile mumps_c.c twice with overrides.
+add_library(qmumps_c_bridge OBJECT ${_MUMPS_UPSTREAM}/src/mumps_c.c)
+target_include_directories(qmumps_c_bridge PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/c/include
+    ${_MUMPS_UPSTREAM}/include ${_MUMPS_UPSTREAM}/src)
+target_compile_definitions(qmumps_c_bridge PRIVATE
+    MUMPS_ARITH=MUMPS_ARITH_d Add_
+    dmumps_f77_=qmumps_f77_
+    dmumps_set_tmp_ptr_=qmumps_set_tmp_ptr_
+    dmumps_c=qmumps_c
+    DMUMPS_STRUC_C=QMUMPS_STRUC_C)
+
+add_library(xmumps_c_bridge OBJECT ${_MUMPS_UPSTREAM}/src/mumps_c.c)
+target_include_directories(xmumps_c_bridge PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/c/include
+    ${_MUMPS_UPSTREAM}/include ${_MUMPS_UPSTREAM}/src)
+target_compile_definitions(xmumps_c_bridge PRIVATE
+    MUMPS_ARITH=MUMPS_ARITH_z Add_
+    zmumps_f77_=xmumps_f77_
+    zmumps_set_tmp_ptr_=xmumps_set_tmp_ptr_
+    zmumps_c=xmumps_c
+    ZMUMPS_STRUC_C=XMUMPS_STRUC_C)
+
+add_library(mumps_c_bridge STATIC
+    $<TARGET_OBJECTS:qmumps_c_bridge>
+    $<TARGET_OBJECTS:xmumps_c_bridge>)
+target_link_libraries(mumps_c_bridge PUBLIC mumps_c_runtime)
+```
+
+Note on the renames:
+
+- `dmumps_f77_ → qmumps_f77_` — Fortran symbol called *from* C; rename
+  so the bridge resolves to the migrated archive's entry.
+- `dmumps_set_tmp_ptr_ → qmumps_set_tmp_ptr_` — same: another Fortran
+  symbol called from C.
+- `dmumps_set_tmp_ptr_c_` is **NOT** renamed — it's a C symbol called
+  *from* the migrated Fortran, which still calls it under the original
+  D name (per the migrator's keep-kind manifest convention).
+- Same pattern: every `dmumps_assign_*` / `dmumps_nullify_c_*` defined
+  by `mumps_c.c` keeps its D prefix because the migrated qmumps_f77_
+  Fortran calls it that way.
+
+Verified end-to-end on 2026-04-29 by hand-linking a JOB=-1/-2
+roundtrip:
+
+```
+$ mpiexec -n 1 ./test_qmumps_init
+Entering QMUMPS 5.8.2 from C interface with JOB =  -2
+      executing #MPI =      1, without OMP
+```
+
+Distributed mapping / permutation retrieval (sym_perm, uns_perm, etc.)
+work the same way they do upstream — our bridge just re-uses upstream
+`mumps_common.c` which provides the assign/nullify/get pairs.
 
 ### B3 — Sequential MPI stub (libmpiseq) not built
 
