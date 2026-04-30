@@ -989,6 +989,13 @@ set(STAGED_LIBRARIES {staged_list})
         ('_scalapack_src', 'scalapack-2.2.3/SRC'),
         ('_scalapack_tools_src', 'scalapack-2.2.3/TOOLS'),
         ('_scalapack_redist_src', 'scalapack-2.2.3/REDIST/SRC'),
+        # MUMPS sequential MPI stub. Lets cmake build a single-process
+        # ``libmpiseq`` archive alongside the migrated qmumps; tests can
+        # link it instead of MPI::MPI_Fortran for plain (no mpiexec)
+        # executables. Stubs print a "should not be called" error if a
+        # collective/comm primitive that requires multi-rank coordination
+        # is invoked, so libseq is NPROCS=1-only by construction.
+        ('_mpiseq_src',    'MUMPS_5.8.2/libseq'),
     ]
     for dst_name, rel_src in _std_dirs:
         src = proj_root / 'external' / rel_src
