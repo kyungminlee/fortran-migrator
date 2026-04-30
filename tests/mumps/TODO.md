@@ -453,26 +453,31 @@ this test directory until upstream support lands.
 
 ## Open coverage gaps
 
-### G1 — Fortran/C cross-language parity test (was H1 in completeness review)
+### G1 — Fortran/C cross-language parity test — RESOLVED 2026-04-30
 
-Originally planned as `c/test_dmumps_c_parity.c` but deferred. The
-intent was to drive the same problem through both `qmumps` (Fortran
-wrapper, called from C via ISO_C_BINDING) and `qmumps_c` (C bridge),
-then byte-compare the outputs to detect any silent corruption that
-the bridge introduces relative to the Fortran-direct path.
+Landed as `fortran/test_dmumps_c_parity.f90` and `test_zmumps_c_parity.f90`
+plus `c/c_parity_helpers.c` (the Fortran-callable bridge into
+qmumps_c / xmumps_c). Each test drives the same generated problem
+through both paths and verifies bit-identical solutions. Catches
+silent struct-extraction corruption that the per-side basic tests
+can't (since they only check `result ≈ x_true` to ~33 digits, not
+that the two paths agree exactly).
 
-The blocker: Fortran's `iso_c_binding` doesn't standardize a
-`__float128`-equivalent type. Mirroring the quad-precision struct
-fields across the language boundary requires either custom typedef
-tricks (`type(c_ptr)` + manual offset arithmetic) or a third
-shadow header that's careful to give both sides the same struct
-layout. Existing tests already parity-check at the result level —
-both the Fortran (`test_dmumps_basic`) and C (`test_dmumps_c_basic`)
-sides compare against the same `x_true` and converge to ~33 digits;
-any ABI mismatch would manifest as a failure on one side.
+Avoided the `__float128` ISO_C_BINDING gymnastics by using
+`real(16)` / `complex(16)` in the Fortran interface block — gfortran
+and gcc agree on the by-reference layout for those kinds, so the
+bridge function declared as `__float128 *` / `mumps_double_complex *`
+on the C side links cleanly.
 
-Worth landing if a future regression slips past the per-side
-checks (e.g. matched-but-corrupted answers). Not blocking.
+Verified `fortran-vs-c = 0.0e+00` on both D and Z paths.
+
+### G2 — `target_kind10/` / `target_multifloats/` placeholder dirs
+
+Convention from `tests/blas/` and `tests/lapack/`: each has empty
+target subdirs alongside `target_kind16/` so when a new precision
+target's overrides land, the wrapper drops in. Currently only
+`target_kind16/` exists for tests/mumps because the recipe only
+has kind16 EP overrides (B4). One-line drop when B4 lands.
 
 ## Defects discovered during runs
 
