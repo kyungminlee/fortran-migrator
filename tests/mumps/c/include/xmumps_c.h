@@ -18,6 +18,8 @@
 #define zmumps_c       xmumps_c
 #define zmumps_f77_    xmumps_f77_
 
+/* See qmumps_c.h for why mumps_c_types.h is included before zmumps_c.h. */
+#include "mumps_c_types.h"
 #include "zmumps_c.h"
 
 #endif /* XMUMPS_C_H */

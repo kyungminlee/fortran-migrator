@@ -25,6 +25,17 @@
 #define dmumps_c       qmumps_c
 #define dmumps_f77_    qmumps_f77_
 
+/* CRITICAL: include OUR mumps_c_types.h shadow FIRST so its
+ * `#define MUMPS_C_TYPES_H` guard fires. dmumps_c.h's own
+ * `#include "mumps_c_types.h"` then resolves to a no-op (guard
+ * already set), which means dmumps_c.h instantiates DMUMPS_STRUC_C
+ * with our __float128 typedefs instead of upstream's `double`.
+ *
+ * Without this prelude, dmumps_c.h's `#include "mumps_c_types.h"`
+ * would search dmumps_c.h's own directory first (== upstream's
+ * include/) and find upstream's `double`-typed mumps_c_types.h
+ * before our shadow on the -I path. */
+#include "mumps_c_types.h"
 #include "dmumps_c.h"
 
 #endif /* QMUMPS_C_H */
