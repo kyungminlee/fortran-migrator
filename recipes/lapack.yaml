@@ -8,6 +8,17 @@ symbols:
 
 depends:
   - blas.yaml
+  # XBLAS extended-precision routines are called from the LAPACK
+  # *la_*rfsx_extended iterative-refinement family (qla_gbrfsx_extended,
+  # xla_gerfsx_extended, ...). Declaring xblas as a dep brings its
+  # BLAS_{s,d,c,z}*_x symbols into the classifier's universe, so the
+  # position-5 precision-letter family (BLAS_DGBMV_X ↔ BLAS_SGBMV_X,
+  # BLAS_ZGEMV_X ↔ BLAS_CGEMV_X, ...) is paired and renamed to the
+  # target prefix (BLAS_QGBMV_X / BLAS_XGEMV_X for kind16, etc.) by the
+  # standard classifier — no special-case rename rule needed. Without
+  # this dep the call sites kept their D/Z form and silently linked
+  # against fp64 XBLAS inside a quad/multifloats build.
+  - xblas.yaml
 
 # INSTALL directory contains slamch/dlamch, sroundup_lwork, etc.
 extra_symbol_dirs:
