@@ -617,7 +617,25 @@ def replace_intrinsic_calls(
                         # ``AIMAG`` / ``CONJG`` are module generics —
                         # leave the name alone.
                         if old_name.upper() in ('REAL', 'DREAL', 'DBLE'):
-                            replacement = f'{target_mode.real_constructor}({inner})'
+                            # Drop the optional kind-spec second argument
+                            # when present: `REAL(x, wp)` / `REAL(x, KIND=wp)`
+                            # / `DBLE(x, wp)` becomes `real64x2(x)` for
+                            # multifloats. The constructor takes a single
+                            # value argument; passing the kind-symbol as a
+                            # second positional component overflows the
+                            # 1-component derived type ("Too many components
+                            # in structure constructor"). Split at the
+                            # top-level comma respecting nested parens.
+                            depth_k = 0
+                            split_at = -1
+                            for ii, ch in enumerate(inner):
+                                if ch == '(': depth_k += 1
+                                elif ch == ')': depth_k -= 1
+                                elif ch == ',' and depth_k == 0:
+                                    split_at = ii
+                                    break
+                            inner_first = inner[:split_at] if split_at >= 0 else inner
+                            replacement = f'{target_mode.real_constructor}({inner_first})'
                         elif old_name.upper() in ('CMPLX', 'DCMPLX'):
                             wrapped = _wrap_complex_args(inner, target_mode, real_names)
                             replacement = f'{target_mode.complex_constructor}({wrapped})'
@@ -692,7 +710,20 @@ def replace_generic_conversions(line: str, target_mode: TargetMode) -> str:
                 # interface procedure instead of the structure
                 # constructor (which has no integer overload).
                 if name.upper() == 'REAL':
-                    replacement = f'{target_mode.real_constructor}({inner})'
+                    # Drop the optional kind-spec second argument
+                    # (`REAL(x, wp)` / `REAL(x, KIND=wp)`) — see the
+                    # parallel comment in the wrap_constructor branch
+                    # of `replace_intrinsic_calls` for the rationale.
+                    depth_k = 0
+                    split_at = -1
+                    for ii, ch in enumerate(inner):
+                        if ch == '(': depth_k += 1
+                        elif ch == ')': depth_k -= 1
+                        elif ch == ',' and depth_k == 0:
+                            split_at = ii
+                            break
+                    inner_first = inner[:split_at] if split_at >= 0 else inner
+                    replacement = f'{target_mode.real_constructor}({inner_first})'
                 else:
                     wrapped = _wrap_complex_args(inner, target_mode, None)
                     replacement = f'{target_mode.complex_constructor}({wrapped})'
