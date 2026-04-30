@@ -87,6 +87,19 @@ copy_files:
   # Note: copy_files matches uppercased filename basenames, not
   # module names — hence FAC_FUTURE_NIV2_MOD, not MUMPS_FUTURE_NIV2.
   - FAC_FUTURE_NIV2_MOD
+  # estim_flops.F has cost-statistics subroutines that take
+  # DOUBLE PRECISION arguments (FLOP1, FLOP2, COST, OPELIW, ...).
+  # Every caller in the migrated tree keeps these as DOUBLE PRECISION
+  # — MUMPS_LR_STATS (kept verbatim above) calls in directly, and
+  # qfac_front_type2_aux.F's FLOP1/FLOP2 declarations are preserved
+  # via the keep-kind manifest. Migrating estim_flops.F promotes
+  # MUMPS_GET_FLOPS_COST's COST argument to REAL(KIND=16), which
+  # then writes 16 bytes into an 8-byte caller buffer — silent
+  # corruption that surfaces as a SIGSEGV during the factorization
+  # phase (qmumps_fac_stack_ → mumps_get_flops_cost_ →
+  # 8-byte stack buffer overrun). Pin to copy_files to keep the
+  # whole file at DOUBLE PRECISION.
+  - ESTIM_FLOPS
 
   # MUMPS_MEMORY_MOD bundles S/D/C/Z reallocators under a single
   # generic MUMPS_REALLOC interface. Migrating it directly collapses
