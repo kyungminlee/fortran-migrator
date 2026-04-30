@@ -723,6 +723,38 @@ if(TARGET ${LIB_PREFIX}scalapack_c)
     endif()
 endif()
 
+# 9. MUMPS (depends on LAPACK, BLAS, ScaLAPACK; needs MPI Fortran).
+#
+# MUMPS is a sparse direct solver (Multifrontal Massively Parallel). The
+# migrated archive ``${LIB_PREFIX}mumps`` carries the Q/X clones of
+# DMUMPS / ZMUMPS plus their auxiliary subroutines.
+#
+# No standard-precision archive is built today: nothing in this project
+# links into the upstream-precision DMUMPS_/ZMUMPS_ entry points, and
+# building one would require wiring the C side (mumps_c.c, mumps_common.c,
+# mumps_pord.c, ...), which the recipe currently skips. Add later if a
+# real consumer surfaces.
+#
+# MPI is linked PUBLIC because the migrated routines invoke MPI
+# primitives (MPI_BCAST / MPI_REDUCE / ...). Downstream callers pass
+# ``id%COMM = MPI_COMM_WORLD`` and let MUMPS handle communication
+# internally; the link dependency must propagate so executables resolve
+# the MPI runtime.
+add_migrated_fortran_library(mumps)
+if(TARGET ${LIB_PREFIX}mumps)
+    foreach(_dep ${LIB_PREFIX}scalapack ${LIB_PREFIX}lapack ${LIB_PREFIX}blas)
+        if(TARGET ${_dep})
+            target_link_libraries(${LIB_PREFIX}mumps PUBLIC ${_dep})
+        endif()
+    endforeach()
+    if(MPI_Fortran_FOUND)
+        target_link_libraries(${LIB_PREFIX}mumps PUBLIC MPI::MPI_Fortran)
+    endif()
+endif()
+if(TARGET mumps_common AND MPI_Fortran_FOUND)
+    target_link_libraries(mumps_common PUBLIC MPI::MPI_Fortran)
+endif()
+
 # ── Install ──────────────────────────────────────────────────────────
 # Each precision library gets its own export set and Config.cmake,
 # so consumers can do: find_package(qblas), find_package(qlapack), etc.
