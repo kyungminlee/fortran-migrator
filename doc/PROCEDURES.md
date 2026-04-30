@@ -1190,6 +1190,21 @@ Out of scope for this index: PBLAS-internal helper libraries
 
 ## PBLAS
 
+> **Coverage** (`tests/pblas/`): 55 of 61 rows exercised on
+> kind10 / kind16 / multifloats targets.
+>
+> - Real-prefix (24 of 27): all except `agemv`, `asymv`, `atrmv`
+>   (auxiliary row/column-norm matvecs — no canonical BLAS analogue).
+> - Complex-prefix (28 of 31): all except `agemv`, `ahemv`, `atrmv`
+>   (same family — auxiliary matvec norms).
+> - Mixed real-from-complex (2 of 2): `asum`, `nrm2`.
+> - Complex-vector with real-scalar (1 of 1): `scal`.
+>
+> The 6 uncovered stems are auxiliary matvec norms; reference is
+> `sum(abs(...))` over each row/column at quad precision rather than
+> a serial-BLAS analogue. Tracked as a follow-up in
+> `tests/pblas/TODO.md`.
+
 
 ### PBLAS — Real-prefix family (27 stems)
 

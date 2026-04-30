@@ -4,31 +4,16 @@ This file tracks items that were *deferred* during the test-coverage
 expansion because they live outside `tests/pblas/`. Each entry names
 the file/concern and what should change after the test PR lands.
 
-## doc/PROCEDURES.md — coverage column
+## doc/PROCEDURES.md — coverage footnote — RESOLVED
 
-`doc/PROCEDURES.md` enumerates all 61 PBLAS (family, stem) rows with
-their migrated names per target, but has no column indicating which
-ones are exercised by `tests/pblas/`. With this PR, 48 of the 61
-rows are exercised on the kind10 and kind16 targets:
-
-- All 7 Real-prefix Level 1 stems
-- All 4 Complex-prefix Level 1 stems
-- Both Mixed real-from-complex stems (asum, nrm2)
-- The Complex-vector with real-scalar stem (zdscal)
-- All 7 Real-prefix Level 2 stems (gemv, ger, symv, syr, syr2, trmv, trsv)
-- All 8 Complex-prefix Level 2 stems (gemv, hemv, gerc, geru, her, her2, trmv, trsv)
-- All 6 Real-prefix Level 3 stems (gemm, symm, syrk, syr2k, trmm, trsm)
-- All 8 Complex-prefix Level 3 stems (gemm, hemm, symm, herk, her2k, syrk, syr2k, trmm, trsm)
-
-Rows *not* exercised — auxiliary PBLAS routines without a direct
-serial-BLAS analogue:
-
-- `agemv`, `ahemv`, `asymv`, `atrmv` (auxiliary mat-vec norms)
-- `geadd`, `tradd` (general / triangular add)
-- `tran`, `tranc`, `tranu` (transpose / conjugate-transpose)
-
-A coverage column or an explicit "tested-by" footnote would document
-this without forcing readers to grep `tests/pblas/level*/`.
+`doc/PROCEDURES.md`'s PBLAS section now carries a coverage footnote
+listing the 55 of 61 rows exercised by `tests/pblas/`. Counts updated
+2026-04-30 from the original 48 (the auxiliary `geadd`, `tradd`,
+`tran`, `tranc`, `tranu` cases gained tests since the TODO was
+written). Remaining uncovered: 6 auxiliary mat-vec norm stems
+(`agemv`, `ahemv`, `asymv`, `atrmv`) — they have no canonical BLAS
+analogue and would each need a hand-coded `sum(abs(...))` reference;
+see "Auxiliary PBLAS coverage" below.
 
 ## Auxiliary PBLAS coverage
 
