@@ -916,9 +916,12 @@ set(STAGED_LIBRARIES {staged_list})
 """
     (staging_dir / 'target_config.cmake').write_text(target_config)
 
-    # Copy CMake files to staging directory
+    # Copy CMake files to staging directory. ``CMakePresets.json`` rides
+    # along so users can `cmake --preset=linux-impi` from the staged
+    # tree without having to re-discover Intel MPI's wrapper paths.
     cmake_dir = proj_root / 'cmake'
-    for cmake_file in ['CMakeLists.txt', 'FortranCompiler.cmake']:
+    for cmake_file in ['CMakeLists.txt', 'FortranCompiler.cmake',
+                       'CMakePresets.json']:
         src = cmake_dir / cmake_file
         if src.exists():
             shutil.copy2(src, staging_dir / cmake_file)
