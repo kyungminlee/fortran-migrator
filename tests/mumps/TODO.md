@@ -453,4 +453,24 @@ this test directory until upstream support lands.
 
 ## Defects discovered during runs
 
-(empty — populated as tests are exercised)
+### D1 — MUMPS 5.8.2 doesn't validate out-of-range matrix entries / negative N
+
+Discovered 2026-04-30 while writing `test_dmumps_errors.f90` /
+`test_zmumps_errors.f90`. Inputs that the test plan expected MUMPS to
+reject with `INFOG(1) < 0` instead crash inside the analysis or
+factorization phase:
+
+- `id%N = -1` → SIGSEGV before MUMPS prints any diagnostic.
+- `id%IRN(1) = N + 5` or `id%JCN(1) = N + 3` → SIGSEGV inside
+  `qmumps_validate_input_` or its callees.
+- Mismatched `NNZ` (e.g. `NNZ = 0` with non-empty IRN/JCN/A) → SIGSEGV
+  during matrix reformatting.
+
+The MUMPS 5.8.2 user manual documents `INFOG(1) = -16` (N out of range)
+and `INFOG(1) = -6` (structurally singular) as the intended behavior.
+The migrated qmumps inherits whatever validation upstream actually has,
+which doesn't cover these cases. The test files for error coverage
+were therefore dropped — keeping them would test MUMPS-side robustness
+that doesn't exist, not migrator correctness. Re-introduce when MUMPS
+upstream tightens validation, or write a lightweight wrapper that
+sanitizes inputs before calling `qmumps_c`.
