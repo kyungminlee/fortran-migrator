@@ -1,0 +1,52 @@
+#! Per-target MUMPS wrapper, parameterized by target.
+#!
+#! Each per-target shim sets:
+#!   target            'kind10' | 'kind16' | 'multifloats'  (label)
+#!   target_name       human-readable name (== target today)
+#!   target_eps        Fortran expression giving the target's epsilon as REAL(KIND=ep)
+#!   prefix_real       migrated entry-point name for QMUMPS-equivalent (e.g. 'qmumps')
+#!   prefix_complex    migrated entry-point name for XMUMPS-equivalent (e.g. 'xmumps')
+#!   real_struc_mod    migrated module providing DMUMPS_STRUC (e.g. 'qmumps_struc_def')
+#!   complex_struc_mod migrated module providing ZMUMPS_STRUC (e.g. 'xmumps_struc_def')
+#!
+#! Re-exports the (D|Z)MUMPS_STRUC types unchanged — the migrator
+#! renames the wrapping module but leaves the TYPE name intact (see
+#! tests/mumps/TODO.md UNK-1) — so test code uses
+#!   USE target_mumps, ONLY: dmumps_struc
+#!   TYPE(dmumps_struc) :: id
+#!   CALL target_qmumps(id)
+#! and stays portable across targets.
+
+module target_mumps
+    use prec_kinds, only: ep
+    use ${real_struc_mod}$,    only: dmumps_struc
+    use ${complex_struc_mod}$, only: zmumps_struc
+    implicit none
+
+    character(len=*), parameter :: target_name = '${target_name}$'
+    real(ep),         parameter :: target_eps  = ${target_eps}$
+
+    interface
+        subroutine ${prefix_real}$(id)
+            import :: dmumps_struc
+            type(dmumps_struc), intent(inout) :: id
+        end subroutine ${prefix_real}$
+        subroutine ${prefix_complex}$(id)
+            import :: zmumps_struc
+            type(zmumps_struc), intent(inout) :: id
+        end subroutine ${prefix_complex}$
+    end interface
+
+contains
+
+    subroutine target_qmumps(id)
+        type(dmumps_struc), intent(inout) :: id
+        call ${prefix_real}$(id)
+    end subroutine target_qmumps
+
+    subroutine target_xmumps(id)
+        type(zmumps_struc), intent(inout) :: id
+        call ${prefix_complex}$(id)
+    end subroutine target_xmumps
+
+end module target_mumps
