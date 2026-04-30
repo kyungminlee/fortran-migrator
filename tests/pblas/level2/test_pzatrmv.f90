@@ -1,7 +1,8 @@
 ! pzatrmv: row/column 1-norm of |alpha|*|op(A_tri)|*|X|, plus |beta*Y|.
 ! A is complex triangular; trans/diag flags select op() and unit diag.
-! For TRANS='C', |conjg(A^T)_{i,j}| = |A_{j,i}| — same as TRANS='T'
-! under the abs() reduction.
+! Routine uses CABS1 (= |Re|+|Im|, Manhattan) — see ZATRMV in PBLAS
+! PTZBLAS — NOT Euclidean. For TRANS='C',
+! cabs1(conjg(A^T)_{i,j}) = cabs1(A_{j,i}), same as TRANS='T'.
 program test_pzatrmv
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_vec
@@ -80,11 +81,11 @@ program test_pzatrmv
                                     if (on_diag .and. diag == 'U') then
                                         aij_abs = 1.0_ep
                                     else
-                                        aij_abs = abs(A_glob(ii, jj))
+                                        aij_abs = abs(real(A_glob(ii, jj), ep)) + abs(aimag(A_glob(ii, jj)))
                                     end if
                                 else
                                     ! TRANS='T' or 'C': read A(jj, ii); conj
-                                    ! drops out under abs.
+                                    ! drops out under cabs1.
                                     if (uplo == 'U') then
                                         in_triangle = (jj <= ii)
                                     else
@@ -95,10 +96,10 @@ program test_pzatrmv
                                     if (on_diag .and. diag == 'U') then
                                         aij_abs = 1.0_ep
                                     else
-                                        aij_abs = abs(A_glob(jj, ii))
+                                        aij_abs = abs(real(A_glob(jj, ii), ep)) + abs(aimag(A_glob(jj, ii)))
                                     end if
                                 end if
-                                acc = acc + aij_abs * abs(x_glob(jj))
+                                acc = acc + aij_abs * (abs(real(x_glob(jj), ep)) + abs(aimag(x_glob(jj))))
                             end do
                             y_ref(ii) = abs(alpha) * acc + abs(beta * y_glob(ii))
                         end do

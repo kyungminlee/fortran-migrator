@@ -1,7 +1,8 @@
 ! pzahemv: row 1-norm of |alpha|*|A_herm|*|X|, plus |beta*Y|.
 ! A is Hermitian (only UPLO triangle stored); the mirror element is
-! conjg(A_{j,i}) for the off-diagonal, but |conjg(z)| = |z| so the
-! reference is symmetric in abs.
+! conjg(A_{j,i}) for the off-diagonal, but cabs1(conjg(z)) = cabs1(z)
+! so the reference is symmetric. Routine uses CABS1 (= |Re|+|Im|),
+! NOT Euclidean — see PHEMV / ZAHEMV in PBLAS PTZBLAS.
 program test_pzahemv
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_vec
@@ -59,25 +60,31 @@ program test_pzahemv
 
             if (my_rank == 0) then
                 allocate(y_ref(n))
-                ! |Hermitian A|_{i,j} = |A_{i,j}| if (i,j) in UPLO,
-                ! else |conjg(A_{j,i})| = |A_{j,i}|. Symmetric in abs.
+                ! Off-diagonal: cabs1(A_{i,j}) (for (i,j) in UPLO triangle)
+                ! or cabs1(conjg(A_{j,i})) = cabs1(A_{j,i}) for the mirror.
+                ! Diagonal: routine uses ABS(REAL(A(j,j))) — Hermitian
+                ! invariant says diagonal is real, so the imaginary part
+                ! is ignored even if the test feeds non-Hermitian noise.
+                ! cabs1(z) = |Re(z)| + |Im(z)| (matches CABS1 in zahemv.f).
                 do ii = 1, n
                     acc = 0.0_ep
                     do jj = 1, n
-                        if (uplo == 'U') then
-                            if (ii <= jj) then
-                                aij_abs = abs(A_glob(ii, jj))
+                        if (ii == jj) then
+                            aij_abs = abs(real(A_glob(jj, jj), ep))   ! diagonal: real part only
+                        else if (uplo == 'U') then
+                            if (ii < jj) then
+                                aij_abs = abs(real(A_glob(ii, jj), ep)) + abs(aimag(A_glob(ii, jj)))
                             else
-                                aij_abs = abs(A_glob(jj, ii))
+                                aij_abs = abs(real(A_glob(jj, ii), ep)) + abs(aimag(A_glob(jj, ii)))
                             end if
                         else
-                            if (ii >= jj) then
-                                aij_abs = abs(A_glob(ii, jj))
+                            if (ii > jj) then
+                                aij_abs = abs(real(A_glob(ii, jj), ep)) + abs(aimag(A_glob(ii, jj)))
                             else
-                                aij_abs = abs(A_glob(jj, ii))
+                                aij_abs = abs(real(A_glob(jj, ii), ep)) + abs(aimag(A_glob(jj, ii)))
                             end if
                         end if
-                        acc = acc + aij_abs * abs(x_glob(jj))
+                        acc = acc + aij_abs * (abs(real(x_glob(jj), ep)) + abs(aimag(x_glob(jj))))
                     end do
                     y_ref(ii) = abs(alpha) * acc + abs(beta * y_glob(ii))
                 end do

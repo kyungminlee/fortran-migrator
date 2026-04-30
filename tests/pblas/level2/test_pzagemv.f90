@@ -1,8 +1,10 @@
 ! pzagemv: row/column 1-norm of |alpha|*|op(A)|*|X|, plus |beta*Y|.
-!   sub(Y)_i := |alpha| * sum_j |op(A)_{i,j}| * |X_j| + |beta * sub(Y)_i|
-! A and X are complex, alpha/beta/Y are real. abs(complex) is the
-! Euclidean magnitude. Conjugate transpose ('C') and plain transpose
-! ('T') agree under abs() since |conjg(z)| = |z|.
+!   sub(Y)_i := |alpha| * sum_j cabs1(op(A)_{i,j}) * cabs1(X_j) + |beta * sub(Y)_i|
+! A and X are complex, alpha/beta/Y are real. The routine uses the
+! Manhattan / L1 norm `cabs1(z) = |Re(z)| + |Im(z)|` (NOT the Euclidean
+! magnitude — see ZAGEMV in PBLAS PTZBLAS), and conjugate transpose
+! ('C') agrees with plain transpose ('T') under cabs1 since
+! cabs1(conjg(z)) = cabs1(z).
 program test_pzagemv
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_vec
@@ -27,6 +29,11 @@ program test_pzagemv
     real(ep),    allocatable :: y_loc(:), y_glob(:), y_got(:), y_ref(:)
     real(ep) :: alpha, beta, err, tol, acc
     character(len=48) :: label
+
+    ! cabs1: Manhattan norm of complex scalar — matches the routine's
+    ! `CABS1` statement function in PTZBLAS/zagemv.f.
+    !
+    !   cabs1(z) = |Re(z)| + |Im(z)|
 
     call grid_init()
     call report_init('pzagemv', target_name, my_rank)
@@ -70,17 +77,19 @@ program test_pzagemv
                     do ii = 1, m
                         acc = 0.0_ep
                         do jj = 1, n
-                            acc = acc + abs(A_glob(ii, jj)) * abs(x_glob(jj))
+                            acc = acc + (abs(real(A_glob(ii, jj), ep)) + abs(aimag(A_glob(ii, jj)))) * &
+                                        (abs(real(x_glob(jj), ep)) + abs(aimag(x_glob(jj))))
                         end do
                         y_ref(ii) = abs(alpha) * acc + abs(beta * y_glob(ii))
                     end do
                 else
                     ! TRANS='T' or 'C': op(A)_{i,j} = A_{j,i} (conjg
-                    ! drops out under abs).
+                    ! drops out under cabs1).
                     do jj = 1, n
                         acc = 0.0_ep
                         do ii = 1, m
-                            acc = acc + abs(A_glob(ii, jj)) * abs(x_glob(ii))
+                            acc = acc + (abs(real(A_glob(ii, jj), ep)) + abs(aimag(A_glob(ii, jj)))) * &
+                                        (abs(real(x_glob(ii), ep)) + abs(aimag(x_glob(ii))))
                         end do
                         y_ref(jj) = abs(alpha) * acc + abs(beta * y_glob(jj))
                     end do
