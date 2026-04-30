@@ -721,6 +721,7 @@ LIBRARY_ORDER = [
     ('pblas',       'pblas.yaml'),
     ('scalapack',   'scalapack.yaml'),
     ('scalapack_c', 'scalapack_c.yaml'),
+    ('mumps',       'mumps.yaml'),
 ]
 
 
