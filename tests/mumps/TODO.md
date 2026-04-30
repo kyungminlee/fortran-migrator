@@ -400,10 +400,50 @@ Distributed mapping / permutation retrieval (sym_perm, uns_perm, etc.)
 work the same way they do upstream — our bridge just re-uses upstream
 `mumps_common.c` which provides the assign/nullify/get pairs.
 
-### B3 — Sequential MPI stub (libmpiseq) not built
+### B3 — Sequential MPI stub (libmpiseq) — PARTIALLY RESOLVED 2026-04-29
 
-`external/MUMPS_5.8.2/libseq/` exists but no CMake target. Tests must
-invoke real MPI via `mpiexec -n 1` (handled in CMakeLists.txt).
+`libmpiseq.a` is now buildable. `external/MUMPS_5.8.2/libseq/` is
+copied to `_mpiseq_src/` by `pyengine stage` (added to `_std_dirs` in
+`src/pyengine/__main__.py`), and `cmake/CMakeLists.txt` (section 10)
+declares `add_library(mpiseq STATIC mpi.f mpic.c elapse.c)` with the
+required `-DAdd_` Fortran-symbol-mangling flag.
+
+**Build verified:**
+
+```
+$ cmake --build /tmp/stg-q/build --target mpiseq
+[..]
+[100%] Linking Fortran static library libmpiseq.a
+[100%] Built target mpiseq
+```
+
+`libmpiseq.a` exports 157 symbols — the full MPI / BLACS / ScaLAPACK
+stub surface upstream MUMPS uses for serial operation.
+
+**Supplementary C-MPI stubs:** `tests/mumps/c/mpiseq_c_stubs.c`
+provides ~30 additional C-side `MPI_*` functions (Send, Recv, Isend,
+Bcast, Type_vector, ...) referenced by the standard BLACS / PBLAS C
+archives. Compiled separately and linked alongside libmpiseq.
+
+**Open: full sequential link is non-trivial.** The migrated qmumps
+archive depends on Q-prefixed Fortran routines (`pqgetrs_`,
+`pqgetrf_`, `pqpotrf_`, `pqpotrs_`) that libmpiseq provides only as
+the upstream D-prefixed equivalents (`pdgetrs_`, ...). And keeping
+`libqscalapack`/`libqblacs`/`libptzblas` in the link line for those
+Q-symbols pulls in duplicate definitions of the precision-agnostic
+descriptor / utility routines (`descinit_`, `numroc_`, `infog2l_`,
+`indxg2p_`, `chk1mat_`, `pchk2mat_`, `pxerbla_`, `descset_`,
+`blacs_gridinit_`, `blacs_gridinfo_`, `blacs_gridexit_`) — those are
+defined by BOTH libmpiseq's `mpi.f` and the standard scalapack/blacs
+archives.
+
+Fix would require either (a) building a stripped variant of
+`libqscalapack` / `libqblacs` that omits the routines libmpiseq
+already covers, or (b) extending libmpiseq's `mpi.f` with Q/X
+analogues of `pdgetrs_` etc. Both are sizable work. Tests today
+keep using `mpiexec -n 1` against real MPI (verified end-to-end).
+libmpiseq is left available as a future option for environments
+without MPI installed.
 
 ### B4 — Only `kind16` target supported
 
