@@ -22,7 +22,10 @@ program test_dmumps_basic
     use mpi
     implicit none
 
-    integer, parameter :: ns(*) = [8, 32]
+    ! n=1 covers the degenerate single-node elimination tree (no
+    ! merges, no panel updates). n=8 / n=32 give realistic small /
+    ! medium baselines.
+    integer, parameter :: ns(*) = [1, 8, 32]
     integer            :: ierr, i, n, nz
     real(ep), allocatable :: A(:,:), x_true(:), b(:), x_solve(:)
     integer,  allocatable :: irn(:), jcn(:)
