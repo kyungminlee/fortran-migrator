@@ -2107,6 +2107,32 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
     return '\n'.join(result_lines)
 
 
+def _strip_inline_comment(text: str) -> str:
+    """Strip an inline ``!`` comment from a Fortran code line, respecting
+    string literals. The trailing whitespace before the ``!`` is also
+    trimmed.
+
+    Used by :func:`_segment_fixed_form_statements` when joining
+    continuation lines: an inline ``!`` mid-statement would otherwise
+    swallow every continuation that follows once
+    :func:`reformat_fixed_line` re-splits the joined string at column
+    66 and the ``!`` lands on a chunk that includes content from the
+    next continuation line. The comment is irretrievably lost from the
+    joined / reformatted output, which is the price of correctness.
+    Single-physical-line statements with ``s == joined`` go through the
+    no-transform path and keep their comments verbatim from ``lines``.
+    """
+    in_s = in_d = False
+    for i, ch in enumerate(text):
+        if ch == "'" and not in_d:
+            in_s = not in_s
+        elif ch == '"' and not in_s:
+            in_d = not in_d
+        elif ch == '!' and not in_s and not in_d:
+            return text[:i].rstrip()
+    return text
+
+
 def _segment_fixed_form_statements(
     physical: list[str],
 ) -> list[tuple[str, list[str], list[str], str]]:
@@ -2117,9 +2143,12 @@ def _segment_fixed_form_statements(
     are aligned slices of ``physical`` (text without newline / the
     original line terminator). For ``'code'`` statements with continuation
     lines, ``joined`` is the head plus each continuation's column-7+
-    content concatenated with single spaces — this is what the per-line
-    transform passes operate on, so paren-walkers can match across the
-    physical line break. For other kinds, ``joined`` is the head text.
+    content concatenated with single spaces — with any inline ``!``
+    comments stripped (see :func:`_strip_inline_comment`). This is what
+    the per-line transform passes operate on, so paren-walkers can match
+    across the physical line break. For other kinds, ``joined`` is the
+    head text (with inline comments preserved — single-line statements
+    don't risk the swallow-the-next-continuation failure mode).
     """
     out: list[tuple[str, list[str], list[str], str]] = []
     i = 0
@@ -2160,10 +2189,21 @@ def _segment_fixed_form_statements(
                     and ntext[5:6] not in (' ', '0', '\t', '')):
                 lines.append(ntext)
                 terms.append(nterm)
-                joined = joined + ' ' + ntext[6:]
+                # Strip the previous segment's inline ``!`` comment
+                # before appending the next continuation, otherwise the
+                # comment swallows every following chunk once
+                # ``reformat_fixed_line`` re-splits the joined string.
+                # On the first continuation, this also strips any inline
+                # comment from the head line.
+                joined = _strip_inline_comment(joined) + ' ' + ntext[6:]
                 j += 1
             else:
                 break
+        # Strip any inline comment from the trailing continuation too
+        # (so the rebuilt single-line / reformatted output isn't truncated
+        # at the comment when reformat_fixed_line walks it).
+        if len(lines) > 1:
+            joined = _strip_inline_comment(joined)
         out.append(('code', lines, terms, joined))
         i = j
     return out
