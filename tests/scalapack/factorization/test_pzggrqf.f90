@@ -40,7 +40,10 @@ program test_pzggrqf
         call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
         call descinit_local(descb, p, n, mb, nb, 0, 0, my_context, lld_b, info)
 
-        allocate(taua(max(1, locm_a)), taub(max(1, locm_b)), work(1))
+        ! pzggrqf TAUA is row-distributed of size LOCr(IA+M-1); TAUB is
+        ! column-distributed of size LOCc(JB+MIN(P,N)-1). Use locn_b
+        ! (= LOCc(N) >= LOCc(MIN(P,N))) for the column axis.
+        allocate(taua(max(1, locm_a)), taub(max(1, locn_b)), work(1))
         call target_pzggrqf(m, p, n, A_loc, 1, 1, desca, taua, &
                             B_loc, 1, 1, descb, taub, work, -1, info)
         lwork = max(1, int(real(work(1))))

@@ -31,7 +31,7 @@
                 "MPI_CXX_COMPILER":     "/opt/intel/oneapi/mpi/latest/bin/mpicxx",
                 "MPI_Fortran_COMPILER": "/opt/intel/oneapi/mpi/latest/bin/mpif90",
                 "MPIEXEC_EXECUTABLE":   "/opt/intel/oneapi/mpi/latest/bin/mpiexec",
-                "MPIEXEC_PREFLAGS":     "-genv;I_MPI_ROOT=/opt/intel/oneapi/mpi/latest;-genv;I_MPI_ADJUST_REDUCE=1"
+                "MPIEXEC_PREFLAGS":     "-genv;I_MPI_ROOT=/opt/intel/oneapi/mpi/latest;-genv;I_MPI_ADJUST_REDUCE=1;-genv;I_MPI_ADJUST_ALLREDUCE=1"
             }
         },
 

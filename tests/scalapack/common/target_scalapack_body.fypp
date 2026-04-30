@@ -4834,7 +4834,11 @@ contains
         integer :: na, nb, ntau_a, ntau_b, lwt
         ${target_real}$, allocatable :: At(:), Bt(:), taua_t(:), taub_t(:), work_t(:)
         na = nloc(desca); nb = nloc(descb)
-        ntau_a = max(1, locrows(desca)); ntau_b = max(1, locrows(descb))
+        ! PxGGRQF: RQ on A produces TAUA of LOCr(IA+M-1); QR on B
+        ! produces TAUB of LOCc(JB+MIN(P,N)-1). The earlier formula
+        ! ntau_b = locrows(descb) used the row axis (= LOCr(P)) and
+        ! under-allocated TAUB on ranks where MYROW != MYCOL.
+        ntau_a = max(1, locrows(desca)); ntau_b = max(1, loccols(descb))
         if (lwork == -1) then
             allocate(At(max(1,na)), Bt(max(1,nb)), &
                      taua_t(ntau_a), taub_t(ntau_b), work_t(1))
@@ -6183,7 +6187,11 @@ contains
         integer :: na, nb, ntau_a, ntau_b, lwt
         ${target_complex}$, allocatable :: At(:), Bt(:), taua_t(:), taub_t(:), work_t(:)
         na = nloc(desca); nb = nloc(descb)
-        ntau_a = max(1, locrows(desca)); ntau_b = max(1, locrows(descb))
+        ! PxGGRQF: RQ on A produces TAUA of LOCr(IA+M-1); QR on B
+        ! produces TAUB of LOCc(JB+MIN(P,N)-1). The earlier formula
+        ! ntau_b = locrows(descb) used the row axis (= LOCr(P)) and
+        ! under-allocated TAUB on ranks where MYROW != MYCOL.
+        ntau_a = max(1, locrows(desca)); ntau_b = max(1, loccols(descb))
         if (lwork == -1) then
             allocate(At(max(1,na)), Bt(max(1,nb)), &
                      taua_t(ntau_a), taub_t(ntau_b), work_t(1))

@@ -188,6 +188,12 @@ extra_renames:
 source_overrides:
   pdlanhs.f: scalapack/source_overrides/pdlanhs.f
   pzlanhs.f: scalapack/source_overrides/pzlanhs.f
+  # PDGEEQU / PZGEEQU column-scale RCMAX/RCMIN/INFO reductions used the
+  # 'Columnwise' axis where 'Rowwise' is needed; under multi-MYCOL grids
+  # COLCND was computed from each grid column's local block instead of
+  # the global. Extends the override pattern; see the body comment.
+  pdgeequ.f: scalapack/source_overrides/pdgeequ.f
+  pzgeequ.f: scalapack/source_overrides/pzgeequ.f
 
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix
