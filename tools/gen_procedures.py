@@ -175,7 +175,7 @@ def main():
                 row.append(PREFIXES[tgt][fam])
             f.write("| " + " | ".join(row) + " |\n")
         f.write("\nFor PBLAS and ScaLAPACK every name additionally carries a\n")
-        f.write("leading `p` (e.g. `pdgemm` / `pqgemm` / `ptgemm`). ScaLAPACK\n")
+        f.write("leading `p` (e.g. `pdgemm` / `pqgemm` / `pmgemm`). ScaLAPACK\n")
         f.write("also has a small `b`-prefix family for back-transformation\n")
         f.write("helpers (`bdlaapp`, `bdlaexc`, `bdtrexc`); their cells\n")
         f.write("therefore start with `b` rather than `p`.\n\n")
