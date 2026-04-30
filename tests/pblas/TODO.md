@@ -75,3 +75,27 @@ Three classes of failures surfaced and were fixed (commit 303df23):
    (returns `sqrt(Re^2+Im^2)`), but PBLAS uses Cabs1 = `|Re|+|Im|`.
    References now compute Cabs1 explicitly. zahemv additionally reads
    only `|Re(A_jj)|` for Hermitian diagonal entries.
+
+## kind10 / multifloats — Level 1/2 PBLAS sporadic context destruction
+
+20-26 PBLAS Level 1/2 tests fail on kind10 and multifloats targets
+(but not kind16) under the `linux-impi` preset — `pdaxpy` /
+`pdcopy` / `pdscal` / `pdswap` / `pdgemv` / `pdtrmv` / `pdtrsv`
+plus the pz analogues. After the first iteration succeeds, on
+subsequent iterations the mycol=1 ranks see `Cblacs_gridinfo`
+return `nprow=-1` for the BLACS context that was just used
+successfully -- i.e. `BI_MyContxts[ctxt]` becomes `NULL` between
+iterations, on the same rank, without any test-side BLACS call.
+
+The same test programs pass cleanly on kind16/impi (1045/1045
+ctests), so the test sources are correct and the bug is in the
+migrated kind10 / multifloats BLACS or PBLAS C globals -- a
+heap-corruption or static-state mismatch between the e/y/m/w
+prefix-renamed BLACS libraries and their PBLAS callers. Adding
+`mpi_barrier` at the start of the wrapper does not help; the
+context invalidation is local to each rank, not driven by another
+rank's `blacs_gridexit`.
+
+Action: investigate the migrated kind10 / multifloats BLACS C
+sources for global-state collisions or heap overwrites. Out of
+scope for the kind16 stabilization PR.
