@@ -15,12 +15,24 @@ written). Remaining uncovered: 6 auxiliary mat-vec norm stems
 analogue and would each need a hand-coded `sum(abs(...))` reference;
 see "Auxiliary PBLAS coverage" below.
 
-## Auxiliary PBLAS coverage
+## Auxiliary PBLAS coverage — RESOLVED for abs-matvec family
 
-The 13 auxiliary entry points listed above (`agemv`, `geadd`, `tran`,
-…) have no canonical BLAS reference, so they are not part of this
-PR's scope. They are still part of the migrated PBLAS surface and
-worth covering with bespoke tests:
+The 6 auxiliary mat-vec norm entry points (`p[dz]agemv`, `pdasymv`,
+`pzahemv`, `p[dz]atrmv`) gain test programs at
+`tests/pblas/level2/test_p[dz](agemv|a(sy|he)mv|atrmv).f90` plus
+matching wrappers in `common/target_pblas_body.fypp` (interfaces
++ subroutines). References are element-wise hand-coded at quad:
+`Y_i := |alpha| * sum_j |op(A)_{i,j}| * |X_j| + |beta * Y_i|`. For
+the symmetric / Hermitian / triangular variants the indexing
+respects UPLO (with the off-triangle mirrored under abs since
+`|conjg(z)| = |z|`); pdatrmv / pzatrmv additionally handle DIAG='U'
+by treating on-diagonal entries as 1.
+
+Build verified across all three targets (kind10 / kind16 /
+multifloats). Runtime exercise still requires real MPI — same
+sandbox limitation that affects the existing pblas tests.
+
+The remaining 7 auxiliary entry points still gap:
 
 - `pdgeadd` / `pzgeadd`: alpha*A + beta*C — reference is element-wise
   add at quad precision.
@@ -29,12 +41,5 @@ worth covering with bespoke tests:
   same with `conjg` over each element (complex).
 - `pdtradd` / `pztradd`: trapezoidal add — reference is element-wise
   add over the upper or lower triangle.
-- `pdagemv` / `pdasymv` / `pdatrmv` / `pzagemv` / `pzahemv` /
-  `pzatrmv`: produce a vector of row/column 1-norms of the
-  underlying mat-vec — reference is `sum(abs(...))` over each
-  row/column at quad precision.
 
-These tests would fit directly into `tests/pblas/level{2,3}/`
-without further infrastructure, but each needs a small inline
-reference computation in lieu of a Netlib BLAS analogue. Worth
-adding in a follow-up PR.
+These would follow the same pattern; left as a follow-up.

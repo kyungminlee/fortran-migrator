@@ -66,9 +66,11 @@ module target_pblas
     public :: target_pzamax
     public :: target_pdgemv, target_pdger, target_pdsymv, target_pdtrsv
     public :: target_pdtrmv, target_pdsyr, target_pdsyr2
+    public :: target_pdagemv, target_pdasymv, target_pdatrmv
     public :: target_pzgemv, target_pzhemv
     public :: target_pzgerc, target_pzgeru, target_pzher, target_pzher2
     public :: target_pztrmv, target_pztrsv
+    public :: target_pzagemv, target_pzahemv, target_pzatrmv
     public :: target_pdgemm, target_pdsymm, target_pdsyrk, target_pdsyr2k
     public :: target_pdtrmm, target_pdtrsm
     public :: target_pzgemm, target_pzhemm, target_pzsymm
@@ -302,6 +304,42 @@ $:IMPORT_R()
             ${target_real}$, intent(inout) :: A(*)
         end subroutine
 
+        ! ── Level 2 — real-prefix abs-matvec aux (agemv/asymv/atrmv) ─
+        ! Y := |alpha|*|op(A)|*|X| + |beta*Y|. Same signature shape as
+        ! gemv/symv/trmv but the result is a row/column 1-norm.
+        subroutine ${R}$agemv(trans, m, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+$:IMPORT_R()
+            character, intent(in) :: trans
+            integer,   intent(in) :: m, n, ia, ja, ix, jx, incx, iy, jy, incy
+            integer,   intent(in) :: desca(9), descx(9), descy(9)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*), x(*)
+            ${target_real}$, intent(inout) :: y(*)
+        end subroutine
+
+        subroutine ${R}$asymv(uplo, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+$:IMPORT_R()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, ia, ja, ix, jx, incx, iy, jy, incy
+            integer,   intent(in) :: desca(9), descx(9), descy(9)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*), x(*)
+            ${target_real}$, intent(inout) :: y(*)
+        end subroutine
+
+        subroutine ${R}$atrmv(uplo, trans, diag, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+$:IMPORT_R()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, ia, ja, ix, jx, incx, iy, jy, incy
+            integer,   intent(in) :: desca(9), descx(9), descy(9)
+            ${target_real}$, intent(in)    :: alpha, beta, A(*), x(*)
+            ${target_real}$, intent(inout) :: y(*)
+        end subroutine
+
         ! ── Level 2 — complex ────────────────────────────────────────
         subroutine ${C}$gemv(trans, m, n, alpha, A, ia, ja, desca, &
                              x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
@@ -380,6 +418,45 @@ $:IMPORT_C()
             integer,   intent(in) :: desca(9), descx(9)
             ${target_complex}$, intent(in)    :: A(*)
             ${target_complex}$, intent(inout) :: x(*)
+        end subroutine
+
+        ! ── Level 2 — complex-prefix abs-matvec aux (agemv/ahemv/atrmv)
+        ! Y := |alpha|*|op(A)|*|X| + |beta*Y|. Mixed signature: A,X are
+        ! complex, alpha/beta/Y are real.
+        subroutine ${C}$agemv(trans, m, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+$:IMPORT_RC()
+            character, intent(in) :: trans
+            integer,   intent(in) :: m, n, ia, ja, ix, jx, incx, iy, jy, incy
+            integer,   intent(in) :: desca(9), descx(9), descy(9)
+            ${target_real}$,    intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(*), x(*)
+            ${target_real}$,    intent(inout) :: y(*)
+        end subroutine
+
+        subroutine ${C}$ahemv(uplo, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+$:IMPORT_RC()
+            character, intent(in) :: uplo
+            integer,   intent(in) :: n, ia, ja, ix, jx, incx, iy, jy, incy
+            integer,   intent(in) :: desca(9), descx(9), descy(9)
+            ${target_real}$,    intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(*), x(*)
+            ${target_real}$,    intent(inout) :: y(*)
+        end subroutine
+
+        subroutine ${C}$atrmv(uplo, trans, diag, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+$:IMPORT_RC()
+            character, intent(in) :: uplo, trans, diag
+            integer,   intent(in) :: n, ia, ja, ix, jx, incx, iy, jy, incy
+            integer,   intent(in) :: desca(9), descx(9), descy(9)
+            ${target_real}$,    intent(in)    :: alpha, beta
+            ${target_complex}$, intent(in)    :: A(*), x(*)
+            ${target_real}$,    intent(inout) :: y(*)
         end subroutine
 
         ! ── Level 3 — real ───────────────────────────────────────────
@@ -1009,6 +1086,70 @@ contains
         A(1:na) = t2q_r(At)
     end subroutine
 
+    ! ── Level 2 — real-prefix abs-matvec aux (agemv/asymv/atrmv) ─────
+    subroutine target_pdagemv(trans, m, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+        character, intent(in)    :: trans
+        integer,   intent(in)    :: m, n, ia, ja, ix, jx, incx, iy, jy, incy
+        integer,   intent(in)    :: desca(9), descx(9), descy(9)
+        real(ep),  intent(in)    :: alpha, beta, A(*), x(*)
+        real(ep),  intent(inout) :: y(*)
+        integer :: na, nx, ny
+        ${target_real}$, allocatable :: At(:), xt(:), yt(:)
+        na = desca(9) * desca(4)
+        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        allocate(At(na), xt(nx), yt(ny))
+        At = q2t_r(A(1:na))
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${R}$agemv(trans, m, n, q2t_r(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_r(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
+    end subroutine
+
+    subroutine target_pdasymv(uplo, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, ia, ja, ix, jx, incx, iy, jy, incy
+        integer,   intent(in)    :: desca(9), descx(9), descy(9)
+        real(ep),  intent(in)    :: alpha, beta, A(*), x(*)
+        real(ep),  intent(inout) :: y(*)
+        integer :: na, nx, ny
+        ${target_real}$, allocatable :: At(:), xt(:), yt(:)
+        na = desca(9) * desca(4)
+        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        allocate(At(na), xt(nx), yt(ny))
+        At = q2t_r(A(1:na))
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${R}$asymv(uplo, n, q2t_r(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_r(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
+    end subroutine
+
+    subroutine target_pdatrmv(uplo, trans, diag, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+        character, intent(in)    :: uplo, trans, diag
+        integer,   intent(in)    :: n, ia, ja, ix, jx, incx, iy, jy, incy
+        integer,   intent(in)    :: desca(9), descx(9), descy(9)
+        real(ep),  intent(in)    :: alpha, beta, A(*), x(*)
+        real(ep),  intent(inout) :: y(*)
+        integer :: na, nx, ny
+        ${target_real}$, allocatable :: At(:), xt(:), yt(:)
+        na = desca(9) * desca(4)
+        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        allocate(At(na), xt(nx), yt(ny))
+        At = q2t_r(A(1:na))
+        xt = q2t_r(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${R}$atrmv(uplo, trans, diag, n, q2t_r(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_r(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
+    end subroutine
+
     ! ── Level 2 — complex ────────────────────────────────────────────
     subroutine target_pzgemv(trans, m, n, alpha, A, ia, ja, desca, &
                              x, ix, jx, descx, incx, beta, y, iy, jy, descy, incy)
@@ -1155,6 +1296,76 @@ contains
         call ${C}$trsv(uplo, trans, diag, n, At, ia, ja, desca, &
                         xt, ix, jx, descx, incx)
         x(1:nx) = t2q_c(xt)
+    end subroutine
+
+    ! ── Level 2 — complex-prefix abs-matvec aux (agemv/ahemv/atrmv) ─
+    subroutine target_pzagemv(trans, m, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+        character,   intent(in)    :: trans
+        integer,     intent(in)    :: m, n, ia, ja, ix, jx, incx, iy, jy, incy
+        integer,     intent(in)    :: desca(9), descx(9), descy(9)
+        real(ep),    intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(*), x(*)
+        real(ep),    intent(inout) :: y(*)
+        integer :: na, nx, ny
+        ${target_complex}$, allocatable :: At(:), xt(:)
+        ${target_real}$,    allocatable :: yt(:)
+        na = desca(9) * desca(4)
+        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        allocate(At(na), xt(nx), yt(ny))
+        At = q2t_c(A(1:na))
+        xt = q2t_c(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${C}$agemv(trans, m, n, q2t_r(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_r(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
+    end subroutine
+
+    subroutine target_pzahemv(uplo, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, ia, ja, ix, jx, incx, iy, jy, incy
+        integer,     intent(in)    :: desca(9), descx(9), descy(9)
+        real(ep),    intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(*), x(*)
+        real(ep),    intent(inout) :: y(*)
+        integer :: na, nx, ny
+        ${target_complex}$, allocatable :: At(:), xt(:)
+        ${target_real}$,    allocatable :: yt(:)
+        na = desca(9) * desca(4)
+        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        allocate(At(na), xt(nx), yt(ny))
+        At = q2t_c(A(1:na))
+        xt = q2t_c(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${C}$ahemv(uplo, n, q2t_r(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_r(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
+    end subroutine
+
+    subroutine target_pzatrmv(uplo, trans, diag, n, alpha, A, ia, ja, desca, &
+                              x, ix, jx, descx, incx, beta, &
+                              y, iy, jy, descy, incy)
+        character,   intent(in)    :: uplo, trans, diag
+        integer,     intent(in)    :: n, ia, ja, ix, jx, incx, iy, jy, incy
+        integer,     intent(in)    :: desca(9), descx(9), descy(9)
+        real(ep),    intent(in)    :: alpha, beta
+        complex(ep), intent(in)    :: A(*), x(*)
+        real(ep),    intent(inout) :: y(*)
+        integer :: na, nx, ny
+        ${target_complex}$, allocatable :: At(:), xt(:)
+        ${target_real}$,    allocatable :: yt(:)
+        na = desca(9) * desca(4)
+        nx = descx(9) * descx(4); ny = descy(9) * descy(4)
+        allocate(At(na), xt(nx), yt(ny))
+        At = q2t_c(A(1:na))
+        xt = q2t_c(x(1:nx)); yt = q2t_r(y(1:ny))
+        call ${C}$atrmv(uplo, trans, diag, n, q2t_r(alpha), At, ia, ja, desca, &
+                        xt, ix, jx, descx, incx, q2t_r(beta), &
+                        yt, iy, jy, descy, incy)
+        y(1:ny) = t2q_r(yt)
     end subroutine
 
     ! ── Level 3 — real ───────────────────────────────────────────────
