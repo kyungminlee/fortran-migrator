@@ -27,11 +27,15 @@ module LA_CONSTANTS_MF
    use multifloats, only: real64x2, cmplx64x2, &
                           DD_ZERO, DD_HALF, DD_ONE, DD_TWO, DD_EIGHT, &
                           DD_SAFMIN, DD_SAFMAX, &
-                          DD_TSML, DD_TBIG, DD_SSML, DD_SBIG, &
                           DD_RTMIN, DD_RTMAX
    implicit none
    private
    public :: real64x2, cmplx64x2
+
+   ! Local alias for the leading-limb double precision kind. Used to
+   ! evaluate Blue's scaling constants from `radix/minexponent/maxexponent/digits`
+   ! at compile time (see msbig/mssml/mtbig/mtsml below).
+   integer, parameter :: dp = kind(1.0d0)
 
 ! =====================================================================
 !  Multifloats double-double (~106-bit) constants
@@ -73,10 +77,32 @@ module LA_CONSTANTS_MF
    type(real64x2), parameter, public :: mrtmin  = DD_RTMIN
    type(real64x2), parameter, public :: mrtmax  = DD_RTMAX
 
-!  Blue's scaling constants
-   type(real64x2), parameter, public :: mtsml = DD_TSML
-   type(real64x2), parameter, public :: mtbig = DD_TBIG
-   type(real64x2), parameter, public :: mssml = DD_SSML
-   type(real64x2), parameter, public :: msbig = DD_SBIG
+!  Blue's scaling constants — derived from the leading-limb double's
+!  exponent range so `(ax * msbig)**2` stays representable for any
+!  `ax` in [tiny(double), huge(double)]. NOT re-exported from
+!  upstream multifloats's DD_TBIG/DD_SBIG/DD_TSML/DD_SSML — those are
+!  defined as 1e±100 / 1e±50 (a SCALE-UP factor for sbig, opposite to
+!  LAPACK's convention) and overflow `(ax * sbig)**2` once ax exceeds
+!  ~1e+104, which dgesvj's protect-from-underflow up-scaling pass
+!  routinely produces. The LAPACK formula:
+!     tsml = base^ceiling((minexp-1)/2)
+!     tbig = base^floor((maxexp-digits+1)/2)
+!     ssml = base^(-floor((minexp-digits)/2))
+!     sbig = base^(-ceiling((maxexp+digits-1)/2))
+!  applied at the leading-limb kind (`dp` = double) gives full-range
+!  safety on a DD-on-double type (the lo limb is below the hi limb's
+!  ULP, so the hi limb's exponent dictates overflow boundaries).
+   type(real64x2), parameter, public :: mtsml = real64x2(limbs=[ &
+      real(radix(0.0_dp), dp)**ceiling( &
+         (minexponent(0.0_dp) - 1) * 0.5_dp), 0.0_dp])
+   type(real64x2), parameter, public :: mtbig = real64x2(limbs=[ &
+      real(radix(0.0_dp), dp)**floor( &
+         (maxexponent(0.0_dp) - digits(0.0_dp) + 1) * 0.5_dp), 0.0_dp])
+   type(real64x2), parameter, public :: mssml = real64x2(limbs=[ &
+      real(radix(0.0_dp), dp)**(-floor( &
+         (minexponent(0.0_dp) - digits(0.0_dp)) * 0.5_dp)), 0.0_dp])
+   type(real64x2), parameter, public :: msbig = real64x2(limbs=[ &
+      real(radix(0.0_dp), dp)**(-ceiling( &
+         (maxexponent(0.0_dp) + digits(0.0_dp) - 1) * 0.5_dp)), 0.0_dp])
 
 end module LA_CONSTANTS_MF
