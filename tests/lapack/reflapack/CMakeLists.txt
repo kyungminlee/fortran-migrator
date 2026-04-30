@@ -73,6 +73,24 @@ list(FILTER _reflap_srcs EXCLUDE REGEX "la_xisnan_ep")
 # INTEGER and CHARACTER arguments.
 list(FILTER _reflap_srcs EXCLUDE REGEX "/iparam2stage\\.F$")
 
+# Reference-source overrides. Files in overrides/ replace their
+# same-named counterparts from the upstream Netlib SRC tree. Used to
+# patch latent precision bugs in the reference path that surface only
+# under -freal-8-real-16 promotion (see overrides/zgedmd.f90 for the
+# CMPLX(...,KIND=WP) fp64 truncation that broke test_zgedmd /
+# test_zgedmdq on kind16 — the migrator's xgedmd is correct; only the
+# quad-promoted reference loses precision).
+file(GLOB _ovr_srcs CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/overrides/*.f
+    ${CMAKE_CURRENT_SOURCE_DIR}/overrides/*.F
+    ${CMAKE_CURRENT_SOURCE_DIR}/overrides/*.f90
+    ${CMAKE_CURRENT_SOURCE_DIR}/overrides/*.F90)
+foreach(_ovr ${_ovr_srcs})
+    get_filename_component(_ovr_name ${_ovr} NAME)
+    list(FILTER _reflap_srcs EXCLUDE REGEX "/${_ovr_name}$")
+endforeach()
+list(APPEND _reflap_srcs ${_ovr_srcs})
+
 add_library(reflapack_quad STATIC ${_reflap_srcs})
 target_compile_options(reflapack_quad PRIVATE
     -freal-8-real-16
