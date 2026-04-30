@@ -54,13 +54,24 @@ under real distributed MPI lands once `cmake/CMakePresets.json`'s
 `cmake --preset=linux-impi` routes Intel MPI 2021.18 from
 `/opt/intel/oneapi/mpi/latest`; `MPIEXEC_PREFLAGS` injects
 `-genv I_MPI_ADJUST_REDUCE=1` to skip the impi shortpath that
-mishandles BLACS-registered user ops over REAL(KIND=16). With that:
+mishandles BLACS-registered user ops over REAL(KIND=16).
 
-- Most pblas tests PASS every documented case under a real 2×2 grid.
-- 41 still hit `free(): invalid pointer` during teardown OR crash
-  mid-suite on specific transpose paths (e.g. `pdgemm` case 8 with
-  TRANSA=N, TRANSB=T).
+Three classes of failures surfaced and were fixed (commit 303df23):
 
-The teardown crashes are BLACS/PBLAS-level MPI lifecycle bugs —
-likely `MPI_Op_free` / `MPI_Type_free` ordering vs `BLACS_EXIT(0)` /
-`MPI_Finalize`. Tracked in `tests/blacs/TODO.md`; not test bugs.
+1. **Buffer-size mismatch on non-owning ranks** — `gen_distrib_vector`
+   zeroed `loc_n` on `my_col != 0` and allocated `max(1, 0) = 1`,
+   but the descriptor's LLD was computed without that gate. Wrappers
+   reading `x(1:lld*N)` overran. Fix: allocate full `max(1, full_loc_n)`
+   on every rank.
+
+2. **`desc(9)*desc(4)` overshoots actual buffer** — every wrapper
+   computed `LLD * full-N`, not `LLD * locn`. Fixed by introducing
+   `desc_buf_size(desc)` that calls `BLACS_GRIDINFO + numroc_local`.
+   Replaced 76 call sites in `target_pblas_body.fypp`. The naive form
+   happened to be correct under singleton MPI (npcol=1 → locn=N).
+
+3. **Cabs1 vs Euclidean magnitude** — references for the auxiliary
+   `pz{agemv,ahemv,atrmv}` used Fortran's intrinsic `abs(complex)`
+   (returns `sqrt(Re^2+Im^2)`), but PBLAS uses Cabs1 = `|Re|+|Im|`.
+   References now compute Cabs1 explicitly. zahemv additionally reads
+   only `|Re(A_jj)|` for Hermitian diagonal entries.
