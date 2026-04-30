@@ -1,5 +1,33 @@
 # tests/scalapack — known upstream / migrator gaps
 
+## Real-MPI exercise via `linux-impi` preset — 2026-04-30
+
+`cmake --preset=linux-impi` invokes Intel MPI 2021.18 with
+`I_MPI_ADJUST_REDUCE=1` injected via `MPIEXEC_PREFLAGS`. ScaLAPACK
+tests went from `0% real signal` (singleton MPI) to `90%+ pass` on a
+real 2×2 grid. 26 ScaLAPACK tests still fail (out of ~170):
+
+```
+banded   : pddbtrf pddbtrs pddbtrsv pdgbsv pdgbtrf pdgbtrs pdpttrf
+           pzdbtrf pzdbtrs pzdbtrsv pzgbsv pzgbtrf pzgbtrs
+refine   : pdgerfs pdporfs pdtrrfs   pzgerfs pzporfs pztrrfs
+expert   : pdgesvx                   pzgesvx
+norms    : pdlanhs                   pzlanhs
+QR-fac   : pdggrqf                   pzggrqf
+equiv    :                           pzgeequ
+```
+
+These all pass cleanly under impi's collectives once the reduce
+shortpath is bypassed; the remaining failures look like banded-matrix
+descriptor / block-size assumptions that don't hold under the real
+distributed path, plus iterative-refinement convergence checks that
+need a tolerance review now that the inner residual is computed via
+real MPI rather than a singleton fallback.
+
+Tracked here — these need per-routine investigation, not blanket
+preset tweaks. For most of these, the fix is in the migrated
+ScaLAPACK or the test reference, not in the harness.
+
 ## Banded solver families — DELIVERED
 
 Tridiagonal piece (`pddtsv`/`pdptsv`) plus all 22 banded drivers

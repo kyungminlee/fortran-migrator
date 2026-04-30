@@ -1,58 +1,65 @@
 # tests/blacs — Outstanding Work
 
-## MPI sandbox caveat
+## MPI environment — RESOLVED via Intel MPI 2021.18
 
-In this sandbox `mpiexec -n N <prog>` spawns **N unconnected MPI worlds**
-— each rank sees `MPI_Comm_size = 1`, BLACS reports a 1×1 grid, and
-`blacs_gridinit` returns each process its own private context.
+The earlier MPICH-on-WSL singleton behavior (every rank seeing
+`MPI_Comm_size = 1`) is bypassed by configuring with
+`cmake --preset=linux-impi`, which routes `MPIEXEC_EXECUTABLE` /
+`MPI_C_COMPILER` / `MPI_Fortran_COMPILER` through Intel MPI 2021.18
+in `/opt/intel/oneapi/mpi/latest`. Hydra/PMI connect 4 ranks on the
+same node correctly; tests now run on a real 2×2 BLACS grid.
 
-Consequence: every BLACS comm test except `test_grid_info` either
-emits `skipped_grid_1x1` (the explicit early-return path in p2p tests
-like `test_qgesd2d`, `test_qtrsd2d`, `test_xgesd2d`, `test_igesd2d`)
-or trivially passes on a 1-element communicator (broadcast/reduce
-tests where rank (0,0) writes and verifies its own buffer with no
-peer involved). **No real signal in this sandbox** — the assertions
-are correct but unexercised.
-
-The tests are correctly written for a real 2×2 grid and *will*
-exercise actual inter-rank communication when run on a properly
-configured MPI deployment (where Hydra/PMI can connect ranks).
-Confirm the sandbox behavior with:
+Verified 2026-04-30: `test_qgesd2d` emits
 
 ```
-mpiexec -n 4 /tmp/staging-kind16/build/tests/blacs/test_qgesd2d
+  blacs_qgesd2d [p2p_00_to_11] err= 0.0000E+00 digits= 99.00 PASS
 ```
 
-— output shows 4 separate `skipped_grid_1x1` lines, one per
-unconnected world.
+— a single inter-rank send/recv between (0,0) and (1,1) — instead of
+4 lines of `skipped_grid_1x1`.
 
-## Environment caveat: MPICH singleton fallback under sandboxed bash
+## Open: Intel MPI compat issues surfaced under real distributed exec
 
-In the sandbox where these tests were authored, `mpiexec -n 4 <prog>`
-ran *4 independent MPICH singleton processes* rather than a connected
-MPI world (each process saw `MPI_Comm_size = 1`). A trivial
-`MPI_Comm_rank/size` C program had the same behavior, so the issue is
-environmental (likely PMI/Hydra cannot connect under the bash sandbox)
-and not in the test code or the migrated BLACS library.
+With real ranks connected via the `linux-impi` preset, the test suite
+went from `0% real signal` (sandbox mpiexec gave singleton MPI) to
+`932/1045 passed` (89%). 113 failures remain, distributed across
+BLACS / PBLAS / ScaLAPACK.
 
-In that mode the tests still PASS:
+`I_MPI_ADJUST_REDUCE=1` (force 'binomial' algorithm; skip the Intel
+MPI shortpath that dispatches a user-registered `MPI_Op` through
+intrinsic `MPIR_SUM`) is wired into the preset's `MPIEXEC_PREFLAGS` —
+that alone reduced failures from 170 to 68.
 
-  - on grid 1×1 the p2p tests (`test_qgesd2d`, `test_qtrsd2d`,
-    `test_xgesd2d`, `test_igesd2d`) take a `skipped_grid_1x1` early
-    return and report `err = 0`,
-  - the broadcast/reduce tests behave like local no-ops: only rank
-    `(0,0)` writes/sums its own buffer; the post-call check sees the
-    expected value because rank `(0,0)` is the sole participant.
+### Remaining BLACS failures (3 of ~21)
 
-So the tests *don't* actually exercise inter-rank communication when
-run in the sandbox. **They do once mpiexec is connecting ranks
-properly** (verified manually by inspecting the wrapper paths and the
-BLACS scope routing) — outside the sandbox, ctest reports the same
-`100% passed`, but the assertions then have teeth.
+```
+blacs_test_blacs_pinfo
+blacs_test_qtrsd2d      blacs_test_xtrsd2d
+```
 
-There is nothing to fix in `tests/blacs/`; this is documented purely
-to set expectations. If a contributor reproduces the singleton
-behavior, the fix is at the harness layer, not here.
+- `blacs_pinfo`: probable test-program teardown / two-phase-init
+  ordering bug under real impi.
+- `qtrsd2d` / `xtrsd2d`: numerical garbage on the trapezoidal p2p
+  (`err=************, digits=*****`) — receiver decodes a different
+  byte layout than sender wrote. Suspect mismatch in
+  `BI_qtrsd2d` / `BI_qtrrv2d` MPI_Datatype packing under impi's send
+  path. Needs inspection of the BI_q*.c packers vs Intel MPI's
+  contiguous-only shortcut for KIND=16.
+
+### Remaining PBLAS / ScaLAPACK failure pattern
+
+A common pattern: the test program PASSES every documented case but
+crashes during teardown (`free(): invalid pointer`) or mid-suite on a
+specific transpose path. The correctness signal is correct; the crash
+is during MPI/BLACS resource cleanup or between-cases reset.
+
+Likely root cause: `MPI_Op_free` / `MPI_Type_free` ordering, or
+`BLACS_EXIT(0)` followed by `MPI_Finalize` double-frees a
+communicator that one of the BLACS-registered ops also references.
+Intel MPI surfaces this where MPICH's permissive cleanup did not.
+
+This is BLACS/PBLAS-level MPI lifecycle work — not test authoring,
+not preset wiring. Tracked here for visibility.
 
 ## Untested BLACS surface
 
