@@ -6,7 +6,7 @@
 |--------------|-----------|--------------------------------------|
 | kind16       | 43/43 ✓  | Quad working precision               |
 | kind10       | 43/43 ✓  | 80-bit extended; built+passes clean  |
-| multifloats  | not run   | DD-on-quad — see follow-ups below    |
+| multifloats  | 43/43 ✓  | DD-on-double; 85/85 case-level PASS  |
 
 All **43 family heads** of XBLAS are tested and passing on the kind
 targets — full user-facing surface coverage.  See `level1/`, `level2/`, `level3/` for the test
@@ -30,17 +30,14 @@ in `common/ref_quad_xblas.f90`.
 
 ## Open follow-ups
 
-### Other targets
+### Other targets — RESOLVED
 
-The current pass is **kind16-only**.  The wrapper module is fypp-
-parameterised on the prefix character pair, so `kind10` (`e`/`y`)
-and `multifloats` (`m`/`w`) targets should build out of the box —
-but they haven't been smoke-tested yet.  Multifloats in particular
-will exercise the `_Complex __float128` → `cmplx64x2` substitution
-path, which has subtleties around C++/`extern "C"` wrapping that
-the existing BLACS multifloats build navigates.  Likely follow-up:
-stage at multifloats, fix any header_patch issues, add target-mode-
-specific tolerances if the dd-on-quad accumulator drift requires it.
+All three targets (kind10 / kind16 / multifloats) build and pass
+without per-target adjustment. Confirmed 2026-04-30: 43/43 tests
+on multifloats, 85/85 case-level PASS. The wrapper module's
+fypp parameterization on the prefix-character pair was sufficient;
+no header_patch / tolerance bumps required for the dd-on-double
+target.
 
 ### Mixed-input variants
 
