@@ -21,6 +21,15 @@
 #ifndef QMUMPS_C_H
 #define QMUMPS_C_H
 
+/* L-1 guard: detect wrong include order. Including upstream's
+ * dmumps_c.h FIRST sets DMUMPS_C_H and instantiates DMUMPS_STRUC_C
+ * BEFORE our renames have a chance to redirect the typename — a
+ * later include of this header would silently use the un-renamed
+ * struct. Fail loudly instead. */
+#ifdef DMUMPS_C_H
+#  error "qmumps_c.h must be included before dmumps_c.h"
+#endif
+
 #define DMUMPS_STRUC_C QMUMPS_STRUC_C
 #define dmumps_c       qmumps_c
 #define dmumps_f77_    qmumps_f77_

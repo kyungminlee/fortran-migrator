@@ -14,7 +14,7 @@
 
 program test_dmumps_basic
     use prec_kinds,            only: ep
-    use prec_report,           only: report_init, report_case, report_finalize
+    use prec_report,           only: report_init, report_case, report_finalize, report_check_status
     use compare,               only: max_rel_err_vec
     use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
     use target_mumps,          only: target_name, target_eps, &
@@ -22,7 +22,10 @@ program test_dmumps_basic
     use mpi
     implicit none
 
-    integer, parameter :: ns(*) = [8, 32]
+    ! n=1 covers the degenerate single-node elimination tree (no
+    ! merges, no panel updates). n=8 / n=32 give realistic small /
+    ! medium baselines.
+    integer, parameter :: ns(*) = [1, 8, 32]
     integer            :: ierr, i, n, nz
     real(ep), allocatable :: A(:,:), x_true(:), b(:), x_solve(:)
     integer,  allocatable :: irn(:), jcn(:)
@@ -84,6 +87,7 @@ program test_dmumps_basic
 
         ! Cleanup before next iteration.
         deallocate(id%IRN, id%JCN, id%A, id%RHS)
+        nullify(id%IRN, id%JCN, id%A, id%RHS)  ! L-2: defensive — decouple from MUMPS_INI_DRIVER's NULLIFY contract
         id%JOB = -2
         call target_qmumps(id)
 
@@ -92,4 +96,5 @@ program test_dmumps_basic
 
     call report_finalize()
     call MPI_FINALIZE(ierr)
+    call report_check_status()
 end program test_dmumps_basic

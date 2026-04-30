@@ -132,6 +132,7 @@ add_library(mumps_c_bridge STATIC
     $<TARGET_OBJECTS:qmumps_c_bridge>
     $<TARGET_OBJECTS:xmumps_c_bridge>
     $<TARGET_OBJECTS:mumps_c_addr_obj>
+    ${CMAKE_CURRENT_SOURCE_DIR}/c/c_parity_helpers.c
     ${_MUMPS_C_SRC}/mumps_common.c
     ${_MUMPS_C_SRC}/mumps_io.c
     ${_MUMPS_C_SRC}/mumps_io_basic.c

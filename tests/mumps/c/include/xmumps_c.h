@@ -14,6 +14,11 @@
 #ifndef XMUMPS_C_H
 #define XMUMPS_C_H
 
+/* L-1 guard: see qmumps_c.h for rationale. */
+#ifdef ZMUMPS_C_H
+#  error "xmumps_c.h must be included before zmumps_c.h"
+#endif
+
 #define ZMUMPS_STRUC_C XMUMPS_STRUC_C
 #define zmumps_c       xmumps_c
 #define zmumps_f77_    xmumps_f77_

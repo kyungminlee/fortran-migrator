@@ -1,0 +1,92 @@
+! ICNTL(7) ordering coverage for DMUMPS:
+!   0 — AMD (approximate minimum degree)
+!   2 — AMF (approximate minimum fill)
+!   6 — QAMD (with extra quasi-dense rows)
+!   7 — automatic (let MUMPS choose)
+!
+! Each ordering is a different graph-partition strategy fed into the
+! analysis phase; they alter the elimination tree and thus the exact
+! floating-point order of the factorization, but should produce the
+! same numeric solution to within a fairly tight tolerance against
+! the quad-precision ground truth. Orderings 3 (Scotch), 4 (PORD),
+! 5 (Metis) require external libraries we don't link in this build.
+
+program test_dmumps_orderings
+    use prec_kinds,            only: ep
+    use prec_report,           only: report_init, report_case, report_finalize, report_check_status
+    use compare,               only: max_rel_err_vec
+    use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
+    use target_mumps,          only: target_name, target_eps, &
+                                     dmumps_struc, target_qmumps
+    use mpi
+    implicit none
+
+    integer, parameter :: n = 24
+    integer, parameter :: orderings(*) = [0, 2, 6, 7]
+    integer            :: ierr, i, nz, ord
+    real(ep), allocatable :: A(:,:), x_true(:), b(:), x_solve(:)
+    integer,  allocatable :: irn(:), jcn(:)
+    real(ep), allocatable :: A_trip(:)
+    type(dmumps_struc)    :: id
+    real(ep)              :: err, tol
+    character(len=48)     :: label
+
+    call MPI_INIT(ierr)
+    call report_init('test_dmumps_orderings', target_name)
+
+    call gen_dense_problem(n, A, x_true, b, seed = 5001)
+    call dense_to_triplet (A, irn, jcn, A_trip, nz)
+
+    do i = 1, size(orderings)
+        ord = orderings(i)
+
+        id%COMM = MPI_COMM_WORLD
+        id%PAR  = 1
+        id%SYM  = 0
+        id%JOB  = -1
+        call target_qmumps(id)
+        if (id%INFOG(1) < 0) then
+            write(*, '(a,i0,a,i0)') 'JOB=-1 (icntl7=', ord, ') failed, INFOG(1)=', id%INFOG(1)
+            error stop 1
+        end if
+
+        id%ICNTL(1) = -1
+        id%ICNTL(2) = -1
+        id%ICNTL(3) = -1
+        id%ICNTL(4) = 0
+        id%ICNTL(7) = ord    ! analysis ordering selector
+
+        id%N    = n
+        id%NNZ  = int(nz, kind=8)
+        allocate(id%IRN(nz));    id%IRN = irn
+        allocate(id%JCN(nz));    id%JCN = jcn
+        allocate(id%A(nz));      id%A   = A_trip
+        allocate(id%RHS(n));     id%RHS = b
+
+        id%JOB = 6
+        call target_qmumps(id)
+        if (id%INFOG(1) < 0) then
+            write(*, '(a,i0,a,i0,a,i0)') 'JOB=6 (icntl7=', ord, &
+                ') failed, INFOG(1)=', id%INFOG(1), &
+                ', INFOG(2)=', id%INFOG(2)
+            error stop 1
+        end if
+
+        allocate(x_solve(n))
+        x_solve = id%RHS
+        err = max_rel_err_vec(x_solve, x_true)
+        tol = 16.0_ep * real(n, ep)**3 * target_eps
+        write(label, '(a,i0)') 'icntl7=', ord
+        call report_case(trim(label), err, tol)
+
+        deallocate(id%IRN, id%JCN, id%A, id%RHS, x_solve)
+        nullify(id%IRN, id%JCN, id%A, id%RHS)
+        id%JOB = -2
+        call target_qmumps(id)
+    end do
+
+    deallocate(A, x_true, b, irn, jcn, A_trip)
+    call report_finalize()
+    call MPI_FINALIZE(ierr)
+    call report_check_status()
+end program test_dmumps_orderings

@@ -2,7 +2,7 @@ module prec_report
     use prec_kinds, only: ep
     implicit none
     private
-    public :: report_init, report_case, report_finalize
+    public :: report_init, report_case, report_finalize, report_check_status
 
     integer :: unit_save = -1
     integer :: case_count = 0
@@ -78,11 +78,20 @@ contains
     end subroutine report_case
 
     subroutine report_finalize()
+        ! Closes the JSON report. Does NOT raise an error when cases
+        ! failed — callers must call MPI_FINALIZE first then invoke
+        ! report_check_status() to halt the program. Splitting the two
+        ! avoids skipping MPI cleanup on failure (the previous combined
+        ! routine called `error stop 1` here, leaving MPI in a state
+        ! that the runtime would print warnings about).
         write(unit_save, '(a)') '  ]'
         write(unit_save, '(a)') '}'
         close(unit_save)
         unit_save = -1
-        if (any_failure) error stop 1
     end subroutine report_finalize
+
+    subroutine report_check_status()
+        if (any_failure) error stop 1
+    end subroutine report_check_status
 
 end module prec_report
