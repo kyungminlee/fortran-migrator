@@ -466,27 +466,83 @@ keep using `mpiexec -n 1` against real MPI (verified end-to-end).
 libmpiseq is left available as a future option for environments
 without MPI installed.
 
-### B4 — Only `kind16` target supported
+### B4 — Only `kind16` target supported — PARTIALLY RESOLVED 2026-04-30
 
-Recipe `overrides:` in `recipes/mumps.yaml` declares hand-written
-extended-precision substitutes only for the kind16 target:
+Per-target overrides for `MUMPS_MEMORY_MOD_EP` and `MUMPS_LR_STATS_EP`
+now exist for all three targets. `recipes/mumps.yaml` carries:
 
 ```yaml
 overrides:
   kind16:
     src_dir: mumps
-    files:
-      - mumps_memory_mod_ep.F
-      - mumps_lr_stats_ep.F
+    files: [mumps_memory_mod_ep.F, mumps_lr_stats_ep.F]
+  kind10:
+    src_dir: mumps
+    files: [mumps_memory_mod_kind10.F, mumps_lr_stats_kind10.F]
+  multifloats:
+    src_dir: mumps
+    files: [mumps_memory_mod_multifloats.F, mumps_lr_stats_multifloats.F]
 ```
 
-The other targets in this repo (`kind10`, `multifloats`) have no
-analogous files, so the recipe falls back to the upstream DP source
-for those modules — which encodes byte-size and stride constants
-based on `sizeof(REAL(KIND=8))` and is therefore wrong at any other
-precision. End result: `pyengine stage --target kind10 --libraries mumps`
-might link but produces a binary with mis-sized internal records;
-`multifloats` likely fails outright.
+Each override defines the same module names (`MUMPS_MEMORY_MOD_EP` and
+`MUMPS_LR_STATS_EP`) so the recipe's `module_renames` redirect resolves
+uniformly regardless of target — only the EP reallocator types differ:
+
+- kind16: `MUMPS_QREALLOC` / `MUMPS_XREALLOC` over `REAL(KIND=16)` / `COMPLEX(KIND=16)`
+- kind10: `MUMPS_EREALLOC` / `MUMPS_YREALLOC` over `REAL(KIND=10)` / `COMPLEX(KIND=10)`
+- multifloats: `MUMPS_MREALLOC` / `MUMPS_WREALLOC` over `TYPE(real64x2)` / `TYPE(cmplx64x2)`
+
+All three follow the same per-subroutine local-`ELSIZE` pattern (computed
+from `storage_size`); module-level `[QXMWE]SIZE` parity with upstream's
+`DSIZE`/`ZSIZE` is still pending — see "Remaining structural parity"
+below.
+
+Build smoke 2026-04-30 confirmed both new override modules compile
+clean under their target builds:
+
+- kind10: `mumps_memory_mod_kind10.F.o`, `mumps_lr_stats_kind10.F.o`
+  produce `mumps_memory_mod_ep.mod` / `mumps_lr_stats_ep.mod` under
+  `gfortran-13` with `-std=legacy`. Migrated callers correctly resolve
+  `MUMPS_REALLOC` to the new `MUMPS_EREALLOC` / `MUMPS_YREALLOC` via the
+  generic interface.
+- multifloats: same — overrides compile and the generic dispatch picks
+  up `MUMPS_MREALLOC` / `MUMPS_WREALLOC` for the migrated `real64x2` /
+  `cmplx64x2` array pointers.
+
+**However**, the full library link (`emumps`, `mmumps`) still fails on
+unrelated migrator/recipe defects — see "Other blockers surfaced by the
+B4 build smoke" below. The MEMORY/LR_STATS gap is closed; the remaining
+defects are not B4 work.
+
+#### Other blockers surfaced by the B4 build smoke
+
+Discovered 2026-04-30 while verifying the new per-target overrides:
+
+- **kind10 — fixed-form line-length overflow.** The migrator expands
+  `MPI_DOUBLE_COMPLEX` (16 chars) → `MPI_C_LONG_DOUBLE_COMPLEX` (25
+  chars) in MPI calls without re-flowing the surrounding fixed-form
+  source. Original line in `zfac_distrib_ELT.F:390` is 68 chars;
+  migrated `yfac_distrib_ELT.F:373` is 75 chars. Cols 73-75 (`EX,`)
+  silently drop, then the next continuation line `&     MASTER` joins
+  to make `MPI_C_LONG_DOUBLE_COMPLMASTER`. gfortran reports
+  `Symbol 'mpi_c_long_double_complmaster' has no IMPLICIT type`.
+
+  Fix paths: (a) re-flow lines that grew past col 72 in the migrator's
+  fixed-form emit, or (b) compile MUMPS sources with
+  `-ffixed-line-length-none` (gfortran extension). Neither belongs in
+  B4 — both are general migrator/build infra changes affecting all
+  recipes that ride fixed-form Fortran.
+
+- **multifloats — fixed-form continuation/scope corruption.** Files
+  like `mana_aux.F:29` show `+CNTL4, COLSCA, ROWSCA` where the
+  continuation marker `+` should be `&` (or column-6 character
+  position got shifted). Downstream errors cascade as
+  `Unexpected USE/IF/DO statement in CONTAINS section` — the parser
+  misclassifies the body once the formal-arg list breaks. This is a
+  multifloats-specific migrator regression in fixed-form continuation
+  handling; affects many `m*.F` files across the staged tree.
+
+  Same fix-locality story — belongs to the migrator, not B4.
 
 #### Why these two specific files need overrides
 
@@ -505,65 +561,46 @@ through the migrator unscathed because they either avoid
 `sizeof()`-style arithmetic or use `STORAGE_SIZE` / kind queries
 that auto-adjust.
 
-#### What "fix B4" looks like
+#### What "fix B4" looks like — most steps DONE
 
-1. **Author per-target override files** in `recipes/mumps/`. Easiest
-   path: copy the existing `_ep.F` files as a skeleton, then walk
-   through every numeric literal and confirm/adjust against the
-   actual byte-width of the target real type:
+1. **Author per-target override files** in `recipes/mumps/`. — DONE
+   2026-04-30.
 
-   - **kind10** (x87 `long double`, 16 bytes on x86-64 with 16-byte
-     alignment per Intel ABI; complex = 32 bytes):
-     `mumps_memory_mod_kind10.F`, `mumps_lr_stats_kind10.F`
-   - **multifloats kind16** (double-double, 16 bytes per real, 32
-     per complex — same byte sizes as kind16, but the SIMD path may
-     pack differently; compare carefully against the existing
-     `_ep.F` to spot divergence):
-     `mumps_memory_mod_multifloats.F`, `mumps_lr_stats_multifloats.F`
-   - **multifloats kind32** (quad-double, 32 bytes per real, 64
-     per complex) — only relevant if multifloats kind32 becomes a
-     supported target.
+   - **kind10**: `mumps_memory_mod_kind10.F`, `mumps_lr_stats_kind10.F`
+     (added). Mirrors the kind16 `_ep.F` with `REAL(KIND=10)` /
+     `COMPLEX(KIND=10)` and Q→E / X→Y reallocator name swap.
+   - **multifloats**: `mumps_memory_mod_multifloats.F`,
+     `mumps_lr_stats_multifloats.F` (added). Uses
+     `USE multifloats, ONLY: real64x2, cmplx64x2` and Q→M / X→W
+     reallocator name swap. The `dble()` overload is imported for the
+     LR_STATS bridge.
+   - **multifloats kind32** (quad-double, 32 bytes per real, 64 per
+     complex) — N/A; not a supported target today.
 
 2. **Register them** under per-target sections in
-   `recipes/mumps.yaml`. Sibling recipes (`recipes/blacs.yaml`,
-   `recipes/pblas.yaml`, `recipes/scalapack_c.yaml`) already use
-   per-target overrides for `multifloats:` with `src_dir:
-   <lib>/mfc_overrides`; follow that pattern. Result:
+   `recipes/mumps.yaml`. — DONE 2026-04-30 (see updated YAML in the
+   B4 status block above).
 
-   ```yaml
-   overrides:
-     kind16:
-       src_dir: mumps
-       files: [mumps_memory_mod_ep.F, mumps_lr_stats_ep.F]
-     kind10:
-       src_dir: mumps
-       files: [mumps_memory_mod_kind10.F, mumps_lr_stats_kind10.F]
-     multifloats:
-       src_dir: mumps/mfc_overrides
-       files: [mumps_memory_mod_multifloats.F, mumps_lr_stats_multifloats.F]
-   ```
+3. **Build smoke per target.** — DONE 2026-04-30. New override modules
+   compile under both kind10 and multifloats. Full library link still
+   blocked on unrelated migrator defects (see "Other blockers" above).
 
-3. **Build smoke per target.** After staging, rebuild `qmumps` →
-   `emumps` (kind10) → `wmumps` (multifloats kind16) — the migrator
-   prefix-replaces D with the target letter (E/Y for kind10, M/W for
-   multifloats per `project_migrator_prefix_convention`).
+4. **Sanity-check `INFOG(20)`** — PENDING. Requires a working full
+   build + a real-MPI test wrapper, which is blocked on (a) the
+   unrelated migrator defects above, and (b) the per-target test
+   wrappers (G2 below).
 
-4. **Sanity-check `INFOG(20)`** ("number of real-precision words
-   used") and the peak-memory report after factorization. Those are
-   the most direct user-visible signals that the byte-width math is
-   correct. If `INFOG(20)` is wildly off versus an equivalent kind16
-   run scaled by precision ratio, the override constants are wrong.
+5. **Drop in test wrappers** (G2 below) — PENDING. Same blocker as #4.
 
-5. **Drop in test wrappers** (G2 below) — once the build works, the
-   tests/mumps/ directory needs `target_kind10/target_mumps.fypp`
-   and `target_multifloats/target_mumps.fypp` mirroring the existing
-   kind16 wrapper.
+#### Remaining structural parity
 
-#### Existing kind16 override is also incomplete
+The current overrides (all three targets) sidestep upstream's
+module-level `[SDCZ]SIZE` size constants by using a per-subroutine
+local `INTEGER(8) :: ELSIZE = int(storage_size(...),8)/8_8`. This
+works for the override's own bookkeeping but isn't a structural
+mirror of upstream's module-level pattern.
 
-The current `recipes/mumps/mumps_memory_mod_ep.F` does NOT mirror
-the upstream module's structure for size constants. Upstream
-`mumps_memory_mod.F:23` declares module-level
+Upstream `mumps_memory_mod.F:23` declares module-level
 
 ```fortran
 INTEGER(8), PRIVATE :: ISIZE, I8SIZE, SSIZE, DSIZE, CSIZE, ZSIZE
@@ -573,55 +610,31 @@ populated at startup by `MUMPS_MEMORY_SET_DATA_SIZES` via
 `MUMPS_SIZE_C(D(1), D(2), DSIZE)` etc., and then used everywhere
 throughout the module as `int(MINSIZE,8)*DSIZE` for byte-accounting.
 
-The override sidesteps this by using a per-subroutine local
-`INTEGER(8) :: ELSIZE` populated as
-`ELSIZE = int(storage_size(1.0_16),8)/8_8` inside each of
-`MUMPS_QREALLOC` / `MUMPS_XREALLOC`. Functional for the override's
-own bookkeeping, but it means there are **no `QSIZE` / `XSIZE`
-module-level constants** the way upstream has `DSIZE` / `ZSIZE`,
-and the override is therefore not a drop-in structural mirror.
+A future structural-parity pass would add:
 
-The future overrides need to mirror the standard-precision module
-faithfully:
+- kind10 override: **`ESIZE`** (kind10 real) and **`YSIZE`** (kind10
+  complex) — module-level `INTEGER(8), PRIVATE`, populated by an
+  extended `MUMPS_MEMORY_SET_DATA_SIZES`.
+- kind16 override: **`QSIZE`** and **`XSIZE`** — retroactive fix.
+- multifloats override: **`MSIZE`** (real) and **`WSIZE`** (complex).
 
-- kind10 override needs **`ESIZE`** (kind10 real) and **`YSIZE`**
-  (kind10 complex) — module-level `INTEGER(8), PRIVATE`,
-  populated by an extended `MUMPS_MEMORY_SET_DATA_SIZES`.
-- kind16 override needs **`QSIZE`** and **`XSIZE`** added —
-  retroactive fix to bring the existing `_ep.F` into structural
-  parity. (Today it works because the local `ELSIZE` covers
-  internal byte accounting, but a module-level `QSIZE` is the
-  pattern.)
-- multifloats override needs **`MSIZE`** (multifloats real) and
-  **`WSIZE`** (multifloats complex).
+#### Why the structural-parity work is deferred
 
-See the `project_migrator_prefix_convention` memory for the
-precision-letter mapping (E/Y for kind10, Q/X for kind16, M/W for
-multifloats).
+No active consumer is waiting for kind10 / multifloats MUMPS, and the
+local-`ELSIZE` shortcut is functionally correct for byte accounting
+inside the EP reallocators. Adding module-level `[QXMWE]SIZE`
+constants is a structural-cleanup follow-up, not a correctness fix.
 
-#### Why deferred
+#### Files to read when picking up the structural-parity work
 
-No active consumer is waiting for kind10 / multifloats MUMPS, and
-sizing the records correctly requires careful inspection of the
-upstream `mumps_memory_mod.F` to enumerate every precision-dependent
-literal — the override is a one-shot hand-port and getting it wrong
-is silent (mis-sized buffers in statistics records, not factorization
-errors). The other libraries in this repo (BLAS / LAPACK /
-ScaLAPACK / xBLAS) work across all three target families today;
-MUMPS is the lone holdout until someone needs a non-quad sparse
-solver.
-
-#### Files to read when picking this up
-
-- `recipes/mumps/mumps_memory_mod_ep.F` — kind16 reference; diff
-  vs upstream `external/MUMPS_5.8.2/src/mumps_memory_mod.F` to see
-  exactly which literals were changed.
-- `recipes/mumps/mumps_lr_stats_ep.F` — kind16 reference for LR
-  statistics module.
+- `recipes/mumps/mumps_memory_mod_ep.F` — kind16 reference.
+- `recipes/mumps/mumps_memory_mod_kind10.F` — kind10 sibling (added).
+- `recipes/mumps/mumps_memory_mod_multifloats.F` — multifloats sibling
+  (added).
+- `recipes/mumps/mumps_lr_stats_{ep,kind10,multifloats}.F` — LR_STATS
+  bridges, one per target.
 - `external/MUMPS_5.8.2/src/mumps_memory_mod.F` — upstream DP source.
 - `external/MUMPS_5.8.2/src/mumps_lr_stats.F` — upstream LR source.
-- `recipes/blacs.yaml`, `recipes/pblas.yaml` — examples of recipes
-  with per-target overrides for multifloats.
 
 ## Open coverage gaps
 
