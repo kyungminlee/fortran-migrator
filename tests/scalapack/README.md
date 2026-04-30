@@ -175,17 +175,19 @@ surfaced during that work and are worth keeping written down:
    teardown. Fixed by adding a negative lookbehind for `sizeof` /
    `alignof` in the protect regex (commit `ef3bf81`).
 
-8. **`DDDOT` symbol collision drove the prefix switch from `DD`/`ZZ`
-   to single-letter `T`/`V`.** ScaLAPACK ships its own `DDDOT`
-   subroutine in `TOOLS/dddot.f`. With the original `DD`/`ZZ`
-   multifloats prefixes, BLAS `DDOT` renamed to `DDDOT` and collided
-   with the orphaned ScaLAPACK wrapper — the linker silently picked
-   the SUBROUTINE form, corrupting `pddpotf2`'s diagonal during panel
-   Cholesky. Switching to `T`/`V` (no upstream BLAS / LAPACK /
-   ScaLAPACK symbol begins with either letter) eliminated the
-   collision class entirely. The migrator now also emits a stderr
-   warning when an orphaned symbol's name shadows another symbol's
-   rename target (`prefix_classifier.build_rename_map`).
+8. **`DDDOT` symbol collision drove the prefix switch away from
+   `DD`/`ZZ`; multifloats now uses single-letter `M`/`W`.**
+   ScaLAPACK ships its own `DDDOT` subroutine in `TOOLS/dddot.f`.
+   With the original `DD`/`ZZ` multifloats prefixes, BLAS `DDOT`
+   renamed to `DDDOT` and collided with the orphaned ScaLAPACK
+   wrapper — the linker silently picked the SUBROUTINE form,
+   corrupting `pddpotf2`'s diagonal during panel Cholesky. The
+   migrator iterated through a transient `T`/`V` step before
+   settling on `M`/`W` as the final single-letter pair (no upstream
+   BLAS / LAPACK / ScaLAPACK symbol begins with either letter),
+   eliminating the collision class entirely. The migrator now also
+   emits a stderr warning when an orphaned symbol's name shadows
+   another symbol's rename target (`prefix_classifier.build_rename_map`).
 
 
 ## Running

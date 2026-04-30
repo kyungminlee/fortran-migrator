@@ -424,7 +424,7 @@ else()
 endif()
 
 # Build the la_constants_mf and la_xisnan_mf helper modules. These
-# re-export multifloats's MF_* constants under the DD/ZZ-prefixed names
+# re-export multifloats's MF_* constants under the M/W-prefixed names
 # that the migrated LAPACK source uses via its rewritten
 # ``USE LA_CONSTANTS_MF`` clause.
 set(MF_HELPERS_DIR "{_helpers_default}"
