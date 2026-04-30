@@ -451,6 +451,29 @@ Recipe `overrides` only lists `kind16` (`mumps_memory_mod_ep.F`,
 `mumps_lr_stats_ep.F`). `kind10` / `multifloats` wrappers omitted from
 this test directory until upstream support lands.
 
+## Open coverage gaps
+
+### G1 — Fortran/C cross-language parity test (was H1 in completeness review)
+
+Originally planned as `c/test_dmumps_c_parity.c` but deferred. The
+intent was to drive the same problem through both `qmumps` (Fortran
+wrapper, called from C via ISO_C_BINDING) and `qmumps_c` (C bridge),
+then byte-compare the outputs to detect any silent corruption that
+the bridge introduces relative to the Fortran-direct path.
+
+The blocker: Fortran's `iso_c_binding` doesn't standardize a
+`__float128`-equivalent type. Mirroring the quad-precision struct
+fields across the language boundary requires either custom typedef
+tricks (`type(c_ptr)` + manual offset arithmetic) or a third
+shadow header that's careful to give both sides the same struct
+layout. Existing tests already parity-check at the result level —
+both the Fortran (`test_dmumps_basic`) and C (`test_dmumps_c_basic`)
+sides compare against the same `x_true` and converge to ~33 digits;
+any ABI mismatch would manifest as a failure on one side.
+
+Worth landing if a future regression slips past the per-side
+checks (e.g. matched-but-corrupted answers). Not blocking.
+
 ## Defects discovered during runs
 
 ### D1 — MUMPS 5.8.2 doesn't validate out-of-range matrix entries / negative N
