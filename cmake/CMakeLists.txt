@@ -755,6 +755,45 @@ if(TARGET mumps_common AND MPI_Fortran_FOUND)
     target_link_libraries(mumps_common PUBLIC MPI::MPI_Fortran)
 endif()
 
+# 10. libmpiseq — sequential MPI stub from MUMPS 5.8.2 upstream.
+#
+# Provides single-process implementations of the MPI / BLACS /
+# ScaLAPACK symbols the migrated qmumps archive calls at link time
+# (``mpi_init_``, ``mpi_send_``, ``mpi_bcast_``, ``blacs_pinfo_``,
+# ``descinit_``, ``ddot_``, ...). Linking a test executable against
+# ``mpiseq`` instead of ``MPI::MPI_Fortran`` (and against a stock
+# BLACS/PBLAS/ScaLAPACK link line) lets it run as a plain executable,
+# no ``mpiexec`` needed, even on machines without MPI installed.
+#
+# Constraints: NPROCS=1 only — collectives that require multi-rank
+# coordination print "should not be called" and abort. The migrated
+# qmumps archive was compiled against real MPI's ``mpif.h``, so its
+# baked-in ``MPI_DOUBLE_PRECISION``/etc. integer constants come from
+# whatever MPI ``find_package`` detected; libseq's stubs are
+# constants-agnostic so the mismatch is harmless for single-rank
+# operation.
+#
+# Sources are staged into ``_mpiseq_src/`` by ``pyengine stage`` (see
+# ``_std_dirs`` in ``src/pyengine/__main__.py``); the build silently
+# skips when that directory is absent (e.g., a bare repo with no
+# upstream MUMPS vendored).
+if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src)
+    add_library(mpiseq STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/mpi.f
+        ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/mpic.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/elapse.c
+    )
+    target_include_directories(mpiseq PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src>
+    )
+    # Add_ matches gfortran's lowercase + trailing-underscore Fortran
+    # symbol convention: elapse.h's #define mumps_elapse mumps_elapse_
+    # fires under Add_, so the Fortran-side mpi.f's MPI_WTIME (which
+    # calls ``mumps_elapse_``) resolves cleanly.
+    target_compile_definitions(mpiseq PRIVATE Add_)
+    fortran_module_layout(mpiseq)
+endif()
+
 # ── Install ──────────────────────────────────────────────────────────
 # Each precision library gets its own export set and Config.cmake,
 # so consumers can do: find_package(qblas), find_package(qlapack), etc.
