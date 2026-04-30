@@ -96,24 +96,42 @@ int LIBSEQ_CALL MPI_Bcast(void *buf, int count, MPI_Datatype dt, int root, MPI_C
     (void) buf; (void) count; (void) dt; (void) root; (void) comm; return 0;
 }
 
+/* Single-rank reduce SEMANTICALLY equals `memcpy(recvbuf, sendbuf,
+ * count * sizeof(element))`, but libmpiseq's mpi.h doesn't expose
+ * datatype-size constants — MPI_Datatype is just an opaque int and
+ * MPI_INT / MPI_DOUBLE / MPI_DOUBLE_COMPLEX / MPI_DOUBLE_PRECISION /
+ * etc. integer values aren't defined on the C side. Using a
+ * hard-coded element size truncates quad-precision reductions
+ * (REAL(KIND=16) = 16 B, COMPLEX(KIND=16) = 32 B) and over-copies
+ * 4-byte INT reductions past sendbuf.
+ *
+ * The honest stub aborts on any call. tests/mumps's standard build
+ * (mpiexec + real MPI) never reaches here. The fully-sequential
+ * libmpiseq link path (B3 in tests/mumps/TODO.md) would invoke this
+ * via BLACS/PBLAS C code, which is currently blocked anyway by the
+ * Q-prefixed scalapack symbol gap. When B3 lands, this stub needs a
+ * datatype→size table built by mirroring mpich's MPI_INT etc. values
+ * or by extending libmpiseq's mpi.h with size-encoding macros. */
 int LIBSEQ_CALL MPI_Reduce(const void *sendbuf, void *recvbuf, int count,
                            MPI_Datatype dt, MPI_Op op, int root, MPI_Comm comm)
 {
+    (void) sendbuf; (void) recvbuf; (void) count;
     (void) dt; (void) op; (void) root; (void) comm;
-    if (sendbuf && recvbuf && count > 0) {
-        /* Single-rank reduce == identity copy. Use the largest sane width
-         * (8 bytes) per element — caller knows the actual datatype but
-         * since we have only one rank, byte-copying is correct as long as
-         * the buffers are the right size. */
-        memcpy(recvbuf, sendbuf, (size_t) count * 8);
-    }
+    mpiseq_should_not_be_called(
+        "MPI_Reduce (libmpiseq stub cannot infer datatype size — see "
+        "tests/mumps/c/mpiseq_c_stubs.c)");
     return 0;
 }
 
 int LIBSEQ_CALL MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
                               MPI_Datatype dt, MPI_Op op, MPI_Comm comm)
 {
-    return MPI_Reduce(sendbuf, recvbuf, count, dt, op, 0, comm);
+    (void) sendbuf; (void) recvbuf; (void) count;
+    (void) dt; (void) op; (void) comm;
+    mpiseq_should_not_be_called(
+        "MPI_Allreduce (libmpiseq stub cannot infer datatype size — see "
+        "tests/mumps/c/mpiseq_c_stubs.c)");
+    return 0;
 }
 
 /* ── Point-to-point — illegal for a single rank ───────────────────────── */

@@ -53,8 +53,9 @@ static void report_finalize_c(void)
 {
     fprintf(gJson, "  ]\n}\n");
     fclose(gJson);
-    if (gAnyFail) exit(1);
 }
+
+static int report_status_c(void) { return gAnyFail; }
 
 /* Multiplication of mumps_double_complex = {r, i}. */
 static mumps_double_complex cmul(mumps_double_complex a, mumps_double_complex b)
@@ -155,5 +156,5 @@ int main(int argc, char **argv)
 
     report_finalize_c();
     MPI_Finalize();
-    return 0;
+    return report_status_c() ? 1 : 0;
 }

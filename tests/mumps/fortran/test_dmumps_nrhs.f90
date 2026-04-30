@@ -8,7 +8,7 @@
 
 program test_dmumps_nrhs
     use prec_kinds,            only: ep
-    use prec_report,           only: report_init, report_case, report_finalize
+    use prec_report,           only: report_init, report_case, report_finalize, report_check_status
     use compare,               only: max_rel_err_vec, max_rel_err_mat
     use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
     use target_mumps,          only: target_name, target_eps, &
@@ -81,6 +81,7 @@ program test_dmumps_nrhs
     deallocate(A, x_true, b, irn, jcn, A_trip, B_multi, X_multi_true)
     call report_finalize()
     call MPI_FINALIZE(ierr)
+    call report_check_status()
 
 contains
 

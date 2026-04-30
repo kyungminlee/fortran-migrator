@@ -56,8 +56,9 @@ static void report_finalize_c(void)
 {
     fprintf(gJson, "  ]\n}\n");
     fclose(gJson);
-    if (gAnyFail) exit(1);
 }
+
+static int report_status_c(void) { return gAnyFail; }
 
 /* Solve A*x = b via QMUMPS, given a triplet (irn, jcn, a) of nz entries
  * and an n-vector b (overwritten with x on exit). */
@@ -200,5 +201,5 @@ int main(int argc, char **argv)
 
     report_finalize_c();
     MPI_Finalize();
-    return 0;
+    return report_status_c() ? 1 : 0;
 }

@@ -14,7 +14,7 @@
 
 program test_dmumps_dist_input
     use prec_kinds,            only: ep
-    use prec_report,           only: report_init, report_case, report_finalize
+    use prec_report,           only: report_init, report_case, report_finalize, report_check_status
     use compare,               only: max_rel_err_vec
     use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
     use target_mumps,          only: target_name, target_eps, &
@@ -70,4 +70,5 @@ program test_dmumps_dist_input
     deallocate(A, x_true, b, irn, jcn, A_trip)
     call report_finalize()
     call MPI_FINALIZE(ierr)
+    call report_check_status()
 end program test_dmumps_dist_input

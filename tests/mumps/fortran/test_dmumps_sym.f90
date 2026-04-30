@@ -10,7 +10,7 @@
 
 program test_dmumps_sym
     use prec_kinds,            only: ep
-    use prec_report,           only: report_init, report_case, report_finalize
+    use prec_report,           only: report_init, report_case, report_finalize, report_check_status
     use compare,               only: max_rel_err_vec
     use test_data_mumps,       only: gen_dense_problem, gen_spd_dense_problem, &
                                      gen_general_sym_problem, &
@@ -91,4 +91,5 @@ program test_dmumps_sym
 
     call report_finalize()
     call MPI_FINALIZE(ierr)
+    call report_check_status()
 end program test_dmumps_sym

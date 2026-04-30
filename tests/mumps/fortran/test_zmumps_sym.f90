@@ -10,7 +10,7 @@
 
 program test_zmumps_sym
     use prec_kinds,            only: ep
-    use prec_report,           only: report_init, report_case, report_finalize
+    use prec_report,           only: report_init, report_case, report_finalize, report_check_status
     use compare,               only: max_rel_err_vec_z
     use test_data_mumps,       only: gen_dense_problem_z, dense_to_triplet_z, &
                                      dense_to_sym_triplet_z
@@ -97,4 +97,5 @@ program test_zmumps_sym
 
     call report_finalize()
     call MPI_FINALIZE(ierr)
+    call report_check_status()
 end program test_zmumps_sym

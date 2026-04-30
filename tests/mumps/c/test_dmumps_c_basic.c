@@ -64,8 +64,9 @@ static void report_finalize_c(void)
     fprintf(gJson, "  ]\n}\n");
     fclose(gJson);
     gJson = NULL;
-    if (gAnyFail) exit(1);
 }
+
+static int report_status_c(void) { return gAnyFail; }
 
 int main(int argc, char **argv)
 {
@@ -165,5 +166,5 @@ int main(int argc, char **argv)
 
     report_finalize_c();
     MPI_Finalize();
-    return 0;
+    return report_status_c() ? 1 : 0;
 }
