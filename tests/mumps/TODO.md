@@ -466,7 +466,24 @@ keep using `mpiexec -n 1` against real MPI (verified end-to-end).
 libmpiseq is left available as a future option for environments
 without MPI installed.
 
-### B4 — Only `kind16` target supported
+### B4 — Only `kind16` target supported  *(PARTIAL — kind10 wired 2026-04-30)*
+
+**Progress 2026-04-30**: kind10 EP overrides authored
+(`recipes/mumps/kind10/{mumps_memory_mod_ep.F,mumps_lr_stats_ep.F}`),
+recipe wired, `emumps-gfortran-13.a` builds clean against staged
+mumps tree. `tests/mumps/target_kind10/target_mumps.fypp` added.
+A latent line-length issue surfaced (kind10's
+`MPI_C_LONG_DOUBLE_COMPLEX` rewrite pushes fixed-form `.F` past
+column 72) and was fixed by adding `-ffixed-line-length-none`
+(gfortran/flang) / `-extend-source` (Intel) to
+`add_migrated_fortran_library` in `cmake/CMakeLists.txt`.
+
+Multifloats overrides also authored
+(`recipes/mumps/multifloats/{...}.F`) and recipe-wired but the
+build hits a separate, pre-existing migrator bug (see B8 below).
+
+Remaining for B4: multifloats build (blocked on B8); `INFOG(20)`
+sanity-check across targets.
 
 Recipe `overrides:` in `recipes/mumps.yaml` declares hand-written
 extended-precision substitutes only for the kind16 target:
@@ -674,3 +691,63 @@ were therefore dropped — keeping them would test MUMPS-side robustness
 that doesn't exist, not migrator correctness. Re-introduce when MUMPS
 upstream tightens validation, or write a lightweight wrapper that
 sanitizes inputs before calling `qmumps_c`.
+
+## New follow-ups (2026-04-30, surfaced during B4 partial completion)
+
+### B8 — Migrator's `USE multifloats` injector mishandles CPP-interspersed argument continuation
+
+Surfaced 2026-04-30 attempting to build `mmumps`. Migrated files like
+`/tmp/stg-mf-mumps/mumps/src/mana_aux.F:26-38` show the multifloats
+USE statement injected INSIDE the formal argument list, between the
+last regular continuation line and the post-CPP continuation:
+
+```fortran
+      SUBROUTINE MMUMPS_ANA_F(N, NZ8, IRN, ICN, LIWALLOC, ...
+     +CNTL4, COLSCA, ROWSCA
+      USE multifloats, only: ...        <-- INJECTED HERE (wrong)
+#if defined(metis) ...
+     &          , METIS_OPTIONS
+#endif
+     &          , NORIG_ARG, ..., GCOMP
+     & )
+      USE MUMPS_ANA_ORD_WRAPPERS         <-- legitimate USE site
+      ...
+```
+
+The injector treats the first non-continued line ending in something
+other than `)` as the SUBROUTINE statement terminator and inserts USE
+right after, missing that the formal arg list resumes after a CPP
+`#if/#endif` block via `&` continuation and only closes at `& )`
+several lines down. The injection ends up inside the formal arg list,
+breaking compilation.
+
+Affects: every multifloats `.F` file that has CPP-mediated continuation
+inside a SUBROUTINE/FUNCTION header. Many MUMPS files trip this because
+they conditionalize METIS/parmetis arguments inline.
+
+Workaround: none today — fully blocks `mmumps` build. Engine fix
+should treat CPP `#if/#endif` blocks as transparent for the
+"end-of-statement" search inside SUBROUTINE/FUNCTION headers, or use
+a Fortran-aware parser instead of textual scanning at the injection
+site (`fortran_migrator.py` — multifloats post-pass).
+
+### B9 — C-bridge / test infrastructure hardcoded to kind16
+
+`tests/mumps/CMakeLists.txt` (and `tests/mumps/c/include/{qmumps_c.h,
+xmumps_c.h, mumps_c_types.h}`) bake kind16-specific names and
+`__float128` typedefs. To run the MUMPS tests against kind10 (or
+multifloats once B8 is fixed), the bridge must be generalized:
+
+- Per-target bridge headers (`emumps_c.h` / `ymumps_c.h` for kind10,
+  with `long double` typedefs) — or a single template generated at
+  configure-time from a target descriptor.
+- `qmumps_c_bridge` / `xmumps_c_bridge` library names and the
+  associated `dmumps_c=qmumps_c` define stack must follow `LIB_PREFIX`.
+- `_mumps_link_group_archives` already uses `${LIB_PREFIX}mumps`; the
+  bridge inputs need the same parameterization.
+
+Without B9, kind10 `emumps` builds clean but no MUMPS tests exercise
+it. The Fortran-only tests (`test_emumps_basic.f90` analogues) could
+in principle bypass the C bridge entirely, but the current CMake
+groups Fortran tests with the bridge in a single LINK_GROUP for
+symbol resolution. Splitting them out is a smaller subset of B9.
