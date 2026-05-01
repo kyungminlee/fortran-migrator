@@ -775,27 +775,77 @@ Resolved by adding a negative lookahead `(?!\s+PROCEDURE\b)` after
 ``MODULE`` in both `_PROC_HEADER_RE` (line 1832) and the local
 `proc_header_re` inside `insert_use_multifloats` (line 2030).
 
-### B8e — `MPI_FLOAT64X2` undeclared in migrated MUMPS Fortran
+### B8e — `MPI_FLOAT64X2` undeclared in migrated MUMPS Fortran — RESOLVED 2026-05-01
 
-Surfaced 2026-05-01 once B8c unblocked the next mmumps file. The
-migrator's `_rewrite_mpi_datatypes` substitutes `MPI_DOUBLE_PRECISION`
-→ `MPI_FLOAT64X2` for the multifloats target. For kind10/kind16 this
-is `MPI_REAL10` / `MPI_REAL16` — standard MPI datatypes provided by the
-MPI runtime when `INCLUDE 'mpif.h'` is in scope. For multifloats,
-`MPI_FLOAT64X2` is a custom datatype: `_helpers/multifloats_mpi.cpp`
-creates it via `MPI_Type_create_*` at MPI_Init time, but the symbol is
-not exposed to Fortran code that does direct `CALL MPI_SEND(..., MPI_FLOAT64X2, ...)`.
+`external/multifloats-mpi/multifloats_mpi_f.f90` ships a Fortran module
+that bind-to-C declares each handle as a default-INTEGER variable, and
+`external/multifloats-mpi/multifloats_mpi.cpp` populates them via
+`MPI_Type_c2f` / `MPI_Op_c2f` inside `multifloats_mpi_init`. The
+migrator's new `insert_use_multifloats_mpi_f` post-pass walks each
+procedure header (with proper depth tracking through INTERFACE-block
+inner SUBROUTINEs) and emits a `USE multifloats_mpi_f` line whenever
+the body references one of the handle names.
 
-gfortran refuses with "Symbol 'mpi_float64x2' at (1) has no IMPLICIT
-type" on every direct Fortran MPI call site (mfac_scalings_simScale_util.F,
-mana_dist_m.F, mfac_scalings.F, msol_distrhs.F, mmumps_driver.F,
-mtype3_root.F, and ~6 others). MUMPS uses Fortran-side MPI directly
-(unlike BLACS/PBLAS which go through C); needs a Fortran-side
-`USE multifloats_mpi` module exposing `MPI_FLOAT64X2`, or the
-multifloats helper extending `mpif.h` analogue with the custom
-datatype declaration. Pending — mmumps build for multifloats still
-gated, but other multifloats libraries (mblas, mlapack, mscalapack,
-etc.) build cleanly and pass 1022/1022 tests.
+Scope decision: the real datatype `MPI_FLOAT64X2` plus all reduction
+ops (`MPI_DD_*`, `MPI_ZZ_*`) are exposed; the complex datatype
+(`MPI_COMPLEX64X2`, renamed from the original `MPI_COMPLEX128X2` to
+match the upstream `cmplx64x2` type) is deliberately deferred — that
+unblocks the m-prefix MUMPS archive but leaves the w-prefix complex
+side gated on this last binding. Adding it is a one-line follow-up
+when wmumps is needed.
+
+After this fix the m-prefix mmumps source files compile end-to-end
+through `_rewrite_mpi_datatypes` + `USE multifloats_mpi_f` + the
+real-side handles. A handful of unrelated migrator bugs that the
+previously-blocking files masked then surfaced — see B8f below.
+
+### B8f — Pre-existing migrator pipeline bugs surfaced once B8e unblocked mmumps
+
+Once B8e let the build progress through the multifloats mumps tree, a
+cluster of latent migrator bugs became visible. Resolved in the same
+commit as B8e:
+
+- `insert_use_multifloats`'s decl-block walker did not list `INCLUDE`
+  among declaration keywords, so PARAMETER-derived assignments landed
+  between `IMPLICIT NONE` and `INCLUDE 'mpif.h'`. Same walker also
+  stopped at keep-kind sentinels (`__KEEPKIND_DP__` etc.) since they
+  no longer matched the bare `DOUBLE PRECISION` keyword. Both added
+  to the whitelist.
+- `convert_parameter_stmts` lost the `#if defined(...)` guard when
+  converting a guarded PARAMETER to a runtime assignment, so files
+  like `wfac_mem_stack_aux.F` ended up with `ZERO = ...` outside the
+  `#if defined(ZERO_TRIANGLE)` block that declared `ZERO`. Now wraps
+  the assignment in the same guard.
+- `_rewrite_int_kind_on_real64x2` emitted `dd_to_double(...)` and
+  `_rewrite_int_of_complex` emitted `DD_REAL(...)`. Neither symbol
+  exists in upstream multifloats — the multifloats public generics
+  are `dble` and `real`. Fixed to emit those; `_build_use_only_clause`
+  predicts the rewrite (when `int(` and `real64x2(` co-occur, add
+  `dble` to referenced) so the only-clause is in place.
+- The depth-tracking `end_proc_re` used by
+  `insert_use_multifloats_mpi_f` falsely matched `END IF` / `END DO`
+  (the keyword group was optional and `\w*` swallowed anything).
+  Now requires a procedure keyword whitelist after `END` if any
+  word follows.
+
+### B8g — Migrator wraps PARAMETER RHS literal even when LHS type is keep-kind DOUBLE PRECISION
+
+Surfaces in `mfac_omp_m.F:133`:
+
+```fortran
+DOUBLE PRECISION, PARAMETER :: DZERO = real64x2(limbs=[0.0D0, 0.0_8])
+```
+
+The keep-kind manifest preserves the LHS (`DOUBLE PRECISION`), but
+the literal-replacement pass still wraps `0.0D0` as
+`real64x2(limbs=[...])`. Result: type mismatch — `Cannot convert
+TYPE(real64x2) to REAL(8)`. Pre-existing; B8e/B8f exposed it as the
+next blocker for the multifloats mmumps build.
+
+Fix would require literal-replacement to consult keep-kind state for
+the line's LHS, or to gate on the surrounding declaration's preserved
+type. Currently blocks mmumps for multifloats but no other libraries
+— `mblas` / `mlapack` / `mscalapack` etc. build cleanly.
 
 ### B8d — `dble(...)` masked by keep-kind sentinel missing from USE only-list — RESOLVED 2026-05-01
 
