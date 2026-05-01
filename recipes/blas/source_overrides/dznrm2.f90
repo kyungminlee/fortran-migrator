@@ -106,9 +106,12 @@ function DZNRM2( n, x, incx )
 !  .. Constants ..
    real(wp), parameter :: zero = 0.0_wp
    real(wp), parameter :: one  = 1.0_wp
-   real(wp), parameter :: maxN = huge(0.0_wp)
 !  ..
-!  .. Blue's scaling constants (SAVE; init at first call below) ..
+!  .. Blue's scaling constants + maxN (SAVE; init at first call below).
+!     maxN is a SAVE rather than PARAMETER because the multifloats target
+!     overloads `huge` for `real64x2`, and gfortran rejects user-defined
+!     functions in PARAMETER initializer expressions.
+   real(wp), save :: maxN
    real(wp), save :: btsml, btbig, bssml, bsbig
    logical, save :: blue_initialized = .false.
    real(wp) :: r_radix, half_wp
@@ -137,6 +140,7 @@ function DZNRM2( n, x, incx )
       btbig = r_radix**floor((maxexp_w - digits_w + 1) * half_wp)
       bssml = r_radix**(-floor((minexp_w - digits_w) * half_wp))
       bsbig = r_radix**(-ceiling((maxexp_w + digits_w - 1) * half_wp))
+      maxN = huge(0._wp)
       blue_initialized = .true.
    end if
 !

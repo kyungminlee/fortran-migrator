@@ -2729,10 +2729,70 @@ def migrate_file(src_path: Path, output_dir: Path, rename_map: dict[str, str], t
 
 
 def _migrate_with_flang(source: str, ext: str, rename_map: dict[str, str], target_mode: TargetMode, facts) -> str:
-    file_names = {rd.name for rd in facts.routine_defs} | {cs.name for cs in facts.call_sites} | set(facts.external_names)
+    # Also include USE-statement module names + every variable's type
+    # spec (where the type is precision-prefixed, e.g.
+    # ``TYPE(DMUMPS_INTR_STRUC)``). The gfortran parser doesn't surface
+    # type-of-variable as a call/external_name, so without this extra
+    # source the rename_map gets filtered down to nothing for files
+    # whose only precision-prefixed reference is via ``USE`` or
+    # ``TYPE(...)``.
+    use_names = {u.module_name for u in (facts.use_stmt_ranges or [])}
+    type_refs: set[str] = set()
+    if facts.variable_types:
+        # variable_types maps name -> ts; the ts may itself be a
+        # precision-prefixed derived type. Add any token of the form
+        # ``DMUMPS_*`` from the source as a candidate (cheap regex).
+        # This catches TYPE(DMUMPS_FOO) :: var declarations the parser
+        # doesn't lift into a routine_def.
+        for token in re.findall(r'\b([SDCZ]MUMPS_[A-Z0-9_]+)\b', source.upper()):
+            type_refs.add(token)
+    file_names = (
+        {rd.name for rd in facts.routine_defs}
+        | {cs.name for cs in facts.call_sites}
+        | set(facts.external_names)
+        | use_names
+        | type_refs
+    )
     file_rename_map = {k: v for k, v in rename_map.items() if k in file_names}
     has_float_types = any(td.type_spec in ('DoublePrecision', 'Real', 'Complex') for td in facts.type_decls)
+    if not has_float_types:
+        # gfortran's dump puts DOUBLE PRECISION components inside a
+        # TYPE body in the parent type's symbol entry, not as
+        # individual type_decls. Without this fall-back, files that
+        # only declare DOUBLE PRECISION inside derived-type bodies
+        # (e.g. MUMPS's *_intr_types.F) skip the promotion pass and
+        # the migrated module still references DOUBLE PRECISION at
+        # the field level — incompatible with callers that expect
+        # the promoted REAL(KIND=...) target type.
+        # The various ways an FP type can appear in a source file. Keep
+        # this list aligned with `replace_type_decls` -- if it can
+        # rewrite the form, this fallback should trigger so the rewrite
+        # actually runs. Catches DOUBLE PRECISION, DOUBLE COMPLEX,
+        # COMPLEX*N, REAL*N, COMPLEX(...), REAL(...) declarations.
+        _fp_patterns = [
+            r'\bDOUBLE\s+PRECISION\b',
+            r'\bDOUBLE\s+COMPLEX\b',
+            r'\bCOMPLEX\s*\*\s*\d+',
+            r'\bREAL\s*\*\s*\d+',
+            r'\bCOMPLEX\s*\(\s*(?:KIND\s*=\s*)?\d+\s*\)',
+            r'\bREAL\s*\(\s*(?:KIND\s*=\s*)?\d+\s*\)',
+        ]
+        if any(re.search(p, source, re.IGNORECASE) for p in _fp_patterns):
+            has_float_types = True
     has_real_literals = bool(facts.real_literals)
+    if not has_real_literals:
+        # gfortran's dump only emits `value:` lines for symbols whose
+        # initializer is a single bare literal — `parameter :: ZERO =
+        # 0.0D+0` lifts the literal into the symbol's `value:` and is
+        # captured, but `parameter :: CZERO = (0.0E+0, 0.0E+0)` (a
+        # complex constructor expression) is NOT captured. Without
+        # this fallback, files whose only real literals live inside
+        # complex/array PARAMETER initializers skip the literal-
+        # promotion pass and `0.0E+0` survives the migration as a
+        # single-precision REAL(KIND=4) value rather than the target
+        # KIND. Catches `1.0D+0` / `1.0e0` / `0.0` style literals.
+        if re.search(r'(?<![\[\d])\d+\.\d*[DdEe][+-]?\d+', source):
+            has_real_literals = True
     if ext in ('.f90', '.f95', '.F90'): return _migrate_free_form_flang(source, file_rename_map, target_mode, has_float_types)
     return _migrate_fixed_form_flang(source, file_rename_map, target_mode, has_float_types, has_real_literals)
 

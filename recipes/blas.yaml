@@ -38,3 +38,13 @@ skip_files:
 source_overrides:
   dnrm2.f90:  blas/source_overrides/dnrm2.f90
   dznrm2.f90: blas/source_overrides/dznrm2.f90
+  # drotg/zrotg PARAMETER initializers use `radix(0._wp)**max(...)`
+  # and `sqrt(safmin)`. ** and sqrt are user-defined for the
+  # multifloats target's real64x2 / cmplx64x2 types, so gfortran
+  # rejects them in PARAMETER context. Override moves the constants
+  # to SAVE-then-init-at-first-call. kind10/kind16 are unaffected
+  # (they still get the same numerical values; the PARAMETER vs
+  # SAVE choice only matters for gfortran's PARAMETER-expression
+  # validator).
+  drotg.f90:  blas/source_overrides/drotg.f90
+  zrotg.f90:  blas/source_overrides/zrotg.f90
