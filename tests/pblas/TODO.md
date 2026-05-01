@@ -78,24 +78,45 @@ Three classes of failures surfaced and were fixed (commit 303df23):
 
 ## kind10 / multifloats — Level 1/2 PBLAS sporadic context destruction
 
-20-26 PBLAS Level 1/2 tests fail on kind10 and multifloats targets
-(but not kind16) under the `linux-impi` preset — `pdaxpy` /
-`pdcopy` / `pdscal` / `pdswap` / `pdgemv` / `pdtrmv` / `pdtrsv`
-plus the pz analogues. After the first iteration succeeds, on
-subsequent iterations the mycol=1 ranks see `Cblacs_gridinfo`
-return `nprow=-1` for the BLACS context that was just used
-successfully -- i.e. `BI_MyContxts[ctxt]` becomes `NULL` between
-iterations, on the same rank, without any test-side BLACS call.
+PBLAS Level 1/2 tests fail on kind10 and multifloats targets (but not
+kind16) under the `linux-impi` preset. As of 2026-04-30:
 
-The same test programs pass cleanly on kind16/impi (1045/1045
-ctests), so the test sources are correct and the bug is in the
-migrated kind10 / multifloats BLACS or PBLAS C globals -- a
-heap-corruption or static-state mismatch between the e/y/m/w
-prefix-renamed BLACS libraries and their PBLAS callers. Adding
-`mpi_barrier` at the start of the wrapper does not help; the
-context invalidation is local to each rank, not driven by another
-rank's `blacs_gridexit`.
+* **kind16/impi: 1045/1045** ctests pass.
+* **kind10/impi: 1004/1022** -- 18 failures, all PBLAS L1/L2.
+* **multifloats/impi: 996/1022** -- 26 failures, same L1/L2 set
+  + `pdaxpy` / `pzaxpy` / `p[dz]scal` / `pzdscal` (which kind10 no
+  longer fails) + a small ScaLAPACK pz tridiagonal cluster
+  (`pzdtsv` / `pzdttrf` / `pzdttrs`).
 
-Action: investigate the migrated kind10 / multifloats BLACS C
-sources for global-state collisions or heap overwrites. Out of
-scope for the kind16 stabilization PR.
+Two failure modes:
+
+1. **Pass cases then SIGABRT at exit (`free(): invalid pointer`).**
+   `test_pdcopy` / `pdscal` / `pdswap` / `pzcopy` / `pzswap` print
+   all PASS lines and the test loop completes, then abort during
+   process tear-down inside `__GI___libc_free` -- some atexit /
+   destructor path frees a pointer with corrupt allocator metadata.
+
+2. **Sporadic mid-loop `Cblacs_gridinfo`-returns-`-1`.** `test_pdgemv`
+   et al. pass an arbitrary subset of cases, then a non-mycol=0 rank
+   sees `BI_MyContxts[ctxt]` flip to `NULL` between iterations
+   without any test-side BLACS call -- and PEAGEMV's argument check
+   aborts with "parameter 802 illegal value". Symptom is timing-
+   dependent: the same binary on the same input passes 5/5 in
+   tight repeats yet fails in the full ctest run, suggesting
+   memory-layout / heap-state sensitivity. Adding `mpi_barrier`
+   inside the wrapper sometimes fixes a specific test; rebuilds
+   shift the surface.
+
+The same test programs pass cleanly on kind16/impi, so the test
+sources are correct and the bug lives in the migrated kind10 /
+multifloats BLACS or PBLAS C globals -- a heap-corruption or
+static-state issue with the e/y/m/w prefix-renamed BLACS libraries
+and their PBLAS callers. Multifloats has the additional `pdaxpy` /
+`pzaxpy` / `p?scal` failures that kind10 doesn't, suggesting the
+multifloats target carries strictly more of the bug surface.
+
+Action: instrument `BI_MyContxts` writes / runs valgrind
+heap-tracking on the kind10 PBLAS Level 1 binary to localise the
+heap-corruption source; investigate the multifloats `mana_aux.F`
+fixed-form continuation regression (which currently blocks the mf
+MUMPS build entirely). Out of scope for the kind16 stabilization PR.
