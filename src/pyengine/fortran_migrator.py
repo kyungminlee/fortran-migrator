@@ -1139,6 +1139,77 @@ def _scan_integer_var_names(source: str) -> set[str]:
 # Phase 1.5 work.
 
 
+def _rewrite_int_kind_on_real64x2(line: str, target_mode: TargetMode) -> str:
+    """Multifloats only — rewrite ``INT(expr, KIND_INT)`` to
+    ``INT(dd_to_double(expr), KIND_INT)`` when ``expr`` contains a
+    ``real64x2(`` token.
+
+    Multifloats publishes ``int`` only as ``dd_int(real64x2)`` returning
+    default-kind integer — no ``int(real64x2, kind)`` overload exists.
+    The migrator's wrap_constructor pass replaces literal real arguments
+    with ``real64x2(...)`` calls but leaves the surrounding
+    ``INT(..., 8)`` shape intact, leading to "Generic function 'int' is
+    not consistent with a specific intrinsic interface" build failures
+    in MUMPS files like ``mana_reordertree.F`` / ``mumps_ooc.F``.
+
+    Routing the inner through ``dd_to_double`` (a public multifloats
+    helper that returns ``real(dp)``) lets the standard Fortran INT
+    intrinsic handle the kind selector. Values that flow through this
+    pattern (cost counters, matrix size estimates) fit comfortably in
+    double precision.
+    """
+    if target_mode.intrinsic_mode != 'wrap_constructor':
+        return line
+    if not line or line[0] in ('C', 'c', '*', '!'):
+        return line
+    lower = line.lower()
+    if 'real64x2(' not in lower or 'int(' not in lower:
+        return line
+    pattern = re.compile(r'\bINT\s*\(', re.IGNORECASE)
+    out: list[str] = []
+    i = 0
+    while i < len(line):
+        m = pattern.search(line, i)
+        if not m:
+            out.append(line[i:])
+            break
+        out.append(line[i:m.start()])
+        paren_open = m.end() - 1
+        depth, j = 1, paren_open + 1
+        while j < len(line) and depth > 0:
+            ch = line[j]
+            if ch == '(': depth += 1
+            elif ch == ')': depth -= 1
+            j += 1
+        if depth != 0:
+            out.append(line[m.start():])
+            break
+        inner = line[paren_open + 1:j - 1]
+        parts: list[str] = []
+        cur, d = '', 0
+        for ch in inner:
+            if ch == '(': d += 1; cur += ch
+            elif ch == ')': d -= 1; cur += ch
+            elif ch == ',' and d == 0:
+                parts.append(cur); cur = ''
+            else:
+                cur += ch
+        if cur:
+            parts.append(cur)
+        if (len(parts) == 2
+                and 'real64x2(' in parts[0].lower()
+                and re.fullmatch(r'\s*(?:KIND\s*=\s*)?\w+\s*', parts[1])):
+            head = line[m.start():m.end()]
+            expr = parts[0].strip()
+            kind_arg = parts[1].strip()
+            replacement = f'{head}dd_to_double({expr}), {kind_arg})'
+            out.append(replacement)
+        else:
+            out.append(line[m.start():j])
+        i = j
+    return ''.join(out)
+
+
 def _rewrite_int_of_complex(line: str, complex_names: set[str]) -> str:
     """Wrap the argument of ``INT(...)`` / ``NINT(...)`` with ``MF_REAL``
     when its leading identifier is a known complex variable.
@@ -1912,6 +1983,16 @@ def _build_use_only_clause(proc_lines: list[str], target_mode: TargetMode) -> st
         if _INCLUDE_RE.match(raw):
             referenced |= {n.lower() for n in target_mode.module_type_names}
             break
+    # Restore identifiers masked by the keep-kind sentinel before the
+    # only-list is built. specialize_use_module runs while sentinels are
+    # still in place (the restore happens after migrate_*_form returns),
+    # so a body like ``CALL F(__KEEPKIND_DBLE__(PEAK))`` would otherwise
+    # not contribute ``dble`` to the only-list — and the post-restore
+    # ``CALL F(dble(PEAK))`` then dispatches to gfortran's intrinsic
+    # ``dble`` which doesn't accept the multifloats real64x2 type.
+    body_text = ''.join(proc_lines)
+    if _KK_DBLE_SENTINEL in body_text:
+        referenced.add('dble')
     declared = _scan_local_declared_names(proc_lines)
     # Determine constant name prefix for sorting (e.g. 'mf_' for multifloats)
     const_prefixes = set()
@@ -2354,6 +2435,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
         s = replace_xerbla_strings(s, rename_map)
         s = replace_known_constants(s, target_mode, renames=removed_known)
         s = _rewrite_int_of_complex(s, complex_names)
+        s = _rewrite_int_kind_on_real64x2(s, target_mode)
         s = _wrap_bare_complex_literals(s, target_mode)
         s = _unwrap_redundant_constructors(s, target_mode, real_names=real_names)
         if len(lines) > 1 and s == joined:
@@ -2597,6 +2679,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
                 stripped = replace_literals(stripped, target_mode)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
+            stripped = _rewrite_int_kind_on_real64x2(stripped, target_mode)
             stripped = _wrap_bare_complex_literals(stripped, target_mode)
             stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
         result.append(stripped + nl)
@@ -2923,6 +3006,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
         s = replace_xerbla_strings(s, rename_map)
         s = replace_known_constants(s, target_mode, renames=removed_known)
         s = _rewrite_int_of_complex(s, complex_names)
+        s = _rewrite_int_kind_on_real64x2(s, target_mode)
         s = _wrap_bare_complex_literals(s, target_mode)
         s = _unwrap_redundant_constructors(s, target_mode, real_names=real_names)
         if len(lines) > 1 and s == joined:
@@ -2990,6 +3074,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
                 stripped = replace_literals(stripped, target_mode)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
+            stripped = _rewrite_int_kind_on_real64x2(stripped, target_mode)
             stripped = _wrap_bare_complex_literals(stripped, target_mode)
             stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
         result.append(stripped + nl)

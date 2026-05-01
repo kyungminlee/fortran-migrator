@@ -694,7 +694,18 @@ sanitizes inputs before calling `qmumps_c`.
 
 ## New follow-ups (2026-04-30, surfaced during B4 partial completion)
 
-### B8 — Migrator's `USE multifloats` injector mishandles CPP-interspersed argument continuation
+### B8 — Migrator's `USE multifloats` injector mishandles CPP-interspersed argument continuation — RESOLVED 2026-05-01
+
+Resolved by tracking parenthesis depth across the SUBROUTINE/FUNCTION
+header walker in `insert_use_multifloats` (commit `bf33cde`). The walker
+also now treats CPP `#if/#endif/#else/#elif/#define` directives as
+transparent. Helper `_count_open_parens` returns the net paren delta
+for a line, ignoring quoted strings and inline comments.
+
+Two follow-up multifloats mmumps build issues surfaced after B8 was
+fixed; these are tracked as B8b and B8c below.
+
+#### Original B8 description (for reference)
 
 Surfaced 2026-04-30 attempting to build `mmumps`. Migrated files like
 `/tmp/stg-mf-mumps/mumps/src/mana_aux.F:26-38` show the multifloats
@@ -730,6 +741,65 @@ should treat CPP `#if/#endif` blocks as transparent for the
 "end-of-statement" search inside SUBROUTINE/FUNCTION headers, or use
 a Fortran-aware parser instead of textual scanning at the injection
 site (`fortran_migrator.py` — multifloats post-pass).
+
+### B8b — `int(real64x2_expr, KIND_INT)` has no multifloats overload — RESOLVED 2026-05-01
+
+Surfaced 2026-05-01 once B8 unblocked the SUBROUTINE-header parse for
+`mana_aux.F`. The migrator's `replace_intrinsic_calls` wraps the inner
+of `INT(double_expr, 8)` calls with `real64x2(...)` (so DOUBLE PRECISION
+arguments lift to multifloats), producing `int(real64x2(...), 8)`. But
+multifloats's `int` interface is only `dd_int(real64x2) -> integer`
+(default kind) — there is no `int(real64x2, kind=8)` overload, and
+gfortran refuses with "Generic function 'int' is not consistent with a
+specific intrinsic interface" (mana_reordertree.F:623,
+mumps_ooc.F:215/219/224/228 etc.).
+
+Resolved by `_rewrite_int_kind_on_real64x2` in `fortran_migrator.py`:
+when the arg of `INT(...)` contains a `real64x2(` token AND the call
+has a kind specifier (numeric or `KIND=N`), wrap the arg with
+`dd_to_double(...)` so the standard Fortran INT intrinsic handles the
+kind selector. `dd_to_double` is a public multifloats helper that
+returns `real(dp)`. Values that flow through this pattern (cost
+counters, matrix size estimates) fit comfortably in double precision.
+
+### B8c — `MODULE PROCEDURE` line falsely matched as procedure header
+
+Surfaced 2026-05-01 building `mmumps_ana_aux_par_m` after B8b. In
+`mana_aux_par.F:25-31`:
+
+```fortran
+INTERFACE MMUMPS_ANA_F_PAR
+MODULE PROCEDURE MMUMPS_ANA_F_PAR
+USE multifloats, only: ...        <-- INJECTED HERE (wrong)
+END INTERFACE
+```
+
+The `_PROC_HEADER_RE` in `fortran_migrator.py` matches the bare keyword
+``MODULE`` with `\b` boundary, so ``MODULE PROCEDURE`` lines inside
+INTERFACE blocks get treated as procedure-header starts and have the
+USE clause inserted right after — but USE inside an INTERFACE block
+between MODULE PROCEDURE and END INTERFACE is illegal Fortran.
+
+Fix: tighten `_PROC_HEADER_RE` to exclude ``MODULE PROCEDURE`` (negative
+lookahead after ``MODULE``). Pending; mmumps build for multifloats
+remains gated.
+
+### B8d — `dble(...)` masked by keep-kind sentinel missing from USE only-list — RESOLVED 2026-05-01
+
+Surfaced 2026-05-01 after B8b. `recipes/mumps/keep-kind.manifest`
+includes `dana_aux.F:4291` to preserve a `dble(PEAK)` call to a
+verbatim (copy_files) callee `MUMPS_DISTRIBUTE` that takes a real(8).
+The keep-kind sentinel masks `dble(` as `__KEEPKIND_DBLE__(` before
+migration, so `_scan_referenced_identifiers` never sees `dble` and
+`_build_use_only_clause` omits it from the only-list. After the
+sentinel restore swaps `dble` back, the call site dispatches to
+gfortran's intrinsic `dble`, which doesn't accept the multifloats
+`real64x2` type ("'a' argument of 'dble' intrinsic at (1) must have
+a numeric type").
+
+Resolved in `_build_use_only_clause`: detect `_KK_DBLE_SENTINEL` in the
+proc body text and unconditionally add `dble` to the referenced set so
+multifloats's `dd_dble(real64x2) -> real(dp)` overload gets imported.
 
 ### B9 — C-bridge / test infrastructure hardcoded to kind16
 
