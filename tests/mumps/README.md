@@ -12,13 +12,16 @@ aggregator.
 ## How to run
 
 ```bash
-uv run --project /home/kyungminlee/Code/fortran-migrator \
-    python -m pyengine stage /tmp/stg-q --target kind16 \
-    --project-root /home/kyungminlee/Code/fm-mumps
-cmake -S /tmp/stg-q -B /tmp/stg-q/build -DCMAKE_BUILD_TYPE=Release
+cd /home/kyungminlee/code/fortran-migrator/src
+uv run python -m pyengine stage /tmp/stg-q --target kind16 --parser gfortran
+cmake -S /tmp/stg-q -B /tmp/stg-q/build --preset=linux-impi
 cmake --build /tmp/stg-q/build -j8
 ctest --test-dir /tmp/stg-q/build -R '^mumps_' --output-on-failure
 ```
+
+The `recipes/` and `cmake/` trees live in this single repo
+(`fortran-migrator`) — the historical fm-mumps split was retired when
+the mumps work merged into `tests` (see TODO.md B7).
 
 Tests are wrapped via `mpiexec -n 1` because the migrated qmumps archive
 calls MPI primitives unconditionally (see TODO.md B3 for the

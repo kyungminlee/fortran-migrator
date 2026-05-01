@@ -272,41 +272,32 @@ Fixed by adding `FAC_FUTURE_NIV2_MOD` to `copy_files` in
 basenames, not module names — the entry is the file basename
 `FAC_FUTURE_NIV2_MOD`, not the module name `MUMPS_FUTURE_NIV2`.)
 
-### B7 — Two cmake/recipe trees diverge (fm-mumps vs fortran-migrator)
+### B7 — Two cmake/recipe trees diverge (fm-mumps vs fortran-migrator) — RESOLVED 2026-05-01
 
-`/home/kyungminlee/Code/fm-mumps/cmake/CMakeLists.txt` and
-`/home/kyungminlee/Code/fortran-migrator/cmake/CMakeLists.txt` are
-separate tracked files — same for `recipes/mumps.yaml`.
-`pyengine stage` reads from `--project-root` (default:
-fortran-migrator). Pass `--project-root /home/kyungminlee/Code/fm-mumps`
-to use fm-mumps's copies. Otherwise the two trees drift.
+The split is gone. The mumps work that briefly lived in a sibling
+`fm-mumps` tree was merged into fortran-migrator on the `tests`
+branch (commits `9ec8357` "Merge branch 'mumps' into tests" and
+`0b92df6` "Merge remote-tracking branch 'origin/mumps' into tests"),
+and `fm-mumps` no longer exists as a separate working tree on this
+machine. All three items the original entry called out as diverged
+now sit in one place:
 
-The 2026-04-29 build-pipeline integration ended up touching both:
-- `cmake/CMakeLists.txt`: section 9 (MUMPS) added in BOTH trees.
-- `recipes/mumps.yaml`: `FAC_FUTURE_NIV2_MOD` added only in fm-mumps.
-- `pyengine __main__.py`: `('mumps','mumps.yaml')` added to
-  LIBRARY_ORDER (only lives in fortran-migrator).
+- `cmake/CMakeLists.txt` — section 9 (MUMPS) and section 10
+  (libmpiseq) live in `cmake/CMakeLists.txt:747` and `:779`.
+- `recipes/mumps.yaml` — `FAC_FUTURE_NIV2_MOD` is wired in
+  `recipes/mumps.yaml:89`.
+- `src/pyengine/__main__.py` — `('mumps', 'mumps.yaml')` is in
+  `LIBRARY_ORDER` at line 724.
 
-**Action when consolidating:** decide on a canonical home for
-`recipes/*.yaml` and `cmake/CMakeLists.txt` — either fortran-migrator
-or fm-mumps. The current split (recipes live in fm-mumps but
-pyengine reads from fortran-migrator unless `--project-root` is
-passed) creates a footgun where a `recipes/mumps.yaml` edit in
-fm-mumps is silently ignored if someone runs `pyengine stage` from
-the migrator's default project root. Options:
+`pyengine stage` reads from this repo with no `--project-root`
+override needed. The fm-mumps wrapper-script / recipe-drift CI
+options listed in earlier drafts of this entry no longer apply —
+keeping everything in one tree is the simpler outcome.
 
-1. Symlink one tree's `recipes/` and `cmake/` to the other (cheap,
-   but git tracks both ends — chooser must be consistent).
-2. Bake `--project-root /home/kyungminlee/Code/fm-mumps` into a
-   wrapper script that always points at fm-mumps for this repo's
-   build (preferred — explicit, reviewable).
-3. Audit-and-sync as a CI step: a `scripts/check_recipe_drift.py`
-   that diffs fm-mumps/recipes against fortran-migrator/recipes and
-   fails on divergence. Tolerates intentional drift if both sides
-   stay in sync.
-
-Until consolidation lands, every cross-tree edit needs to be
-mirrored manually — track each multi-tree commit so nothing slips.
+If a sibling MUMPS-only repo is ever introduced again, the right
+move would still be option 2 (a wrapper script that pins
+`--project-root` explicitly) over symlinks or a drift-check CI step.
+But until then, this entry is closed.
 
 ### B2 — C interface (mumps_c.c, *mumps_c.h) not migrated — RESOLVED 2026-04-29 via header-override bridge
 
