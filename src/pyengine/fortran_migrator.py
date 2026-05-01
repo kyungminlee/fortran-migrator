@@ -541,6 +541,7 @@ def replace_intrinsic_calls(
     line: str,
     target_mode: TargetMode,
     real_names: set[str] | None = None,
+    complex_names: set[str] | None = None,
 ) -> str:
     """Replace type-specific intrinsic function calls."""
     for old_name, (new_name, needs_kind) in INTRINSIC_MAP.items():
@@ -637,7 +638,10 @@ def replace_intrinsic_calls(
                             inner_first = inner[:split_at] if split_at >= 0 else inner
                             replacement = f'{target_mode.real_constructor}({inner_first})'
                         elif old_name.upper() in ('CMPLX', 'DCMPLX'):
-                            wrapped = _wrap_complex_args(inner, target_mode, real_names)
+                            wrapped = _wrap_complex_args(
+                                inner, target_mode, real_names,
+                                complex_names=complex_names,
+                            )
                             replacement = f'{target_mode.complex_constructor}({wrapped})'
                         else:
                             replacement = f'{new_name}({inner})'
@@ -660,7 +664,11 @@ def replace_intrinsic_calls(
     return line
 
 
-def replace_generic_conversions(line: str, target_mode: TargetMode) -> str:
+def replace_generic_conversions(
+    line: str,
+    target_mode: TargetMode,
+    complex_names: set[str] | None = None,
+) -> str:
     """Add KIND (or wrap in constructor) to generic REAL() and CMPLX() calls in expression context."""
     is_fixed_cont = (len(line) >= 6 and line[:5] == '     ' and line[5] not in (' ', '0', '!', 'C', 'c', '*', '\t'))
     cont_marker = line[5] if is_fixed_cont else ''
@@ -725,7 +733,10 @@ def replace_generic_conversions(line: str, target_mode: TargetMode) -> str:
                     inner_first = inner[:split_at] if split_at >= 0 else inner
                     replacement = f'{target_mode.real_constructor}({inner_first})'
                 else:
-                    wrapped = _wrap_complex_args(inner, target_mode, None)
+                    wrapped = _wrap_complex_args(
+                        inner, target_mode, None,
+                        complex_names=complex_names,
+                    )
                     replacement = f'{target_mode.complex_constructor}({wrapped})'
 
             line = line[:name_start] + replacement + line[close_pos + 1:]
@@ -1181,6 +1192,7 @@ def _rewrite_int_of_complex(line: str, complex_names: set[str]) -> str:
 
 def _wrap_complex_args(
     inner: str, target_mode: TargetMode, real_names: set[str] | None,
+    complex_names: set[str] | None = None,
 ) -> str:
     """Pre-wrap each top-level argument of a CMPLX-style call so the
     multifloats complex128x2 interface can dispatch.
@@ -1196,6 +1208,13 @@ def _wrap_complex_args(
     (bare ``MF_*`` constant, ``float64x2(...)`` call, or a known
     float64x2 local) — wrapping again would fail because float64x2
     has no identity constructor.
+
+    Also skip the wrap when the arg is itself a complex expression
+    (any token in ``complex_names``). ``CMPLX(D, KIND=N)`` /
+    ``DCMPLX(D)`` on a complex ``D`` is the Fortran identity (preserves
+    Re/Im). Wrapping with ``float64x2(...)`` would dispatch to
+    ``dd_from_cdd`` which discards the imaginary part — silently
+    corrupting the result.
     """
     parts: list[str] = []
     cur, depth = '', 0
@@ -1247,6 +1266,10 @@ def _wrap_complex_args(
             for tok in re.finditer(r'\b([A-Za-z_]\w*)\b', body):
                 u = tok.group(1).upper()
                 if u in real_names or u.startswith('MF_'):
+                    return arg
+        if complex_names:
+            for tok in re.finditer(r'\b([A-Za-z_]\w*)\b', body):
+                if tok.group(1).upper() in complex_names:
                     return arg
         if head and head.group(1).upper().startswith('MF_'):
             return arg
@@ -2278,9 +2301,11 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
             continue
         s = replace_standalone_real_complex(s, target_mode)
         s = replace_literals(s, target_mode)
-        s = replace_intrinsic_calls(s, target_mode, real_names=real_names)
+        s = replace_intrinsic_calls(
+            s, target_mode, real_names=real_names, complex_names=complex_names,
+        )
         s = replace_intrinsic_decls(s, target_mode)
-        s = replace_generic_conversions(s, target_mode)
+        s = replace_generic_conversions(s, target_mode, complex_names=complex_names)
         s = replace_routine_names(s, rename_map)
         s = replace_include_filenames(s, rename_map)
         s = replace_xerbla_strings(s, rename_map)
@@ -2504,9 +2529,14 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
         if not stripped.lstrip().startswith('!'):
             stripped = _strip_iso_fortran_env_realN(stripped)
             if not stripped: continue
-            stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
+            stripped = replace_intrinsic_calls(
+                stripped, target_mode, real_names=real_names,
+                complex_names=complex_names,
+            )
             stripped = replace_intrinsic_decls(stripped, target_mode)
-            stripped = replace_generic_conversions(stripped, target_mode)
+            stripped = replace_generic_conversions(
+                stripped, target_mode, complex_names=complex_names,
+            )
         stripped = replace_routine_names(stripped, rename_map)
         stripped = replace_include_filenames(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
@@ -2840,9 +2870,11 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
                 continue
             s = replace_standalone_real_complex(s, target_mode)
         if has_real_literals: s = replace_literals(s, target_mode)
-        s = replace_intrinsic_calls(s, target_mode, real_names=real_names)
+        s = replace_intrinsic_calls(
+            s, target_mode, real_names=real_names, complex_names=complex_names,
+        )
         s = replace_intrinsic_decls(s, target_mode)
-        s = replace_generic_conversions(s, target_mode)
+        s = replace_generic_conversions(s, target_mode, complex_names=complex_names)
         s = replace_routine_names(s, rename_map)
         s = replace_include_filenames(s, rename_map)
         s = replace_xerbla_strings(s, rename_map)
@@ -2890,9 +2922,14 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
         if not stripped.lstrip().startswith('!'):
             stripped = _strip_iso_fortran_env_realN(stripped)
             if not stripped: continue
-            stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
+            stripped = replace_intrinsic_calls(
+                stripped, target_mode, real_names=real_names,
+                complex_names=complex_names,
+            )
             stripped = replace_intrinsic_decls(stripped, target_mode)
-            stripped = replace_generic_conversions(stripped, target_mode)
+            stripped = replace_generic_conversions(
+                stripped, target_mode, complex_names=complex_names,
+            )
         stripped = replace_routine_names(stripped, rename_map)
         stripped = replace_include_filenames(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
