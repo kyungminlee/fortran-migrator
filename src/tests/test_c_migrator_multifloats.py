@@ -49,7 +49,7 @@ def test_build_sub_vars_multifloats_struct_types():
     assert v['COMPLEX_TYPE'] == 'complex64x2'
     assert v['C_REAL_TYPE'] == 'float64x2'
     assert v['MPI_REAL'] == 'MPI_FLOAT64X2'
-    assert v['MPI_COMPLEX'] == 'MPI_COMPLEX128X2'
+    assert v['MPI_COMPLEX'] == 'MPI_COMPLEX64X2'
     assert v['MPI_SUM_REAL'] == 'MPI_DD_SUM'
     assert v['MPI_SUM_COMPLEX'] == 'MPI_ZZ_SUM'
     assert v['RP'] == _RP
@@ -171,7 +171,7 @@ def test_blacs_complex_clone_multifloats(tmp_path):
     assert new_name == f'BI_{_CP}vvsum.c'
     assert 'complex64x2 *v1' in text
     assert 'float64x2 *r1' in text
-    assert 'MPI_COMPLEX128X2' in text
+    assert 'MPI_COMPLEX64X2' in text
     # Complex files use the zz reduction op
     assert 'MPI_ZZ_SUM' in text
     assert 'MPI_SUM,' not in text

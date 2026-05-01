@@ -118,7 +118,7 @@ inline float64x2 mf_cabs1(complex64x2 z) { return mf_abs(z.re) + mf_abs(z.im); }
 extern "C" {
 
 extern MPI_Datatype MPI_FLOAT64X2;
-extern MPI_Datatype MPI_COMPLEX128X2;
+extern MPI_Datatype MPI_COMPLEX64X2;
 
 extern MPI_Op MPI_DD_SUM;
 extern MPI_Op MPI_ZZ_SUM;

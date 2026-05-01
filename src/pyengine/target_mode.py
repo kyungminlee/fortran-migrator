@@ -47,7 +47,7 @@ class TargetMode:
     c_complex_type: Optional[str] = None      # 'XCOMPLEX' / 'complex64x2'
     c_c_real_type: Optional[str] = None       # '__float128' / 'float64x2'
     c_mpi_real: Optional[str] = None          # 'MPI_REAL16' / 'MPI_FLOAT64X2'
-    c_mpi_complex: Optional[str] = None       # 'MPI_COMPLEX32' / 'MPI_COMPLEX128X2'
+    c_mpi_complex: Optional[str] = None       # 'MPI_COMPLEX32' / 'MPI_COMPLEX64X2'
     c_mpi_sum_real: Optional[str] = None      # 'MPI_SUM' / 'MPI_DD_SUM'
     c_mpi_sum_complex: Optional[str] = None   # 'MPI_SUM' / 'MPI_ZZ_SUM'
     c_needs_mpi_check: bool = False           # True only for KIND=16

@@ -159,7 +159,7 @@ c_interop:
   complex_type: complex64x2
   c_real_type: float64x2
   mpi_real: MPI_FLOAT64X2
-  mpi_complex: MPI_COMPLEX128X2
+  mpi_complex: MPI_COMPLEX64X2
   mpi_sum_real: MPI_DD_SUM
   mpi_sum_complex: MPI_ZZ_SUM
   needs_mpi_check: false

@@ -1141,7 +1141,7 @@ def _scan_integer_var_names(source: str) -> set[str]:
 
 def _rewrite_int_kind_on_real64x2(line: str, target_mode: TargetMode) -> str:
     """Multifloats only — rewrite ``INT(expr, KIND_INT)`` to
-    ``INT(dd_to_double(expr), KIND_INT)`` when ``expr`` contains a
+    ``INT(dble(expr), KIND_INT)`` when ``expr`` contains a
     ``real64x2(`` token.
 
     Multifloats publishes ``int`` only as ``dd_int(real64x2)`` returning
@@ -1152,11 +1152,13 @@ def _rewrite_int_kind_on_real64x2(line: str, target_mode: TargetMode) -> str:
     not consistent with a specific intrinsic interface" build failures
     in MUMPS files like ``mana_reordertree.F`` / ``mumps_ooc.F``.
 
-    Routing the inner through ``dd_to_double`` (a public multifloats
-    helper that returns ``real(dp)``) lets the standard Fortran INT
-    intrinsic handle the kind selector. Values that flow through this
-    pattern (cost counters, matrix size estimates) fit comfortably in
-    double precision.
+    Routing the inner through ``dble`` (multifloats's public generic
+    over real64x2 → real(dp), via ``dd_to_dp``) lets the standard
+    Fortran INT intrinsic handle the kind selector. Values that flow
+    through this pattern (cost counters, matrix size estimates) fit
+    comfortably in double precision. ``_build_use_only_clause`` adds
+    ``dble`` to the only-list whenever ``INT`` and ``real64x2(``
+    co-occur, so the import is in place when this rewrite fires.
     """
     if target_mode.intrinsic_mode != 'wrap_constructor':
         return line
@@ -1202,7 +1204,7 @@ def _rewrite_int_kind_on_real64x2(line: str, target_mode: TargetMode) -> str:
             head = line[m.start():m.end()]
             expr = parts[0].strip()
             kind_arg = parts[1].strip()
-            replacement = f'{head}dd_to_double({expr}), {kind_arg})'
+            replacement = f'{head}dble({expr}), {kind_arg})'
             out.append(replacement)
         else:
             out.append(line[m.start():j])
@@ -1249,7 +1251,15 @@ def _rewrite_int_of_complex(line: str, complex_names: set[str]) -> str:
             inner = out[paren_open + 1:paren_close]
             head = re.match(r'\s*([A-Za-z_]\w*)', inner)
             if head and head.group(1).upper() in complex_names:
-                replacement = f'DD_REAL({inner.strip()})'
+                # Use multifloats's overloaded ``real`` generic
+                # (cdd_to_dd / dd_to_dd) — it extracts the real
+                # component of cmplx64x2 as a real64x2, which the
+                # ``int`` / ``nint`` overloads then accept. The earlier
+                # ``DD_REAL`` spelling targeted an upstream symbol
+                # that no longer exists; ``real`` is in the multifloats
+                # generic_names list and gets imported via the USE
+                # only-clause whenever a file references it.
+                replacement = f'real({inner.strip()})'
                 out = out[:paren_open + 1] + replacement + out[paren_close:]
                 pos = paren_open + 1 + len(replacement) + 1
             else:
@@ -1553,9 +1563,23 @@ def convert_parameter_stmts(
     dropped_known: dict[str, str] = {}
     param_re = re.compile(r'^(\s{6,}|^\s*)PARAMETER\s*\((.*)\)\s*(!.*)?$', re.IGNORECASE)
 
+    # CPP guard stack: each entry is the original ``#if ...`` directive
+    # line (without trailing newline) that's still open at the current
+    # source position. When a PARAMETER is converted to a runtime
+    # assignment, the assignment is wrapped in the same #if/#endif so
+    # it stays in scope only when the original declaration is in scope
+    # — otherwise gfortran sees an assignment to an undeclared symbol.
+    cpp_stack: list[str] = []
+
     i = 0
     while i < len(lines):
         line = lines[i]
+        stripped_for_cpp = line.lstrip()
+        if stripped_for_cpp.startswith('#if'):
+            cpp_stack.append(line.rstrip('\n'))
+        elif stripped_for_cpp.startswith('#endif'):
+            if cpp_stack: cpp_stack.pop()
+
         # Try matching a single-line PARAMETER first; if not, try
         # joining continuation lines and matching the joined form.
         joined, next_i = line.rstrip('\n'), i + 1
@@ -1603,7 +1627,12 @@ def convert_parameter_stmts(
                                 and not is_cx_value):
                             line_dropped_known[name.upper()] = target_mode.known_constants[name.upper()]
                             continue
-                        line_assignments.append(f"{indent}{name} = {val}{comment}\n")
+                        assn = f"{indent}{name} = {val}{comment}\n"
+                        if cpp_stack:
+                            pre = ''.join(g + '\n' for g in cpp_stack)
+                            post = '#endif\n' * len(cpp_stack)
+                            assn = pre + assn + post
+                        line_assignments.append(assn)
                     else: kept_parts.append(part)
                 else: kept_parts.append(part)
 
@@ -1993,6 +2022,17 @@ def _build_use_only_clause(proc_lines: list[str], target_mode: TargetMode) -> st
     body_text = ''.join(proc_lines)
     if _KK_DBLE_SENTINEL in body_text:
         referenced.add('dble')
+    # Predict the ``dble`` calls that ``_rewrite_int_kind_on_real64x2``
+    # will inject in a later post-pass: ``INT(real64x2_expr, K)`` →
+    # ``INT(dble(real64x2_expr), K)``. The rewrite runs AFTER the
+    # only-clause is built, so the scanner can't see the literal ``dble``
+    # call yet. Conservatively add ``dble`` whenever both ``int(`` and
+    # ``real64x2(`` appear in the body — false positives just import an
+    # unused name, which gfortran tolerates.
+    if (target_mode.intrinsic_mode == 'wrap_constructor'
+            and re.search(r'\bint\s*\(', body_text, re.IGNORECASE)
+            and 'real64x2(' in body_text.lower()):
+        referenced.add('dble')
     declared = _scan_local_declared_names(proc_lines)
     # Determine constant name prefix for sorting (e.g. 'mf_' for multifloats)
     const_prefixes = set()
@@ -2152,7 +2192,23 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
                         'REAL', 'DOUBLE', 'COMPLEX', 'INTEGER', 'LOGICAL',
                         'CHARACTER', 'TYPE', 'USE', 'IMPLICIT', 'PARAMETER',
                         'DATA', 'INTRINSIC', 'EXTERNAL', 'DIMENSION', 'SAVE',
-                        'EQUIVALENCE', 'COMMON',
+                        'EQUIVALENCE', 'COMMON', 'INCLUDE',
+                        # Keep-kind sentinels appear at this stage in the
+                        # pipeline — the migrator masks ``DOUBLE PRECISION`` /
+                        # ``dble`` / ``dcmplx`` with sentinels around lines
+                        # in recipes/*/keep-kind.manifest so they survive
+                        # the migration unchanged. The sentinels get
+                        # restored after migration but BEFORE this walker
+                        # only when the migrator doesn't run a USE pass
+                        # (e.g. the source-emit path), and the walker runs
+                        # on the still-sentineled text in the multifloats
+                        # path. Treat them as declaration keywords so the
+                        # walker doesn't stop at them and insert
+                        # PARAMETER-derived assignments in the middle of
+                        # the declaration block.
+                        '__KEEPKIND_DP__',
+                        '__KEEPKIND_DBLE__',
+                        '__KEEPKIND_DCMPLX__',
                     )):
                         k += 1; continue
                     # LAPACK statement-function definitions look like
@@ -2812,6 +2868,115 @@ def _rewrite_mpi_datatypes(source: str, target_mode: TargetMode) -> str:
     return source
 
 
+# Multifloats MPI handle tokens emitted by ``_rewrite_mpi_datatypes`` for
+# the multifloats target (``MPI_DOUBLE_PRECISION`` → ``MPI_FLOAT64X2``)
+# plus the real + complex reduction op handles the bridge exposes.
+# Migrated MUMPS Fortran calls MPI directly with these names; without a
+# Fortran module declaring them, gfortran rejects every site with "has
+# no IMPLICIT type". The ``multifloats_mpi_f`` module
+# (external/multifloats-mpi/multifloats_mpi_f.f90) bind-to-C declares
+# them as default-INTEGER variables populated at MPI init time. The
+# complex datatype token (MPI_COMPLEX64X2) is deferred — the m-prefix
+# MUMPS build only needs the real datatype plus all reduction ops.
+_MF_MPI_TOKENS = (
+    'MPI_FLOAT64X2',
+    'MPI_DD_SUM', 'MPI_DD_AMX', 'MPI_DD_AMN',
+    'MPI_ZZ_SUM', 'MPI_ZZ_AMX', 'MPI_ZZ_AMN',
+)
+_MF_MPI_ANY_RE = re.compile(r'\b(?:' + '|'.join(_MF_MPI_TOKENS) + r')\b')
+
+
+def insert_use_multifloats_mpi_f(source: str, target_mode: TargetMode) -> str:
+    """For multifloats targets only: inject ``USE multifloats_mpi_f``
+    after each procedure header in sources that reference custom MPI
+    handles. Runs after ``_rewrite_mpi_datatypes`` so the rewritten
+    tokens are visible. The module exports only ``MPI_*``-prefixed
+    names plus ``multifloats_mpi_init``, so no ONLY clause is needed
+    — collision risk is nil and the bare USE keeps fixed-form lines
+    well under column 72 even when many tokens are involved."""
+    if target_mode.is_kind_based:
+        return source
+    if not _MF_MPI_ANY_RE.search(source):
+        return source
+
+    lines = source.splitlines(keepends=True)
+    proc_header_re = re.compile(
+        r'^(\s{6,}|^\s*)(?:RECURSIVE\s+|PURE\s+|ELEMENTAL\s+)*'
+        r'(?:(?:INTEGER|REAL|COMPLEX|LOGICAL|CHARACTER|TYPE\s*\([^)]+\)'
+        r'|DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX)'
+        r'(?:\s*\*\s*\d+)?\s+)?'
+        r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE(?!\s+PROCEDURE\b)|BLOCK\s+DATA)\b',
+        re.IGNORECASE,
+    )
+    # ``END SUBROUTINE FOO``, ``END FUNCTION``, plain ``END``. Crucially
+    # NOT ``END IF`` / ``END DO`` / ``END SELECT`` — those would cut off
+    # the body scan partway through the procedure and miss MPI tokens
+    # that appear later. Hence the keyword whitelist must be required
+    # if any word follows ``END``.
+    end_proc_re = re.compile(
+        r'^\s*END(?:\s+(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s*DATA)'
+        r'(?:\s+\w+)?)?\s*$',
+        re.IGNORECASE,
+    )
+
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        result.append(line)
+        m = proc_header_re.match(line)
+        if not m:
+            i += 1
+            continue
+        # Walk past the procedure header (continuations + CPP blocks),
+        # mirroring insert_use_multifloats so paren-balanced argument
+        # lists that span ``#if defined(metis)`` blocks are handled.
+        j = i + 1
+        paren_depth = _count_open_parens(line)
+        prev_has_amp = line.rstrip().rstrip('\n').endswith('&')
+        while j < len(lines):
+            next_line = lines[j]
+            if next_line.lstrip().startswith('#'):
+                result.append(next_line)
+                j += 1
+                continue
+            if (is_continuation_line(next_line) or prev_has_amp
+                    or paren_depth > 0):
+                result.append(next_line)
+                prev_has_amp = next_line.rstrip().rstrip('\n').endswith('&')
+                paren_depth += _count_open_parens(next_line)
+                j += 1
+            else:
+                break
+        # Find this procedure's matching END via depth tracking. Many
+        # MUMPS files put an INTERFACE block inside the outer SUBROUTINE
+        # whose internal SUBROUTINE signatures look syntactically like
+        # procedure headers; their END SUBROUTINE would falsely
+        # terminate a naive linear scan, missing the MPI_FLOAT64X2
+        # sites further down in the outer body. Counting nested opens
+        # vs closes lets us land on the actual matching END at depth 0.
+        depth = 1
+        k = j
+        while k < len(lines):
+            if proc_header_re.match(lines[k]):
+                depth += 1
+            elif end_proc_re.match(lines[k]):
+                depth -= 1
+                if depth == 0:
+                    break
+            k += 1
+        body_text = ''.join(lines[j:k + 1])
+        if _MF_MPI_ANY_RE.search(body_text):
+            already_has = any('USE multifloats_mpi_f' in lines[kk]
+                              for kk in range(j, min(j + 30, len(lines))))
+            if not already_has:
+                indent = m.group(1)
+                ind = indent if indent.strip() else '      '
+                result.append(f"{ind}USE multifloats_mpi_f\n")
+        i = j
+    return ''.join(result)
+
+
 def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mode: TargetMode, parser: str | None = None, parser_cmd: str | None = None, keep_kind_lines: frozenset[int] | None = None) -> tuple[str, str] | None:
     ext, source = src_path.suffix.lower(), src_path.read_text(errors='replace')
     facts = None
@@ -2836,6 +3001,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
         migrated = _restore_keep_kind_sentinel(migrated)
 
     migrated = _rewrite_mpi_datatypes(migrated, target_mode)
+    migrated = insert_use_multifloats_mpi_f(migrated, target_mode)
     migrated = _rewrite_prefixed_includes(migrated, target_mode)
 
     out_name = target_filename(src_path.name, rename_map, target_mode)
@@ -2866,7 +3032,6 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
             # Type/conversion / complex
             'REAL', 'AIMAG', 'CONJG', 'CMPLX', 'DCMPLX', 'DCONJG',
             'DIMAG', 'DBLE', 'INT', 'NINT', 'CEILING', 'FLOOR',
-            'DD_REAL',
         }
         def clean_intrinsic(m):
             indent, sep, funcs_str, newline = m.group(1), m.group(2), m.group(3), m.group(4)

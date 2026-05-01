@@ -12,7 +12,7 @@
 extern "C" {
 
 MPI_Datatype MPI_FLOAT64X2    = MPI_DATATYPE_NULL;
-MPI_Datatype MPI_COMPLEX128X2 = MPI_DATATYPE_NULL;
+MPI_Datatype MPI_COMPLEX64X2 = MPI_DATATYPE_NULL;
 
 MPI_Op MPI_DD_SUM = MPI_OP_NULL;
 MPI_Op MPI_ZZ_SUM = MPI_OP_NULL;
@@ -20,6 +20,25 @@ MPI_Op MPI_DD_AMX = MPI_OP_NULL;
 MPI_Op MPI_DD_AMN = MPI_OP_NULL;
 MPI_Op MPI_ZZ_AMX = MPI_OP_NULL;
 MPI_Op MPI_ZZ_AMN = MPI_OP_NULL;
+
+/* Fortran-side handles. Populated by multifloats_mpi_init() via
+ * MPI_Type_c2f / MPI_Op_c2f after the C-side handles are ready, and
+ * surfaced to Fortran via multifloats_mpi_f.f90 using bind(c, name=...).
+ * MUMPS calls MPI from Fortran directly with names like
+ * ``MPI_FLOAT64X2`` and ``MPI_ZZ_SUM``, which need INTEGER Fortran
+ * handles rather than the C-side MPI_Datatype / MPI_Op opaque types.
+ *
+ * The complex datatype (MPI_COMPLEX64X2) Fortran handle is deliberately
+ * deferred — the m-prefix MUMPS archive only needs the real datatype
+ * plus all reduction ops (real and complex). The complex datatype
+ * handle gets added when wmumps follows. */
+MPI_Fint mf_mpi_float64x2_f = 0;
+MPI_Fint mf_mpi_dd_sum_f    = 0;
+MPI_Fint mf_mpi_dd_amx_f    = 0;
+MPI_Fint mf_mpi_dd_amn_f    = 0;
+MPI_Fint mf_mpi_zz_sum_f    = 0;
+MPI_Fint mf_mpi_zz_amx_f    = 0;
+MPI_Fint mf_mpi_zz_amn_f    = 0;
 
 } /* extern "C" */
 
@@ -76,8 +95,8 @@ extern "C" void multifloats_mpi_init(void) {
 
     MPI_Type_contiguous(2, MPI_DOUBLE, &MPI_FLOAT64X2);
     MPI_Type_commit(&MPI_FLOAT64X2);
-    MPI_Type_contiguous(4, MPI_DOUBLE, &MPI_COMPLEX128X2);
-    MPI_Type_commit(&MPI_COMPLEX128X2);
+    MPI_Type_contiguous(4, MPI_DOUBLE, &MPI_COMPLEX64X2);
+    MPI_Type_commit(&MPI_COMPLEX64X2);
 
     MPI_Op_create(dd_sum_fn, 1, &MPI_DD_SUM);
     MPI_Op_create(zz_sum_fn, 1, &MPI_ZZ_SUM);
@@ -85,6 +104,14 @@ extern "C" void multifloats_mpi_init(void) {
     MPI_Op_create(dd_amn_fn, 1, &MPI_DD_AMN);
     MPI_Op_create(zz_amx_fn, 1, &MPI_ZZ_AMX);
     MPI_Op_create(zz_amn_fn, 1, &MPI_ZZ_AMN);
+
+    mf_mpi_float64x2_f = MPI_Type_c2f(MPI_FLOAT64X2);
+    mf_mpi_dd_sum_f    = MPI_Op_c2f(MPI_DD_SUM);
+    mf_mpi_dd_amx_f    = MPI_Op_c2f(MPI_DD_AMX);
+    mf_mpi_dd_amn_f    = MPI_Op_c2f(MPI_DD_AMN);
+    mf_mpi_zz_sum_f    = MPI_Op_c2f(MPI_ZZ_SUM);
+    mf_mpi_zz_amx_f    = MPI_Op_c2f(MPI_ZZ_AMX);
+    mf_mpi_zz_amn_f    = MPI_Op_c2f(MPI_ZZ_AMN);
 
     initialized = 1;
 }

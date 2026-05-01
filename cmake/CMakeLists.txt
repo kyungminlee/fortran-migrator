@@ -161,6 +161,19 @@ if(NEEDS_MULTIFLOATS)
         target_include_directories(multifloats_mpi INTERFACE
             $<BUILD_INTERFACE:${MF_HELPERS_DIR}>)
     endif()
+
+    # multifloats_mpi_f — Fortran module exposing the C-side MPI_FLOAT64X2
+    # / MPI_DD_SUM / etc. handles to Fortran callers (MUMPS calls MPI
+    # from Fortran directly with these tokens; without the module they
+    # have no IMPLICIT type at compile time). Linking into multifloats_mpi
+    # ensures the C++ runtime that defines mf_mpi_*_f globals is pulled
+    # in transitively whenever a target depends on multifloats_mpi_f.
+    if(EXISTS "${MF_HELPERS_DIR}/multifloats_mpi_f.f90" AND TARGET multifloats_mpi)
+        add_library(multifloats_mpi_f STATIC
+            "${MF_HELPERS_DIR}/multifloats_mpi_f.f90")
+        fortran_module_layout(multifloats_mpi_f)
+        target_link_libraries(multifloats_mpi_f PUBLIC multifloats_mpi)
+    endif()
 endif()
 
 # ── Helper functions ─────────────────────────────────────────────────
@@ -771,6 +784,14 @@ if(TARGET ${LIB_PREFIX}mumps)
     if(MPI_Fortran_FOUND)
         target_link_libraries(${LIB_PREFIX}mumps PUBLIC MPI::MPI_Fortran)
     endif()
+    # Multifloats: the migrator rewrites MPI_DOUBLE_PRECISION →
+    # MPI_FLOAT64X2 (and reduction op tokens) in MUMPS Fortran sources,
+    # then injects ``USE multifloats_mpi_f`` so those names resolve.
+    # Link the module library so the .mod is on the include path and
+    # the C++ side that actually defines the handles is pulled in.
+    if(NEEDS_MULTIFLOATS AND TARGET multifloats_mpi_f)
+        target_link_libraries(${LIB_PREFIX}mumps PUBLIC multifloats_mpi_f)
+    endif()
 endif()
 if(TARGET mumps_common AND MPI_Fortran_FOUND)
     target_link_libraries(mumps_common PUBLIC MPI::MPI_Fortran)
@@ -860,7 +881,7 @@ endforeach()
 
 if(NEEDS_MULTIFLOATS)
     # multifloats defines its own install rules; only install local helpers
-    foreach(_t la_constants_mf la_xisnan_mf multifloats_mpi)
+    foreach(_t la_constants_mf la_xisnan_mf multifloats_mpi multifloats_mpi_f)
         if(TARGET ${_t})
             fortran_install_library(${_t} EXPORT ${_t}Targets)
             get_target_property(_fc_moddir ${_t} Fortran_MODULE_DIRECTORY)
