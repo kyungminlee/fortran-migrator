@@ -1,25 +1,32 @@
 # tests/scalapack — known upstream / migrator gaps
 
-## Real-MPI exercise via `linux-impi` preset — 2026-04-30
+## Real-MPI exercise via `linux-impi` preset — 2026-04-30 (RESOLVED on kind16)
 
 `cmake --preset=linux-impi` invokes Intel MPI 2021.18 with
-`I_MPI_ADJUST_REDUCE=1` injected via `MPIEXEC_PREFLAGS`. ScaLAPACK
-tests went from `0% real signal` (singleton MPI) to `92%+ pass` on a
-real 2×2 grid. 13 ScaLAPACK tests still fail (out of 170):
+`I_MPI_ADJUST_REDUCE=1` and `I_MPI_ADJUST_ALLREDUCE=1` injected via
+`MPIEXEC_PREFLAGS` to skip the impi shortpaths that mishandle
+BLACS-registered user MPI ops over `REAL(KIND=16)`. ScaLAPACK tests
+went from `0% real signal` (singleton MPI) to **170/170 (100%)** on
+the kind16 target with a real 2×2 grid.
 
-```
-refine   : pdgerfs pdporfs pdtrrfs   pzgerfs pzporfs pztrrfs
-expert   : pdgesvx                   pzgesvx
-norms    : pdlanhs                   pzlanhs
-QR-fac   : pdggrqf                   pzggrqf
-equiv    :                           pzgeequ
-```
+The 13 ScaLAPACK tests that originally failed under impi were
+resolved by 4 distinct fixes — see commits `cfcf023`,
+`67c57d2`, and `e469670`:
 
-Iterative-refinement and expert drivers likely need a tolerance review
-now that the inner residual is computed via real MPI; the remaining
-norms/QR/equiv failures need per-routine investigation. For most of
-these, the fix is in the migrated ScaLAPACK or the test reference,
-not in the harness.
+* **norms (pdlanhs/pzlanhs)** — upstream IAROW double-advance bug;
+  patched in source_overrides. See `doc/UPSTREAM_BUGS.md` entry
+  "p?lanhs.f IAROW double-advance".
+* **equiv (pzgeequ)** — upstream wrong-axis reduction bug; patched
+  in source_overrides. See `doc/UPSTREAM_BUGS.md` entry
+  "p?geequ.f column-scale reduction wrong axis". (pdgeequ was
+  passing only by coincidence; the same fix applies.)
+* **QR-fac (pdggrqf/pzggrqf)** — wrapper TAUB used the row axis
+  where TAUB is column-distributed; fixed `loccols(descb)` for
+  TAUB and bumped the test pre-allocation to `locn_b`.
+* **refine (rfs x6) + expert (svx x2)** — the impi preset was
+  missing `I_MPI_ADJUST_ALLREDUCE=1`; BLACS *GAMX2D / IGAMX2D
+  paths through `MPIR_Reduce_local` crashed in the intranode
+  shortpath on user MPI_Op + REAL(KIND=16) payload.
 
 ## Banded test sources — workspace / IPIV size fixes (2026-04-30)
 
