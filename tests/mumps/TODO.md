@@ -762,7 +762,7 @@ kind selector. `dd_to_double` is a public multifloats helper that
 returns `real(dp)`. Values that flow through this pattern (cost
 counters, matrix size estimates) fit comfortably in double precision.
 
-### B8c — `MODULE PROCEDURE` line falsely matched as procedure header
+### B8c — `MODULE PROCEDURE` line falsely matched as procedure header — RESOLVED 2026-05-01
 
 Surfaced 2026-05-01 building `mmumps_ana_aux_par_m` after B8b. In
 `mana_aux_par.F:25-31`:
@@ -774,15 +774,37 @@ USE multifloats, only: ...        <-- INJECTED HERE (wrong)
 END INTERFACE
 ```
 
-The `_PROC_HEADER_RE` in `fortran_migrator.py` matches the bare keyword
+The `_PROC_HEADER_RE` in `fortran_migrator.py` matched the bare keyword
 ``MODULE`` with `\b` boundary, so ``MODULE PROCEDURE`` lines inside
-INTERFACE blocks get treated as procedure-header starts and have the
+INTERFACE blocks were treated as procedure-header starts and had the
 USE clause inserted right after — but USE inside an INTERFACE block
 between MODULE PROCEDURE and END INTERFACE is illegal Fortran.
 
-Fix: tighten `_PROC_HEADER_RE` to exclude ``MODULE PROCEDURE`` (negative
-lookahead after ``MODULE``). Pending; mmumps build for multifloats
-remains gated.
+Resolved by adding a negative lookahead `(?!\s+PROCEDURE\b)` after
+``MODULE`` in both `_PROC_HEADER_RE` (line 1832) and the local
+`proc_header_re` inside `insert_use_multifloats` (line 2030).
+
+### B8e — `MPI_FLOAT64X2` undeclared in migrated MUMPS Fortran
+
+Surfaced 2026-05-01 once B8c unblocked the next mmumps file. The
+migrator's `_rewrite_mpi_datatypes` substitutes `MPI_DOUBLE_PRECISION`
+→ `MPI_FLOAT64X2` for the multifloats target. For kind10/kind16 this
+is `MPI_REAL10` / `MPI_REAL16` — standard MPI datatypes provided by the
+MPI runtime when `INCLUDE 'mpif.h'` is in scope. For multifloats,
+`MPI_FLOAT64X2` is a custom datatype: `_helpers/multifloats_mpi.cpp`
+creates it via `MPI_Type_create_*` at MPI_Init time, but the symbol is
+not exposed to Fortran code that does direct `CALL MPI_SEND(..., MPI_FLOAT64X2, ...)`.
+
+gfortran refuses with "Symbol 'mpi_float64x2' at (1) has no IMPLICIT
+type" on every direct Fortran MPI call site (mfac_scalings_simScale_util.F,
+mana_dist_m.F, mfac_scalings.F, msol_distrhs.F, mmumps_driver.F,
+mtype3_root.F, and ~6 others). MUMPS uses Fortran-side MPI directly
+(unlike BLACS/PBLAS which go through C); needs a Fortran-side
+`USE multifloats_mpi` module exposing `MPI_FLOAT64X2`, or the
+multifloats helper extending `mpif.h` analogue with the custom
+datatype declaration. Pending — mmumps build for multifloats still
+gated, but other multifloats libraries (mblas, mlapack, mscalapack,
+etc.) build cleanly and pass 1022/1022 tests.
 
 ### B8d — `dble(...)` masked by keep-kind sentinel missing from USE only-list — RESOLVED 2026-05-01
 

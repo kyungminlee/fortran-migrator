@@ -1833,7 +1833,7 @@ _PROC_HEADER_RE = re.compile(
     r'^(\s{6,}|^\s*)(?:RECURSIVE\s+|PURE\s+|ELEMENTAL\s+)*'
     r'(?:(?:INTEGER|REAL|COMPLEX|LOGICAL|CHARACTER|TYPE\s*\([^)]+\)|DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX)'
     r'(?:\s*\*\s*\d+)?\s+)?'
-    r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s+DATA)\b',
+    r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE(?!\s+PROCEDURE\b)|BLOCK\s+DATA)\b',
     re.IGNORECASE,
 )
 _END_PROC_RE = re.compile(
@@ -2028,11 +2028,14 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
     lines = source.splitlines(keepends=True)
     result = []
     # Robust header match for SUBROUTINE, FUNCTION, PROGRAM, etc.
+    # ``MODULE PROCEDURE`` (inside an INTERFACE block) is NOT a procedure
+    # header and must be excluded — injecting USE between
+    # ``MODULE PROCEDURE foo`` and ``END INTERFACE`` is illegal Fortran.
     proc_header_re = re.compile(
         r'^(\s{6,}|^\s*)(?:RECURSIVE\s+|PURE\s+|ELEMENTAL\s+)*'
         r'(?:(?:INTEGER|REAL|COMPLEX|LOGICAL|CHARACTER|TYPE\s*\([^)]+\)|DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX)'
         r'(?:\s*\*\s*\d+)?\s+)?'
-        r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE|BLOCK\s+DATA)\b',
+        r'(?:PROGRAM|SUBROUTINE|FUNCTION|MODULE(?!\s+PROCEDURE\b)|BLOCK\s+DATA)\b',
         re.IGNORECASE
     )
     end_proc_re = re.compile(
