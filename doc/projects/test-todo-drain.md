@@ -150,8 +150,8 @@ prefix returns `IPARAM2STAGE = -1`, making `LWMIN = 2*N + (-1) +
 `recipes/lapack.yaml`. The patched file (added under
 `recipes/lapack/mf_overrides/`, reused by all three extended-precision
 target overrides) inserts a one-shot prefix-mapping shim right
-after `PREC = SUBNAM(1:1)` that maps `Q/E/T → D` (real) and
-`X/Y/V → Z` (complex), then restores `SUBNAM(1:1)` so the later
+after `PREC = SUBNAM(1:1)` that maps `Q/E/M → D` (real) and
+`X/Y/W → Z` (complex), then restores `SUBNAM(1:1)` so the later
 `SUBNAM(2:6) = 'GEQRF'` construction dispatches via `ILAENV` with
 a recognized name. Six lines of patch logic; no migrator-code
 change required.
@@ -207,7 +207,7 @@ gfortran -o /tmp/t_q /tmp/test_qsyev.f90 -L/tmp/stg-k16-ub03/build \
 
 **Note**: the iparam2stage override applies to all three
 extended-precision targets (kind10, kind16, multifloats). The same
-patched file recognizes all six migrator prefixes (Q/X/E/Y/T/V) so
+patched file recognizes all six migrator prefixes (Q/X/E/Y/M/W) so
 one source-of-truth file works for every target.
 
 ## UB-04 — merged

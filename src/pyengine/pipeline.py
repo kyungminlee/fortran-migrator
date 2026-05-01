@@ -1212,6 +1212,7 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         extra_c_dirs=config.extra_c_dirs,
         skip_files=config.skip_files,
         copy_files=config.copy_files,
+        source_overrides=config.source_overrides,
     )
     return result
 

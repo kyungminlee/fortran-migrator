@@ -32,7 +32,7 @@ The `--target` option selects the precision target. It accepts either a built-in
 | :--- | :--- | :--- |
 | `kind10` | 80-bit extended precision (x86) | `E` / `Y` |
 | `kind16` (default) | 128-bit quad precision | `Q` / `X` |
-| `multifloats` | Double-double (`float64x2`) | `DD` / `ZZ` |
+| `multifloats` | Double-double (`float64x2`) | `M` / `W` |
 
 Example:
 ```bash

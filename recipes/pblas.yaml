@@ -272,6 +272,14 @@ copy_files:
 
 skip_files: []
 
+# Source overrides for upstream-bug-class issues. The override file
+# is in upstream-shape (it gets renamed for each migration target via
+# the normal pipeline). Each entry is `<upstream basename>: <path
+# under recipe_dir>`.
+source_overrides:
+  pdatrmv_.c: pblas/source_overrides/pdatrmv_.c
+  pzatrmv_.c: pblas/source_overrides/pzatrmv_.c
+
 # Hand-written replacements for the PB_C[dz]typeset typeset functions.
 # The migrated-by-regex versions try to assign the macro ZERO (= 0.0)
 # directly to a float64x2 local, which the C type system rejects.

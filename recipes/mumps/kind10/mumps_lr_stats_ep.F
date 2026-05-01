@@ -1,9 +1,7 @@
 C
 C  Hand-written extended-precision bridge for MUMPS_LR_STATS — kind10.
-C
-C  Sibling of mumps_lr_stats_ep.F (kind16). Casts the migrated
-C  REAL(KIND=10) input back to DP before calling the upstream
-C  MUMPS_LR_STATS implementation.
+C  Mirrors the kind16 variant; FLOP_NUMBER is REAL(KIND=10) and is
+C  cast back to DP via dble() before delegation.
 C
       MODULE MUMPS_LR_STATS_EP
       USE MUMPS_LR_STATS,

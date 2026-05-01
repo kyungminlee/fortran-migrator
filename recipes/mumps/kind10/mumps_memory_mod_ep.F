@@ -1,17 +1,13 @@
 C
-C  Hand-written extended-precision reallocator module — multifloats.
+C  Hand-written extended-precision reallocator module — kind10 variant.
 C
-C  Sibling of mumps_memory_mod_ep.F (kind16). Bridges callers migrated
-C  to multifloats arithmetic (M / W prefixes; real64x2 / cmplx64x2
-C  double-double types) to the reallocator contract provided by the
-C  upstream MUMPS_MEMORY_MOD.
-C
-C  See mumps_memory_mod_ep.F for the rationale; only the EP variants
-C  differ — multifloats uses TYPE(real64x2) / TYPE(cmplx64x2) imported
-C  from the multifloats module.
+C  Bridges callers migrated to kind10 arithmetic (E for real,
+C  Y for complex) to the reallocator contract provided by the
+C  upstream MUMPS_MEMORY_MOD. See the kind16 variant for full
+C  rationale; this file mirrors it with REAL(KIND=10) /
+C  COMPLEX(KIND=10) and MUMPS_E/YREALLOC procedures.
 C
       MODULE MUMPS_MEMORY_MOD_EP
-      USE multifloats, ONLY: real64x2, cmplx64x2
       USE MUMPS_MEMORY_MOD, ONLY:
      &     MUMPS_IREALLOC,  MUMPS_IREALLOC8,
      &     MUMPS_I8REALLOC, MUMPS_I8REALLOC8,
@@ -24,15 +20,15 @@ C
       MODULE PROCEDURE MUMPS_IREALLOC
       MODULE PROCEDURE MUMPS_SREALLOC, MUMPS_DREALLOC
       MODULE PROCEDURE MUMPS_CREALLOC, MUMPS_ZREALLOC
-      MODULE PROCEDURE MUMPS_MREALLOC, MUMPS_WREALLOC
+      MODULE PROCEDURE MUMPS_EREALLOC, MUMPS_YREALLOC
       END INTERFACE
       INTERFACE MUMPS_DEALLOC
       MODULE PROCEDURE MUMPS_IDEALLOC
       END INTERFACE
       CONTAINS
-      SUBROUTINE MUMPS_MREALLOC(ARRAY, MINSIZE, INFO, LP, FORCE, COPY,
+      SUBROUTINE MUMPS_EREALLOC(ARRAY, MINSIZE, INFO, LP, FORCE, COPY,
      &     STRING, MEMCNT, ERRCODE)
-      TYPE(real64x2), POINTER      :: ARRAY(:)
+      REAL(KIND=10), POINTER       :: ARRAY(:)
       INTEGER                      :: INFO(:)
       INTEGER                      :: MINSIZE, LP
       LOGICAL, OPTIONAL            :: FORCE
@@ -41,12 +37,11 @@ C
       INTEGER, OPTIONAL            :: ERRCODE
       INTEGER(8), OPTIONAL         :: MEMCNT
       LOGICAL                      :: ICOPY, IFORCE
-      TYPE(real64x2), POINTER      :: TEMP(:)
-      TYPE(real64x2)               :: SAMPLE
+      REAL(KIND=10), POINTER       :: TEMP(:)
       INTEGER                      :: I, IERR, ERRTPL(2)
       INTEGER(8)                   :: ELSIZE
       CHARACTER(len=60)            :: FMTA, FMTD
-      ELSIZE = int(storage_size(SAMPLE),8)/8_8
+      ELSIZE = int(storage_size(1.0_10),8)/8_8
       IF(present(COPY)) THEN
          ICOPY = COPY
       ELSE
@@ -130,10 +125,10 @@ C
          END IF
       END IF
       RETURN
-      END SUBROUTINE MUMPS_MREALLOC
-      SUBROUTINE MUMPS_WREALLOC(ARRAY, MINSIZE, INFO, LP, FORCE, COPY,
+      END SUBROUTINE MUMPS_EREALLOC
+      SUBROUTINE MUMPS_YREALLOC(ARRAY, MINSIZE, INFO, LP, FORCE, COPY,
      &     STRING, MEMCNT, ERRCODE)
-      TYPE(cmplx64x2), POINTER     :: ARRAY(:)
+      COMPLEX(KIND=10), POINTER    :: ARRAY(:)
       INTEGER                      :: INFO(:)
       INTEGER                      :: MINSIZE, LP
       LOGICAL, OPTIONAL            :: FORCE
@@ -142,12 +137,11 @@ C
       INTEGER, OPTIONAL            :: ERRCODE
       INTEGER(8), OPTIONAL         :: MEMCNT
       LOGICAL                      :: ICOPY, IFORCE
-      TYPE(cmplx64x2), POINTER     :: TEMP(:)
-      TYPE(cmplx64x2)              :: SAMPLE
+      COMPLEX(KIND=10), POINTER    :: TEMP(:)
       INTEGER                      :: I, IERR, ERRTPL(2)
       INTEGER(8)                   :: ELSIZE
       CHARACTER(len=60)            :: FMTA, FMTD
-      ELSIZE = int(storage_size(SAMPLE),8)/8_8
+      ELSIZE = int(storage_size((1.0_10,0.0_10)),8)/8_8
       IF(present(COPY)) THEN
          ICOPY = COPY
       ELSE
@@ -231,5 +225,5 @@ C
          END IF
       END IF
       RETURN
-      END SUBROUTINE MUMPS_WREALLOC
+      END SUBROUTINE MUMPS_YREALLOC
       END MODULE MUMPS_MEMORY_MOD_EP

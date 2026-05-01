@@ -21,8 +21,9 @@ solvers, eigenvalue/SVD, banded + tridiagonal + triangular variants),
 up from 15 before this round of test additions.
 
 ScaLAPACK on multifloats was the last hold-out; it landed once the
-T/V single-letter prefix switch resolved a `DDDOT` symbol-collision
-in `pddpotrf` (commits `6fdaa2a` … `f97970b`) and the
+single-letter prefix switch (eventually settling on M/W after a
+transient T/V step) resolved a `DDDOT` symbol-collision in `pddpotrf`
+(commits `6fdaa2a` … `f97970b`) and the
 `sizeof(double)` cast-protection bug was fixed in the C migrator
 (commit `ef3bf81` — heap corruption in `PDGEMR2D` was crashing
 `pdsyev` / `pdgesvd` at teardown).

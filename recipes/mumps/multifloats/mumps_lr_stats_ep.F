@@ -1,14 +1,11 @@
 C
-C  Hand-written extended-precision bridge for MUMPS_LR_STATS — multifloats.
-C
-C  Sibling of mumps_lr_stats_ep.F (kind16). Casts the migrated
-C  TYPE(real64x2) input back to DP before calling the upstream
-C  MUMPS_LR_STATS implementation. The multifloats module supplies a
-C  generic ``dble()`` overload that returns the high limb of a
-C  double-double — sufficient for accounting / reporting.
+C  Hand-written extended-precision bridge for MUMPS_LR_STATS —
+C  multifloats target. FLOP_NUMBER is TYPE(real64x2) and is cast to
+C  DP via dble() (the multifloats module exports this as a generic
+C  to-double conversion) before delegating to the upstream routine.
 C
       MODULE MUMPS_LR_STATS_EP
-      USE multifloats, ONLY: real64x2, dble
+      USE multifloats
       USE MUMPS_LR_STATS,
      &    COMPUTE_GLOBAL_GAINS_DP => COMPUTE_GLOBAL_GAINS
       IMPLICIT NONE

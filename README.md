@@ -11,7 +11,7 @@ Three targets ship out of the box:
 |---------------|------------------------|------------------------|-------------|----------------|
 | `kind10`      | `REAL(KIND=10)`        | `COMPLEX(KIND=10)`     | `e`         | `y`            |
 | `kind16`      | `REAL(KIND=16)`        | `COMPLEX(KIND=16)`     | `q`         | `x`            |
-| `multifloats` | `TYPE(float64x2)`      | `TYPE(complex64x2)`    | `dd`        | `zz`           |
+| `multifloats` | `TYPE(float64x2)`      | `TYPE(complex64x2)`    | `m`         | `w`            |
 
 `kind10` / `kind16` rely on the compiler's native extended-precision modes
 (`__float80` / `__float128` via gfortran). `multifloats` uses the

@@ -25,18 +25,20 @@ NETLIB = {
 }
 
 # Per-target precision-prefix maps. Families:
-#   R  = real-prefix     (s/d/e/q/t)
-#   C  = complex-prefix  (c/z/y/x/v)
-#   RC = mixed real-from-complex (sc/dz/ey/qx/tv)  e.g. scnrm2 / dznrm2
-#   CR = complex-vector with real scalar (cs/zd/ye/xq/vt)  e.g. csrot / zdscal
-#   IR = integer-result, real-input (is/id/ie/iq/it)
-#   IC = integer-result, complex-input (ic/iz/iy/ix/iv)
+#   R  = real-prefix     (s/d/e/q/m)
+#   C  = complex-prefix  (c/z/y/x/w)
+#   RC = mixed real-from-complex (sc/dz/ey/qx/mw)  e.g. scnrm2 / dznrm2
+#   CR = complex-vector with real scalar (cs/zd/ye/xq/wm)  e.g. csrot / zdscal
+#   IR = integer-result, real-input (is/id/ie/iq/im)
+#   IC = integer-result, complex-input (ic/iz/iy/ix/iw)
+# Multifloats prefixes used to be t/v (and earlier dd/zz); the active
+# scheme is m/w per ``targets/multifloats.yaml``.
 PREFIXES = {
     "single":      {"R": "s",  "C": "c",  "RC": "sc", "CR": "cs", "IR": "is", "IC": "ic"},
     "double":      {"R": "d",  "C": "z",  "RC": "dz", "CR": "zd", "IR": "id", "IC": "iz"},
     "kind10":      {"R": "e",  "C": "y",  "RC": "ey", "CR": "ye", "IR": "ie", "IC": "iy"},
     "kind16":      {"R": "q",  "C": "x",  "RC": "qx", "CR": "xq", "IR": "iq", "IC": "ix"},
-    "multifloats": {"R": "t",  "C": "v",  "RC": "tv", "CR": "vt", "IR": "it", "IC": "iv"},
+    "multifloats": {"R": "m",  "C": "w",  "RC": "mw", "CR": "wm", "IR": "im", "IC": "iw"},
 }
 TARGETS = list(PREFIXES.keys())
 FAMILIES = ["R", "C", "RC", "CR", "IR", "IC"]
@@ -173,7 +175,7 @@ def main():
                 row.append(PREFIXES[tgt][fam])
             f.write("| " + " | ".join(row) + " |\n")
         f.write("\nFor PBLAS and ScaLAPACK every name additionally carries a\n")
-        f.write("leading `p` (e.g. `pdgemm` / `pqgemm` / `ptgemm`). ScaLAPACK\n")
+        f.write("leading `p` (e.g. `pdgemm` / `pqgemm` / `pmgemm`). ScaLAPACK\n")
         f.write("also has a small `b`-prefix family for back-transformation\n")
         f.write("helpers (`bdlaapp`, `bdlaexc`, `bdtrexc`); their cells\n")
         f.write("therefore start with `b` rather than `p`.\n\n")

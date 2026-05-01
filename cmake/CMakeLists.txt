@@ -280,6 +280,27 @@ function(add_migrated_fortran_library lib_name)
         target_link_libraries(${_precision_target} PUBLIC ${_common_target})
     endif()
 
+    # The migrator can lengthen tokens (e.g. MPI_DOUBLE_COMPLEX →
+    # MPI_C_LONG_DOUBLE_COMPLEX for kind10), pushing fixed-form ``.F``
+    # lines past column 72. Disable the fixed-form line-length limit
+    # so the post-migration source compiles regardless of growth.
+    if(FORTRAN_COMPILER_FAMILY STREQUAL "gfortran"
+       OR FORTRAN_COMPILER_FAMILY STREQUAL "flang")
+        target_compile_options(${_precision_target} PRIVATE
+            $<$<COMPILE_LANGUAGE:Fortran>:-ffixed-line-length-none>)
+        if(TARGET ${_common_target})
+            target_compile_options(${_common_target} PRIVATE
+                $<$<COMPILE_LANGUAGE:Fortran>:-ffixed-line-length-none>)
+        endif()
+    elseif(FORTRAN_COMPILER_FAMILY STREQUAL "intel")
+        target_compile_options(${_precision_target} PRIVATE
+            $<$<COMPILE_LANGUAGE:Fortran>:-extend-source>)
+        if(TARGET ${_common_target})
+            target_compile_options(${_common_target} PRIVATE
+                $<$<COMPILE_LANGUAGE:Fortran>:-extend-source>)
+        endif()
+    endif()
+
     # Link multifloats helpers for Fortran libraries. multifloatsf
     # comes from a fetched sub-project that owns its own install/export
     # set; wrap the link in ``$<BUILD_INTERFACE:>`` so the dependency
