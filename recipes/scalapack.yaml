@@ -161,6 +161,12 @@ prefer_source:
   # source_overrides entries supply the bug-fixed PD/PZ bodies.
   - PDLANHS
   - PZLANHS
+  # Same pin reason as PDLANHS/PZLANHS: the source_overrides for
+  # PDGEEQU/PZGEEQU only patch the D/Z half. Without an explicit
+  # prefer_source pin, the canonical-rank picker sorts pcgeequ.f
+  # alphabetically first and the un-fixed copy becomes canonical.
+  - PDGEEQU
+  - PZGEEQU
 
 # Mirror the scalapack_c.yaml rename for pdlaiectb_/pdlaiectl_: the
 # Fortran callers PDSTEBZ / PDSYEVX / PDSYGVX / PZHEEVX / PZHEGVX

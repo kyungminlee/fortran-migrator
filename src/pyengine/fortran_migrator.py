@@ -2808,34 +2808,56 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
     removed_known.update(dropped_d)
     source = _dedup_intrinsic_stmts(source, target_mode)
     source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
-    lines = source.splitlines(keepends=True)
+    # Join continuation lines into logical statements before running the
+    # paren-walking passes (replace_intrinsic_calls,
+    # replace_generic_conversions, etc.). Without this, a CMPLX call
+    # split across a fixed-form continuation -- ``CMPLX(re,\n+ im)`` --
+    # has its open paren on one line and close paren on another, the
+    # paren-balancer runs out of input on the first line and bails
+    # silently, and the missing ``, KIND=k`` truncates COMPLEX(KIND=16)
+    # results to default COMPLEX(KIND=4) (single precision). The non-
+    # flang `migrate_fixed_form` path already does this; the flang
+    # variant matches it now.
+    physical = source.splitlines(keepends=True)
+    statements = _segment_fixed_form_statements(physical)
     result = []
-    for line in lines:
-        stripped = line.rstrip('\n\r')
-        if not stripped: result.append(line); continue
-        nl = '\n' if line.endswith('\n') else ''
-        if is_comment_line(stripped):
-            stripped = replace_routine_names(stripped, rename_map)
-            if has_float_types: stripped = replace_type_decls(stripped, target_mode)
-        else:
-            if has_float_types:
-                stripped = replace_type_decls(stripped, target_mode)
-                if not stripped:
-                    continue
-                stripped = replace_standalone_real_complex(stripped, target_mode)
-            if has_real_literals: stripped = replace_literals(stripped, target_mode)
-            stripped = replace_intrinsic_calls(stripped, target_mode, real_names=real_names)
-            stripped = replace_intrinsic_decls(stripped, target_mode)
-            stripped = replace_generic_conversions(stripped, target_mode)
-            stripped = replace_routine_names(stripped, rename_map)
-            stripped = replace_include_filenames(stripped, rename_map)
-            stripped = replace_xerbla_strings(stripped, rename_map)
-            stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
-            stripped = _rewrite_int_of_complex(stripped, complex_names)
-            stripped = _wrap_bare_complex_literals(stripped, target_mode)
-            stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
-            stripped = reformat_fixed_line(stripped)
-        result.append(stripped + nl)
+    for kind, lines, terms, joined in statements:
+        if kind == 'blank':
+            result.append(lines[0] + terms[0])
+            continue
+        if kind == 'pp':
+            result.append(lines[0] + terms[0])
+            continue
+        if kind == 'comment':
+            s = replace_routine_names(lines[0], rename_map)
+            if has_float_types: s = replace_type_decls(s, target_mode)
+            result.append(s + terms[0])
+            continue
+        s = joined
+        if has_float_types:
+            s = replace_type_decls(s, target_mode)
+            if not s:
+                continue
+            s = replace_standalone_real_complex(s, target_mode)
+        if has_real_literals: s = replace_literals(s, target_mode)
+        s = replace_intrinsic_calls(s, target_mode, real_names=real_names)
+        s = replace_intrinsic_decls(s, target_mode)
+        s = replace_generic_conversions(s, target_mode)
+        s = replace_routine_names(s, rename_map)
+        s = replace_include_filenames(s, rename_map)
+        s = replace_xerbla_strings(s, rename_map)
+        s = replace_known_constants(s, target_mode, renames=removed_known)
+        s = _rewrite_int_of_complex(s, complex_names)
+        s = _wrap_bare_complex_literals(s, target_mode)
+        s = _unwrap_redundant_constructors(s, target_mode, real_names=real_names)
+        if len(lines) > 1 and s == joined:
+            # Multi-line, no transforms: emit physical lines verbatim
+            # to avoid reformatting churn for unchanged statements.
+            for line, term in zip(lines, terms):
+                result.append(line + term)
+            continue
+        s = reformat_fixed_line(s)
+        result.append(s + terms[-1])
 
     source = ''.join(result)
     if not target_mode.is_kind_based:
