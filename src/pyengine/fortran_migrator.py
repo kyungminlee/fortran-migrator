@@ -34,7 +34,11 @@ from .target_mode import TargetMode
 # Type declaration replacement
 # ---------------------------------------------------------------------------
 
-def replace_type_decls(line: str, target_mode: TargetMode) -> str:
+def replace_type_decls(
+    line: str,
+    target_mode: TargetMode,
+    complex_names: set[str] | None = None,
+) -> str:
     """Replace precision type keywords with target form.
 
     In multifloats mode, also filters out variable names that are
@@ -42,6 +46,13 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
     ONE, TWO). Those names become module imports and must not appear
     as locally-declared variables — otherwise gfortran complains:
     "Symbol 'mf_one' conflicts with symbol from module 'multifloats'".
+
+    ``complex_names`` is the file-scope set of names declared as
+    COMPLEX in any procedure. When provided, names in that set are
+    NOT stripped from real declarations — ZERO, ONE etc. that occur
+    in BOTH real and complex contexts in the same file are kept as
+    locals everywhere, since the global rename to a real
+    multifloats constant would mistype the COMPLEX scope.
     """
     real_target = target_mode.real_type
     complex_target = target_mode.complex_type
@@ -101,7 +112,9 @@ def replace_type_decls(line: str, target_mode: TargetMode) -> str:
     )
 
     if not target_mode.is_kind_based:
-        line = _filter_known_constants_from_decl(line, target_mode)
+        line = _filter_known_constants_from_decl(
+            line, target_mode, complex_names=complex_names,
+        )
 
     return line
 
@@ -223,6 +236,16 @@ def strip_known_constants_from_decls(
     if not known:
         return source, {}
 
+    # A name is "globally ambiguous" if some other procedure in the
+    # same file declares it as COMPLEX. Stripping it here would push a
+    # global ZERO -> DD_ZERO rename, but ZERO in the complex procedure
+    # is locally COMPLEX — the rename would mistype it. Skip stripping
+    # for these names; they stay declared in every scope, with a
+    # runtime assignment per scope handling the value. (The two scopes'
+    # respective declarations are typed correctly by the per-line type
+    # rewrite later.)
+    file_complex_names = _scan_complex_var_names(source)
+
     removed: dict[str, str] = {}
     lines = source.splitlines(keepends=True)
     out: list[str] = []
@@ -315,7 +338,8 @@ def strip_known_constants_from_decls(
         kept: list[str] = []
         for it in items:
             nm = re.match(r'^([A-Za-z_]\w*)', it)
-            if nm and nm.group(1).upper() in known and it == nm.group(1):
+            if (nm and nm.group(1).upper() in known and it == nm.group(1)
+                    and nm.group(1).upper() not in file_complex_names):
                 removed[nm.group(1).upper()] = known[nm.group(1).upper()]
                 continue  # drop bare known-constant name
             kept.append(it)
@@ -338,7 +362,11 @@ def strip_known_constants_from_decls(
     return ''.join(out), removed
 
 
-def _filter_known_constants_from_decl(line: str, target_mode: TargetMode) -> str:
+def _filter_known_constants_from_decl(
+    line: str,
+    target_mode: TargetMode,
+    complex_names: set[str] | None = None,
+) -> str:
     """Drop known-constant names from a TYPE() declaration's variable list.
 
     Matches `TYPE(...)` (followed by optional ``::``) followed by a
@@ -346,10 +374,17 @@ def _filter_known_constants_from_decl(line: str, target_mode: TargetMode) -> str
     like ``A(LDA,*)`` or initializers, which would require a deeper
     parse. Names matching ``target_mode.known_constants`` are removed;
     if every name is removed, the entire declaration is dropped.
+
+    When ``complex_names`` is provided, names in that set are NOT
+    removed even from a real-typed declaration — they're declared as
+    COMPLEX somewhere else in the file and the multifloats real
+    constant would mistype the complex scope.
     """
     real_target = target_mode.real_type
     complex_target = target_mode.complex_type
     known = {k.upper() for k in target_mode.known_constants}
+    if complex_names:
+        known = known - {n.upper() for n in complex_names}
 
     type_alt = f'(?:{re.escape(real_target)}|{re.escape(complex_target)})'
     m = re.match(
@@ -417,6 +452,20 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
     promoted so that complex constants like ``(0.0,0.0)`` in C sources
     converge with ``(0.0d0,0.0d0)`` in Z sources after migration.
     """
+    # Keep-kind preserves the LHS type (DOUBLE PRECISION) or call-site
+    # wrapper (dble/dcmplx) on this line. In constructor mode, wrapping
+    # an RHS literal as ``real64x2(limbs=[...])`` produces a derived-
+    # type value the keep-kind LHS / wrapper cannot absorb (no implicit
+    # narrowing exists for derived types). Skip the literal pass on
+    # such lines and leave the original DP literal in place — it
+    # matches the preserved LHS / wrapper type. The kind_suffix path
+    # is unaffected because REAL(KIND=N) → REAL(8) narrowing IS legal.
+    if (target_mode.literal_mode == 'constructor'
+            and (_KK_SENTINEL in line
+                 or _KK_DBLE_SENTINEL in line
+                 or _KK_DCMPLX_SENTINEL in line)):
+        return line
+
     def literal_sub(m):
         mantissa = m.group(1)
         exp_rest = m.group(3)
@@ -977,7 +1026,14 @@ _DECL_KEYWORD_RE = re.compile(
     r'^\s*(?:TYPE\s*\(|INTEGER|REAL|COMPLEX|LOGICAL|CHARACTER|'
     r'DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX|PARAMETER\b|DATA\b|'
     r'IMPLICIT\b|DIMENSION\b|EXTERNAL\b|INTRINSIC\b|SAVE\b|'
-    r'COMMON\b|EQUIVALENCE\b|USE\b)',
+    r'COMMON\b|EQUIVALENCE\b|USE\b|'
+    # Keep-kind sentinels — the pre-pass masks ``DOUBLE PRECISION`` /
+    # ``dble`` / ``dcmplx`` on keep-kind lines, and these decl-keyword
+    # detection points must treat the masked tokens the same as the
+    # un-masked originals so that subsequent passes (e.g.
+    # ``replace_known_constants``) don't try to rewrite identifiers in
+    # what is logically still a declaration line.
+    r'__KEEPKIND_DP__\b)',
     re.IGNORECASE,
 )
 
@@ -1019,6 +1075,25 @@ def replace_known_constants(
     if not renames:
         return line
     renames = {k.upper(): v for k, v in renames.items()}
+
+    # An assignment of the form ``ZERO = <expr>`` typically came from
+    # ``convert_parameter_stmts`` keeping a name as a runtime local
+    # because it carries complex semantics (e.g. ``COMPLEX(kind=8) ZERO;
+    # PARAMETER(ZERO = (0.0D0, 0.0D0))``). Renaming the LHS to
+    # ``DD_ZERO`` (a multifloats public constant) would turn the
+    # assignment into a write to an imported PARAMETER, which gfortran
+    # rejects as "Named constant in variable definition context". Skip
+    # the rename for the LHS name on such lines (use sites on the
+    # right-hand side are still a problem at the procedure-scope level
+    # but are out of scope for this per-line fix).
+    assn_m = re.match(r'^\s*([A-Za-z_]\w*)\s*=(?!=)', line)
+    if assn_m and assn_m.group(1).upper() in renames:
+        renames = {
+            k: v for k, v in renames.items()
+            if k != assn_m.group(1).upper()
+        }
+        if not renames:
+            return line
 
     # Split off any inline comment so we don't substitute inside it.
     # We must respect string literals when locating the '!'.
@@ -1139,10 +1214,15 @@ def _scan_integer_var_names(source: str) -> set[str]:
 # Phase 1.5 work.
 
 
-def _rewrite_int_kind_on_real64x2(line: str, target_mode: TargetMode) -> str:
+def _rewrite_int_kind_on_real64x2(
+    line: str,
+    target_mode: TargetMode,
+    real_names: set[str] | None = None,
+) -> str:
     """Multifloats only — rewrite ``INT(expr, KIND_INT)`` to
     ``INT(dble(expr), KIND_INT)`` when ``expr`` contains a
-    ``real64x2(`` token.
+    ``real64x2(`` token, or when ``expr`` is a single identifier
+    declared as ``TYPE(real64x2)`` in the file (``real_names``).
 
     Multifloats publishes ``int`` only as ``dd_int(real64x2)`` returning
     default-kind integer — no ``int(real64x2, kind)`` overload exists.
@@ -1165,7 +1245,13 @@ def _rewrite_int_kind_on_real64x2(line: str, target_mode: TargetMode) -> str:
     if not line or line[0] in ('C', 'c', '*', '!'):
         return line
     lower = line.lower()
-    if 'real64x2(' not in lower or 'int(' not in lower:
+    # ``int (`` with whitespace before the paren is also a valid call;
+    # use the regex below as the authoritative gate, not a substring
+    # check that misses the spaced form.
+    if not re.search(r'\bint\s*\(', lower):
+        return line
+    real_names_upper = {n.upper() for n in (real_names or ())}
+    if 'real64x2' not in lower and not real_names_upper:
         return line
     pattern = re.compile(r'\bINT\s*\(', re.IGNORECASE)
     out: list[str] = []
@@ -1199,13 +1285,21 @@ def _rewrite_int_kind_on_real64x2(line: str, target_mode: TargetMode) -> str:
         if cur:
             parts.append(cur)
         if (len(parts) == 2
-                and 'real64x2(' in parts[0].lower()
                 and re.fullmatch(r'\s*(?:KIND\s*=\s*)?\w+\s*', parts[1])):
-            head = line[m.start():m.end()]
             expr = parts[0].strip()
-            kind_arg = parts[1].strip()
-            replacement = f'{head}dble({expr}), {kind_arg})'
-            out.append(replacement)
+            ident_m = re.fullmatch(r'[A-Za-z_]\w*', expr)
+            inner_is_real = (
+                'real64x2(' in parts[0].lower()
+                or (ident_m is not None
+                    and ident_m.group(0).upper() in real_names_upper)
+            )
+            if inner_is_real:
+                head = line[m.start():m.end()]
+                kind_arg = parts[1].strip()
+                replacement = f'{head}dble({expr}), {kind_arg})'
+                out.append(replacement)
+            else:
+                out.append(line[m.start():j])
         else:
             out.append(line[m.start():j])
         i = j
@@ -1512,6 +1606,10 @@ _PROC_HEADER_RE_SCOPE = re.compile(
 )
 
 
+_INTERFACE_BEGIN_RE = re.compile(r'^\s*(?:ABSTRACT\s+)?INTERFACE\b', re.IGNORECASE)
+_INTERFACE_END_RE = re.compile(r'^\s*END\s*INTERFACE\b', re.IGNORECASE)
+
+
 def _scope_index_at(lines: list[str], line_idx: int) -> int:
     """Return the 0-based procedure scope index for ``line_idx``.
 
@@ -1521,10 +1619,25 @@ def _scope_index_at(lines: list[str], line_idx: int) -> int:
     ``convert_parameter_stmts`` to tag each converted assignment with
     the scope it belongs to, so that ``insert_use_multifloats`` can
     insert only the assignments belonging to the current scope.
+
+    INTERFACE-block inner SUBROUTINE/FUNCTION declarations are NOT
+    counted as new scopes — they declare prototypes for external
+    procedures, not local scopes that take runtime assignments.
     """
     scope = -1
+    in_interface = 0
     for i in range(line_idx + 1):
-        if _PROC_HEADER_RE_SCOPE.match(lines[i]):
+        ln = lines[i]
+        if _INTERFACE_BEGIN_RE.match(ln):
+            in_interface += 1
+            continue
+        if _INTERFACE_END_RE.match(ln):
+            if in_interface > 0:
+                in_interface -= 1
+            continue
+        if in_interface > 0:
+            continue
+        if _PROC_HEADER_RE_SCOPE.match(ln):
             scope += 1
     return scope
 
@@ -1562,6 +1675,23 @@ def convert_parameter_stmts(
     result, fp_assignments = [], []
     dropped_known: dict[str, str] = {}
     param_re = re.compile(r'^(\s{6,}|^\s*)PARAMETER\s*\((.*)\)\s*(!.*)?$', re.IGNORECASE)
+    # Combined declaration-attribute form: ``TYPE, PARAMETER :: name = val``.
+    # The type-spec captured in group 2 is whatever comes before the
+    # ``, PARAMETER ::`` token. After matching, the type-spec is
+    # preserved for the new declaration line and each ``name = val``
+    # entry is split off as a runtime assignment — same logic as the
+    # standalone-PARAMETER branch.
+    combined_param_re = re.compile(
+        r'^(\s+)('
+        r'(?:DOUBLE\s+PRECISION|DOUBLE\s+COMPLEX'
+        r'|REAL\s*\*\s*\d+|COMPLEX\s*\*\s*\d+'
+        r'|REAL\s*\(\s*[^)]*\)|COMPLEX\s*\(\s*[^)]*\)'
+        r'|TYPE\s*\(\s*[A-Za-z_]\w*\s*\)'
+        r'|INTEGER\s*\(\s*[^)]*\)|INTEGER'
+        r'|REAL|COMPLEX)'
+        r')\s*,\s*PARAMETER\s*::\s*(.+?)\s*(!.*)?$',
+        re.IGNORECASE,
+    )
 
     # CPP guard stack: each entry is the original ``#if ...`` directive
     # line (without trailing newline) that's still open at the current
@@ -1585,6 +1715,115 @@ def convert_parameter_stmts(
         joined, next_i = line.rstrip('\n'), i + 1
         if param_re.match(joined) is None and re.match(r'^\s{6,}PARAMETER\b', joined, re.IGNORECASE):
             joined, next_i = _join_continued_lines(lines, i)
+
+        # Combined-form ``TYPE, PARAMETER :: name = val [, ...]``.
+        # Split into (a) a plain declaration line listing only the
+        # variable names and (b) a runtime assignment for each entry.
+        # For known-constant names with non-complex values, drop the
+        # entry entirely (the multifloats module supplies the constant).
+        cm = combined_param_re.match(joined)
+        if cm:
+            indent  = cm.group(1)
+            type_sp = cm.group(2)
+            items   = cm.group(3)
+            comment = cm.group(4) or ''
+
+            entries: list[str] = []
+            cur, depth = '', 0
+            for ch in items:
+                if ch == '(': depth += 1; cur += ch
+                elif ch == ')': depth -= 1; cur += ch
+                elif ch == ',' and depth == 0:
+                    if cur.strip(): entries.append(cur.strip())
+                    cur = ''
+                else:
+                    cur += ch
+            if cur.strip():
+                entries.append(cur.strip())
+
+            kept_names: list[str] = []
+            line_assignments: list[str] = []
+            line_dropped_known: dict[str, str] = {}
+            type_is_complex = bool(re.search(r'COMPLEX|cmplx64x2', type_sp, re.IGNORECASE))
+            type_is_integer = bool(re.match(r'\s*INTEGER', type_sp, re.IGNORECASE))
+            # Upstream MUMPS has a few stray ``INTEGER, PARAMETER ::
+            # ZERO = (0.0D0, 0.0D0)`` lines (e.g. zsol_fwd_aux.F:1095) —
+            # gfortran tolerates these via numeric coercion (the COMPLEX
+            # literal becomes integer 0), but in multifloats mode the
+            # post-pass rewrites the literal to ``cmplx64x2(...)`` which
+            # is not a constant expression for INTEGER. Detect a
+            # complex literal on an INTEGER LHS and override the
+            # declared type to the complex type so the runtime
+            # assignment is type-correct (the use sites of ZERO etc.
+            # are downstream complex contexts in every observed case).
+            if type_is_integer and any(
+                ('(' in v.split('=', 1)[1] and ',' in v.split('=', 1)[1])
+                for v in entries if '=' in v
+            ):
+                type_sp = target_mode.complex_type
+                type_is_complex = True
+                type_is_integer = False
+            for entry in entries:
+                if '=' in entry:
+                    name, val = entry.split('=', 1)
+                    name, val = name.strip(), val.strip()
+                else:
+                    # No initializer — a PARAMETER without a value is
+                    # not legal Fortran, so this branch should not
+                    # trigger in practice. Bail out by emitting the
+                    # original line unchanged.
+                    kept_names = []
+                    break
+
+                if not _is_fp_value(val, target_mode.known_constants):
+                    # INTEGER PARAMETER, character literal, etc. don't
+                    # need conversion — leave the combined-form line
+                    # alone (we'll fall through to the unchanged emit
+                    # path below).
+                    kept_names = []
+                    break
+
+                cx_ctor = (target_mode.complex_constructor or '').lower()
+                is_cx_value = (
+                    type_is_complex
+                    or ('(' in val and ',' in val)
+                    or (cx_ctor and cx_ctor in val.lower())
+                    or 'cmplx' in val.lower()
+                    or 'dcmplx' in val.lower()
+                    or name.upper() in complex_names
+                )
+                if (name.upper() in target_mode.known_constants
+                        and not is_cx_value):
+                    line_dropped_known[name.upper()] = (
+                        target_mode.known_constants[name.upper()]
+                    )
+                    continue
+
+                kept_names.append(name)
+                assn = f"{indent}{name} = {val}{comment}\n"
+                if cpp_stack:
+                    pre = ''.join(g + '\n' for g in cpp_stack)
+                    post = '#endif\n' * len(cpp_stack)
+                    assn = pre + assn + post
+                line_assignments.append(assn)
+            else:
+                # Loop completed without `break`: all entries were
+                # FP-valued and either dropped or converted. Emit the
+                # decl line + assignments and skip past the consumed
+                # source lines.
+                scope = _scope_index_at(lines, i)
+                fp_assignments.extend((scope, a) for a in line_assignments)
+                dropped_known.update(line_dropped_known)
+                if kept_names:
+                    decl = f"{indent}{type_sp} :: {', '.join(kept_names)}{comment}\n"
+                    result.append(decl)
+                else:
+                    # Every entry was a known constant — drop the line
+                    # entirely.
+                    pass
+                i = next_i
+                continue
+            # Bailed out — leave the source as-is for this line.
 
         m = param_re.match(joined)
         if m:
@@ -1889,10 +2128,24 @@ def specialize_use_module(source: str, target_mode: TargetMode, fixed_form: bool
     )
 
     lines = source.splitlines(keepends=True)
-    # Find all procedure boundaries.
+    # Find all procedure boundaries. INTERFACE-inner SUBROUTINE/
+    # FUNCTION declarations are NOT real procedures — they declare
+    # external prototypes. Skip them so the outer procedure's
+    # body-text scan covers the real implementation, not just the
+    # span up to the first interface-inner END.
     headers: list[int] = []
     ends: list[int] = []
+    in_interface = 0
     for idx, ln in enumerate(lines):
+        if _INTERFACE_BEGIN_RE.match(ln):
+            in_interface += 1
+            continue
+        if _INTERFACE_END_RE.match(ln):
+            if in_interface > 0:
+                in_interface -= 1
+            continue
+        if in_interface > 0:
+            continue
         if _PROC_HEADER_RE.match(ln):
             headers.append(idx)
         if _END_PROC_RE.match(ln):
@@ -2031,7 +2284,11 @@ def _build_use_only_clause(proc_lines: list[str], target_mode: TargetMode) -> st
     # unused name, which gfortran tolerates.
     if (target_mode.intrinsic_mode == 'wrap_constructor'
             and re.search(r'\bint\s*\(', body_text, re.IGNORECASE)
-            and 'real64x2(' in body_text.lower()):
+            and 'real64x2' in body_text.lower()):
+        # Match either the literal-wrapped form ``real64x2(...)`` or the
+        # bare type ``TYPE(real64x2)`` declaration — the latter signals
+        # that some local is real64x2-typed and may be passed through
+        # ``int(var, K)``, which the rewrite then routes via ``dble``.
         referenced.add('dble')
     declared = _scan_local_declared_names(proc_lines)
     # Determine constant name prefix for sorting (e.g. 'mf_' for multifloats)
@@ -2095,14 +2352,33 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
                 scoped_extras.append((-1, item))
 
     scope_counter = -1
+    in_interface = 0
 
     i = 0
     while i < len(lines):
         line = lines[i]
         result.append(line)
+        # INTERFACE blocks bracket prototype SUBROUTINE/FUNCTION
+        # declarations. The prototypes still need USE statements (so
+        # they can see ``real64x2`` / ``cmplx64x2``) because each
+        # interface body is its own scope and does NOT inherit the
+        # enclosing procedure's USE clauses. But they must NOT receive
+        # runtime assignments, and they don't count as procedure scopes
+        # for assignment placement.
+        if _INTERFACE_BEGIN_RE.match(line):
+            in_interface += 1
+            i += 1
+            continue
+        if _INTERFACE_END_RE.match(line):
+            if in_interface > 0:
+                in_interface -= 1
+            i += 1
+            continue
         m = proc_header_re.match(line)
         if m:
-            scope_counter += 1
+            inside_interface = in_interface > 0
+            if not inside_interface:
+                scope_counter += 1
             j = i + 1
             # Walk past continuation lines so the USE clause is
             # inserted AFTER the entire procedure header, not in the
@@ -2146,9 +2422,14 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
 
             # Filter extra_lines to those belonging to this scope
             # (scope_counter). Entries tagged with -1 are unscoped
-            # (legacy) and go into every scope.
-            scope_lines = [text for sc, text in scoped_extras
-                           if sc == scope_counter or sc == -1]
+            # (legacy) and go into every scope. Interface-inner
+            # prototypes never get assignments — they declare
+            # external interfaces, not local scopes.
+            if inside_interface:
+                scope_lines = []
+            else:
+                scope_lines = [text for sc, text in scoped_extras
+                               if sc == scope_counter or sc == -1]
 
             if scope_lines:
                 # Walk past the declaration block (blank lines, comments,
@@ -2187,6 +2468,74 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
                         k += 1; continue
                     if is_continuation_line(raw):
                         k += 1; continue
+                    # INTERFACE / END INTERFACE blocks live in the
+                    # declaration section. Walk past the entire block
+                    # so the runtime assignments don't get inserted
+                    # into a prototype body or between IMPLICIT NONE
+                    # and the rest of the declarations. While walking,
+                    # inject ``USE <module>`` after each inner
+                    # SUBROUTINE/FUNCTION prototype header — interface
+                    # body scopes do not inherit the enclosing
+                    # procedure's USE clauses, so the migrated type
+                    # references inside the prototype need their own
+                    # module visibility.
+                    if _INTERFACE_BEGIN_RE.match(raw):
+                        k += 1
+                        depth = 1
+                        while k < len(lines) and depth > 0:
+                            inner_ln = lines[k]
+                            if _INTERFACE_BEGIN_RE.match(inner_ln):
+                                depth += 1
+                            elif _INTERFACE_END_RE.match(inner_ln):
+                                depth -= 1
+                            elif (target_mode.module_name
+                                    and proc_header_re.match(inner_ln)):
+                                # Walk continuation lines of the inner
+                                # header so the USE lands AFTER the
+                                # full prototype header, not inside
+                                # the formal-arg list.
+                                k_after = k + 1
+                                paren_d = _count_open_parens(inner_ln)
+                                prev_amp = inner_ln.rstrip().rstrip('\n').endswith('&')
+                                while k_after < len(lines):
+                                    nxt = lines[k_after]
+                                    if nxt.lstrip().startswith('#'):
+                                        k_after += 1
+                                        continue
+                                    if (is_continuation_line(nxt)
+                                            or prev_amp or paren_d > 0):
+                                        prev_amp = nxt.rstrip().rstrip('\n').endswith('&')
+                                        paren_d += _count_open_parens(nxt)
+                                        k_after += 1
+                                    else:
+                                        break
+                                # Insert the bare ``USE`` line
+                                # immediately after the prototype
+                                # header. specialize_use_module's
+                                # outer-procedure pass then rewrites
+                                # the bare form to a ``, only:`` clause.
+                                pm = proc_header_re.match(inner_ln)
+                                hdr_indent = pm.group(1) if pm else '      '
+                                use_line_inner = (
+                                    f"{hdr_indent if hdr_indent.strip() else '      '}"
+                                    f"USE {target_mode.module_name}\n"
+                                )
+                                # Splice the USE line into ``lines`` so
+                                # the outer walker copies it through
+                                # to ``result`` along with the rest of
+                                # the prototype. Search 20 lines ahead
+                                # for an existing USE to skip duplicates.
+                                already_inner = any(
+                                    f"USE {target_mode.module_name}".upper()
+                                    in lines[kk].upper()
+                                    for kk in range(k_after, min(k_after + 20, len(lines)))
+                                )
+                                if not already_inner:
+                                    lines.insert(k_after, use_line_inner)
+                                k = k_after
+                                continue
+                            k += 1
+                        continue
                     l = stripped.upper()
                     if any(l.startswith(p) for p in (
                         'REAL', 'DOUBLE', 'COMPLEX', 'INTEGER', 'LOGICAL',
@@ -2471,7 +2820,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
             continue
         if kind == 'comment':
             s = replace_routine_names(lines[0], rename_map)
-            s = replace_type_decls(s, target_mode)
+            s = replace_type_decls(s, target_mode, complex_names=complex_names)
             result.append(s + terms[0])
             continue
         # 'code' — apply all per-line transforms to the joined logical
@@ -2479,7 +2828,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
         # can match calls that span fixed-form continuations. Single-
         # physical-line statements have ``joined == lines[0]`` and pass
         # through identically.
-        s = replace_type_decls(joined, target_mode)
+        s = replace_type_decls(joined, target_mode, complex_names=complex_names)
         if not s:
             continue
         s = replace_standalone_real_complex(s, target_mode)
@@ -2494,7 +2843,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
         s = replace_xerbla_strings(s, rename_map)
         s = replace_known_constants(s, target_mode, renames=removed_known)
         s = _rewrite_int_of_complex(s, complex_names)
-        s = _rewrite_int_kind_on_real64x2(s, target_mode)
+        s = _rewrite_int_kind_on_real64x2(s, target_mode, real_names=real_names)
         s = _wrap_bare_complex_literals(s, target_mode)
         s = _unwrap_redundant_constructors(s, target_mode, real_names=real_names)
         if len(lines) > 1 and s == joined:
@@ -2724,7 +3073,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
         stripped = replace_routine_names(stripped, rename_map)
         stripped = replace_include_filenames(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
-            stripped = replace_type_decls(stripped, target_mode)
+            stripped = replace_type_decls(stripped, target_mode, complex_names=complex_names)
         else:
             if not target_mode.is_kind_based:
                 stripped = re.sub(r'REAL\s*\(\s*(?:KIND\s*=\s*)?' + _KIND_PARAM_NAMES + r'\s*\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
@@ -2738,7 +3087,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
                 stripped = replace_literals(stripped, target_mode)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
-            stripped = _rewrite_int_kind_on_real64x2(stripped, target_mode)
+            stripped = _rewrite_int_kind_on_real64x2(stripped, target_mode, real_names=real_names)
             stripped = _wrap_bare_complex_literals(stripped, target_mode)
             stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
         result.append(stripped + nl)
@@ -2869,17 +3218,16 @@ def _rewrite_mpi_datatypes(source: str, target_mode: TargetMode) -> str:
 
 
 # Multifloats MPI handle tokens emitted by ``_rewrite_mpi_datatypes`` for
-# the multifloats target (``MPI_DOUBLE_PRECISION`` → ``MPI_FLOAT64X2``)
-# plus the real + complex reduction op handles the bridge exposes.
-# Migrated MUMPS Fortran calls MPI directly with these names; without a
-# Fortran module declaring them, gfortran rejects every site with "has
-# no IMPLICIT type". The ``multifloats_mpi_f`` module
+# the multifloats target (``MPI_DOUBLE_PRECISION`` → ``MPI_FLOAT64X2``,
+# ``MPI_DOUBLE_COMPLEX`` → ``MPI_COMPLEX64X2``) plus the real + complex
+# reduction op handles the bridge exposes. Migrated MUMPS Fortran calls
+# MPI directly with these names; without a Fortran module declaring
+# them, gfortran rejects every site with "has no IMPLICIT type". The
+# ``multifloats_mpi_f`` module
 # (external/multifloats-mpi/multifloats_mpi_f.f90) bind-to-C declares
-# them as default-INTEGER variables populated at MPI init time. The
-# complex datatype token (MPI_COMPLEX64X2) is deferred — the m-prefix
-# MUMPS build only needs the real datatype plus all reduction ops.
+# them as default-INTEGER variables populated at MPI init time.
 _MF_MPI_TOKENS = (
-    'MPI_FLOAT64X2',
+    'MPI_FLOAT64X2', 'MPI_COMPLEX64X2',
     'MPI_DD_SUM', 'MPI_DD_AMX', 'MPI_DD_AMN',
     'MPI_ZZ_SUM', 'MPI_ZZ_AMX', 'MPI_ZZ_AMN',
 )
@@ -3154,12 +3502,12 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
             continue
         if kind == 'comment':
             s = replace_routine_names(lines[0], rename_map)
-            if has_float_types: s = replace_type_decls(s, target_mode)
+            if has_float_types: s = replace_type_decls(s, target_mode, complex_names=complex_names)
             result.append(s + terms[0])
             continue
         s = joined
         if has_float_types:
-            s = replace_type_decls(s, target_mode)
+            s = replace_type_decls(s, target_mode, complex_names=complex_names)
             if not s:
                 continue
             s = replace_standalone_real_complex(s, target_mode)
@@ -3174,7 +3522,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
         s = replace_xerbla_strings(s, rename_map)
         s = replace_known_constants(s, target_mode, renames=removed_known)
         s = _rewrite_int_of_complex(s, complex_names)
-        s = _rewrite_int_kind_on_real64x2(s, target_mode)
+        s = _rewrite_int_kind_on_real64x2(s, target_mode, real_names=real_names)
         s = _wrap_bare_complex_literals(s, target_mode)
         s = _unwrap_redundant_constructors(s, target_mode, real_names=real_names)
         if len(lines) > 1 and s == joined:
@@ -3228,7 +3576,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
         stripped = replace_routine_names(stripped, rename_map)
         stripped = replace_include_filenames(stripped, rename_map)
         if stripped.lstrip().startswith('!'):
-            stripped = replace_type_decls(stripped, target_mode)
+            stripped = replace_type_decls(stripped, target_mode, complex_names=complex_names)
         else:
             if not target_mode.is_kind_based:
                 stripped = re.sub(r'REAL\s*\(\s*(?:KIND\s*=\s*)?' + _KIND_PARAM_NAMES + r'\s*\)', target_mode.real_type, stripped, flags=re.IGNORECASE)
@@ -3242,7 +3590,7 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
                 stripped = replace_literals(stripped, target_mode)
             stripped = replace_known_constants(stripped, target_mode, renames=removed_known)
             stripped = _rewrite_int_of_complex(stripped, complex_names)
-            stripped = _rewrite_int_kind_on_real64x2(stripped, target_mode)
+            stripped = _rewrite_int_kind_on_real64x2(stripped, target_mode, real_names=real_names)
             stripped = _wrap_bare_complex_literals(stripped, target_mode)
             stripped = _unwrap_redundant_constructors(stripped, target_mode, real_names=real_names)
         result.append(stripped + nl)

@@ -786,18 +786,18 @@ procedure header (with proper depth tracking through INTERFACE-block
 inner SUBROUTINEs) and emits a `USE multifloats_mpi_f` line whenever
 the body references one of the handle names.
 
-Scope decision: the real datatype `MPI_FLOAT64X2` plus all reduction
-ops (`MPI_DD_*`, `MPI_ZZ_*`) are exposed; the complex datatype
-(`MPI_COMPLEX64X2`, renamed from the original `MPI_COMPLEX128X2` to
-match the upstream `cmplx64x2` type) is deliberately deferred — that
-unblocks the m-prefix MUMPS archive but leaves the w-prefix complex
-side gated on this last binding. Adding it is a one-line follow-up
-when wmumps is needed.
+Scope: real datatype `MPI_FLOAT64X2` + complex datatype
+`MPI_COMPLEX64X2` (renamed from the original `MPI_COMPLEX128X2` to
+match the upstream `cmplx64x2` type) + all reduction ops
+(`MPI_DD_*`, `MPI_ZZ_*`) are exposed. The complex datatype handle was
+added in the B8g cleanup commit when wmumps multifloats build was
+brought up alongside mmumps.
 
-After this fix the m-prefix mmumps source files compile end-to-end
-through `_rewrite_mpi_datatypes` + `USE multifloats_mpi_f` + the
-real-side handles. A handful of unrelated migrator bugs that the
-previously-blocking files masked then surfaced — see B8f below.
+After this fix all multifloats mumps source files (m-prefix and
+w-prefix) compile end-to-end through `_rewrite_mpi_datatypes` +
+`USE multifloats_mpi_f` + the bind-to-C handles. A handful of unrelated
+migrator bugs that the previously-blocking files masked then surfaced
+— see B8f and B8h below.
 
 ### B8f — Pre-existing migrator pipeline bugs surfaced once B8e unblocked mmumps
 
@@ -828,24 +828,66 @@ commit as B8e:
   Now requires a procedure keyword whitelist after `END` if any
   word follows.
 
-### B8g — Migrator wraps PARAMETER RHS literal even when LHS type is keep-kind DOUBLE PRECISION
+### B8g — Migrator wraps PARAMETER RHS literal even when LHS type is keep-kind DOUBLE PRECISION — RESOLVED 2026-05-01
 
-Surfaces in `mfac_omp_m.F:133`:
+`replace_literals` now early-returns the line unchanged in
+``constructor`` mode whenever any keep-kind sentinel
+(``__KEEPKIND_DP__`` / ``__KEEPKIND_DBLE__`` / ``__KEEPKIND_DCMPLX__``)
+appears on the line. The keep-kind LHS / wrapper preserves the
+original DP semantics, so the RHS DP literal must stay un-wrapped to
+avoid the ``Cannot convert TYPE(real64x2) to REAL(8)`` mismatch. The
+``kind_suffix`` path is unaffected (REAL(KIND=N) → REAL(8) implicit
+narrowing is legal).
 
-```fortran
-DOUBLE PRECISION, PARAMETER :: DZERO = real64x2(limbs=[0.0D0, 0.0_8])
-```
+### B8h — Pre-existing migrator bugs surfaced once B8g unblocked mmumps multifloats — RESOLVED 2026-05-01
 
-The keep-kind manifest preserves the LHS (`DOUBLE PRECISION`), but
-the literal-replacement pass still wraps `0.0D0` as
-`real64x2(limbs=[...])`. Result: type mismatch — `Cannot convert
-TYPE(real64x2) to REAL(8)`. Pre-existing; B8e/B8f exposed it as the
-next blocker for the multifloats mmumps build.
+Resolved in the same commit as B8g. The mmumps Fortran build for the
+multifloats target now compiles end-to-end (real m-prefix + complex
+w-prefix). Items in this cluster:
 
-Fix would require literal-replacement to consult keep-kind state for
-the line's LHS, or to gate on the surrounding declaration's preserved
-type. Currently blocks mmumps for multifloats but no other libraries
-— `mblas` / `mlapack` / `mscalapack` etc. build cleanly.
+- **Combined-form ``TYPE, PARAMETER ::`` declarations** were left as
+  invalid PARAMETER initializers (``cmplx64x2(...)`` etc. is not a
+  constant expression). ``convert_parameter_stmts`` now matches the
+  combined form (``COMPLEX(kind=8), PARAMETER :: ZERO = (0.0,0.0)``,
+  ``DOUBLE PRECISION, PARAMETER :: DZERO = 0.0D0``, ``TYPE(...)``,
+  ``INTEGER(...)``) and splits it into a plain declaration + runtime
+  assignment. The INTEGER + complex-literal degenerate form (upstream
+  ``INTEGER, PARAMETER :: ZERO = (0.0D0,0.0D0)`` in zsol_fwd_aux.F:1095)
+  is detected and the type is promoted to the multifloats complex type.
+- **File-scope COMPLEX/REAL ambiguity for known-constant names**.
+  ``strip_known_constants_from_decls`` and
+  ``_filter_known_constants_from_decl`` now accept a per-file
+  ``complex_names`` set and skip stripping a known-constant name that
+  is also declared as COMPLEX in some other procedure of the same
+  file. Without this, a global ``ZERO -> DD_ZERO`` rename mistyped
+  the COMPLEX scope.
+- **Renames overwriting LHS of converted-PARAMETER assignments**.
+  ``replace_known_constants`` now detects ``^name = ...`` lines whose
+  LHS would be renamed by ``removed_known``; the LHS rename is
+  suppressed for those lines so the runtime assignment stays
+  ``ZERO = ...`` rather than becoming ``DD_ZERO = ...`` (an
+  assignment to a multifloats public PARAMETER, which gfortran rejects
+  with ``Named constant in variable definition context``).
+- **Keep-kind sentinel masking declaration detection.**
+  ``_DECL_KEYWORD_RE`` now matches ``__KEEPKIND_DP__`` so
+  ``replace_known_constants`` correctly skips declaration lines
+  whose ``DOUBLE PRECISION`` token has been masked.
+- **``int(var, KIND_INT)`` over real64x2 variables.**
+  ``_rewrite_int_kind_on_real64x2`` previously triggered only on the
+  literal-wrapper form ``int(real64x2(...), 8)``; it now also fires
+  when the inner expression is a single identifier that the file scan
+  recognises as ``TYPE(real64x2)``. Recognises ``int(...)`` with a
+  preceding space (``int (`` in continuation-merged statements).
+- **INTERFACE blocks treated as procedure scopes.**
+  ``insert_use_multifloats``, ``_scope_index_at`` and
+  ``specialize_use_module`` now track INTERFACE depth: prototype
+  SUBROUTINE/FUNCTION declarations inside an INTERFACE block are NOT
+  counted as new scopes for runtime-assignment placement, but the
+  decl-block walker injects ``USE <module>`` after each inner header
+  so the prototype body sees ``real64x2`` / ``cmplx64x2`` (interface
+  scopes do not inherit the enclosing procedure's USE clauses).
+  Runtime assignments are placed AFTER the entire decl section
+  (including any INTERFACE blocks), not before it.
 
 ### B8d — `dble(...)` masked by keep-kind sentinel missing from USE only-list — RESOLVED 2026-05-01
 
