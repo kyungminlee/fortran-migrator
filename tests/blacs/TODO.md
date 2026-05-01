@@ -54,18 +54,12 @@ the Intel MPI compat issues with BLACS-registered user ops over
 
 See commit `67c57d2`.
 
-## Open: kind10 / multifloats PBLAS Level 1/2 heap corruption
+## kind10 / multifloats PBLAS Level 1/2 heap corruption — RESOLVED 2026-05-01
 
-The pattern of "test PASSES every case but crashes during teardown
-with `free(): invalid pointer`" persists on kind10 and multifloats
-targets only — kind16 is clean. Two distinct modes; full details
-in `tests/pblas/TODO.md`'s "kind10 / multifloats — Level 1/2 PBLAS
-sporadic context destruction" entry.
-
-Likely root cause is in the migrated `e/y/m/w`-prefix BLACS or PBLAS
-C globals — heap corruption or static-state collision specific to
-the precision-renamed sources, not a test-authoring or preset issue.
-Out of scope for the kind16 stabilization PR.
+The previously-described "test PASSES every case but crashes during
+teardown" pattern no longer reproduces. Re-verified 2026-05-01:
+kind10 1022/1022 PASS, multifloats 1022/1022 PASS. See
+`tests/pblas/TODO.md`'s same-named entry for the closed inventory.
 
 ## Untested BLACS surface
 

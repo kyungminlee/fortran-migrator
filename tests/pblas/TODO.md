@@ -76,47 +76,28 @@ Three classes of failures surfaced and were fixed (commit 303df23):
    References now compute Cabs1 explicitly. zahemv additionally reads
    only `|Re(A_jj)|` for Hermitian diagonal entries.
 
-## kind10 / multifloats — Level 1/2 PBLAS sporadic context destruction
+## kind10 / multifloats — Level 1/2 PBLAS sporadic context destruction — RESOLVED 2026-05-01
 
-PBLAS Level 1/2 tests fail on kind10 and multifloats targets (but not
-kind16) under the `linux-impi` preset. As of 2026-04-30:
+This entry described 18 PBLAS L1/L2 failures on kind10 and 26 on
+multifloats (heap corruption at exit, sporadic mid-loop
+`Cblacs_gridinfo`-returns-`-1`, etc.). When re-tested 2026-05-01 after
+the audit-branch merge (commit `cc54c42`) and the multifloats
+migrator polish (`0caddd1`, `bf33cde`, `1a609a0`, `0cfb366`), all
+three targets are clean:
 
-* **kind16/impi: 1045/1045** ctests pass.
-* **kind10/impi: 1004/1022** -- 18 failures, all PBLAS L1/L2.
-* **multifloats/impi: 996/1022** -- 26 failures, same L1/L2 set
-  + `pdaxpy` / `pzaxpy` / `p[dz]scal` / `pzdscal` (which kind10 no
-  longer fails) + a small ScaLAPACK pz tridiagonal cluster
-  (`pzdtsv` / `pzdttrf` / `pzdttrs`).
+* **kind16/impi**: 1045/1045 (100%, incl. mumps tests).
+* **kind10/impi**: 1022/1022 (100%, mumps tests excluded — pre-existing
+  hardcoded q/x prefixes in `tests/mumps/CMakeLists.txt`).
+* **multifloats/impi**: 1022/1022 (100%, mumps excluded — same).
 
-Two failure modes:
+The previously-described L1/L2 failure modes (SIGABRT-on-exit and
+sporadic `BI_MyContxts[ctxt]` NULL-flip) no longer reproduce in the
+current build. Most likely the audit-branch merge brought changes that
+fixed the underlying state collision, but the original symptoms also
+manifested as Heisenbugs (timing-dependent across rebuilds), so this
+entry is closed conservatively — re-open if the failures recur.
 
-1. **Pass cases then SIGABRT at exit (`free(): invalid pointer`).**
-   `test_pdcopy` / `pdscal` / `pdswap` / `pzcopy` / `pzswap` print
-   all PASS lines and the test loop completes, then abort during
-   process tear-down inside `__GI___libc_free` -- some atexit /
-   destructor path frees a pointer with corrupt allocator metadata.
-
-2. **Sporadic mid-loop `Cblacs_gridinfo`-returns-`-1`.** `test_pdgemv`
-   et al. pass an arbitrary subset of cases, then a non-mycol=0 rank
-   sees `BI_MyContxts[ctxt]` flip to `NULL` between iterations
-   without any test-side BLACS call -- and PEAGEMV's argument check
-   aborts with "parameter 802 illegal value". Symptom is timing-
-   dependent: the same binary on the same input passes 5/5 in
-   tight repeats yet fails in the full ctest run, suggesting
-   memory-layout / heap-state sensitivity. Adding `mpi_barrier`
-   inside the wrapper sometimes fixes a specific test; rebuilds
-   shift the surface.
-
-The same test programs pass cleanly on kind16/impi, so the test
-sources are correct and the bug lives in the migrated kind10 /
-multifloats BLACS or PBLAS C globals -- a heap-corruption or
-static-state issue with the e/y/m/w prefix-renamed BLACS libraries
-and their PBLAS callers. Multifloats has the additional `pdaxpy` /
-`pzaxpy` / `p?scal` failures that kind10 doesn't, suggesting the
-multifloats target carries strictly more of the bug surface.
-
-Action: instrument `BI_MyContxts` writes / runs valgrind
-heap-tracking on the kind10 PBLAS Level 1 binary to localise the
-heap-corruption source; investigate the multifloats `mana_aux.F`
-fixed-form continuation regression (which currently blocks the mf
-MUMPS build entirely). Out of scope for the kind16 stabilization PR.
+The 3 multifloats `pzdtsv` / `pzdttrf` / `pzdttrs` failures noted
+alongside this entry were a separate bug (CMPLX-of-complex identity
+mishandling in the migrator) — fixed in `0caddd1` and verified at
+~31-digit accuracy.
