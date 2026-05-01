@@ -41,6 +41,23 @@ if(NOT IS_DIRECTORY ${_wrapper_dir})
     return()
 endif()
 
+# Mumps tests for multifloats are deferred — the test sources currently
+# use ``real(ep)`` (== REAL(16)) for input data and assign directly to
+# ``id%A``/``id%RHS`` (TYPE(real64x2) in mmumps), which has no implicit
+# kind conversion. Driving the migrated mmumps from a quad-host harness
+# needs an intermediate ``real(real64x2, ...)`` shim per assignment
+# site. Track as a follow-up; for now we still build the bridge to
+# verify the cmake parameterisation, but skip the test-executable
+# registration.
+if(TARGET_NAME STREQUAL "multifloats")
+    message(STATUS "tests/mumps: skipping test executables for "
+                   "target 'multifloats' — needs harness rework "
+                   "(see tests/mumps/TODO.md B9 follow-up)")
+    set(_MUMPS_TESTS_SKIP_EXECUTABLES TRUE)
+else()
+    set(_MUMPS_TESTS_SKIP_EXECUTABLES FALSE)
+endif()
+
 set(_MUMPS_C_SRC ${PROJECT_SOURCE_DIR}/_mumps_upstream_src)
 set(_MUMPS_C_INC ${PROJECT_SOURCE_DIR}/_mumps_upstream_include)
 if(NOT IS_DIRECTORY ${_MUMPS_C_SRC} OR NOT IS_DIRECTORY ${_MUMPS_C_INC})
@@ -49,7 +66,20 @@ if(NOT IS_DIRECTORY ${_MUMPS_C_SRC} OR NOT IS_DIRECTORY ${_MUMPS_C_INC})
     return()
 endif()
 
-set(_BRIDGE_INC ${CMAKE_CURRENT_SOURCE_DIR}/c/include)
+# Per-target bridge include directory carries the precision-aware
+# mumps_c_types.h shadow plus the ${LIB_PREFIX}mumps_c.h /
+# ${LIB_PREFIX_COMPLEX}mumps_c.h wrappers around upstream's
+# dmumps_c.h / zmumps_c.h. ${PFX} / ${PFX_C} are the upper-case
+# arithmetic prefixes used in the bridge's macro renames. The
+# target-agnostic mumps_int_def.h sits in the shared c/include/.
+set(_BRIDGE_INC_TARGET ${CMAKE_CURRENT_SOURCE_DIR}/target_${TARGET_NAME}/c/include)
+set(_BRIDGE_INC_SHARED ${CMAKE_CURRENT_SOURCE_DIR}/c/include)
+if(NOT IS_DIRECTORY ${_BRIDGE_INC_TARGET})
+    message(STATUS "tests/mumps: skipping — no target_${TARGET_NAME}/c/include")
+    return()
+endif()
+string(TOUPPER "${LIB_PREFIX}" PFX)
+string(TOUPPER "${LIB_PREFIX_COMPLEX}" PFX_C)
 
 # ── Output directory for JSON reports ────────────────────────────────
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
@@ -62,60 +92,61 @@ set(_mp_moddir "${PROJECT_BINARY_DIR}/fmod/${FORTRAN_MOD_COMPAT_TAG}/mumps_tests
 file(MAKE_DIRECTORY ${_mp_moddir})
 
 # ── C-side bridge ─────────────────────────────────────────────────────
-# Per-arithmetic dispatch — compile mumps_c.c twice (Q and X) as
-# OBJECT libraries so they can be folded into the single combined
-# archive below. Override Fortran symbols so qmumps_c() lands in the
-# bridge but the dmumps_assign_*/dmumps_set_tmp_ptr_c_ helpers stay
-# under their D-prefix (because the migrated qmumps_f77_ Fortran
-# expects them that way — same convention for Z/X).
-add_library(qmumps_c_bridge OBJECT ${_MUMPS_C_SRC}/mumps_c.c)
-target_include_directories(qmumps_c_bridge PRIVATE
-    ${_BRIDGE_INC} ${_MUMPS_C_INC} ${_MUMPS_C_SRC}
+# Per-arithmetic dispatch — compile mumps_c.c twice (real + complex)
+# as OBJECT libraries so they can be folded into the single combined
+# archive below. Override Fortran symbols so ${LIB_PREFIX}mumps_c()
+# lands in the bridge but the dmumps_assign_*/dmumps_set_tmp_ptr_c_
+# helpers stay under their D-prefix (because the migrated
+# ${LIB_PREFIX}mumps_f77_ Fortran expects them that way — same
+# convention for Z/${LIB_PREFIX_COMPLEX}).
+add_library(${LIB_PREFIX}mumps_c_bridge OBJECT ${_MUMPS_C_SRC}/mumps_c.c)
+target_include_directories(${LIB_PREFIX}mumps_c_bridge PRIVATE
+    ${_BRIDGE_INC_TARGET} ${_BRIDGE_INC_SHARED} ${_MUMPS_C_INC} ${_MUMPS_C_SRC}
 )
-target_compile_definitions(qmumps_c_bridge PRIVATE
+target_compile_definitions(${LIB_PREFIX}mumps_c_bridge PRIVATE
     MUMPS_ARITH=MUMPS_ARITH_d Add_
-    dmumps_f77_=qmumps_f77_
-    dmumps_set_tmp_ptr_=qmumps_set_tmp_ptr_
-    dmumps_c=qmumps_c
-    DMUMPS_STRUC_C=QMUMPS_STRUC_C
+    dmumps_f77_=${LIB_PREFIX}mumps_f77_
+    dmumps_set_tmp_ptr_=${LIB_PREFIX}mumps_set_tmp_ptr_
+    dmumps_c=${LIB_PREFIX}mumps_c
+    DMUMPS_STRUC_C=${PFX}MUMPS_STRUC_C
 )
-# Force-include our quad-precision mumps_c_types.h shadow BEFORE
+# Force-include the per-target mumps_c_types.h shadow BEFORE
 # mumps_c.c gets a chance to pull in upstream's via mumps_common.h's
 # `#include "mumps_c_types.h"` (which would otherwise resolve to
 # upstream's via same-directory search).
-target_compile_options(qmumps_c_bridge PRIVATE
+target_compile_options(${LIB_PREFIX}mumps_c_bridge PRIVATE
     -include mumps_c_types.h)
 
-add_library(xmumps_c_bridge OBJECT ${_MUMPS_C_SRC}/mumps_c.c)
-target_include_directories(xmumps_c_bridge PRIVATE
-    ${_BRIDGE_INC} ${_MUMPS_C_INC} ${_MUMPS_C_SRC}
+add_library(${LIB_PREFIX_COMPLEX}mumps_c_bridge OBJECT ${_MUMPS_C_SRC}/mumps_c.c)
+target_include_directories(${LIB_PREFIX_COMPLEX}mumps_c_bridge PRIVATE
+    ${_BRIDGE_INC_TARGET} ${_BRIDGE_INC_SHARED} ${_MUMPS_C_INC} ${_MUMPS_C_SRC}
 )
-target_compile_definitions(xmumps_c_bridge PRIVATE
+target_compile_definitions(${LIB_PREFIX_COMPLEX}mumps_c_bridge PRIVATE
     MUMPS_ARITH=MUMPS_ARITH_z Add_
-    zmumps_f77_=xmumps_f77_
-    zmumps_set_tmp_ptr_=xmumps_set_tmp_ptr_
-    zmumps_c=xmumps_c
-    ZMUMPS_STRUC_C=XMUMPS_STRUC_C
+    zmumps_f77_=${LIB_PREFIX_COMPLEX}mumps_f77_
+    zmumps_set_tmp_ptr_=${LIB_PREFIX_COMPLEX}mumps_set_tmp_ptr_
+    zmumps_c=${LIB_PREFIX_COMPLEX}mumps_c
+    ZMUMPS_STRUC_C=${PFX_C}MUMPS_STRUC_C
 )
-target_compile_options(xmumps_c_bridge PRIVATE
+target_compile_options(${LIB_PREFIX_COMPLEX}mumps_c_bridge PRIVATE
     -include mumps_c_types.h)
 
 # mumps_addr.c stays at upstream double precision because the migrated
 # Fortran callers (qtools.F's QMUMPS_UPDATE_PROGRESS, xtools.F's
 # XMUMPS_UPDATE_PROGRESS) pass DOUBLE PRECISION OPELI — the keep-kind
 # manifest preserved DP for those callers. Compiling mumps_addr.c with
-# DMUMPS_REAL=__float128 overrides would make MUMPS_SETDVAL_ADDR_C
-# write 16 bytes into the 8-byte caller buffer (silent corruption →
-# SIGSEGV inside qmumps_update_progress_).
+# the precision-shadow types would make MUMPS_SETDVAL_ADDR_C write the
+# wider value into the 8-byte caller buffer (silent corruption →
+# SIGSEGV inside ${LIB_PREFIX}mumps_update_progress_).
 add_library(mumps_c_addr_obj OBJECT ${_MUMPS_C_SRC}/mumps_addr.c)
 # Include path order matters: list _MUMPS_C_INC FIRST so upstream's
 # `double`-typed mumps_c_types.h gets resolved by mumps_addr.c's
-# `#include "mumps_c_types.h"` chain. _BRIDGE_INC is still on the
-# search path so the upstream's `#include "mumps_int_def.h"` falls
+# `#include "mumps_c_types.h"` chain. _BRIDGE_INC_SHARED is still on
+# the search path so upstream's `#include "mumps_int_def.h"` falls
 # through to our generated stand-in (upstream ships only a .in
 # template).
 target_include_directories(mumps_c_addr_obj PRIVATE
-    ${_MUMPS_C_INC} ${_MUMPS_C_SRC} ${_BRIDGE_INC})
+    ${_MUMPS_C_INC} ${_MUMPS_C_SRC} ${_BRIDGE_INC_SHARED})
 target_compile_definitions(mumps_c_addr_obj PRIVATE Add_)
 
 # Combined C-side static archive. Bundles the per-arithmetic bridge
@@ -129,8 +160,8 @@ target_compile_definitions(mumps_c_addr_obj PRIVATE Add_)
 # libqmumps would have its objects skipped at scan time and not
 # re-pulled when libqmumps's later objects request them.
 add_library(mumps_c_bridge STATIC
-    $<TARGET_OBJECTS:qmumps_c_bridge>
-    $<TARGET_OBJECTS:xmumps_c_bridge>
+    $<TARGET_OBJECTS:${LIB_PREFIX}mumps_c_bridge>
+    $<TARGET_OBJECTS:${LIB_PREFIX_COMPLEX}mumps_c_bridge>
     $<TARGET_OBJECTS:mumps_c_addr_obj>
     ${CMAKE_CURRENT_SOURCE_DIR}/c/c_parity_helpers.c
     ${_MUMPS_C_SRC}/mumps_common.c
@@ -154,17 +185,28 @@ add_library(mumps_c_bridge STATIC
     ${_MUMPS_C_SRC}/mumps_scotch_int.c
 )
 target_include_directories(mumps_c_bridge PUBLIC
-    $<BUILD_INTERFACE:${_BRIDGE_INC}>      # FIRST — quad-precision type shadow
-    $<BUILD_INTERFACE:${_MUMPS_C_INC}>     # then upstream include/
-    $<BUILD_INTERFACE:${_MUMPS_C_SRC}>     # then upstream src/ for mumps_common.h etc.
+    $<BUILD_INTERFACE:${_BRIDGE_INC_TARGET}>  # FIRST — per-target type shadow
+    $<BUILD_INTERFACE:${_BRIDGE_INC_SHARED}>  # then mumps_int_def.h fallback
+    $<BUILD_INTERFACE:${_MUMPS_C_INC}>        # then upstream include/
+    $<BUILD_INTERFACE:${_MUMPS_C_SRC}>        # then upstream src/
 )
-target_compile_definitions(mumps_c_bridge PRIVATE Add_)
+target_compile_definitions(mumps_c_bridge PRIVATE Add_
+    # c_parity_helpers.c references the per-target header path and
+    # entry-point names through these macros so the helper compiles
+    # for any target.
+    "TARGET_REAL_HEADER=\"${LIB_PREFIX}mumps_c.h\""
+    "TARGET_COMPLEX_HEADER=\"${LIB_PREFIX_COMPLEX}mumps_c.h\""
+    TARGET_REAL_MUMPS_C=${LIB_PREFIX}mumps_c
+    TARGET_COMPLEX_MUMPS_C=${LIB_PREFIX_COMPLEX}mumps_c
+    TARGET_REAL_STRUC_C=${PFX}MUMPS_STRUC_C
+    TARGET_COMPLEX_STRUC_C=${PFX_C}MUMPS_STRUC_C
+)
 # Override applies to everything in mumps_c_bridge EXCEPT the
 # already-built mumps_c_addr_obj (which we added via $<TARGET_OBJECTS>
 # so its compile flags are frozen). The non-_addr files are either
 # integer-only (mumps_common.c, IO/save/thread/etc. helpers — the
 # override is harmless) or they're the per-arithmetic bridge sources
-# that NEED __float128.
+# that NEED the precision-shadow types.
 target_compile_options(mumps_c_bridge PRIVATE
     -include mumps_c_types.h)
 target_link_libraries(mumps_c_bridge PUBLIC MPI::MPI_C)
@@ -277,17 +319,36 @@ function(add_mumps_c_test test_src)
     )
     target_link_options(${name} PRIVATE -fno-lto)
     target_include_directories(${name} PRIVATE
-        ${_BRIDGE_INC} ${_MUMPS_C_INC}
+        ${_BRIDGE_INC_TARGET} ${_BRIDGE_INC_SHARED} ${_MUMPS_C_INC}
     )
     _mumps_register_test(${name})
 endfunction()
 
-file(GLOB _ftests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.f90)
-foreach(_t ${_ftests})
-    add_mumps_fortran_test(${_t})
-endforeach()
+if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
+    file(GLOB _ftests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.f90)
+    # c_parity tests embed a hard-coded ``real(16)`` interface to
+    # c_qmumps_solve — kind16-only. Skip them for other targets until
+    # parity-test infrastructure is templatised over precision.
+    if(NOT TARGET_NAME STREQUAL "kind16")
+        list(FILTER _ftests EXCLUDE REGEX "_c_parity\\.f90$")
+    endif()
+    foreach(_t ${_ftests})
+        add_mumps_fortran_test(${_t})
+    endforeach()
+endif()
 
-file(GLOB _ctests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/c/test_*.c)
-foreach(_t ${_ctests})
-    add_mumps_c_test(${_t})
-endforeach()
+# C-side tests still hard-code kind16-only types (``__float128``,
+# ``quadmath.h``, ``0.0q`` literals, the literal ``QMUMPS_STRUC_C``
+# spelling). Skip them for non-kind16 targets until the C tests are
+# templatised the same way ``c_parity_helpers.c`` is. The generic
+# ``mumps_c_bridge`` archive still builds for every target so the
+# Fortran tests + parity helpers are unaffected.
+if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES AND TARGET_NAME STREQUAL "kind16")
+    file(GLOB _ctests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/c/test_*.c)
+    foreach(_t ${_ctests})
+        add_mumps_c_test(${_t})
+    endforeach()
+elseif(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
+    message(STATUS "tests/mumps: skipping C-side tests for target "
+                   "'${TARGET_NAME}' — only kind16 wired today")
+endif()

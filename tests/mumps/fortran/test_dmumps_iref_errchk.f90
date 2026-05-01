@@ -91,13 +91,22 @@ program test_dmumps_iref_errchk
     ! on platforms with different LTO inlining: any sane residual
     ! below 1e-25 means MUMPS produced a finite RINFOG(6) and it's
     ! consistent with quad-precision arithmetic.
-    if (id%RINFOG(6) /= id%RINFOG(6)) then  ! NaN check
-        call report_case('icntl11=2:RINFOG6-finite', 1.0_ep, 0.0_ep)
-    else if (id%RINFOG(6) > 1.0e-25_ep) then
-        call report_case('icntl11=2:RINFOG6-bound', id%RINFOG(6), 1.0e-25_ep)
-    else
-        call report_case('icntl11=2:RINFOG6-bound', 0.0_ep, 1.0_ep)
-    end if
+    ! Loose bound on the iter-refinement residual: a few orders of
+    ! magnitude above the target's epsilon. The actual residual is
+    ! typically a small multiple of eps; the bound is generous to
+    ! avoid false negatives on platforms with different LTO inlining.
+    block
+        real(ep) :: rinfog6_bound
+        rinfog6_bound = 1.0e6_ep * target_eps
+        if (id%RINFOG(6) /= id%RINFOG(6)) then  ! NaN check
+            call report_case('icntl11=2:RINFOG6-finite', 1.0_ep, 0.0_ep)
+        else if (real(id%RINFOG(6), kind=ep) > rinfog6_bound) then
+            call report_case('icntl11=2:RINFOG6-bound', &
+                             real(id%RINFOG(6), kind=ep), rinfog6_bound)
+        else
+            call report_case('icntl11=2:RINFOG6-bound', 0.0_ep, 1.0_ep)
+        end if
+    end block
     deallocate(x_solve);  call end_id(id)
 
     deallocate(A, x_true, b, irn, jcn, A_trip)

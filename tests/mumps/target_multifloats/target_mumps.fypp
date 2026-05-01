@@ -1,0 +1,8 @@
+#:set target            = 'multifloats'
+#:set target_name       = 'multifloats'
+#:set target_eps        = 'epsilon(1.0_ep)'
+#:set prefix_real       = 'mmumps'
+#:set prefix_complex    = 'wmumps'
+#:set real_struc_mod    = 'mmumps_struc_def'
+#:set complex_struc_mod = 'wmumps_struc_def'
+#:include 'target_mumps_body.fypp'

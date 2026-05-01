@@ -466,6 +466,18 @@ def replace_literals(line: str, target_mode: TargetMode) -> str:
                  or _KK_DCMPLX_SENTINEL in line)):
         return line
 
+    # ``INTEGER, PARAMETER :: name = <fp_literal>`` lines exist in
+    # upstream MUMPS as a degenerate idiom (e.g. dsol_fwd_aux.F:1093
+    # ``INTEGER, PARAMETER :: ZERO = 0.0D0``) — gfortran tolerates the
+    # FP literal via integer coercion. In multifloats mode, wrapping
+    # the literal to ``real64x2(limbs=[...])`` produces a derived-type
+    # value that the INTEGER PARAMETER cannot accept. Leave the
+    # original FP literal alone on those lines.
+    if (target_mode.literal_mode == 'constructor'
+            and re.match(r'^\s*INTEGER\b.*\bPARAMETER\b.*::',
+                         line, re.IGNORECASE)):
+        return line
+
     def literal_sub(m):
         mantissa = m.group(1)
         exp_rest = m.group(3)
@@ -1746,23 +1758,40 @@ def convert_parameter_stmts(
             line_dropped_known: dict[str, str] = {}
             type_is_complex = bool(re.search(r'COMPLEX|cmplx64x2', type_sp, re.IGNORECASE))
             type_is_integer = bool(re.match(r'\s*INTEGER', type_sp, re.IGNORECASE))
-            # Upstream MUMPS has a few stray ``INTEGER, PARAMETER ::
-            # ZERO = (0.0D0, 0.0D0)`` lines (e.g. zsol_fwd_aux.F:1095) —
-            # gfortran tolerates these via numeric coercion (the COMPLEX
-            # literal becomes integer 0), but in multifloats mode the
-            # post-pass rewrites the literal to ``cmplx64x2(...)`` which
-            # is not a constant expression for INTEGER. Detect a
-            # complex literal on an INTEGER LHS and override the
-            # declared type to the complex type so the runtime
-            # assignment is type-correct (the use sites of ZERO etc.
-            # are downstream complex contexts in every observed case).
-            if type_is_integer and any(
-                ('(' in v.split('=', 1)[1] and ',' in v.split('=', 1)[1])
-                for v in entries if '=' in v
-            ):
-                type_sp = target_mode.complex_type
-                type_is_complex = True
-                type_is_integer = False
+
+            # Standard INTEGER PARAMETER lines (``INTEGER, PARAMETER ::
+            # N = 5`` / ``wp = kind(1.d0)`` etc.) are constant
+            # expressions and must stay as PARAMETERs — converting them
+            # to runtime assignments would break things like the
+            # ``kind(1.d0)`` idiom (the literal gets wrapped to a
+            # derived-type value the ``kind()`` intrinsic rejects).
+            #
+            # The exception is the upstream-bug case
+            # ``INTEGER, PARAMETER :: ZERO = (0.0D0, 0.0D0)``
+            # (zsol_fwd_aux.F:1095): gfortran tolerates these via
+            # numeric coercion, but multifloats mode rewrites the
+            # literal to ``cmplx64x2(...)`` which is not a constant
+            # expression for INTEGER. When we detect a complex-literal
+            # value on an INTEGER LHS, override the declared type to
+            # the multifloats complex type so the runtime assignment
+            # is type-correct (the use sites are downstream complex
+            # contexts in every observed case).
+            if type_is_integer:
+                has_cx_lit = any(
+                    ('(' in v.split('=', 1)[1] and ',' in v.split('=', 1)[1])
+                    for v in entries if '=' in v
+                )
+                if has_cx_lit:
+                    type_sp = target_mode.complex_type
+                    type_is_complex = True
+                    type_is_integer = False
+                else:
+                    # Bail out — the standalone-PARAMETER branch below
+                    # won't match either, so the line falls through to
+                    # the unchanged-emit path.
+                    result.append(line)
+                    i += 1
+                    continue
             for entry in entries:
                 if '=' in entry:
                     name, val = entry.split('=', 1)
@@ -2440,6 +2469,7 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
                 # otherwise the assignments would be parsed as
                 # implicit-typed executables before declarations.
                 k = j
+                prev_amp_decl = False
                 while k < len(lines):
                     raw = lines[k]
                     stripped = raw.lstrip()
@@ -2465,6 +2495,16 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
                     # this position is itself decl-only (``use omp_lib``)
                     # so skipping the directive markers is enough.
                     if stripped.startswith('#'):
+                        k += 1; continue
+                    # Free-form continuation: previous code line ended
+                    # in ``&``. The current line is part of the same
+                    # logical statement (typically the trailing names
+                    # on a multi-line ``INTEGER, INTENT(IN) :: ...``
+                    # argument declaration). Skip it so the walker
+                    # doesn't treat the continuation prefix as the
+                    # start of an executable statement.
+                    if prev_amp_decl:
+                        prev_amp_decl = raw.rstrip().rstrip('\n').endswith('&')
                         k += 1; continue
                     if is_continuation_line(raw):
                         k += 1; continue
@@ -2559,6 +2599,7 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
                         '__KEEPKIND_DBLE__',
                         '__KEEPKIND_DCMPLX__',
                     )):
+                        prev_amp_decl = raw.rstrip().rstrip('\n').endswith('&')
                         k += 1; continue
                     # LAPACK statement-function definitions look like
                     # ``CABS1( ZDUM ) = ABS( ... )`` and live between the
@@ -2570,6 +2611,7 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
                     # line is the only thing between two ``*     ..``
                     # separator comments, treat as still in decl section.
                     if _looks_like_statement_function(stripped, lines, k):
+                        prev_amp_decl = raw.rstrip().rstrip('\n').endswith('&')
                         k += 1; continue
                     break
                 # Copy declaration block as-is, then emit assignments.

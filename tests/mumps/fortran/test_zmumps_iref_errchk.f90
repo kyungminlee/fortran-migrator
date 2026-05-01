@@ -53,13 +53,19 @@ program test_zmumps_iref_errchk
     allocate(x_solve(n));  x_solve = id%RHS
     err = max_rel_err_vec_z(x_solve, x_true)
     call report_case('icntl11=2:solution', err, tol)
-    if (id%RINFOG(6) /= id%RINFOG(6)) then
-        call report_case('icntl11=2:RINFOG6-finite', 1.0_ep, 0.0_ep)
-    else if (id%RINFOG(6) > 1.0e-25_ep) then
-        call report_case('icntl11=2:RINFOG6-bound', id%RINFOG(6), 1.0e-25_ep)
-    else
-        call report_case('icntl11=2:RINFOG6-bound', 0.0_ep, 1.0_ep)
-    end if
+    ! See test_dmumps_iref_errchk for the rationale on this bound.
+    block
+        real(ep) :: rinfog6_bound
+        rinfog6_bound = 1.0e6_ep * target_eps
+        if (id%RINFOG(6) /= id%RINFOG(6)) then
+            call report_case('icntl11=2:RINFOG6-finite', 1.0_ep, 0.0_ep)
+        else if (real(id%RINFOG(6), kind=ep) > rinfog6_bound) then
+            call report_case('icntl11=2:RINFOG6-bound', &
+                             real(id%RINFOG(6), kind=ep), rinfog6_bound)
+        else
+            call report_case('icntl11=2:RINFOG6-bound', 0.0_ep, 1.0_ep)
+        end if
+    end block
     deallocate(x_solve);  call end_id(id)
 
     deallocate(A, x_true, b, irn, jcn, A_trip)

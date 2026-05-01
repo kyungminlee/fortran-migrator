@@ -906,23 +906,62 @@ Resolved in `_build_use_only_clause`: detect `_KK_DBLE_SENTINEL` in the
 proc body text and unconditionally add `dble` to the referenced set so
 multifloats's `dd_dble(real64x2) -> real(dp)` overload gets imported.
 
-### B9 — C-bridge / test infrastructure hardcoded to kind16
+### B9 — C-bridge / test infrastructure hardcoded to kind16 — RESOLVED 2026-05-01
 
-`tests/mumps/CMakeLists.txt` (and `tests/mumps/c/include/{qmumps_c.h,
-xmumps_c.h, mumps_c_types.h}`) bake kind16-specific names and
-`__float128` typedefs. To run the MUMPS tests against kind10 (or
-multifloats once B8 is fixed), the bridge must be generalized:
+The bridge cmake glue (tests/mumps/CMakeLists.txt) and the per-
+arithmetic header shadow (tests/mumps/target_${TARGET_NAME}/c/include/)
+now follow `${LIB_PREFIX}` / `${LIB_PREFIX_COMPLEX}`. Each target
+ships its own:
 
-- Per-target bridge headers (`emumps_c.h` / `ymumps_c.h` for kind10,
-  with `long double` typedefs) — or a single template generated at
-  configure-time from a target descriptor.
-- `qmumps_c_bridge` / `xmumps_c_bridge` library names and the
-  associated `dmumps_c=qmumps_c` define stack must follow `LIB_PREFIX`.
-- `_mumps_link_group_archives` already uses `${LIB_PREFIX}mumps`; the
-  bridge inputs need the same parameterization.
+- `mumps_c_types.h` — precision-aware DMUMPS_REAL / ZMUMPS_COMPLEX
+  typedefs (kind16: `__float128` / `mumps_double_complex` of two
+  `__float128`; kind10: `long double` / two `long double`;
+  multifloats: `mumps_float64x2` POD / two such with `.r/.i`).
+- `${LIB_PREFIX}mumps_c.h` / `${LIB_PREFIX_COMPLEX}mumps_c.h` —
+  thin wrappers around upstream `dmumps_c.h` / `zmumps_c.h` with
+  the per-target macro renames.
 
-Without B9, kind10 `emumps` builds clean but no MUMPS tests exercise
-it. The Fortran-only tests (`test_emumps_basic.f90` analogues) could
-in principle bypass the C bridge entirely, but the current CMake
-groups Fortran tests with the bridge in a single LINK_GROUP for
-symbol resolution. Splitting them out is a smaller subset of B9.
+The cmake bridge OBJECT-library names are now
+`${LIB_PREFIX}mumps_c_bridge` / `${LIB_PREFIX_COMPLEX}mumps_c_bridge`
+(replacing the old fixed `qmumps_c_bridge`/`xmumps_c_bridge`), with
+`-Ddmumps_c=${LIB_PREFIX}mumps_c` etc. driving the per-arithmetic
+dispatch. `c_parity_helpers.c` is templated through the C macros
+`TARGET_REAL_HEADER` / `TARGET_REAL_MUMPS_C` / `TARGET_REAL_STRUC_C`
+(plus complex counterparts) so it builds unchanged against any
+target; backward-compat aliases preserve the kind16 parity tests.
+
+`pyengine stage` writes `LIB_PREFIX_COMPLEX` to `target_config.cmake`
+alongside the existing `LIB_PREFIX`.
+
+#### Results
+
+| Target       | Total tests | mumps tests | Notes                                |
+| ------------ | ----------- | ----------- | ------------------------------------ |
+| kind16       | 1045        | 23          | unchanged                            |
+| kind10       | 1040        | 18          | C-side tests + parity tests gated    |
+| multifloats  | 1022        | 0 (skipped) | mumps-test executables deferred (B9b)|
+
+#### Follow-ups (B9b — deferred test-harness rework)
+
+- Multifloats mumps test executables: the existing test sources use
+  `real(ep)` (== REAL(16)) for input data and assign directly to
+  `id%A` / `id%RHS` (TYPE(real64x2) in mmumps), and there's no
+  implicit kind conversion between REAL(16) and TYPE(real64x2). The
+  test harness needs an explicit `real64x2(real(...))` shim around
+  every host→device boundary, plus a way to drive
+  `id%RINFOG` / `id%CNTL` / etc. extraction back to the quad host.
+  Tracked separately because it's test-design work, not bridge work.
+- C-side tests (test_dmumps_c_basic, test_zmumps_c_basic,
+  test_dmumps_c_sym): hardcoded `__float128` / `quadmath.h` /
+  `0.0q` literal syntax. Skipped for kind10 / multifloats; they
+  need a portable rewrite using the same `TARGET_*` macros that
+  `c_parity_helpers.c` uses.
+- Fortran parity tests (test_dmumps_c_parity, test_zmumps_c_parity):
+  embed `real(16)` in a `bind(C)` interface, kind16-only. Skipped
+  for non-kind16 targets pending a portable rewrite.
+- Pre-existing `_replace_kind_parameter` for multifloats (line 2872
+  of fortran_migrator.py) comments out `integer, parameter :: wp =
+  kind(1.d0)` lines; `replace_literals` skips literal-wrapping on
+  `INTEGER, PARAMETER :: ` lines so degenerate upstream forms like
+  `INTEGER, PARAMETER :: ZERO = 0.0D0` (dsol_fwd_aux.F:1093) survive
+  the constructor-mode pass intact.
