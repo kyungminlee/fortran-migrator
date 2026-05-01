@@ -1985,12 +1985,28 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
             # middle of a continued SUBROUTINE/FUNCTION declaration.
             # Both fixed-form (column-6 marker) and free-form
             # (trailing ``&``) continuations are recognized.
+            #
+            # The SUBROUTINE header may also span CPP ``#if``/``#endif``
+            # blocks that conditionalize formal arguments (common in
+            # MUMPS — e.g. ``mana_aux.F`` toggles ``METIS_OPTIONS`` via
+            # ``#if defined(metis)``). Track parenthesis depth across
+            # the header lines: as long as the formal-arg-list paren is
+            # still open, we treat the next non-CPP line as part of the
+            # header even when neither the previous nor current line
+            # carries a continuation marker.
+            paren_depth = _count_open_parens(line)
             prev_has_amp = result[-1].rstrip().rstrip('\n').endswith('&')
             while j < len(lines):
                 next_line = lines[j]
-                if is_continuation_line(next_line) or prev_has_amp:
+                if next_line.lstrip().startswith('#'):
+                    result.append(next_line)
+                    j += 1
+                    continue
+                if (is_continuation_line(next_line) or prev_has_amp
+                        or paren_depth > 0):
                     result.append(next_line)
                     prev_has_amp = next_line.rstrip().rstrip('\n').endswith('&')
+                    paren_depth += _count_open_parens(next_line)
                     j += 1
                 else:
                     break
@@ -2083,6 +2099,33 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
 
 def is_comment_line(line: str) -> bool:
     return bool(line) and line[0] in ('C', 'c', '*', '!')
+
+def _count_open_parens(line: str) -> int:
+    """Net paren delta for ``line`` ignoring quoted strings and inline
+    fixed-form ``!`` / ``C`` / ``*`` comments. Used to track when a
+    SUBROUTINE/FUNCTION formal-arg list is still open across CPP
+    ``#if/#endif`` blocks."""
+    if not line:
+        return 0
+    if line[0] in ('C', 'c', '*'):
+        return 0
+    body = line
+    in_s = in_d = False
+    depth = 0
+    for ch in body:
+        if ch == "'" and not in_d:
+            in_s = not in_s
+        elif ch == '"' and not in_s:
+            in_d = not in_d
+        elif ch == '!' and not in_s and not in_d:
+            break
+        elif not in_s and not in_d:
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+    return depth
+
 
 def is_continuation_line(line: str) -> bool:
     # Fixed-form continuation: cols 1-5 blank (spaces only — NOT tabs), col 6
