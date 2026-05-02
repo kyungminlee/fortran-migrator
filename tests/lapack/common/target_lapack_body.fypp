@@ -102,6 +102,11 @@ module target_lapack
     public :: target_dsytrf_rk, target_dsytf2_rk, target_dsysv_rk, target_dsytri_3x
     public :: target_zhetrf_rk, target_zhetf2_rk, target_zhesv_rk, target_zhetri_3x
     public :: target_zsytrf_rk, target_zsytf2_rk, target_zsysv_rk, target_zsytri_3x
+    public :: target_dsytri_3, target_zsytri_3
+    public :: target_dsytri2, target_zsytri2
+    public :: target_dsytrs2, target_zsytrs2
+    public :: target_dsytrs_3, target_zsytrs_3
+    public :: target_dsycon_3, target_zsycon_3
     public :: target_dsytrf_aa, target_dsytrs_aa, target_dsysv_aa
     public :: target_dsytrf_aa_2stage, target_dsytrs_aa_2stage, target_dsysv_aa_2stage
     public :: target_zhetrf_aa, target_zhetrs_aa, target_zhesv_aa
@@ -212,7 +217,9 @@ module target_lapack
     public :: target_dlansb, target_zlanhb
     public :: target_dlansp, target_zlanhp
     public :: target_dlanst, target_zlanht
-    public :: target_dlansy
+    public :: target_dlansy, target_zlansy
+    public :: target_zlansb, target_zlansp
+    public :: target_dlansf
     public :: target_dlantb, target_zlantb
     public :: target_dlantp, target_zlantp
     public :: target_dlantr, target_zlantr
@@ -221,6 +228,7 @@ module target_lapack
     public :: target_dlapmt, target_zlapmt
     public :: target_dlapll, target_zlapll
     public :: target_dlacn2, target_zlacn2
+    public :: target_dlacon, target_zlacon
     public :: target_dlartg, target_zlartg
     public :: target_dlartgp
     public :: target_dlartgs
@@ -268,8 +276,10 @@ module target_lapack
     public :: target_dtftri, target_ztftri
     ! P13 — pentagonal QR/LQ
     public :: target_dtpqrt, target_ztpqrt
+    public :: target_dtpqrt2, target_ztpqrt2
     public :: target_dtpmqrt, target_ztpmqrt
     public :: target_dtplqt, target_ztplqt
+    public :: target_dtplqt2, target_ztplqt2
     public :: target_dtpmlqt, target_ztpmlqt
     public :: target_dtprfb, target_ztprfb
     ! P14 — TSQR + Householder reconstruction
@@ -285,6 +295,14 @@ module target_lapack
     public :: target_dbbcsd, target_zbbcsd
     public :: target_dorbdb, target_zunbdb
     public :: target_dorcsd, target_zuncsd
+    public :: target_dorcsd2by1, target_zuncsd2by1
+    public :: target_dggsvd3, target_zggsvd3
+    public :: target_dggsvp3, target_zggsvp3
+    public :: target_dorbdb1, target_dorbdb2, target_dorbdb3, target_dorbdb4
+    public :: target_dorbdb5, target_dorbdb6
+    public :: target_zunbdb1, target_zunbdb2, target_zunbdb3, target_zunbdb4
+    public :: target_zunbdb5, target_zunbdb6
+    public :: target_dorm22, target_zunm22
     ! P6/P7 — modern SVD + banded bidiag reduction
     public :: target_dgesvdq, target_zgesvdq
     public :: target_dgesvdx, target_zgesvdx
@@ -4305,6 +4323,42 @@ $:IMPORT_R()
             ${target_real}$ :: r
         end function
 
+        function ${C}$lansy(norm, uplo, n, A, lda, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, lda
+            ${target_complex}$, intent(in) :: A(lda,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lansb(norm, uplo, n, k, AB, ldab, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, k, ldab
+            ${target_complex}$, intent(in) :: AB(ldab,*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${C}$lansp(norm, uplo, n, AP, work) result(r)
+$:IMPORT_C()
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n
+            ${target_complex}$, intent(in) :: AP(*)
+            ${target_real}$,    intent(out) :: work(*)
+            ${target_real}$ :: r
+        end function
+
+        function ${R}$lansf(norm, transr, uplo, n, A, work) result(r)
+$:IMPORT_R()
+            character, intent(in) :: norm, transr, uplo
+            integer,   intent(in) :: n
+            ${target_real}$, intent(in) :: A(0:*)
+            ${target_real}$, intent(out) :: work(0:*)
+            ${target_real}$ :: r
+        end function
+
         function ${R}$lantb(norm, uplo, diag, n, k, AB, ldab, work) result(r)
 $:IMPORT_R()
             character, intent(in) :: norm, uplo, diag
@@ -4422,6 +4476,108 @@ $:IMPORT_C()
             ${target_complex}$, intent(inout) :: X(*)
             ${target_real}$,    intent(inout) :: est
             integer,     intent(inout) :: kase, isave(3)
+        end subroutine
+
+        subroutine ${R}$lacon(n, V, X, isgn, est, kase)
+$:IMPORT_R()
+            integer,  intent(in)    :: n
+            ${target_real}$, intent(out)   :: V(*)
+            ${target_real}$, intent(inout) :: X(*), est
+            integer,  intent(out)   :: isgn(*)
+            integer,  intent(inout) :: kase
+        end subroutine
+
+        subroutine ${C}$lacon(n, V, X, est, kase)
+$:IMPORT_C()
+            integer,     intent(in)    :: n
+            ${target_complex}$, intent(out)   :: V(*)
+            ${target_complex}$, intent(inout) :: X(*)
+            ${target_real}$,    intent(inout) :: est
+            integer,     intent(inout) :: kase
+        end subroutine
+
+        subroutine ${R}$sytri2(uplo, n, A, lda, ipiv, work, lwork, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            ${target_real}$, intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$sytri2(uplo, n, A, lda, ipiv, work, lwork, info)
+$:IMPORT_C()
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            ${target_complex}$, intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$sytrs2(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            ${target_real}$, intent(in)    :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            ${target_real}$, intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$sytrs2(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, info)
+$:IMPORT_C()
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            ${target_complex}$, intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            ${target_complex}$, intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$sytrs_3(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, info)
+$:IMPORT_R()
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            ${target_real}$, intent(in)    :: A(lda,*), e(*)
+            integer,   intent(in)    :: ipiv(*)
+            ${target_real}$, intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine
+
+        subroutine ${C}$sytrs_3(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, info)
+$:IMPORT_C()
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            ${target_complex}$, intent(in)    :: A(lda,*), e(*)
+            integer,     intent(in)    :: ipiv(*)
+            ${target_complex}$, intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine
+
+        subroutine ${R}$sycon_3(uplo, n, A, lda, e, ipiv, anorm, rcond, work, iwork, info)
+$:IMPORT_R()
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            ${target_real}$, intent(in) :: A(lda,*), e(*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            ${target_real}$, intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine
+
+        subroutine ${C}$sycon_3(uplo, n, A, lda, e, ipiv, anorm, rcond, work, info)
+$:IMPORT_C()
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            ${target_complex}$, intent(in) :: A(lda,*), e(*)
+            ${target_real}$,    intent(in)  :: anorm
+            integer,     intent(in)  :: ipiv(*)
+            ${target_real}$,    intent(out) :: rcond
+            ${target_complex}$, intent(out) :: work(*)
+            integer,     intent(out) :: info
         end subroutine
 
         subroutine ${R}$lartg(f, g, c, s, r)
@@ -12576,6 +12732,57 @@ $:CPACK_INV('zsptri', C + 'sptri')
         r = t2q_r(${R}$lansy(norm, uplo, n, At, lda, workt))
     end function
 
+    function target_zlansy(norm, uplo, n, A, lda) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n, lda
+        complex(ep), intent(in) :: A(lda,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: At(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(At(lda,n), workt(max(1,n)))
+        At = q2t_c(A(1:lda,1:n))
+        r = t2q_r(${C}$lansy(norm, uplo, n, At, lda, workt))
+    end function
+
+    function target_zlansb(norm, uplo, n, k, AB, ldab) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n, k, ldab
+        complex(ep), intent(in) :: AB(ldab,*)
+        real(ep) :: r
+        ${target_complex}$, allocatable :: ABt(:,:)
+        ${target_real}$,    allocatable :: workt(:)
+        allocate(ABt(ldab,n), workt(max(1,n)))
+        ABt = q2t_c(AB(1:ldab,1:n))
+        r = t2q_r(${C}$lansb(norm, uplo, n, k, ABt, ldab, workt))
+    end function
+
+    function target_zlansp(norm, uplo, n, AP) result(r)
+        character,   intent(in) :: norm, uplo
+        integer,     intent(in) :: n
+        complex(ep), intent(in) :: AP(*)
+        real(ep) :: r
+        integer :: nap
+        ${target_complex}$, allocatable :: APt(:)
+        ${target_real}$,    allocatable :: workt(:)
+        nap = n * (n + 1) / 2
+        allocate(APt(max(1,nap)), workt(max(1,n)))
+        APt = q2t_c(AP(1:nap))
+        r = t2q_r(${C}$lansp(norm, uplo, n, APt, workt))
+    end function
+
+    function target_dlansf(norm, transr, uplo, n, A) result(r)
+        character, intent(in) :: norm, transr, uplo
+        integer,   intent(in) :: n
+        real(ep),  intent(in) :: A(0:*)
+        real(ep) :: r
+        integer :: nt
+        ${target_real}$, allocatable :: At(:), workt(:)
+        nt = n * (n + 1) / 2
+        allocate(At(0:max(0,nt-1)), workt(0:max(0,n-1)))
+        At = q2t_r(A(0:nt-1))
+        r = t2q_r(${R}$lansf(norm, transr, uplo, n, At, workt))
+    end function
+
     function target_dlantb(norm, uplo, diag, n, k, AB, ldab) result(r)
         character, intent(in) :: norm, uplo, diag
         integer,   intent(in) :: n, k, ldab
@@ -12758,6 +12965,38 @@ $:CPACK_INV('zsptri', C + 'sptri')
         Xt = q2t_c(X(1:n))
         estt = q2t_r(est)
         call ${C}$lacn2(n, Vt, Xt, estt, kase, isave)
+        V(1:n) = t2q_c(Vt); X(1:n) = t2q_c(Xt)
+        est = t2q_r(estt)
+    end subroutine
+
+    subroutine target_dlacon(n, V, X, isgn, est, kase)
+        integer,  intent(in)    :: n
+        real(ep), intent(out)   :: V(*)
+        real(ep), intent(inout) :: X(*), est
+        integer,  intent(out)   :: isgn(*)
+        integer,  intent(inout) :: kase
+        ${target_real}$, allocatable :: Vt(:), Xt(:)
+        ${target_real}$ :: estt
+        allocate(Vt(n), Xt(n))
+        Xt = q2t_r(X(1:n))
+        estt = q2t_r(est)
+        call ${R}$lacon(n, Vt, Xt, isgn, estt, kase)
+        V(1:n) = t2q_r(Vt); X(1:n) = t2q_r(Xt)
+        est = t2q_r(estt)
+    end subroutine
+
+    subroutine target_zlacon(n, V, X, est, kase)
+        integer,     intent(in)    :: n
+        complex(ep), intent(out)   :: V(*)
+        complex(ep), intent(inout) :: X(*)
+        real(ep),    intent(inout) :: est
+        integer,     intent(inout) :: kase
+        ${target_complex}$, allocatable :: Vt(:), Xt(:)
+        ${target_real}$ :: estt
+        allocate(Vt(n), Xt(n))
+        Xt = q2t_c(X(1:n))
+        estt = q2t_r(est)
+        call ${C}$lacon(n, Vt, Xt, estt, kase)
         V(1:n) = t2q_c(Vt); X(1:n) = t2q_c(Xt)
         est = t2q_r(estt)
     end subroutine
@@ -13890,6 +14129,30 @@ $:CPACK_INV('zsptri', C + 'sptri')
         A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt); T(1:ldt, 1:n) = t2q_c(Tt)
     end subroutine
 
+    subroutine target_dtpqrt2(m, n, l, A, lda, B, ldb, T, ldt, info)
+        integer,  intent(in)    :: m, n, l, lda, ldb, ldt
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Tt(:,:)
+        allocate(At(lda, n), Bt(ldb, n), Tt(ldt, n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        Tt = q2t_r(T(1:ldt, 1:n))
+        call ${R}$tpqrt2(m, n, l, At, lda, Bt, ldb, Tt, ldt, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt); T(1:ldt, 1:n) = t2q_r(Tt)
+    end subroutine
+
+    subroutine target_ztpqrt2(m, n, l, A, lda, B, ldb, T, ldt, info)
+        integer,     intent(in)    :: m, n, l, lda, ldb, ldt
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Tt(:,:)
+        allocate(At(lda, n), Bt(ldb, n), Tt(ldt, n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        Tt = q2t_c(T(1:ldt, 1:n))
+        call ${C}$tpqrt2(m, n, l, At, lda, Bt, ldb, Tt, ldt, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt); T(1:ldt, 1:n) = t2q_c(Tt)
+    end subroutine
+
     subroutine target_dtpmqrt(side, trans, m, n, k, l, nb, V, ldv, T, ldt, &
                               A, lda, B, ldb, info)
         character, intent(in)    :: side, trans
@@ -13951,6 +14214,30 @@ $:CPACK_INV('zsptri', C + 'sptri')
         At = q2t_c(A(1:lda, 1:m)); Bt = q2t_c(B(1:ldb, 1:n))
         Tt = q2t_c(T(1:ldt, 1:m))
         call ${C}$tplqt(m, n, l, mb, At, lda, Bt, ldb, Tt, ldt, work, info)
+        A(1:lda, 1:m) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt); T(1:ldt, 1:m) = t2q_c(Tt)
+    end subroutine
+
+    subroutine target_dtplqt2(m, n, l, A, lda, B, ldb, T, ldt, info)
+        integer,  intent(in)    :: m, n, l, lda, ldb, ldt
+        real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), Tt(:,:)
+        allocate(At(lda, m), Bt(ldb, n), Tt(ldt, m))
+        At = q2t_r(A(1:lda, 1:m)); Bt = q2t_r(B(1:ldb, 1:n))
+        Tt = q2t_r(T(1:ldt, 1:m))
+        call ${R}$tplqt2(m, n, l, At, lda, Bt, ldb, Tt, ldt, info)
+        A(1:lda, 1:m) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt); T(1:ldt, 1:m) = t2q_r(Tt)
+    end subroutine
+
+    subroutine target_ztplqt2(m, n, l, A, lda, B, ldb, T, ldt, info)
+        integer,     intent(in)    :: m, n, l, lda, ldb, ldt
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), Tt(:,:)
+        allocate(At(lda, m), Bt(ldb, n), Tt(ldt, m))
+        At = q2t_c(A(1:lda, 1:m)); Bt = q2t_c(B(1:ldb, 1:n))
+        Tt = q2t_c(T(1:ldt, 1:m))
+        call ${C}$tplqt2(m, n, l, At, lda, Bt, ldb, Tt, ldt, info)
         A(1:lda, 1:m) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt); T(1:ldt, 1:m) = t2q_c(Tt)
     end subroutine
 
@@ -14805,6 +15092,389 @@ $:CPACK_INV('zsptri', C + 'sptri')
         V1t(1:ldv1t, 1:q) = t2q_c(V1tt); V2t(1:ldv2t, 1:m-q) = t2q_c(V2tt)
     end subroutine
 
+    subroutine target_dorcsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11, ldx11, &
+                                 X21, ldx21, theta, U1, ldu1, U2, ldu2, V1t, ldv1t, info)
+        character, intent(in)    :: jobu1, jobu2, jobv1t
+        integer,   intent(in)    :: m, p, q, ldx11, ldx21, ldu1, ldu2, ldv1t
+        real(ep),  intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+        real(ep),  intent(out)   :: theta(*), U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: X11t(:,:), X21t(:,:), thetat(:)
+        ${target_real}$, allocatable :: U1t(:,:), U2t(:,:), V1tt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork
+        allocate(X11t(ldx11, q), X21t(ldx21, q), thetat(q), &
+                 U1t(ldu1, p), U2t(ldu2, m-p), V1tt(ldv1t, q), iwork(m-q))
+        X11t = q2t_r(X11(1:ldx11, 1:q)); X21t = q2t_r(X21(1:ldx21, 1:q))
+        call ${R}$orcsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11t, ldx11, X21t, ldx21, &
+                            thetat, U1t, ldu1, U2t, ldu2, V1tt, ldv1t, &
+                            wopt, -1, iwork, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$orcsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11t, ldx11, X21t, ldx21, &
+                            thetat, U1t, ldu1, U2t, ldu2, V1tt, ldv1t, &
+                            work, lwork, iwork, info)
+        theta(1:q) = t2q_r(thetat)
+        U1(1:ldu1, 1:p) = t2q_r(U1t); U2(1:ldu2, 1:m-p) = t2q_r(U2t)
+        V1t(1:ldv1t, 1:q) = t2q_r(V1tt)
+    end subroutine
+
+    subroutine target_zuncsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11, ldx11, &
+                                 X21, ldx21, theta, U1, ldu1, U2, ldu2, V1t, ldv1t, info)
+        character,   intent(in)    :: jobu1, jobu2, jobv1t
+        integer,     intent(in)    :: m, p, q, ldx11, ldx21, ldu1, ldu2, ldv1t
+        complex(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+        real(ep),    intent(out)   :: theta(*)
+        complex(ep), intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: X11t(:,:), X21t(:,:)
+        ${target_complex}$, allocatable :: U1t(:,:), U2t(:,:), V1tt(:,:), work(:)
+        ${target_real}$, allocatable :: thetat(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        ${target_real}$ :: ropt(1)
+        integer, allocatable :: iwork(:)
+        integer :: lwork, lrwork
+        allocate(X11t(ldx11, q), X21t(ldx21, q), thetat(q), &
+                 U1t(ldu1, p), U2t(ldu2, m-p), V1tt(ldv1t, q), iwork(m-q))
+        X11t = q2t_c(X11(1:ldx11, 1:q)); X21t = q2t_c(X21(1:ldx21, 1:q))
+        call ${C}$uncsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11t, ldx11, X21t, ldx21, &
+                            thetat, U1t, ldu1, U2t, ldu2, V1tt, ldv1t, &
+                            wopt, -1, ropt, -1, iwork, info)
+        lwork  = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        lrwork = max(1, int(t2q_r(ropt(1))));            allocate(rwork(lrwork))
+        call ${C}$uncsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11t, ldx11, X21t, ldx21, &
+                            thetat, U1t, ldu1, U2t, ldu2, V1tt, ldv1t, &
+                            work, lwork, rwork, lrwork, iwork, info)
+        theta(1:q) = t2q_r(thetat)
+        U1(1:ldu1, 1:p) = t2q_c(U1t); U2(1:ldu2, 1:m-p) = t2q_c(U2t)
+        V1t(1:ldv1t, 1:q) = t2q_c(V1tt)
+    end subroutine
+
+    subroutine target_dggsvd3(jobu, jobv, jobq, m, n, p, k, l, A, lda, B, ldb, &
+                              alpha, beta, U, ldu, V, ldv, Q, ldq, iwork, info)
+        character, intent(in)    :: jobu, jobv, jobq
+        integer,   intent(in)    :: m, n, p, lda, ldb, ldu, ldv, ldq
+        integer,   intent(out)   :: k, l, info
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),  intent(out)   :: alpha(*), beta(*)
+        real(ep),  intent(out)   :: U(ldu,*), V(ldv,*), Q(ldq,*)
+        integer,   intent(inout) :: iwork(*)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), alphat(:), betat(:)
+        ${target_real}$, allocatable :: Ut(:,:), Vt(:,:), Qt(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, n), alphat(n), betat(n), &
+                 Ut(ldu, m), Vt(ldv, p), Qt(ldq, n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$ggsvd3(jobu, jobv, jobq, m, n, p, k, l, At, lda, Bt, ldb, &
+                         alphat, betat, Ut, ldu, Vt, ldv, Qt, ldq, &
+                         wopt, -1, iwork, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$ggsvd3(jobu, jobv, jobq, m, n, p, k, l, At, lda, Bt, ldb, &
+                         alphat, betat, Ut, ldu, Vt, ldv, Qt, ldq, &
+                         work, lwork, iwork, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+        alpha(1:n) = t2q_r(alphat); beta(1:n) = t2q_r(betat)
+        U(1:ldu, 1:m) = t2q_r(Ut); V(1:ldv, 1:p) = t2q_r(Vt); Q(1:ldq, 1:n) = t2q_r(Qt)
+    end subroutine
+
+    subroutine target_zggsvd3(jobu, jobv, jobq, m, n, p, k, l, A, lda, B, ldb, &
+                              alpha, beta, U, ldu, V, ldv, Q, ldq, iwork, info)
+        character,   intent(in)    :: jobu, jobv, jobq
+        integer,     intent(in)    :: m, n, p, lda, ldb, ldu, ldv, ldq
+        integer,     intent(out)   :: k, l, info
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),    intent(out)   :: alpha(*), beta(*)
+        complex(ep), intent(out)   :: U(ldu,*), V(ldv,*), Q(ldq,*)
+        integer,     intent(inout) :: iwork(*)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        ${target_complex}$, allocatable :: Ut(:,:), Vt(:,:), Qt(:,:), work(:)
+        ${target_real}$, allocatable :: alphat(:), betat(:), rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, n), alphat(n), betat(n), &
+                 Ut(ldu, m), Vt(ldv, p), Qt(ldq, n), rwork(2*n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$ggsvd3(jobu, jobv, jobq, m, n, p, k, l, At, lda, Bt, ldb, &
+                         alphat, betat, Ut, ldu, Vt, ldv, Qt, ldq, &
+                         wopt, -1, rwork, iwork, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$ggsvd3(jobu, jobv, jobq, m, n, p, k, l, At, lda, Bt, ldb, &
+                         alphat, betat, Ut, ldu, Vt, ldv, Qt, ldq, &
+                         work, lwork, rwork, iwork, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
+        alpha(1:n) = t2q_r(alphat); beta(1:n) = t2q_r(betat)
+        U(1:ldu, 1:m) = t2q_c(Ut); V(1:ldv, 1:p) = t2q_c(Vt); Q(1:ldq, 1:n) = t2q_c(Qt)
+    end subroutine
+
+    subroutine target_dggsvp3(jobu, jobv, jobq, m, p, n, A, lda, B, ldb, tola, tolb, &
+                              k, l, U, ldu, V, ldv, Q, ldq, iwork, tau, info)
+        character, intent(in)    :: jobu, jobv, jobq
+        integer,   intent(in)    :: m, p, n, lda, ldb, ldu, ldv, ldq
+        real(ep),  intent(in)    :: tola, tolb
+        integer,   intent(out)   :: k, l, info
+        real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+        real(ep),  intent(out)   :: U(ldu,*), V(ldv,*), Q(ldq,*), tau(*)
+        integer,   intent(inout) :: iwork(*)
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:)
+        ${target_real}$, allocatable :: Ut(:,:), Vt(:,:), Qt(:,:), taut(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, n), Ut(ldu, m), Vt(ldv, p), Qt(ldq, n), taut(n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:n))
+        call ${R}$ggsvp3(jobu, jobv, jobq, m, p, n, At, lda, Bt, ldb, q2t_r(tola), q2t_r(tolb), &
+                         k, l, Ut, ldu, Vt, ldv, Qt, ldq, iwork, taut, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$ggsvp3(jobu, jobv, jobq, m, p, n, At, lda, Bt, ldb, q2t_r(tola), q2t_r(tolb), &
+                         k, l, Ut, ldu, Vt, ldv, Qt, ldq, iwork, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At); B(1:ldb, 1:n) = t2q_r(Bt)
+        U(1:ldu, 1:m) = t2q_r(Ut); V(1:ldv, 1:p) = t2q_r(Vt); Q(1:ldq, 1:n) = t2q_r(Qt)
+        tau(1:n) = t2q_r(taut)
+    end subroutine
+
+    subroutine target_zggsvp3(jobu, jobv, jobq, m, p, n, A, lda, B, ldb, tola, tolb, &
+                              k, l, U, ldu, V, ldv, Q, ldq, iwork, tau, info)
+        character,   intent(in)    :: jobu, jobv, jobq
+        integer,     intent(in)    :: m, p, n, lda, ldb, ldu, ldv, ldq
+        real(ep),    intent(in)    :: tola, tolb
+        integer,     intent(out)   :: k, l, info
+        complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+        complex(ep), intent(out)   :: U(ldu,*), V(ldv,*), Q(ldq,*), tau(*)
+        integer,     intent(inout) :: iwork(*)
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:)
+        ${target_complex}$, allocatable :: Ut(:,:), Vt(:,:), Qt(:,:), taut(:), work(:)
+        ${target_real}$, allocatable :: rwork(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), Bt(ldb, n), Ut(ldu, m), Vt(ldv, p), Qt(ldq, n), &
+                 taut(n), rwork(2*n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:n))
+        call ${C}$ggsvp3(jobu, jobv, jobq, m, p, n, At, lda, Bt, ldb, q2t_r(tola), q2t_r(tolb), &
+                         k, l, Ut, ldu, Vt, ldv, Qt, ldq, iwork, rwork, taut, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$ggsvp3(jobu, jobv, jobq, m, p, n, At, lda, Bt, ldb, q2t_r(tola), q2t_r(tolb), &
+                         k, l, Ut, ldu, Vt, ldv, Qt, ldq, iwork, rwork, taut, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At); B(1:ldb, 1:n) = t2q_c(Bt)
+        U(1:ldu, 1:m) = t2q_c(Ut); V(1:ldv, 1:p) = t2q_c(Vt); Q(1:ldq, 1:n) = t2q_c(Qt)
+        tau(1:n) = t2q_c(taut)
+    end subroutine
+
+#:def ORBDB_VARIANT_R(VARIANT)
+    subroutine target_d${VARIANT}$(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                                   taup1, taup2, tauq1, info)
+        integer,  intent(in)    :: m, p, q, ldx11, ldx21
+        real(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+        real(ep), intent(out)   :: theta(*), phi(*)
+        real(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: X11t(:,:), X21t(:,:), thetat(:), phit(:)
+        ${target_real}$, allocatable :: taup1t(:), taup2t(:), tauq1t(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, ts, ps
+        ts = max(1, q); ps = max(1, q-1)
+        allocate(X11t(ldx11, q), X21t(ldx21, q), thetat(ts), phit(ps), &
+                 taup1t(max(1,p)), taup2t(max(1,m-p)), tauq1t(max(1,q)))
+        X11t = q2t_r(X11(1:ldx11, 1:q)); X21t = q2t_r(X21(1:ldx21, 1:q))
+        call ${R}$${VARIANT}$(m, p, q, X11t, ldx11, X21t, ldx21, thetat, phit, &
+                              taup1t, taup2t, tauq1t, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$${VARIANT}$(m, p, q, X11t, ldx11, X21t, ldx21, thetat, phit, &
+                              taup1t, taup2t, tauq1t, work, lwork, info)
+        X11(1:ldx11, 1:q) = t2q_r(X11t); X21(1:ldx21, 1:q) = t2q_r(X21t)
+        theta(1:ts) = t2q_r(thetat); phi(1:ps) = t2q_r(phit)
+        if (p > 0)   taup1(1:p)   = t2q_r(taup1t(1:p))
+        if (m-p > 0) taup2(1:m-p) = t2q_r(taup2t(1:m-p))
+        if (q > 0)   tauq1(1:q)   = t2q_r(tauq1t(1:q))
+    end subroutine
+#:enddef
+
+#:def ORBDB_VARIANT_C(VARIANT)
+    subroutine target_z${VARIANT}$(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                                   taup1, taup2, tauq1, info)
+        integer,     intent(in)    :: m, p, q, ldx11, ldx21
+        complex(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+        real(ep),    intent(out)   :: theta(*), phi(*)
+        complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: X11t(:,:), X21t(:,:)
+        ${target_real}$,    allocatable :: thetat(:), phit(:)
+        ${target_complex}$, allocatable :: taup1t(:), taup2t(:), tauq1t(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, ts, ps
+        ts = max(1, q); ps = max(1, q-1)
+        allocate(X11t(ldx11, q), X21t(ldx21, q), thetat(ts), phit(ps), &
+                 taup1t(max(1,p)), taup2t(max(1,m-p)), tauq1t(max(1,q)))
+        X11t = q2t_c(X11(1:ldx11, 1:q)); X21t = q2t_c(X21(1:ldx21, 1:q))
+        call ${C}$${VARIANT}$(m, p, q, X11t, ldx11, X21t, ldx21, thetat, phit, &
+                              taup1t, taup2t, tauq1t, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$${VARIANT}$(m, p, q, X11t, ldx11, X21t, ldx21, thetat, phit, &
+                              taup1t, taup2t, tauq1t, work, lwork, info)
+        X11(1:ldx11, 1:q) = t2q_c(X11t); X21(1:ldx21, 1:q) = t2q_c(X21t)
+        theta(1:ts) = t2q_r(thetat); phi(1:ps) = t2q_r(phit)
+        if (p > 0)   taup1(1:p)   = t2q_c(taup1t(1:p))
+        if (m-p > 0) taup2(1:m-p) = t2q_c(taup2t(1:m-p))
+        if (q > 0)   tauq1(1:q)   = t2q_c(tauq1t(1:q))
+    end subroutine
+#:enddef
+
+$:ORBDB_VARIANT_R('orbdb1')
+$:ORBDB_VARIANT_R('orbdb2')
+$:ORBDB_VARIANT_R('orbdb3')
+$:ORBDB_VARIANT_C('unbdb1')
+$:ORBDB_VARIANT_C('unbdb2')
+$:ORBDB_VARIANT_C('unbdb3')
+
+    subroutine target_dorbdb4(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                              taup1, taup2, tauq1, phantom, info)
+        integer,  intent(in)    :: m, p, q, ldx11, ldx21
+        real(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+        real(ep), intent(out)   :: theta(*), phi(*)
+        real(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), phantom(*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: X11t(:,:), X21t(:,:), thetat(:), phit(:)
+        ${target_real}$, allocatable :: taup1t(:), taup2t(:), tauq1t(:), phantomt(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(X11t(ldx11, q), X21t(ldx21, q), thetat(max(1,q)), phit(max(1,q-1)), &
+                 taup1t(max(1,m-q)), taup2t(max(1,m-q)), tauq1t(max(1,q)), &
+                 phantomt(max(1,m)))
+        X11t = q2t_r(X11(1:ldx11, 1:q)); X21t = q2t_r(X21(1:ldx21, 1:q))
+        call ${R}$orbdb4(m, p, q, X11t, ldx11, X21t, ldx21, thetat, phit, &
+                         taup1t, taup2t, tauq1t, phantomt, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$orbdb4(m, p, q, X11t, ldx11, X21t, ldx21, thetat, phit, &
+                         taup1t, taup2t, tauq1t, phantomt, work, lwork, info)
+        X11(1:ldx11, 1:q) = t2q_r(X11t); X21(1:ldx21, 1:q) = t2q_r(X21t)
+        theta(1:q) = t2q_r(thetat(1:q))
+        if (q-1 > 0) phi(1:q-1) = t2q_r(phit(1:q-1))
+        if (m-q > 0) then
+            taup1(1:m-q) = t2q_r(taup1t(1:m-q))
+            taup2(1:m-q) = t2q_r(taup2t(1:m-q))
+        end if
+        if (q > 0) tauq1(1:q) = t2q_r(tauq1t(1:q))
+        if (m > 0) phantom(1:m) = t2q_r(phantomt(1:m))
+    end subroutine
+
+    subroutine target_zunbdb4(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                              taup1, taup2, tauq1, phantom, info)
+        integer,     intent(in)    :: m, p, q, ldx11, ldx21
+        complex(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+        real(ep),    intent(out)   :: theta(*), phi(*)
+        complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), phantom(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: X11t(:,:), X21t(:,:)
+        ${target_real}$,    allocatable :: thetat(:), phit(:)
+        ${target_complex}$, allocatable :: taup1t(:), taup2t(:), tauq1t(:), phantomt(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(X11t(ldx11, q), X21t(ldx21, q), thetat(max(1,q)), phit(max(1,q-1)), &
+                 taup1t(max(1,m-q)), taup2t(max(1,m-q)), tauq1t(max(1,q)), &
+                 phantomt(max(1,m)))
+        X11t = q2t_c(X11(1:ldx11, 1:q)); X21t = q2t_c(X21(1:ldx21, 1:q))
+        call ${C}$unbdb4(m, p, q, X11t, ldx11, X21t, ldx21, thetat, phit, &
+                         taup1t, taup2t, tauq1t, phantomt, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$unbdb4(m, p, q, X11t, ldx11, X21t, ldx21, thetat, phit, &
+                         taup1t, taup2t, tauq1t, phantomt, work, lwork, info)
+        X11(1:ldx11, 1:q) = t2q_c(X11t); X21(1:ldx21, 1:q) = t2q_c(X21t)
+        theta(1:q) = t2q_r(thetat(1:q))
+        if (q-1 > 0) phi(1:q-1) = t2q_r(phit(1:q-1))
+        if (m-q > 0) then
+            taup1(1:m-q) = t2q_c(taup1t(1:m-q))
+            taup2(1:m-q) = t2q_c(taup2t(1:m-q))
+        end if
+        if (q > 0) tauq1(1:q) = t2q_c(tauq1t(1:q))
+        if (m > 0) phantom(1:m) = t2q_c(phantomt(1:m))
+    end subroutine
+
+#:def ORBDB56_R(VARIANT)
+    subroutine target_d${VARIANT}$(m1, m2, n, X1, incx1, X2, incx2, Q1, ldq1, Q2, ldq2, info)
+        integer,  intent(in)    :: m1, m2, n, incx1, incx2, ldq1, ldq2
+        real(ep), intent(inout) :: X1(*), X2(*)
+        real(ep), intent(in)    :: Q1(ldq1,*), Q2(ldq2,*)
+        integer,  intent(out)   :: info
+        ${target_real}$, allocatable :: X1t(:), X2t(:), Q1t(:,:), Q2t(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, l1, l2
+        l1 = max(1, 1 + (m1-1) * abs(incx1))
+        l2 = max(1, 1 + (m2-1) * abs(incx2))
+        allocate(X1t(l1), X2t(l2), Q1t(ldq1, n), Q2t(ldq2, n))
+        X1t = q2t_r(X1(1:l1)); X2t = q2t_r(X2(1:l2))
+        Q1t = q2t_r(Q1(1:ldq1, 1:n)); Q2t = q2t_r(Q2(1:ldq2, 1:n))
+        call ${R}$${VARIANT}$(m1, m2, n, X1t, incx1, X2t, incx2, Q1t, ldq1, Q2t, ldq2, &
+                              wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$${VARIANT}$(m1, m2, n, X1t, incx1, X2t, incx2, Q1t, ldq1, Q2t, ldq2, &
+                              work, lwork, info)
+        X1(1:l1) = t2q_r(X1t); X2(1:l2) = t2q_r(X2t)
+    end subroutine
+#:enddef
+
+#:def ORBDB56_C(VARIANT)
+    subroutine target_z${VARIANT}$(m1, m2, n, X1, incx1, X2, incx2, Q1, ldq1, Q2, ldq2, info)
+        integer,     intent(in)    :: m1, m2, n, incx1, incx2, ldq1, ldq2
+        complex(ep), intent(inout) :: X1(*), X2(*)
+        complex(ep), intent(in)    :: Q1(ldq1,*), Q2(ldq2,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: X1t(:), X2t(:), Q1t(:,:), Q2t(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, l1, l2
+        l1 = max(1, 1 + (m1-1) * abs(incx1))
+        l2 = max(1, 1 + (m2-1) * abs(incx2))
+        allocate(X1t(l1), X2t(l2), Q1t(ldq1, n), Q2t(ldq2, n))
+        X1t = q2t_c(X1(1:l1)); X2t = q2t_c(X2(1:l2))
+        Q1t = q2t_c(Q1(1:ldq1, 1:n)); Q2t = q2t_c(Q2(1:ldq2, 1:n))
+        call ${C}$${VARIANT}$(m1, m2, n, X1t, incx1, X2t, incx2, Q1t, ldq1, Q2t, ldq2, &
+                              wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$${VARIANT}$(m1, m2, n, X1t, incx1, X2t, incx2, Q1t, ldq1, Q2t, ldq2, &
+                              work, lwork, info)
+        X1(1:l1) = t2q_c(X1t); X2(1:l2) = t2q_c(X2t)
+    end subroutine
+#:enddef
+
+$:ORBDB56_R('orbdb5')
+$:ORBDB56_R('orbdb6')
+$:ORBDB56_C('unbdb5')
+$:ORBDB56_C('unbdb6')
+
+    subroutine target_dorm22(side, trans, m, n, n1, n2, Q, ldq, C, ldc, info)
+        character, intent(in)    :: side, trans
+        integer,   intent(in)    :: m, n, n1, n2, ldq, ldc
+        real(ep),  intent(in)    :: Q(ldq,*)
+        real(ep),  intent(inout) :: C(ldc,*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: Qt(:,:), Ct(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork, qcols
+        qcols = n1 + n2
+        allocate(Qt(ldq, qcols), Ct(ldc, n))
+        Qt = q2t_r(Q(1:ldq, 1:qcols)); Ct = q2t_r(C(1:ldc, 1:n))
+        call ${R}$orm22(side, trans, m, n, n1, n2, Qt, ldq, Ct, ldc, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1)))); allocate(work(lwork))
+        call ${R}$orm22(side, trans, m, n, n1, n2, Qt, ldq, Ct, ldc, work, lwork, info)
+        C(1:ldc, 1:n) = t2q_r(Ct)
+    end subroutine
+
+    subroutine target_zunm22(side, trans, m, n, n1, n2, Q, ldq, C, ldc, info)
+        character,   intent(in)    :: side, trans
+        integer,     intent(in)    :: m, n, n1, n2, ldq, ldc
+        complex(ep), intent(in)    :: Q(ldq,*)
+        complex(ep), intent(inout) :: C(ldc,*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: Qt(:,:), Ct(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork, qcols
+        qcols = n1 + n2
+        allocate(Qt(ldq, qcols), Ct(ldc, n))
+        Qt = q2t_c(Q(1:ldq, 1:qcols)); Ct = q2t_c(C(1:ldc, 1:n))
+        call ${C}$unm22(side, trans, m, n, n1, n2, Qt, ldq, Ct, ldc, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep))); allocate(work(lwork))
+        call ${C}$unm22(side, trans, m, n, n1, n2, Qt, ldq, Ct, ldc, work, lwork, info)
+        C(1:ldc, 1:n) = t2q_c(Ct)
+    end subroutine
+
     subroutine target_ztprfb(side, trans, direct, storev, m, n, k, l, &
                              V, ldv, T, ldt, A, lda, B, ldb, ldwork)
         character,   intent(in)    :: side, trans, direct, storev
@@ -15069,6 +15739,170 @@ $:CPACK_INV('zsptri', C + 'sptri')
         At = q2t_r(A(1:lda, 1:n)); et = q2t_r(e(1:n))
         call ${R}$sytri_3x(uplo, n, At, lda, et, ipiv, work, nb, info)
         A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_dsytri_3(uplo, n, A, lda, e, ipiv, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        real(ep),  intent(in)    :: e(*)
+        integer,   intent(in)    :: ipiv(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), et(:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), et(n))
+        At = q2t_r(A(1:lda, 1:n)); et = q2t_r(e(1:n))
+        call ${R}$sytri_3(uplo, n, At, lda, et, ipiv, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sytri_3(uplo, n, At, lda, et, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_zsytri_3(uplo, n, A, lda, e, ipiv, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        complex(ep), intent(in)    :: e(*)
+        integer,     intent(in)    :: ipiv(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), et(:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n), et(n))
+        At = q2t_c(A(1:lda, 1:n)); et = q2t_c(e(1:n))
+        call ${C}$sytri_3(uplo, n, At, lda, et, ipiv, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$sytri_3(uplo, n, At, lda, et, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_dsytri2(uplo, n, A, lda, ipiv, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, lda
+        real(ep),  intent(inout) :: A(lda,*)
+        integer,   intent(in)    :: ipiv(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), work(:)
+        ${target_real}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_r(A(1:lda, 1:n))
+        call ${R}$sytri2(uplo, n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(t2q_r(wopt(1))))
+        allocate(work(lwork))
+        call ${R}$sytri2(uplo, n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_zsytri2(uplo, n, A, lda, ipiv, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, lda
+        complex(ep), intent(inout) :: A(lda,*)
+        integer,     intent(in)    :: ipiv(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), work(:)
+        ${target_complex}$ :: wopt(1)
+        integer :: lwork
+        allocate(At(lda, n))
+        At = q2t_c(A(1:lda, 1:n))
+        call ${C}$sytri2(uplo, n, At, lda, ipiv, wopt, -1, info)
+        lwork = max(1, int(real(t2q_c(wopt(1)), ep)))
+        allocate(work(lwork))
+        call ${C}$sytri2(uplo, n, At, lda, ipiv, work, lwork, info)
+        A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_dsytrs2(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ldb
+        real(ep),  intent(in)    :: A(lda,*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(in)    :: ipiv(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        allocate(At(lda, n), Bt(ldb, nrhs), work(n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        call ${R}$sytrs2(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_zsytrs2(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(in)    :: A(lda,*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(in)    :: ipiv(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), work(:)
+        allocate(At(lda, n), Bt(ldb, nrhs), work(n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        call ${C}$sytrs2(uplo, n, nrhs, At, lda, ipiv, Bt, ldb, work, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dsytrs_3(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, info)
+        character, intent(in)    :: uplo
+        integer,   intent(in)    :: n, nrhs, lda, ldb
+        real(ep),  intent(in)    :: A(lda,*), e(*)
+        real(ep),  intent(inout) :: B(ldb,*)
+        integer,   intent(in)    :: ipiv(*)
+        integer,   intent(out)   :: info
+        ${target_real}$, allocatable :: At(:,:), Bt(:,:), et(:)
+        allocate(At(lda, n), Bt(ldb, nrhs), et(n))
+        At = q2t_r(A(1:lda, 1:n)); Bt = q2t_r(B(1:ldb, 1:nrhs))
+        et = q2t_r(e(1:n))
+        call ${R}$sytrs_3(uplo, n, nrhs, At, lda, et, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_r(Bt)
+    end subroutine
+
+    subroutine target_zsytrs_3(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, info)
+        character,   intent(in)    :: uplo
+        integer,     intent(in)    :: n, nrhs, lda, ldb
+        complex(ep), intent(in)    :: A(lda,*), e(*)
+        complex(ep), intent(inout) :: B(ldb,*)
+        integer,     intent(in)    :: ipiv(*)
+        integer,     intent(out)   :: info
+        ${target_complex}$, allocatable :: At(:,:), Bt(:,:), et(:)
+        allocate(At(lda, n), Bt(ldb, nrhs), et(n))
+        At = q2t_c(A(1:lda, 1:n)); Bt = q2t_c(B(1:ldb, 1:nrhs))
+        et = q2t_c(e(1:n))
+        call ${C}$sytrs_3(uplo, n, nrhs, At, lda, et, ipiv, Bt, ldb, info)
+        B(1:ldb, 1:nrhs) = t2q_c(Bt)
+    end subroutine
+
+    subroutine target_dsycon_3(uplo, n, A, lda, e, ipiv, anorm, rcond, info)
+        character, intent(in)  :: uplo
+        integer,   intent(in)  :: n, lda
+        real(ep),  intent(in)  :: A(lda,*), e(*), anorm
+        integer,   intent(in)  :: ipiv(*)
+        real(ep),  intent(out) :: rcond
+        integer,   intent(out) :: info
+        ${target_real}$, allocatable :: At(:,:), et(:), work(:)
+        ${target_real}$ :: rcond_t
+        integer, allocatable :: iwork(:)
+        allocate(At(lda, n), et(n), work(2*n), iwork(n))
+        At = q2t_r(A(1:lda, 1:n)); et = q2t_r(e(1:n))
+        call ${R}$sycon_3(uplo, n, At, lda, et, ipiv, q2t_r(anorm), rcond_t, work, iwork, info)
+        rcond = t2q_r(rcond_t)
+    end subroutine
+
+    subroutine target_zsycon_3(uplo, n, A, lda, e, ipiv, anorm, rcond, info)
+        character,   intent(in)  :: uplo
+        integer,     intent(in)  :: n, lda
+        complex(ep), intent(in)  :: A(lda,*), e(*)
+        real(ep),    intent(in)  :: anorm
+        integer,     intent(in)  :: ipiv(*)
+        real(ep),    intent(out) :: rcond
+        integer,     intent(out) :: info
+        ${target_complex}$, allocatable :: At(:,:), et(:), work(:)
+        ${target_real}$ :: rcond_t
+        allocate(At(lda, n), et(n), work(2*n))
+        At = q2t_c(A(1:lda, 1:n)); et = q2t_c(e(1:n))
+        call ${C}$sycon_3(uplo, n, At, lda, et, ipiv, q2t_r(anorm), rcond_t, work, info)
+        rcond = t2q_r(rcond_t)
     end subroutine
 
     subroutine target_zhetrf_rk(uplo, n, A, lda, e, ipiv, info)
