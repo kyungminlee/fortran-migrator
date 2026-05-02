@@ -100,3 +100,28 @@ target_compile_options(reflapack_quad PRIVATE
 # LAPACK internally calls BLAS. Link the quad-promoted refblas_quad so
 # every routine in the reference chain operates at KIND=16.
 target_link_libraries(reflapack_quad PUBLIC refblas_quad)
+
+# xx-family iterative refinement (dgesvxx / zgesvxx / dgerfsx / ...) is
+# implemented in ${_reflap_dir}/{d,z}la_*_extended.f. Those files call
+# XBLAS Level-2 entry points by their upstream d/z names
+# (blas_dgemv_x_, blas_dgbmv_x_, blas_dsymv_x_, blas_zhemv_x_, ...).
+# We don't ship a standard-precision XBLAS archive, and the migrated
+# ${LIB_PREFIX}xblas is at the *target* working precision (e.g. 80-bit
+# extended on kind10, double-double on multifloats) — so its q/x/e/m/y
+# entry points cannot satisfy reflapack_quad's d/z calls under
+# -freal-8-real-16 (which promotes both to KIND=16 quad).
+#
+# Bridge with quad-precision Fortran shims in
+# refxblas_quad_bridge.f90. The shims expose the standard
+# blas_dgemv_x_ / blas_zhemv2_x_ / etc. names and forward to the
+# quad-promoted refblas_quad routines (DGEMV/ZGEMV/DGBMV/ZGBMV/DSYMV/
+# ZHEMV) for everything that has a BLAS analogue, hand-coding the
+# complex-symmetric matvec which has none. At quad working precision
+# XBLAS's "extra-precise" residual refinement is the identity, so the
+# shim form (no head/tail decomposition) is mathematically faithful.
+#
+# Compiling the bridge with the same -freal-8-real-16 / KIND=16 ABI as
+# reflapack_quad keeps the parameter-passing convention identical to
+# the upstream LAPACK call sites.
+target_sources(reflapack_quad PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/refxblas_quad_bridge.f90)
