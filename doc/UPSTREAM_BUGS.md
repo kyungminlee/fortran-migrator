@@ -370,6 +370,7 @@ heap corruption a few iterations later.
 **Upstream report.** Not yet filed.
 
 ---
+
 ## ScaLAPACK 2.2.3: `pdtrsen.f` IWORK(1:N) early-write during LQUERY
 
 **Symptom.** Calling `PDTRSEN` with `LIWORK = -1` (workspace query)
@@ -405,5 +406,61 @@ own test harness) allocate `IWORK` to a precomputed `LIWMIN` upper
 bound *before* the query, so the early-write fits. A caller that
 follows the documented two-pass query contract (`IWORK(1)` for the
 query, then size to `LIWMIN`) trips the heap corruption.
+
+**Upstream report.** Not yet filed.
+
+---
+
+## ScaLAPACK 2.2.3: `pdlarzb.f` PBDTRAN workspace under-allocation
+
+**Symptom.** `PDORMRZ` / `PZUNMRZ` (apply Q from RZ-factorization) on a
+multi-rank grid silently produces a numerically corrupt C: gathered
+result disagrees with LAPACK `dormrz`/`zunmrz` by a factor of ~1.2-1.3
+regardless of SIDE/TRANS. Stderr shows
+"On entry to PBDTRAN parameter number 11 had an illegal value" but
+PXERBLA returns rather than aborting, so the routine continues with
+uninitialised workspace and returns garbage. Single-rank execution
+also trips the issue.
+
+**Root cause.** `pdlarzb.f:374-377` allocates the PBDTRAN destination
+buffer:
+
+```fortran
+LV = MAX( 1, MPC20 )    ! MPC20 = local rows of L-row distribution
+WORK( IPV ) is MPC20 x K
+```
+
+then calls
+
+```fortran
+CALL PBDTRAN( ICTXT, 'Rowwise', 'Transpose', K, M+ICOFFV,
+$             DESCV( NB_ ), WORK( IPW ), LW, ZERO,
+$             WORK( IPV ), LV, IVROW, IVCOL, ICROW2, -1, WORK( IPT ) )
+```
+
+But `pbdtran.f:457-459` (the ROWFORM/'Rowwise' branch) checks
+`LDC ≥ Np` where `Np = NUMROC(N, NB, MYROW, ICROW, NPROW)` is the
+local-row count of an `N`-row distribution, and `N = M+ICOFFV` is
+PDORMRZ's outer-call M (= the order of Q = `K + L` for the canonical
+shape with `mA <= nA`). Since `mC = K + L > L` for any non-trivial K,
+`LV < Np` and PBDTRAN refuses the call.
+
+**Files affected.**
+- `external/scalapack-2.2.3/SRC/pdlarzb.f` (lines 374-395).
+- `external/scalapack-2.2.3/PBLAS/SRC/PBBLAS/pbdtran.f` (lines 457-459).
+- Same shape for the complex variant `pzlarzb.f` / `pbztran.f` driving
+  `pzunmrz`.
+
+**Fix.** Not yet patched. The minimal repair would be a
+`source_overrides` patch in `pdlarzb.f` (and the C/Z counterpart) that
+either bumps the `LV` allocation to `MAX(1, MPC20, NUMROC(M+ICOFFV,
+DESCV(NB_), MYROW, ICROW2, NPROW))` or splits the PBDTRAN call to
+avoid the LDC mismatch. Neither is a one-line change, so the
+multi-rank pdormrz/pzunmrz tests stay deferred for now.
+
+**Why upstream's tests miss it.** ScaLAPACK ships no `pdormrz`
+differential test in its standard test suite. The routine is exercised
+only as a building block of higher-level GSVD/GELSY drivers, where the
+specific shape that triggers PBDTRAN's check apparently isn't hit.
 
 **Upstream report.** Not yet filed.

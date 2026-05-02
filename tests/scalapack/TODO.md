@@ -150,10 +150,31 @@ Results (kind16, 2×2 grid):
 
 (pzheev fix folded into the pxhetrd/pxheev entry above.)
 
-## pdormrz / pzunmrz — descriptor-alignment failure
+## pdormrz / pzunmrz — STILL DEFERRED (real upstream pdlarzb bug, 2026-05-02)
 
-- **Symptom**: A test driver that invokes pdtzrzf followed by pdormrz('L', 'N', n_a, ncc, m_a, n_a-m_a, …) aborts in the internal PBETRAN dispatcher with "parameter number 11 had an illegal value", suggesting the m-by-n trapezoidal A's column distribution must align with C's row distribution in a way the simple "same MB/NB" descriptor pair doesn't satisfy.
-- **Action**: Defer until the descA/descC alignment study is done. The wrappers are exposed (target_pdormrz / target_pzunmrz) and compile, so re-enabling is just a driver-shape fix.
+Initial assumption was a test-driver descriptor-alignment fix; turns
+out the underlying `pdlarzb.f` workspace allocation is the real
+problem. With `mb=nb=8`, `IA=JA=IC=JC=1`, `K=mA`, `L=nA-mA`, and
+`mC=nA=K+L` (the only legal shape per `pdormrz.f:34` "Q is of order M
+if SIDE='L'"), `pdlarzb.f:374-377` allocates `WORK(IPV)` with
+`LV = MAX(1, MPC20) = local rows of L-row matrix`. But the inner
+`PBDTRAN(...,'Rowwise','Transpose', K, M+ICOFFV, ..., LV, ...)` call
+checks `LDC ≥ NP` where `NP = local rows of M=mC=(K+L)-row matrix` at
+`pbdtran.f:457-459`. Since `mC > L` for any non-trivial K, `LV < NP`
+and `PBDTRAN` exits via `PXERBLA` with `INFO=11` ("LDC illegal value")
+without performing the transpose. The outer `pdormrz` continues using
+uninitialised `WORK(IPV)` and produces a numerically-corrupt C
+(disagreement of ~1.2× vs LAPACK `dormrz`), which is exactly the
+symptom the original TODO captured.
+
+The wrapper TAU sizing as `locrows(desca)` IS correct
+(`pdlarzt.f:135-138, 246-256` confirms TAU is row-distributed for
+row-storage RZ). The bug is upstream in `pdlarzb.f`; a test driver
+cannot work around it. Fix would be a `source_overrides` patch that
+either bumps `LV` allocation or splits the PBDTRAN call to avoid the
+LDC mismatch — neither is a one-line repair, hence still deferred.
+
+Documented in `doc/UPSTREAM_BUGS.md`.
 
 ## *trsv (single-half banded/tridiag triangular solves) — RESOLVED 2026-05-02
 
@@ -228,12 +249,10 @@ New driver `tests/scalapack/eigenvalue/test_pdtrsen.f90` exercises the
 fix over sizes [32, 64, 96]; all PASS without the previous `free()`
 abort. Documented in `doc/UPSTREAM_BUGS.md`.
 
-## pdormrz / pzunmrz update — semantic mismatch with dormrz/zunmrz
+## pdormrz / pzunmrz "factor of ~1.3" — folded into the deferral above (2026-05-02)
 
-- Followup attempt with SIDE='R' (which side-steps the SIDE='L'
-  PBETRAN parameter-11 abort) produces a numerically clean run
-  (no abort) but the gathered C disagrees with LAPACK dormrz by
-  factors of ~1.3 — same magnitude regardless of TRANS='N' vs 'T'.
-  Either pdormrz stores the reflectors with a different sign/scale
-  convention than dormrz, or the K/L semantics differ. Defer until
-  a careful upstream-doc walkthrough.
+The earlier SIDE='R' factor-of-1.3 disagreement was the same upstream
+`pdlarzb.f` LV/PBDTRAN bug. The transpose silently no-ops via
+PXERBLA, leaving uninitialised workspace that gets multiplied through
+to C — manifesting as a ~1.3× scaling error. Same root cause, same
+deferral.
