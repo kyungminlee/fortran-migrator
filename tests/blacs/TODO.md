@@ -61,25 +61,23 @@ teardown" pattern no longer reproduces. Re-verified 2026-05-01:
 kind10 1022/1022 PASS, multifloats 1022/1022 PASS. See
 `tests/pblas/TODO.md`'s same-named entry for the closed inventory.
 
-## Untested BLACS surface
+## BLACS surface coverage — RESOLVED
 
-These ship in `external/scalapack-2.2.3/BLACS/SRC/` and are migrated
-for kind16 alongside the routines we cover, but the test tree does
-not yet exercise them:
+Re-audited 2026-05-02: every routine flagged below is in fact
+exercised by the test tree.
 
-### `*trbr2d` receive companion of `*trbs2d`
+### `*trbr2d` receive companion of `*trbs2d` — RESOLVED
 
-`test_qtrbs2d` only exercises the `'A'` scope where the broadcast
-data was loaded on rank `(0,0)` and verified on every other rank by
-having them call `target_qtrbr2d` indirectly through… actually it
-*does* call `target_qtrbr2d` on receivers — so this is covered.
+`test_qtrbs2d.f90` calls `target_qtrbr2d` in all three scopes:
+`'A'` (line 35), `'R'` (line 62), `'C'` (line 88). Wrappers in
+`common/target_blacs_body.fypp:51,311`.
 
-### `qtrrv2d`/`xtrrv2d` companions
+### `qtrrv2d` / `xtrrv2d` companions — RESOLVED
 
-Receive partners for the trapezoidal point-to-point send. The real
-variant is exercised in `test_qtrsd2d`; complex variant is exercised
-in `test_xtrsd2d` (added — `target_xtrsd2d`/`target_xtrrv2d` wrappers
-declared in `common/target_blacs_body.fypp`).
+Receive partners for the trapezoidal point-to-point send.
+`test_qtrsd2d.f90:51` calls `target_qtrrv2d`; `test_xtrsd2d.f90:48`
+calls `target_xtrrv2d`. Wrappers in `common/target_blacs_body.fypp`
+(real at 257/311, complex at 377/387).
 
 ### `qgamn2d` / `xgamn2d` / `qgsum2d` / `xgsum2d` row/column scopes — RESOLVED
 
