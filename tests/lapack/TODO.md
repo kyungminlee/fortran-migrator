@@ -151,7 +151,7 @@ divergence was misdiagnosed as a migration bug):
 | kind10      | 12/12 PASS (~18 digits)              |
 | multifloats | 12/12 PASS (~31 digits)              |
 
-## Older blocked-T routines that need a wider scope to test
+## Older blocked-T routines that need a wider scope to test — PARKED
 
 The following routines were tested in Phase 35 / Phase 36, but only
 the |R| (or |L|) factor is compared — the lower-triangle reflector
@@ -165,11 +165,13 @@ migrated and reference paths diverge:
 
 For the matching `*gemqr`/`*gemlq` and `*gemqrt`/`*gemlqt` apply
 routines the C output is canonical and matches cleanly — those tests
-do compare the full result.
+do compare the full result. So the factorization+apply pipeline is
+covered end-to-end; only the intermediate reflector/T representations
+are loose.
 
-If migrator changes (or recipe overrides) ever pin both paths to the
-same blocking heuristic, the factor-side comparisons could be
-strengthened to compare the full A and T arrays.
+**Reopen condition**: a migrator change (or recipe override) that pins
+both paths to the same blocking heuristic. Until then the |R|/|L|
+comparison is the strongest assertion the test framework can make.
 
 ## Phase P6/P7 — zgesvdq runtime crash — RESOLVED
 
@@ -427,17 +429,26 @@ targets after the reference-side override at
 `tests/lapack/reflapack/overrides/zgedmd.f90` (see resolved P22
 section above).
 
-### sb2st kernels (2 routines)
+### sb2st kernels (2 routines) — PARKED
 
   dsb2st_kernels, zhb2st_kernels — SBR (Successive Band Reduction) inner
   kernels, normally driven by `*sb2st` / `*hb2st`.  Testing them in
   isolation requires constructing a partial band-reduction state that
-  matches the kernel's mid-stream invariants — non-trivial, may not be
-  worth standalone coverage if the orchestrator paths are tested.
+  matches the kernel's mid-stream invariants — non-trivial.
 
-### Audit pending
+  These are the only two user-facing routines without a test driver
+  (per the audit script below).  The orchestrator paths
+  (`*sb2st` / `*hb2st`) ARE tested end-to-end, and they exercise the
+  kernels on every call, so coverage is effectively transitive.
 
-After all phases land, run the audit:
+  **Reopen condition**: a regression or precision divergence
+  attributable to the kernels that the orchestrator tests fail to
+  catch.  Until then, standalone drivers aren't worth the
+  state-construction work.
+
+### Audit — RESULT 2026-05-02
+
+Audit script:
 
 ```bash
 awk 'NR>=89 && NR<=1107 && /^\| ✓ \|/ {gsub(/^\| ✓ \| /,""); split($0,a,/ \|/); print a[1]}' tests/RESULT.md \
@@ -446,4 +457,6 @@ awk 'NR>=89 && NR<=1107 && /^\| ✓ \|/ {gsub(/^\| ✓ \| /,""); split($0,a,/ \|
     done
 ```
 
-Expected output: empty (all user-facing routines covered).
+Result: only `dsb2st_kernels` and `zhb2st_kernels` missing (both
+parked — see "sb2st kernels" entry above).  Every other user-facing
+LAPACK routine in the audit table now ships a test driver.
