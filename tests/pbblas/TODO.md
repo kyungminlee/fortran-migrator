@@ -6,26 +6,31 @@ These ship in `external/scalapack-2.2.3/PBLAS/SRC/PBBLAS/` and are
 exercised at runtime only as part of the wider PBLAS pipeline; we do
 not cover them here.
 
-### `pbdtrnv` / `pbztrnv` — covered, smoke-test only
+### `pbdtrnv` / `pbztrnv` — covered
 
-`test_pbdtrnv.f90` and `test_pbztrnv.f90` exercise XDIST='C',
-TRANS='T' (and TRANS='C' for the complex variant) with NZ=0 and a
-generously-sized WORK buffer (`4*(N+NB)`) that envelopes the
-upstream `CEIL(Nqb,LCMQ)*NB` formula on the 1×1 / 2×2 grids these
-tests run on. XDIST='R' added 2026-05-02 via `test_pb[dz]trnv_xdistr.f90`
-(row-vector input → column-vector output, 2×2 grid, all three
-targets pass). Replicated paths (IXCOL=-1 and IYROW=-1 simultaneously)
-added 2026-05-02 via `test_pb[dz]trnv_replicated.f90` — X populated
-on every process column, Y verified on row 0 against the reference
-and cross-checked byte-equal against row `nprow-1`; all three targets
-pass. NZ > 0 added 2026-05-02 via `test_pb[dz]trnv_nzoffset.f90`
-(NB=4, NZ=2, N=12; source-row / source-column local layouts honor
-the `numroc(NN)-NZ` shrink for the offset extended NN=N+NZ space);
-all three targets pass. Coverage gaps still open:
+`test_pbdtrnv.f90` / `test_pbztrnv.f90` (baseline XDIST='C', NZ=0,
+2×2 grid) plus four families of follow-ups, all added 2026-05-02
+and passing on every target (kind10 / kind16 / multifloats):
 
-  - Larger / non-square grids where `LCMP > 1` or `LCMQ > 1` (the
-    sandbox's mpiexec produces unconnected MPI worlds, so the
-    distributed paths degenerate to local).
+  - `test_pb[dz]trnv_xdistr.f90` — XDIST='R' (row-vector input →
+    column-vector output) on the default 2×2 grid.
+  - `test_pb[dz]trnv_replicated.f90` — IXCOL=-1 and IYROW=-1
+    simultaneously; X populated on every process column, Y verified
+    on row 0 against the reference and cross-checked byte-equal
+    against row `nprow-1`.
+  - `test_pb[dz]trnv_nzoffset.f90` — NZ > 0 (NB=4, NZ=2, N=12).
+    Source-row / source-column local layouts honor the `numroc(NN)
+    - NZ` shrink for the offset extended NN=N+NZ space; non-source
+    processes hold full NB-sized blocks.
+  - `test_pb[dz]trnv_lcm.f90` — non-square grid via the new
+    `grid_init_shape` helper. `pbdtrnv_lcm` runs 4×1 (LCMQ=4) with
+    XDIST='C'; `pbztrnv_lcm` runs 1×4 (LCMP=4) with XDIST='R'. Both
+    require a connected 4-rank MPI world: skipped (with a "skipped"
+    pseudo-case) when the launcher spawns unconnected worlds.
+    Verified on the linux-impi preset with `FI_PROVIDER=tcp` +
+    `I_MPI_HYDRA_BOOTSTRAP=fork`.
+
+No remaining coverage gaps for `pbdtrnv` / `pbztrnv`.
 
 ### `pbdtran` / `pbztran` — replicated-A (IACOL=-1) variant
 
