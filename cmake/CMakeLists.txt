@@ -587,6 +587,18 @@ endif()
 if(TARGET ${LIB_PREFIX}lapack AND TARGET lapack)
     target_link_libraries(${LIB_PREFIX}lapack PUBLIC lapack)
 endif()
+# The xx-family iterative-refinement helpers (qla_gerfsx_extended,
+# xla_gerfsx_extended, ...) live inside ${LIB_PREFIX}lapack and call
+# XBLAS extra-precise Level-2 entry points (BLAS_QGEMV_X_, ...). With
+# static archives, linking ${LIB_PREFIX}lapack into a test executable
+# pulls those *_extended objects via undefined-symbol resolution as
+# soon as any xx driver (qgesvxx / xgesvxx / qgbsvxx / ...) is reached
+# transitively, so the XBLAS symbols must be resolvable on the same
+# link line. Make the xblas dependency public so every consumer of
+# the migrated lapack archive picks it up automatically.
+if(TARGET ${LIB_PREFIX}lapack AND TARGET ${LIB_PREFIX}xblas)
+    target_link_libraries(${LIB_PREFIX}lapack PUBLIC ${LIB_PREFIX}xblas)
+endif()
 # The migrated lapack_common archive holds the extended-precision-only
 # helpers (la_constants_ep, la_xisnan_ep) which ``USE`` the standard
 # la_constants / la_xisnan modules supplied by the std ``lapack``
