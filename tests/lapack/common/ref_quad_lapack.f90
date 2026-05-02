@@ -6189,6 +6189,313 @@ module ref_quad_lapack
             real(ep),    intent(out)   :: res(*), work(*)
             integer,     intent(out)   :: iwork(*)
         end subroutine zgedmdq
+
+        ! ── Phase P17xx — extra-precise iterative-refinement xx family ─
+        !
+        ! These xx-suffix drivers (FACT='E' equilibrate-then-factor and
+        ! refine, or RFSX refine-only) perform residual refinement in
+        ! higher precision than the working precision via an XBLAS
+        ! (head, tail) accumulator pair. They return per-RHS BERR plus
+        ! a 2-D ERR_BNDS_NORM/COMP array of dimension
+        ! (NRHS, N_ERR_BNDS) where N_ERR_BNDS = 3:
+        !   col 1 = TRUST  (1.0 if bound is reliable, 0.0 if not),
+        !   col 2 = NORMWISE/COMPONENTWISE error bound,
+        !   col 3 = reciprocal of the condition number used.
+        ! NPARAMS / PARAMS are tuning knobs; passing NPARAMS=0 takes
+        ! all defaults (refinement on, threshold 10.0, no
+        ! componentwise refinement) and the PARAMS array is not
+        ! referenced.
+
+        subroutine dgesvxx(fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, &
+                           R, C, B, ldb, X, ldx, rcond, rpvgrw, berr,           &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), R(*), C(*), params(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, rpvgrw, berr(*),       &
+                                        err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgesvxx
+
+        subroutine zgesvxx(fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, &
+                           R, C, B, ldb, X, ldx, rcond, rpvgrw, berr,           &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: R(*), C(*), params(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvxx
+
+        subroutine dgerfsx(trans, equed, n, nrhs, A, lda, AF, ldaf, ipiv,       &
+                           R, C, B, ldb, X, ldx, rcond, berr, n_err_bnds,       &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans, equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*), R(*), C(*)
+            real(ep),  intent(inout) :: X(ldx,*), params(*)
+            real(ep),  intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*),  &
+                                        err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgerfsx
+
+        subroutine zgerfsx(trans, equed, n, nrhs, A, lda, AF, ldaf, ipiv,       &
+                           R, C, B, ldb, X, ldx, rcond, berr, n_err_bnds,       &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans, equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(in)    :: R(*), C(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgerfsx
+
+        subroutine dgbsvxx(fact, trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb,  &
+                           ipiv, equed, R, C, B, ldb, X, ldx,                    &
+                           rcond, rpvgrw, berr, n_err_bnds, err_bnds_norm,       &
+                           err_bnds_comp, nparams, params, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*), R(*), C(*), params(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, rpvgrw, berr(*),       &
+                                        err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgbsvxx
+
+        subroutine zgbsvxx(fact, trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb,  &
+                           ipiv, equed, R, C, B, ldb, X, ldx,                    &
+                           rcond, rpvgrw, berr, n_err_bnds, err_bnds_norm,       &
+                           err_bnds_comp, nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),    intent(inout) :: R(*), C(*), params(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbsvxx
+
+        subroutine dgbrfsx(trans, equed, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, &
+                           ipiv, R, C, B, ldb, X, ldx, rcond, berr,             &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans, equed
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx, n_err_bnds, nparams
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*), R(*), C(*)
+            real(ep),  intent(inout) :: X(ldx,*), params(*)
+            real(ep),  intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                        err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgbrfsx
+
+        subroutine zgbrfsx(trans, equed, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, &
+                           ipiv, R, C, B, ldb, X, ldx, rcond, berr,             &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans, equed
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx, n_err_bnds, nparams
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),    intent(in)    :: R(*), C(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbrfsx
+
+        subroutine dposvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, equed, S,     &
+                           B, ldb, X, ldx, rcond, rpvgrw, berr, n_err_bnds,     &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), S(*), params(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, rpvgrw, berr(*),       &
+                                        err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dposvxx
+
+        subroutine zposvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, equed, S,     &
+                           B, ldb, X, ldx, rcond, rpvgrw, berr, n_err_bnds,     &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*), params(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zposvxx
+
+        subroutine dporfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, S,           &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo, equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), S(*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*), params(*)
+            real(ep),  intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*),  &
+                                        err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dporfsx
+
+        subroutine zporfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, S,           &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo, equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(in)    :: S(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zporfsx
+
+        subroutine dsysvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, equed,  &
+                           S, B, ldb, X, ldx, rcond, rpvgrw, berr,              &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), S(*), params(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, rpvgrw, berr(*),       &
+                                        err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsysvxx
+
+        subroutine zsysvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, equed,  &
+                           S, B, ldb, X, ldx, rcond, rpvgrw, berr,              &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*), params(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zsysvxx
+
+        subroutine dsyrfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, ipiv, S,     &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo, equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), S(*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*), params(*)
+            real(ep),  intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                        err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyrfsx
+
+        subroutine zsyrfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, ipiv, S,     &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo, equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(in)    :: S(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyrfsx
+
+        subroutine zhesvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, equed,  &
+                           S, B, ldb, X, ldx, rcond, rpvgrw, berr,              &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*), params(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhesvxx
+
+        subroutine zherfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, ipiv, S,     &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo, equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(in)    :: S(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zherfsx
     end interface
 
 end module ref_quad_lapack
