@@ -368,3 +368,42 @@ call pattern) reproduces the LWORK abort immediately and the LRWORK
 heap corruption a few iterations later.
 
 **Upstream report.** Not yet filed.
+
+---
+## ScaLAPACK 2.2.3: `pdtrsen.f` IWORK(1:N) early-write during LQUERY
+
+**Symptom.** Calling `PDTRSEN` with `LIWORK = -1` (workspace query)
+and a 1-element `IWORK` corrupts the heap, surfacing as a
+`free(): invalid pointer` abort on the next `deallocate` of any
+unrelated buffer. The query *also* returns the correct `LIWMIN` in
+`IWORK(1)`, so a follow-up full call with a properly sized `IWORK`
+runs to completion and produces a numerically correct eigenvalue
+spectrum — the heap damage shows up only at cleanup.
+
+**Root cause.** The `LQUERY` gate at `pdtrsen.f:475` enters the
+parameter-validation block on either `INFO=0 OR LQUERY`. Inside that
+block, the `SELECT(1:N) → IWORK(1:N)` integer-conversion loop at
+lines 499-525 writes `IWORK(K)` (and `IWORK(K+1)` for 2-by-2 block
+boundaries) for `K = 1..N`. Line 537 then broadcasts `IWORK(1:N)` via
+`IGAMX2D(...,IWORK,N,...)`. Only after all of this is the `LQUERY`
+return reached at line 619-622, which sets `IWORK(1) = LIWMIN`. The
+caller passing `IWORK(1)` for the query (the documented contract) has
+`IWORK(2..N)` written past the end of its 1-element buffer.
+
+**Files affected.**
+- `external/scalapack-2.2.3/SRC/pdtrsen.f` (lines 499-538).
+
+**Fix.** Wrapper-side, mirroring the `target_pdsyevx` `WORK_T(3)` bump
+for upstream `PDSYEVX`'s `WORK(1:3)` early-write. `target_pdtrsen` in
+`tests/scalapack/common/target_scalapack_body.fypp` now allocates a
+local `iwork_t(max(1,n))` for the LQUERY branch and forwards it to
+upstream instead of the caller's `IWORK`; `iwork_t(1)` (= LIWMIN) is
+copied back to `iwork(1)` after the query returns.
+
+**Why upstream's tests miss it.** Most callers (including ScaLAPACK's
+own test harness) allocate `IWORK` to a precomputed `LIWMIN` upper
+bound *before* the query, so the early-write fits. A caller that
+follows the documented two-pass query contract (`IWORK(1)` for the
+query, then size to `LIWMIN`) trips the heap corruption.
+
+**Upstream report.** Not yet filed.

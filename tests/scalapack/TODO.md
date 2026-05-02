@@ -188,19 +188,26 @@ Both bugs documented in `doc/UPSTREAM_BUGS.md`. Tests:
 `tests/scalapack/linear_solve/test_pdposvx.f90` / `test_pzposvx.f90`
 both 3/3 PASS at ~33-digit accuracy on kind16 / 2×2 grid.
 
-## pdtrsen — heap corruption on every call
+## pdtrsen — RESOLVED 2026-05-02
 
-- **Status**: target_pdtrsen wrapper exists and the precision result
-  is correct (sorted eigenvalue spectrum agrees bit-equally with
-  LAPACK dtrsen), but every PDTRSEN call leaves the heap in a
-  corrupted state — `free(): invalid pointer` aborts on the next
-  deallocate. Same family as pdsyevx (heap corruption via internal
-  workspace bookkeeping).
-- **Action**: Either fix the upstream PDTRSEN workspace handling
-  or run pdtrsen in a sandbox so a single-call result can be reported
-  without the cleanup crash. Wrapper remains exposed; pdtrord (the
-  reorder-only sibling) does NOT exhibit the issue and ships a
-  passing driver.
+Root cause was an upstream LQUERY-contract bug: `pdtrsen.f:499-538`
+writes `IWORK(1:N)` (the SELECT→integer copy plus the IGAMX2D
+broadcast) before the LQUERY return at line 619-622, so a caller
+passing `IWORK(1)` for the workspace query writes past the end of its
+buffer and corrupts the heap. The follow-up "real" call runs cleanly
+(LIWMIN ≥ N), which is why the eigenvalue spectrum was correct even
+as the heap was already damaged.
+
+Fix: `target_pdtrsen` in
+`tests/scalapack/common/target_scalapack_body.fypp` allocates a local
+`iwork_t(max(1,n))` in the LQUERY branch and forwards it to upstream
+in place of the caller's IWORK; `iwork_t(1)` (= LIWMIN) is copied back
+to `iwork(1)` afterwards. Mirrors the `WORK_T(3)` pattern for
+`target_pdsyevx`'s upstream `WORK(1:3)` early-write.
+
+New driver `tests/scalapack/eigenvalue/test_pdtrsen.f90` exercises the
+fix over sizes [32, 64, 96]; all PASS without the previous `free()`
+abort. Documented in `doc/UPSTREAM_BUGS.md`.
 
 ## pdormrz / pzunmrz update — semantic mismatch with dormrz/zunmrz
 

@@ -3250,15 +3250,21 @@ contains
         real(ep),  intent(out)   :: WR(*), WI(*), S, SEP, work(*)
         integer,   intent(out)   :: m, iwork(*), info
         integer :: nt, nq, lwt
+        integer, allocatable :: iwork_t(:)
         ${target_real}$, allocatable :: Tt(:), Qt(:), WRt(:), WIt(:), work_t(:)
         ${target_real}$ :: S_t, SEP_t
         nt = nloc(descT); nq = nloc(descQ)
         if (lwork == -1) then
-            allocate(Tt(max(1,nt)), Qt(max(1,nq)), WRt(max(1,n)), WIt(max(1,n)), work_t(1))
+            ! Upstream PDTRSEN writes IWORK(1:N) (SELECT->integer copy) and
+            ! IGAMX2D(...,IWORK,N,...) before the LQUERY return, so a 1-element
+            ! caller IWORK is overrun. Use a local n-sized buffer for the query.
+            allocate(Tt(max(1,nt)), Qt(max(1,nq)), WRt(max(1,n)), WIt(max(1,n)), &
+                     work_t(1), iwork_t(max(1,n)))
             call ${R}$trsen(job, compq, select, para, n, Tt, it, jt, descT, &
                              Qt, iq, jq, descQ, WRt, WIt, m, S_t, SEP_t, &
-                             work_t, -1, iwork, liwork, info)
+                             work_t, -1, iwork_t, -1, info)
             work(1) = t2q_r(work_t(1))
+            iwork(1) = iwork_t(1)
         else
             lwt = max(1, lwork)
             allocate(Tt(nt), Qt(nq), WRt(n), WIt(n), work_t(lwt))
