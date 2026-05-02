@@ -411,7 +411,7 @@ query, then size to `LIWMIN`) trips the heap corruption.
 
 ---
 
-## ScaLAPACK 2.2.3: `pdlarzb.f` PBDTRAN workspace under-allocation
+## ScaLAPACK 2.2.3: `pdlarzb.f` PBDTRAN N-arg vs LV-buffer mismatch
 
 **Symptom.** `PDORMRZ` / `PZUNMRZ` (apply Q from RZ-factorization) on a
 multi-rank grid silently produces a numerically corrupt C: gathered
@@ -451,16 +451,95 @@ shape with `mA <= nA`). Since `mC = K + L > L` for any non-trivial K,
 - Same shape for the complex variant `pzlarzb.f` / `pbztran.f` driving
   `pzunmrz`.
 
-**Fix.** Not yet patched. The minimal repair would be a
-`source_overrides` patch in `pdlarzb.f` (and the C/Z counterpart) that
-either bumps the `LV` allocation to `MAX(1, MPC20, NUMROC(M+ICOFFV,
-DESCV(NB_), MYROW, ICROW2, NPROW))` or splits the PBDTRAN call to
-avoid the LDC mismatch. Neither is a one-line change, so the
-multi-rank pdormrz/pzunmrz tests stay deferred for now.
+**Fix (PARTIAL).** Patched overrides in
+`recipes/scalapack/source_overrides/p[dz]larzb.f`. The repair is a
+one-line change to the SIDE='L' branch: PBDTRAN/PBZTRAN's N argument
+goes from `M+ICOFFV` to `L+ICOFFV` (and the matching `MQV0` line is
+adjusted likewise). Per `pdlarzb`'s comment "WORK(IPW) is K x MQV0 = [
+. V(IOFFV) ]'" and the row-stored RZ convention, only the trailing
+K×L portion of V holds meaningful Householder data, so the transpose
+only needs to operate on those L columns. The `MPC20`-sized IPV
+buffer (= local rows of L) then satisfies PBDTRAN's
+`LDC >= NUMROC(L+ICOFFV, NBV, MYROW, ICROW2, NPROW)` requirement
+under the alignment hypothesis `IROFFC2 = ICOFFV` (= `NB_V = MB_C`).
+`recipes/scalapack.yaml` declares the overrides plus matching
+`prefer_source: PDLARZB, PZLARZB` to keep the canonical-rank picker
+from choosing the un-fixed S/C halves.
+
+This fix alone is insufficient. A second, independent upstream bug in
+`pdormrz.f` / `pzunmrz.f` (post-loop condition copy-paste — see the
+section below) also applies; both fixes are required for SIDE='R' to
+pass. SIDE='L' continues to fail by ~factor of 2 even after both
+fixes — the residual bug appears to live in the PDORMR3/PDLARZ chain
+for SIDE='L' and is still under investigation.
 
 **Why upstream's tests miss it.** ScaLAPACK ships no `pdormrz`
 differential test in its standard test suite. The routine is exercised
 only as a building block of higher-level GSVD/GELSY drivers, where the
 specific shape that triggers PBDTRAN's check apparently isn't hit.
+
+**Test drivers.**
+- `tests/scalapack/factorization/test_pdormrz.f90` — real, SIDE='R'
+  only (TRANS='N','T'), mA=32, mC=48, nC=nA=64.
+- `tests/scalapack/factorization/test_pzunmrz.f90` — complex
+  counterpart with TRANS in {'N','C'}.
+
+Both pass to ~target precision on kind16 / 2×2 grid after the fixes.
+SIDE='L' is currently disabled in the test drivers pending the
+remaining PDORMR3/PDLARZ investigation (see `tests/scalapack/TODO.md`).
+
+**Upstream report.** Not yet filed.
+
+---
+
+## ScaLAPACK 2.2.3: `p?ormrz.f` post-loop condition copy-paste
+
+**Symptom.** Calling `PDORMRZ` (or `PZUNMRZ`) with SIDE/TRANS
+combinations `(LEFT,NOTRAN)` or `(RIGHT,TRANS)` returns C with the
+leading partial block of reflectors (rows/cols `IA:I2-1`) unapplied.
+The remaining K reflectors are applied correctly, so the disagreement
+with the LAPACK serial reference scales with how many reflectors fell
+into the leading partial block — for the canonical-shape case
+`K = mA`, that's the entire first `MIN(K, MB)` reflectors.
+
+**Root cause.** `pdormrz.f:458-459` reads
+
+```fortran
+IF( ( LEFT .AND. .NOT.NOTRAN ) .OR.
+$    ( .NOT.LEFT .AND. NOTRAN ) ) THEN
+   IB = I2 - IA
+   ...
+   CALL PDORMR3( SIDE, TRANS, MI, NI, IB, L, A, IA, JA, ... )
+END IF
+```
+
+This is a *byte-for-byte copy* of the pre-loop condition at
+`pdormrz.f:416-417`. Because the same condition gates both, both fire
+together for `(LEFT,!NOTRAN)` and `(!LEFT,NOTRAN)`, and *neither*
+fires for the complementary cases `(LEFT,NOTRAN)` and
+`(!LEFT,!NOTRAN)`. The complementary cases need the post-loop
+PDORMR3 call to handle the leading partial block left untouched by
+the main DO loop's asymmetric I1/I2 bounds.
+
+The intended structure mirrors `pdormrq.f:454`:
+
+```fortran
+IF( ( RIGHT .AND. TRAN ) .OR.
+$    ( LEFT .AND. NOTRAN ) ) THEN
+```
+
+— exactly the complement of the pre-loop. Same shape applies in
+`pzunmrz.f:459-460`.
+
+**Affected files.**
+- `external/scalapack-2.2.3/SRC/pdormrz.f` (lines 458-459).
+- `external/scalapack-2.2.3/SRC/pzunmrz.f` (lines 459-460).
+- Same shape in `psormrz.f` / `pcunmrz.f` (untested by us).
+
+**Fix.** Patched overrides in
+`recipes/scalapack/source_overrides/p[dz]ormrz.f` change the post-loop
+condition to `(LEFT .AND. NOTRAN) .OR. (.NOT.LEFT .AND. .NOT.NOTRAN)`.
+Wired via `recipes/scalapack.yaml` plus matching `prefer_source:
+PDORMRZ, PZUNMRZ` pins.
 
 **Upstream report.** Not yet filed.

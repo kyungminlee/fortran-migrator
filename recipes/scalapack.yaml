@@ -172,6 +172,17 @@ prefer_source:
   # rank picker doesn't choose an alphabetically-earlier S/C copy.
   - PDPOSVX
   - PZPOSVX
+  # Same pin reason: source_overrides for PDLARZB/PZLARZB patch the
+  # PBDTRAN/PBZTRAN LDC mismatch (M+ICOFFV vs L+ICOFFV); pin the D/Z
+  # half so the canonical-rank picker doesn't pick the un-fixed
+  # alphabetically-earlier S/C copy.
+  - PDLARZB
+  - PZLARZB
+  # Same pin reason: source_overrides for PDORMRZ/PZUNMRZ patch the
+  # post-loop-condition copy-paste bug (post-loop should be the
+  # complement of pre-loop, not a duplicate). Pin the D/Z half.
+  - PDORMRZ
+  - PZUNMRZ
 
 # Mirror the scalapack_c.yaml rename for pdlaiectb_/pdlaiectl_: the
 # Fortran callers PDSTEBZ / PDSYEVX / PDSYGVX / PZHEEVX / PZHEGVX
@@ -213,6 +224,30 @@ source_overrides:
   # restores the documented MAX(PDPOCON,PDPORFS) formula.
   pdposvx.f: scalapack/source_overrides/pdposvx.f
   pzposvx.f: scalapack/source_overrides/pzposvx.f
+  # PDLARZB / PZLARZB SIDE='L' branch passed M+ICOFFV (the C-row count)
+  # as PBDTRAN/PBZTRAN's N argument while sizing the destination buffer
+  # WORK( IPV ) / LV from MPC20 = local rows of L. Whenever M > L
+  # (typical: M = K+L from PDORMRZ/PZUNMRZ), PBDTRAN's LDC contract
+  # `LDC >= NUMROC( N_arg, NBV, MYROW, ICROW2, NPROW )` fails — the
+  # transpose silently no-ops via PXERBLA(INFO=11) and the trailing
+  # GEMM multiplies uninitialised data into C, surfacing as a ~1.3x
+  # numerical-corruption error in PDORMRZ/PZUNMRZ. The override changes
+  # M+ICOFFV to L+ICOFFV in the PBDTRAN call (and matching MQV0
+  # computation), which matches the only-K×L-meaningful row-stored RZ
+  # convention.
+  pdlarzb.f: scalapack/source_overrides/pdlarzb.f
+  pzlarzb.f: scalapack/source_overrides/pzlarzb.f
+  # PDORMRZ / PZUNMRZ post-loop condition is a copy-paste of the pre-
+  # loop condition (line 458 vs 416 in pdormrz.f, line 459 vs 417 in
+  # pzunmrz.f). For SIDE/TRANS combinations (LEFT,NOTRAN) and
+  # (RIGHT,TRANS), the leftover-block PDORMR3/PZUNMR3 call never fires
+  # — neither pre nor post — leaving the trailing partial-MB block of
+  # reflectors unapplied. The mainline DO loop also misses the missing
+  # block due to its asymmetric I1/I2 bounds. The override fixes the
+  # post-loop condition to be the complement of the pre-loop, matching
+  # the correct structure in PDORMRQ/PZUNMRQ.
+  pdormrz.f: scalapack/source_overrides/pdormrz.f
+  pzunmrz.f: scalapack/source_overrides/pzunmrz.f
 
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix

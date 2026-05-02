@@ -150,29 +150,49 @@ Results (kind16, 2×2 grid):
 
 (pzheev fix folded into the pxhetrd/pxheev entry above.)
 
-## pdormrz / pzunmrz — STILL DEFERRED (real upstream pdlarzb bug, 2026-05-02)
+## pdormrz / pzunmrz — PARTIALLY RESOLVED 2026-05-02 (SIDE='R' only)
 
-Initial assumption was a test-driver descriptor-alignment fix; turns
-out the underlying `pdlarzb.f` workspace allocation is the real
-problem. With `mb=nb=8`, `IA=JA=IC=JC=1`, `K=mA`, `L=nA-mA`, and
-`mC=nA=K+L` (the only legal shape per `pdormrz.f:34` "Q is of order M
-if SIDE='L'"), `pdlarzb.f:374-377` allocates `WORK(IPV)` with
-`LV = MAX(1, MPC20) = local rows of L-row matrix`. But the inner
-`PBDTRAN(...,'Rowwise','Transpose', K, M+ICOFFV, ..., LV, ...)` call
-checks `LDC ≥ NP` where `NP = local rows of M=mC=(K+L)-row matrix` at
-`pbdtran.f:457-459`. Since `mC > L` for any non-trivial K, `LV < NP`
-and `PBDTRAN` exits via `PXERBLA` with `INFO=11` ("LDC illegal value")
-without performing the transpose. The outer `pdormrz` continues using
-uninitialised `WORK(IPV)` and produces a numerically-corrupt C
-(disagreement of ~1.2× vs LAPACK `dormrz`), which is exactly the
-symptom the original TODO captured.
+Two upstream bugs identified and patched in
+`recipes/scalapack/source_overrides/p[dz]larzb.f` and
+`recipes/scalapack/source_overrides/p[dz]ormrz.f`:
 
-The wrapper TAU sizing as `locrows(desca)` IS correct
-(`pdlarzt.f:135-138, 246-256` confirms TAU is row-distributed for
-row-storage RZ). The bug is upstream in `pdlarzb.f`; a test driver
-cannot work around it. Fix would be a `source_overrides` patch that
-either bumps `LV` allocation or splits the PBDTRAN call to avoid the
-LDC mismatch — neither is a one-line repair, hence still deferred.
+1. **`p[dz]larzb.f` PBDTRAN N-arg vs LV-buffer mismatch (SIDE='L'
+   branch).** With `mb=nb=8`, `IA=JA=IC=JC=1`, `K=mA`, `L=nA-mA`, and
+   `mC=nA=K+L` (the only legal shape per `pdormrz.f:34` "Q is of order
+   M if SIDE='L'"), `pdlarzb.f:374-377` allocates `WORK(IPV)` with
+   `LV = MAX(1, MPC20) = local rows of L-row matrix`, but
+   `PBDTRAN(...,'Rowwise','Transpose', K, M+ICOFFV, ..., LV, ...)`
+   checks `LDC ≥ NP` where `NP = local rows of M=mC=(K+L)-row matrix`.
+   Since `mC > L` for any non-trivial K, `LV < NP` and `PBDTRAN` exits
+   via `PXERBLA(INFO=11)` without performing the transpose, leaving
+   uninitialised `WORK(IPV)`. The override changes the PBDTRAN N arg
+   from `M+ICOFFV` to `L+ICOFFV` — only the trailing K×L portion of V
+   holds meaningful Householder data per the row-stored RZ convention.
+
+2. **`p[dz]ormrz.f` post-loop condition copy-paste (`(L&&!T)||(!L&&T)`
+   matches the pre-loop condition instead of being its complement).**
+   The result is that for SIDE/TRANS combinations `(LEFT,NOTRAN)` and
+   `(RIGHT,TRANS)`, neither pre nor post fires. Combined with the main
+   DO loop's asymmetric I1/I2 bounds, the leading partial block of
+   reflectors goes unapplied. The override fixes the post-loop
+   condition to `(LEFT && NOTRAN) || (.NOT.LEFT && .NOT.NOTRAN)`,
+   mirroring `pdormrq.f:454`'s correct shape.
+
+Both fixes wired in `recipes/scalapack.yaml` (`source_overrides` +
+`prefer_source` pins).
+
+**SIDE='R' status**: passes to target precision on kind16 / 2×2 grid
+for both TRANS='N' and TRANS='C/T'. Test drivers:
+`tests/scalapack/factorization/test_p[dz]ormrz.f90`.
+
+**SIDE='L' status — STILL DEFERRED**. Even with both fixes applied,
+SIDE='L' (both TRANS='N' and TRANS='T') fails by a factor of ~2.5.
+The failure reproduces with K=mA=4 / mC=nA=K+L=8 (single-block path,
+where PDLARZB is *not* called and only the post-loop PDORMR3 fires),
+ruling out PDLARZB. The bug appears to live in the PDORMR3 + PDLARZ
+chain for SIDE='L' (the SIDE='R' chain works correctly). Test drivers
+currently restrict to SIDE='R' only; re-add SIDE='L' once the
+underlying PDORMR3/PDLARZ bug is identified.
 
 Documented in `doc/UPSTREAM_BUGS.md`.
 
@@ -249,10 +269,10 @@ New driver `tests/scalapack/eigenvalue/test_pdtrsen.f90` exercises the
 fix over sizes [32, 64, 96]; all PASS without the previous `free()`
 abort. Documented in `doc/UPSTREAM_BUGS.md`.
 
-## pdormrz / pzunmrz "factor of ~1.3" — folded into the deferral above (2026-05-02)
+## pdormrz / pzunmrz "factor of ~1.3" — folded into the resolution above (2026-05-02)
 
-The earlier SIDE='R' factor-of-1.3 disagreement was the same upstream
-`pdlarzb.f` LV/PBDTRAN bug. The transpose silently no-ops via
-PXERBLA, leaving uninitialised workspace that gets multiplied through
-to C — manifesting as a ~1.3× scaling error. Same root cause, same
-deferral.
+Same root cause as the SIDE='L' bug: `pdlarzb.f`'s PBDTRAN N-arg vs
+LV-buffer mismatch. The transpose silently no-ops via PXERBLA, leaving
+uninitialised workspace that gets multiplied through to C —
+manifesting as a ~1.3× scaling error. Resolved by the same
+`source_overrides` fix.
