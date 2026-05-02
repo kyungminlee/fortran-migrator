@@ -1,27 +1,32 @@
 program test_pddttrsv
-    ! Smoke test: factor general tridiagonal with pddttrf, then call
-    ! pddttrsv twice (UPLO='L'/'U'). PDDTTRF applies a permutation;
-    ! the two trsv halves don't compose to the full pddttrs solve, so
-    ! we report INFO=0 from each call as the success metric.
+    ! Validate the general-tridiagonal half-solves by composing them to
+    ! recover the full pddttrs result. PDDTTRF stores A = P*L*U with the
+    ! permutation absorbed into the factor representation; PDDTTRSV
+    ! halves with TRANS='N' apply L^-1 (UPLO='L') and U^-1 (UPLO='U')
+    ! through the same factor.
     use prec_kinds,        only: ep
+    use compare,           only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use pblas_grid,        only: grid_init, grid_exit, my_rank, my_nproc, &
-                                 my1d_context, my1d_npcol, my1d_col, &
-                                 descinit_1d
+                                 my1d_context, my1d_npcol, my1d_col, descinit_1d
     use test_data,         only: gen_vector_quad, gen_matrix_quad
     use target_scalapack,  only: target_name, target_eps, &
-                                 target_pddttrf, target_pddttrsv
+                                 target_pddttrf, target_pddttrs, target_pddttrsv
+    use mpi
     implicit none
 
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: nrhs = 2
+    integer, parameter :: tag = 8821
     integer :: i, n, nb, info, lwork, laf, ig, jl, lldB
+    integer :: bytes_per_elem, ierr, src_rank, peer
     integer :: desca(9), descb(9)
     real(ep), allocatable :: dl_glob(:), d_glob(:), du_glob(:), B_glob(:,:)
-    real(ep), allocatable :: dl_loc(:), d_loc(:), du_loc(:), B_loc(:,:)
+    real(ep), allocatable :: dl_loc(:), d_loc(:), du_loc(:)
+    real(ep), allocatable :: B_full(:,:), B_half(:,:)
     real(ep), allocatable :: af(:), work(:)
+    real(ep), allocatable :: B_full_got(:,:), B_half_got(:,:), buf(:,:)
     real(ep) :: err, tol, wopt(1)
-    integer :: info_l, info_u
     character(len=48) :: label
 
     call grid_init()
@@ -57,14 +62,16 @@ program test_pddttrsv
         end do
 
         lldB = nb
-        allocate(B_loc(nb, nrhs)); B_loc = 0.0_ep
+        allocate(B_full(nb, nrhs), B_half(nb, nrhs))
+        B_full = 0.0_ep; B_half = 0.0_ep
         do ig = 1, n
             block
                 integer :: blk, owner
                 blk = (ig - 1) / nb; owner = blk
                 if (owner == my1d_col) then
                     jl = mod(ig - 1, nb) + 1
-                    B_loc(jl, 1:nrhs) = B_glob(ig, 1:nrhs)
+                    B_full(jl, 1:nrhs) = B_glob(ig, 1:nrhs)
+                    B_half(jl, 1:nrhs) = B_glob(ig, 1:nrhs)
                 end if
             end block
         end do
@@ -83,30 +90,88 @@ program test_pddttrsv
                             af, laf, work, lwork, info)
         deallocate(work)
 
+        call target_pddttrs('N', n, nrhs, dl_loc, d_loc, du_loc, 1, desca, &
+                            B_full, 1, descb, af, laf, wopt, -1, info)
+        lwork = max(1, int(wopt(1)))
+        allocate(work(lwork))
+        call target_pddttrs('N', n, nrhs, dl_loc, d_loc, du_loc, 1, desca, &
+                            B_full, 1, descb, af, laf, work, lwork, info)
+        deallocate(work)
+
         call target_pddttrsv('L', 'N', n, nrhs, dl_loc, d_loc, du_loc, 1, desca, &
-                             B_loc, 1, descb, af, laf, wopt, -1, info_l)
+                             B_half, 1, descb, af, laf, wopt, -1, info)
         lwork = max(1, int(wopt(1)))
         allocate(work(lwork))
         call target_pddttrsv('L', 'N', n, nrhs, dl_loc, d_loc, du_loc, 1, desca, &
-                             B_loc, 1, descb, af, laf, work, lwork, info_l)
+                             B_half, 1, descb, af, laf, work, lwork, info)
         deallocate(work)
 
         allocate(work(1))
         call target_pddttrsv('U', 'N', n, nrhs, dl_loc, d_loc, du_loc, 1, desca, &
-                             B_loc, 1, descb, af, laf, work, -1, info_u)
+                             B_half, 1, descb, af, laf, work, -1, info)
         lwork = max(1, int(work(1)))
         deallocate(work); allocate(work(lwork))
         call target_pddttrsv('U', 'N', n, nrhs, dl_loc, d_loc, du_loc, 1, desca, &
-                             B_loc, 1, descb, af, laf, work, lwork, info_u)
+                             B_half, 1, descb, af, laf, work, lwork, info)
+
+        bytes_per_elem = storage_size(0.0_ep) / 8
+        if (my_rank == 0) then
+            allocate(B_full_got(n, nrhs), B_half_got(n, nrhs))
+            B_full_got = 0.0_ep; B_half_got = 0.0_ep
+            do src_rank = 0, my_nproc - 1
+                allocate(buf(nb, nrhs))
+                if (src_rank == my_rank) then
+                    buf = B_full
+                else
+                    call mpi_recv(buf, nb * nrhs * bytes_per_elem, mpi_byte, &
+                                  src_rank, tag, mpi_comm_world, &
+                                  mpi_status_ignore, ierr)
+                end if
+                do ig = 1, n
+                    block
+                        integer :: blk, owner
+                        blk = (ig - 1) / nb; owner = blk
+                        if (owner == src_rank) then
+                            jl = mod(ig - 1, nb) + 1
+                            B_full_got(ig, 1:nrhs) = buf(jl, 1:nrhs)
+                        end if
+                    end block
+                end do
+                if (src_rank == my_rank) then
+                    buf = B_half
+                else
+                    call mpi_recv(buf, nb * nrhs * bytes_per_elem, mpi_byte, &
+                                  src_rank, tag + 1, mpi_comm_world, &
+                                  mpi_status_ignore, ierr)
+                end if
+                do ig = 1, n
+                    block
+                        integer :: blk, owner
+                        blk = (ig - 1) / nb; owner = blk
+                        if (owner == src_rank) then
+                            jl = mod(ig - 1, nb) + 1
+                            B_half_got(ig, 1:nrhs) = buf(jl, 1:nrhs)
+                        end if
+                    end block
+                end do
+                deallocate(buf)
+            end do
+        else
+            peer = 0
+            call mpi_send(B_full, nb * nrhs * bytes_per_elem, mpi_byte, &
+                          peer, tag, mpi_comm_world, ierr)
+            call mpi_send(B_half, nb * nrhs * bytes_per_elem, mpi_byte, &
+                          peer, tag + 1, mpi_comm_world, ierr)
+        end if
 
         if (my_rank == 0) then
-            err = real(abs(info_l) + abs(info_u), ep)
-            tol = 0.5_ep
-            write(label, '(a,i0,a,i0,a,i0,a,i0)') 'n=', n, ',nrhs=', nrhs, &
-                ',info_L=', info_l, ',info_U=', info_u
+            err = max_rel_err_mat(B_half_got, B_full_got)
+            tol = 64.0_ep * real(n, ep) * target_eps
+            write(label, '(a,i0,a,i0)') 'n=', n, ',nrhs=', nrhs
             call report_case(trim(label), err, tol)
+            deallocate(B_full_got, B_half_got)
         end if
-        deallocate(dl_loc, d_loc, du_loc, B_loc, work, af, &
+        deallocate(dl_loc, d_loc, du_loc, B_full, B_half, work, af, &
                    dl_glob, d_glob, du_glob, B_glob)
     end do
 

@@ -155,20 +155,39 @@ Results (kind16, 2×2 grid):
 - **Symptom**: A test driver that invokes pdtzrzf followed by pdormrz('L', 'N', n_a, ncc, m_a, n_a-m_a, …) aborts in the internal PBETRAN dispatcher with "parameter number 11 had an illegal value", suggesting the m-by-n trapezoidal A's column distribution must align with C's row distribution in a way the simple "same MB/NB" descriptor pair doesn't satisfy.
 - **Action**: Defer until the descA/descC alignment study is done. The wrappers are exposed (target_pdormrz / target_pzunmrz) and compile, so re-enabling is just a driver-shape fix.
 
-## *trsv (single-half banded/tridiag triangular solves) — driver semantics
+## *trsv (single-half banded/tridiag triangular solves) — RESOLVED 2026-05-02
 
-- **Status**: Wrappers exist for pdpttrsv/pzpttrsv, pddttrsv/pzdttrsv,
-  pdpbtrsv/pzpbtrsv, pddbtrsv/pzdbtrsv (interface signatures match
-  upstream — UPLO/TRANS/etc.).
-- **Symptom**: A naïve "verify pdpttrsv(L) ∘ pdpttrsv(U) ≡ pdpttrs"
-  test fails by 60-200x — the trsv routines do NOT compose to the
-  full LDL^T solve; the implicit D^-1 step lives only in the *trs
-  driver, not in the half-solves.
-- **Action**: Build a meaningful test by applying *trsv to a vector
-  built from the factor (forward-substitute against the L stored in
-  AF), or by rebuilding T from D/E/AF on rank 0 and checking
-  T_L * X_got ≡ B_orig directly. Deferred until an upstream-doc
-  read pins down exactly what each *trsv variant computes.
+The 8 smoke tests at `tests/scalapack/linear_solve/test_p[dz]{pt,dt,pb,db}trsv.f90`
+were upgraded from INFO=0 checks to validation tests that compose the
+two halves and compare against the full `*trs` oracle on the same
+distributed factor. Per-family composition:
+
+* **PT** (real LDL^T): `pdpttrsv('L')` → mid-step → `pdpttrsv('U')`
+  ≡ `pdpttrs`. The mid-step mirrors `pdpttrs.f:707-716` exactly: ranks
+  0..NPCOL-2 divide entries 1..nb-1 by `d_loc` (the modified LDL^T
+  diagonal D'), then divide entry nb by the reduced-system pivot
+  stored at `af(nb+1)`; the last rank divides all nb entries by
+  `d_loc` (no boundary). The original "fails by 60-200x" smoke test
+  was missing both the D'^-1 step and the AF reduced-system pivot.
+* **PT** (complex Hermitian LDL^H): `pzpttrsv('L','N')` →
+  mid-step (real D' divide + complex AF pivot divide, mirroring
+  `pzpttrs.f:744-758`) → `pzpttrsv('L','C')` ≡ `pzpttrs(UPLO='L')`.
+  Note backward half uses `('L','C')` (apply L^H of stored L), not
+  `('U','N')` — pzpttrf stores the L view, and `pzpttrs(UPLO='L')`
+  internally uses the same pattern.
+* **DT/DB** (LU): `trsv('L','N')` ∘ `trsv('U','N')` ≡ `*trs` (no
+  scaling). For DB, the `*trsv` and `*trs` paths must use distinct AF
+  copies — even though AF is documented read-only, in practice the
+  `*trs` divide-and-conquer path perturbs internal scratch in AF on
+  certain ranks, so the test snapshots AF after the factor and runs
+  the two paths sequentially with restore in between. Workspace must
+  be the bumped formula `nrhs*max(bwl,bwu) + (nrhs-1)*(bwl+bwu)`
+  (per the banded TODO entry above) — upstream's `*trsv` LWMIN query
+  under-allocates.
+* **PB** (Cholesky, UPLO='U'): `trsv('U','T'/'C')` then `trsv('U','N')`
+  ≡ `pbtrs` — apply U^-T (or U^-H) before U^-1.
+
+All 8 PASS to ~target precision on kind16 / 2×2 grid.
 
 ## pdposvx / pzposvx — RESOLVED 2026-05-01
 
