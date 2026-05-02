@@ -542,6 +542,7 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
     else:
         result = _migrate_blacs_c_directory(
             src_dir, output_dir, target_mode, copy_originals,
+            source_overrides=source_overrides,
         )
     if overrides:
         applied = _apply_overrides(output_dir, overrides)
@@ -1418,13 +1419,40 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
 
 
 def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
-                                 target_mode: TargetMode, copy_originals: bool) -> dict:
-    """BLACS-specific C migration (original behavior)."""
+                                 target_mode: TargetMode, copy_originals: bool,
+                                 source_overrides: dict[str, Path] | None = None) -> dict:
+    """BLACS-specific C migration (original behavior).
+
+    ``source_overrides`` maps upstream basenames to recipe-relative
+    replacement paths. A name that exists upstream is swapped for the
+    replacement before the copy / clone passes — so the override goes
+    through the same d→{rp} / z→{cp} substitution as the original.
+    A name that does not exist upstream is added as a new source (used
+    for sibling files like ``BI_dMPI_sum.c`` that have no upstream
+    counterpart). Same semantics as the generic-path
+    ``source_overrides`` field, but adapted to BLACS's hand-rolled
+    file walk.
+    """
     template_vars = _build_sub_vars(target_mode)
     rp = template_vars['RP']
     cp = template_vars['CP']
 
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    _overrides = source_overrides or {}
+
+    # Build the effective source list: every upstream file (with the
+    # override path swapped in if its name is overridden), plus any
+    # override-only files not present upstream. The override file's
+    # ``Path.name`` is used downstream for prefix detection and clone
+    # naming, so override files must keep the upstream-shape basename.
+    upstream_by_name = {p.name: p for p in src_dir.iterdir()}
+    sources: list[Path] = []
+    for name in sorted(upstream_by_name):
+        sources.append(_overrides.get(name, upstream_by_name[name]))
+    for name in sorted(_overrides):
+        if name not in upstream_by_name:
+            sources.append(_overrides[name])
 
     # Copy headers always; copy precision-prefixed .c originals only
     # when copy_originals; copy precision-independent dispatcher .c
@@ -1443,7 +1471,7 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
             return True
         return False
 
-    for f in sorted(src_dir.iterdir()):
+    for f in sources:
         ext = f.suffix.lower()
         if ext == '.h':
             shutil.copy2(f, output_dir / f.name)
@@ -1454,7 +1482,7 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
     cloned = []
 
     # Clone d-variant → real-extended
-    for f in sorted(src_dir.iterdir()):
+    for f in sources:
         if f.suffix.lower() != '.c':
             continue
         stem = f.stem
@@ -1476,7 +1504,7 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
             cloned.append(f'{f.name} → {new_name}')
 
     # Clone z-variant → complex-extended
-    for f in sorted(src_dir.iterdir()):
+    for f in sources:
         if f.suffix.lower() != '.c':
             continue
         stem = f.stem
