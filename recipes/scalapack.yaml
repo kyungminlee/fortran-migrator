@@ -167,6 +167,11 @@ prefer_source:
   # alphabetically first and the un-fixed copy becomes canonical.
   - PDGEEQU
   - PZGEEQU
+  # Same pin reason: source_overrides for PDPOSVX/PZPOSVX patch the
+  # LWMIN-too-small upstream bug; pin the D/Z half so the canonical-
+  # rank picker doesn't choose an alphabetically-earlier S/C copy.
+  - PDPOSVX
+  - PZPOSVX
 
 # Mirror the scalapack_c.yaml rename for pdlaiectb_/pdlaiectl_: the
 # Fortran callers PDSTEBZ / PDSYEVX / PDSYGVX / PZHEEVX / PZHEGVX
@@ -200,6 +205,14 @@ source_overrides:
   # the global. Extends the override pattern; see the body comment.
   pdgeequ.f: scalapack/source_overrides/pdgeequ.f
   pzgeequ.f: scalapack/source_overrides/pzgeequ.f
+  # PDPOSVX / PZPOSVX upstream LWMIN = 3*DESCA(LLD_) is insufficient
+  # for the internal PDPOCON/PZPOCON + PDPORFS/PZPORFS workspace
+  # contracts (see commented prologue at line 311 of either file).
+  # The internal PDPOCON / PZPOCON call then aborts with INFO=-10
+  # ("LWORK too small") on every grid above the smallest. The override
+  # restores the documented MAX(PDPOCON,PDPORFS) formula.
+  pdposvx.f: scalapack/source_overrides/pdposvx.f
+  pzposvx.f: scalapack/source_overrides/pzposvx.f
 
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix

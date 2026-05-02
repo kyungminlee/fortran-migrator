@@ -703,6 +703,18 @@ module ref_quad_lapack
             integer,     intent(out)   :: info
         end subroutine zpotrf
 
+        subroutine zpocon(uplo, n, A, lda, anorm, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(in)    :: A(lda,*)
+            real(ep),    intent(in)    :: anorm
+            real(ep),    intent(out)   :: rcond
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zpocon
+
         subroutine dtrtrs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, info)
             import :: ep
             character, intent(in)    :: uplo, trans, diag

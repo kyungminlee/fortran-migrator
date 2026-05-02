@@ -321,6 +321,20 @@ function(add_mumps_c_test test_src)
     target_include_directories(${name} PRIVATE
         ${_BRIDGE_INC_TARGET} ${_BRIDGE_INC_SHARED} ${_MUMPS_C_INC}
     )
+    # Wire the same ``TARGET_*`` macros mumps_c_bridge uses so each
+    # test source can ``#include TARGET_REAL_HEADER`` and dispatch to
+    # the per-target bridge entry points without hard-coding kind16.
+    string(TOUPPER "${TARGET_NAME}" _ttn_upper)
+    target_compile_definitions(${name} PRIVATE
+        "TARGET_REAL_HEADER=\"${LIB_PREFIX}mumps_c.h\""
+        "TARGET_COMPLEX_HEADER=\"${LIB_PREFIX_COMPLEX}mumps_c.h\""
+        TARGET_REAL_MUMPS_C=${LIB_PREFIX}mumps_c
+        TARGET_COMPLEX_MUMPS_C=${LIB_PREFIX_COMPLEX}mumps_c
+        TARGET_REAL_STRUC_C=${PFX}MUMPS_STRUC_C
+        TARGET_COMPLEX_STRUC_C=${PFX_C}MUMPS_STRUC_C
+        "TEST_TARGET_NAME=\"${TARGET_NAME}\""
+        "TEST_TARGET_${_ttn_upper}"
+    )
     _mumps_register_test(${name})
 endfunction()
 
@@ -337,18 +351,17 @@ if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
     endforeach()
 endif()
 
-# C-side tests still hard-code kind16-only types (``__float128``,
-# ``quadmath.h``, ``0.0q`` literals, the literal ``QMUMPS_STRUC_C``
-# spelling). Skip them for non-kind16 targets until the C tests are
-# templatised the same way ``c_parity_helpers.c`` is. The generic
-# ``mumps_c_bridge`` archive still builds for every target so the
-# Fortran tests + parity helpers are unaffected.
-if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES AND TARGET_NAME STREQUAL "kind16")
+# C-side tests are portable across kind16 and kind10 via the
+# ``test_real_compat.h`` shim plus the ``TARGET_REAL_HEADER`` /
+# ``TARGET_REAL_MUMPS_C`` macros wired in ``add_mumps_c_test()``.
+# Multifloats has no scalar-arithmetic real type in plain C (the bridge
+# typedef is a POD struct), so the C tests still skip there.
+if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES AND NOT TARGET_NAME STREQUAL "multifloats")
     file(GLOB _ctests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/c/test_*.c)
     foreach(_t ${_ctests})
         add_mumps_c_test(${_t})
     endforeach()
 elseif(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
     message(STATUS "tests/mumps: skipping C-side tests for target "
-                   "'${TARGET_NAME}' — only kind16 wired today")
+                   "'${TARGET_NAME}' — POD real type, no plain-C arithmetic")
 endif()

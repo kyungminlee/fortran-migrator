@@ -70,6 +70,7 @@ add_library(scalapack_test_common STATIC
     common/test_data.f90
     common/ref_quad_blas.f90
     common/ref_quad_lapack.f90
+    common/cond_helpers.f90
     common/pblas_grid.f90
     common/pblas_distrib.f90
 )

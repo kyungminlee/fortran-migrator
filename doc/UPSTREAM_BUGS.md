@@ -305,3 +305,66 @@ seed-by-seed numerical comparison surfaces the disagreement
 immediately, which is what `test_p[dz]geequ.f90` do.
 
 **Upstream report.** Not yet filed.
+
+## ScaLAPACK 2.2.3: `p?posvx.f` LWMIN too small (PDPOCON / PZPOCON aborts)
+
+**Symptom.** Calling migrated `pqposvx` / `pxposvx` (or the upstream
+`PDPOSVX` / `PZPOSVX`) in single-thread or any nontrivial grid
+configuration aborts inside the internal `PDPOCON` / `PZPOCON` call
+with `On entry to P[QX]POCON parameter number 10 had an illegal value`.
+The outer `*POSVX` workspace query returns `WORK(1) = 3*DESCA(LLD_)`,
+which the caller dutifully allocates — but `PDPOCON` then enforces a
+much larger `LWMIN` and aborts.
+
+**Root cause.** `pdposvx.f:430` and `pzposvx.f:429` set
+``LWMIN = 3*DESCA( LLD_ )`` where the documented contract (line 311 of
+either file's prologue) is
+
+```
+LWORK = MAX( PDPOCON( LWORK ), PDPORFS( LWORK ) )
+```
+
+`PDPOCON`'s actual `LWMIN` is
+
+```
+2*NPMOD + 2*NQMOD +
+MAX( 2, MAX( NB*ICEIL(NPROW-1, NPCOL),
+             NQMOD + NB*ICEIL(NPCOL-1, NPROW) ) )
+```
+
+and `PDPORFS`'s is `3*NPMOD`. For any nontrivial grid (e.g. 2×2 with
+`NB ≥ 8`), the documented formula exceeds `3*DESCA(LLD_)`. Same shape
+for `PZPOSVX` with `LWMIN_PZPOCON = 2*NPMOD + MAX(2, …)` (no `2*NQMOD`
+term — that part lives in `LRWMIN`) and `LWMIN_PZPORFS = 2*NPMOD`. The
+`LRWMIN = MAX( 2*NQ, NP )` formula in `pzposvx.f:430` is also too small
+versus `LRWMIN_PZPOCON = 2*NQMOD` and `LRWMIN_PZPORFS = NPMOD`.
+
+**Files affected.**
+- `external/scalapack-2.2.3/SRC/pdposvx.f` (line 430).
+- `external/scalapack-2.2.3/SRC/pzposvx.f` (lines 429–430).
+
+**Fix.** Patched overrides in
+`recipes/scalapack/source_overrides/p[dz]posvx.f` recompute
+`NPMOD`/`NQMOD` (PDPOCON's unadjusted NUMROCs), then set
+`LWMIN = MAX( PDPOCON_LWMIN, PDPORFS_LWMIN )` (and `LRWMIN` accordingly
+for the complex variant). `recipes/scalapack.yaml` declares the
+overrides plus the matching `prefer_source: PDPOSVX, PZPOSVX` pin to
+keep the canonical-rank picker from selecting the un-fixed S/C halves.
+
+**Companion bug — `pzposvx.f` LRWMIN too small.** The same file's
+`LRWMIN = MAX( 2*NQ, NP )` doesn't cover `PZLANHE('1', ...)`'s
+documented `RWORK` requirement of `2*Nq0 + Np0 + LDW`, which `PZPOSVX`
+calls at line 610 to compute ANORM. The shortfall doesn't abort
+immediately — `PZLANHE` writes past the end of the caller's RWORK and
+corrupts the heap, surfacing as a `free()` SIGSEGV during cleanup or a
+few iterations later. Fix: `LRWMIN >= 2*NQMOD + NPMOD + LDW` (LDW=0
+on square grids; we use `NPMOD` as a safe upper bound).
+
+**Why upstream's tests miss it.** The shipped `*posvx` test drivers
+allocate `WORK` / `RWORK` from precomputed bounds that exceed the
+flawed `LWMIN` / `LRWMIN`, so the in-tree workspace queries are never
+the binding constraint. A driver that trusts the queries (the natural
+call pattern) reproduces the LWORK abort immediately and the LRWORK
+heap corruption a few iterations later.
+
+**Upstream report.** Not yet filed.
