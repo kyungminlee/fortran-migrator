@@ -59,22 +59,44 @@ is declared by upstream `dmumps_c.h` itself, and is INDEPENDENT from the
 Fortran `DMUMPS_STRUC` (upstream's `dmumps_c()` decouples them via
 field-by-field extraction). No layout match required.
 
-### UNK-3 — `NO_SAVE_RESTORE` compile flag
+### UNK-3 — `NO_SAVE_RESTORE` compile flag — RESOLVED 2026-05-02
 
-The bridge's F77 prototype must agree with the migrated MUMPS's compile-time
-`NO_SAVE_RESTORE` setting. The recipe doesn't define the macro, so the
-default (SAVE/RESTORE enabled) likely applies — confirm by inspecting the
-staged sources for `#if ! defined(NO_SAVE_RESTORE)` blocks and whether
-they're active.
+`recipes/mumps.yaml` does not define `NO_SAVE_RESTORE` and the build
+does not pass `-DNO_SAVE_RESTORE`, so the macro is **undefined** and
+the `#if ! defined(NO_SAVE_RESTORE)` branches are active throughout
+the staged tree (i.e. SAVE/RESTORE code is compiled in). Verified by
+grepping `/tmp/stg-q/mumps/src/`:
 
-### UNK-4 — Link-time satisfaction
+```
+$ grep -nE '#if[[:space:]]*!?[[:space:]]*defined\(NO_SAVE_RESTORE\)' \
+       qmumps_save_restore.F qmumps_driver.F qini_defaults.F qmumps_f77.F
+qmumps_save_restore.F:14:#if ! defined(NO_SAVE_RESTORE)
+qmumps_f77.F:32: / :36: / :47: / :80: / :323:#if ! defined(NO_SAVE_RESTORE)
+qmumps_driver.F:23 / :176 / :441 / :537 / :563 / :662 / :841 / :853 /
+  :921 / :934 / :2065 — all `! defined(...)` form, all active
+qini_defaults.F:682 / :1052 — same
+mumps_print_defined.F:107: lone `defined(NO_SAVE_RESTORE)` (printed-config only)
+```
 
-Migrated MUMPS declares `depends: [blas, lapack, scalapack]`. Verify that
-linking against `${LIB_PREFIX}{mumps,scalapack,lapack,blas}` + `MPI::MPI_Fortran`
-is sufficient. The vendored PORD (`external/MUMPS_5.8.2/PORD/`) is C and not
-migrated — if the recipe leaves `USE MUMPS_PORD`-callers in the migrated
-archive, link will fail with unresolved PORD symbols. Surface during the
-build-smoke step.
+Implication for the C bridge: the F77 prototype that the bridge calls
+through (`${LIB_PREFIX}mumps_f77_`) is the SAVE/RESTORE-extended one,
+matching upstream's default. No additional macro plumbing required.
+
+### UNK-4 — Link-time satisfaction — RESOLVED 2026-05-02
+
+Verified against the existing kind16 build under `/tmp/stg-q/build/`:
+
+```
+$ nm /tmp/stg-q/build/libqmumps-gfortran-13.a | grep -i pord | grep ' U '
+(0 matches)
+```
+
+Zero unresolved PORD symbols in the migrated archive. The PORD bits
+that MUMPS uses are reached through the C-side `mumps_pord.c` (compiled
+in `mumps_c_bridge` for tests), not through Fortran callers. Linking
+test executables with `${LIB_PREFIX}{mumps,scalapack,lapack,blas}` +
+`MPI::MPI_Fortran` is sufficient — confirmed end-to-end by the kind16
+suite already passing 23 mumps tests.
 
 ## Test design
 
@@ -457,6 +479,30 @@ keep using `mpiexec -n 1` against real MPI (verified end-to-end).
 libmpiseq is left available as a future option for environments
 without MPI installed.
 
+**Update 2026-05-02 (path b, partial):** Q/X/E/Y per-precision stubs
+landed in `cmake/mpiseq_qx_stubs.f` and are appended to the `mpiseq`
+target via `cmake/CMakeLists.txt:835`. Twenty new stubs exported
+(`p[qxey]{getrf,getrs,potrf,potrs,trtrs}_`), each cloning upstream
+`mpi.f`'s "should not be called / STOP" body. Authored in-tree
+because `external/` is read-only.
+
+Multifloats (M/W) prefixes intentionally NOT covered yet — adding
+sequential stubs without the matching test-harness work (Group A /
+B9b) would be premature. Adding `pmgetrf_` etc. is a follow-up to
+B9b whenever multifloats Fortran tests come online.
+
+The duplicate-symbol concern from path (b) does not bite here:
+upstream `mpi.f` defines only PD* — the Q/X/E/Y names are fresh,
+so adding them does not collide with `libqscalapack` /
+`libqblacs` either, and a stripped-variant recipe is no longer the
+prerequisite that path (a) implied.
+
+Linking a test executable against `mpiseq` (instead of
+`MPI::MPI_Fortran`) plus `libqscalapack`/`libqblacs` should now
+resolve all symbols for kind10 + kind16, but no test in this repo
+exercises that path today (mpiexec -n 1 stays the default). Spot-
+check via `nm libmpiseq.a | grep ' T pqgetrf'`.
+
 ### B4 — Only `kind16` target supported  *(PARTIAL — kind10 wired 2026-04-30)*
 
 **Progress 2026-04-30**: kind10 EP overrides authored
@@ -475,6 +521,25 @@ build hits a separate, pre-existing migrator bug (see B8 below).
 
 Remaining for B4: multifloats build (blocked on B8); `INFOG(20)`
 sanity-check across targets.
+
+**Update 2026-05-02:** `tests/mumps/fortran/test_dmumps_infog20.f90`
+landed for kind10 + kind16. The test factors a fixed n=32 SYM=0
+JOB=6 problem, reads `id%INFOG(20)`, and asserts the result lies in
+the structural bound `[n², 50·n²]`. The structural bound is wider
+than the ±5% kind16-baseline check originally specified — it ships
+before any per-target baseline has been captured, and catches the
+gross-mis-sizing failure mode (off-by-2× / off-by-4× from a wrong
+override constant) without needing a precaptured number. Tighten
+to ±5% once two builds have logged the actual `INFOG(20)` values
+into `precision_reports/test_dmumps_infog20.<target>.json` and the
+spread is known.
+
+Multifloats coverage on this test is deferred: ctest skips test
+executables for `multifloats`
+(`tests/mumps/CMakeLists.txt:52-59`'s `_MUMPS_TESTS_SKIP_EXECUTABLES`),
+and Group A (B9b) is the path that re-enables them. Re-evaluate
+once Group A lands and pull multifloats into the cross-target ±5%
+check at that point.
 
 Recipe `overrides:` in `recipes/mumps.yaml` declares hand-written
 extended-precision substitutes only for the kind16 target:
@@ -651,13 +716,15 @@ on the C side links cleanly.
 
 Verified `fortran-vs-c = 0.0e+00` on both D and Z paths.
 
-### G2 — `target_kind10/` / `target_multifloats/` placeholder dirs
+### G2 — `target_kind10/` / `target_multifloats/` placeholder dirs — RESOLVED 2026-05-02
 
-Convention from `tests/blas/` and `tests/lapack/`: each has empty
-target subdirs alongside `target_kind16/` so when a new precision
-target's overrides land, the wrapper drops in. Currently only
-`target_kind16/` exists for tests/mumps because the recipe only
-has kind16 EP overrides (B4). One-line drop when B4 lands.
+Both wrapper directories now exist on disk:
+
+- `tests/mumps/target_kind10/target_mumps.fypp`
+- `tests/mumps/target_multifloats/target_mumps.fypp`
+
+Each ships a precision-aware `c/include/mumps_c_types.h` shadow plus
+the per-target `*mumps_c.h` wrappers (B9 cleanup). Closed.
 
 ## Defects discovered during runs
 
@@ -682,6 +749,16 @@ were therefore dropped — keeping them would test MUMPS-side robustness
 that doesn't exist, not migrator correctness. Re-introduce when MUMPS
 upstream tightens validation, or write a lightweight wrapper that
 sanitizes inputs before calling `qmumps_c`.
+
+**Wrapper landed 2026-05-02.** `target_mumps` now exports
+`check_dmumps_input` / `check_zmumps_input` plus `MIC_*` codes
+(`tests/mumps/common/target_mumps_body.fypp`). Restored tests live at
+`tests/mumps/fortran/test_dmumps_errors.f90` and
+`tests/mumps/fortran/test_zmumps_errors.f90`; they exercise BAD_N
+(neg + zero), BAD_NNZ, BAD_IRN (high + zero), BAD_JCN (high + zero),
+SIZE_MISMATCH, plus a final valid-input pass that reaches MIC_OK and
+factors via JOB=6. The wrapper layers above MUMPS — does not touch
+`id%INFOG(1)`. Tests target-portable via `target_qmumps`/`target_xmumps`.
 
 ## New follow-ups (2026-04-30, surfaced during B4 partial completion)
 
