@@ -48,16 +48,19 @@ caller needs one of these, the path is to add a hand-written
 override in `recipes/xblas/mfc_overrides/` rather than trying to
 push them through the family classifier.
 
-### LAPACK xx-family unblocking (P17xx)
+### LAPACK xx-family unblocking (P17xx) — RESOLVED
 
-`tests/lapack/TODO.md` §P17xx documents 18 LAPACK extra-precise
-iterative-refinement drivers (`gesvxx`, `gbsvxx`, ...) blocked on
-XBLAS being available.  XBLAS is now available; unblocking those
-tests is its own task — it requires editing
-`recipes/lapack.yaml` (un-skip the `*la_*_extended.f` files),
-adding a `BUILD_XBLAS=ON`-style gate so callers that don't link
-xblas don't get poisoned, and writing the test wrappers.  Strictly
-out-of-scope for `tests/xblas/`; tracked in the lapack tree.
+`tests/lapack/TODO.md` §P17xx documented 18 LAPACK extra-precise
+iterative-refinement drivers (`gesvxx`, `gbsvxx`, `gerfsx`, ...)
+blocked on XBLAS being available.  Now landed — 18/18 PASS on all
+three targets.  Resolution: `${LIB_PREFIX}lapack` PUBLIC-links
+`${LIB_PREFIX}xblas` so migrated qla/ela/mla `*_extended` objects
+resolve via qxblas/exblas/mxblas, and a quad-precision Fortran
+bridge (`tests/lapack/reflapack/refxblas_quad_bridge.f90`) supplies
+the upstream-named `blas_dgemv_x_` / `blas_zhemv_x_` / etc. that
+reflapack_quad's `dla_*_extended.f` calls — forwarding to the
+quad-promoted refblas_quad standard L2 routines.  See
+`tests/lapack/TODO.md` §P17xx for the full write-up.
 
 ## Cross-tests/ items deferred
 

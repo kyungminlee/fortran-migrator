@@ -204,37 +204,73 @@ sy2sb/he2hb) / gtsvx / ptsvx / trsna / DMD (gedmd/gedmdq) families are now
 covered (Phases P8a–P8h, P22).  20 routines remain — they cluster into
 two categories, both of which are blocked or deferred:
 
-### P17xx — Extra-precise iterative-refinement family (18 routines) — BLOCKED on XBLAS
+### P17xx — Extra-precise iterative-refinement family (18 routines) — RESOLVED
 
   d/z × gbrfsx, gbsvxx, gerfsx, gesvxx, porfsx, posvxx, syrfsx, sysvxx
   z × herfsx, hesvxx
 
-**Blocker:** the xx family in LAPACK delegates to `xla_*_extended` helper
-routines, which in turn call XBLAS extended-precision BLAS
+Status: 18/18 PASS on kind10 / kind16 / multifloats (~17–19 digits on
+kind10, ~32–34 on kind16, ~30–32 on multifloats). Tests live at
+`tests/lapack/linear_solve/test_{d,z}{gesvxx,gerfsx,gbsvxx,gbrfsx,
+posvxx,porfsx,sysvxx,syrfsx}.f90` plus `test_zhesvxx.f90` /
+`test_zherfsx.f90`. Each driver compares X / RCOND (and RPVGRW for the
+SVXX drivers); BERR / ERR_BNDS_NORM / ERR_BNDS_COMP are computed on
+both sides but not differenced (they're algorithm-internal estimates,
+not deterministic across precision targets).
+
+Resolution had three load-bearing pieces:
+
+1. **Migrated lapack now PUBLIC-links migrated xblas**
+   (`cmake/CMakeLists.txt`). The xx-family inside qlapack/elapack/
+   mlapack reaches the migrated `qla_*_extended` / `ela_*_extended` /
+   etc., which call the migrated XBLAS L2 entry points
+   (`BLAS_qgemv_x_`, `BLAS_egemv_x_`, ...). Adding xblas to the lapack
+   archive's interface link makes those symbols resolve transitively
+   in every test executable that pulls in lapack.
+
+2. **Quad-precision Fortran XBLAS bridge for reflapack_quad**
+   (`tests/lapack/reflapack/refxblas_quad_bridge.f90`). The reference
+   side `reflapack_quad` is built from the upstream Netlib LAPACK with
+   `-freal-8-real-16`, so its `dla_*_extended.f` files call the
+   upstream-named `blas_dgemv_x_` / `blas_zhemv_x_` / etc. Those names
+   are NOT in qxblas (q-prefixed) and NOT in exblas/mxblas (different
+   working precision). The bridge defines them as Fortran subroutines
+   compiled with the same `-freal-8-real-16` ABI, forwarding to the
+   quad-promoted refblas_quad routines (DGEMV/ZGEMV/DGBMV/ZGBMV/DSYMV/
+   ZHEMV) for everything with a BLAS analogue and hand-coding the
+   complex-symmetric matvec (no upstream BLAS analog). The Fortran-
+   callable signature OMITS the C interface's leading `order` arg
+   (the f2c bridge in `external/xblas-1.0.248/src/<routine>/
+   BLAS_<routine>_x-f2c.c` hardcodes `blas_colmajor`); getting this
+   wrong manifests as `xerbla DGEMV parameter 6 (LDA) had an illegal
+   value` because all subsequent args shift by one slot.
+
+3. **Wrapper module entries** in
+   `tests/lapack/common/target_lapack_body.fypp` and matching
+   interfaces in `tests/lapack/common/ref_quad_lapack.f90`. NPARAMS=0
+   in every test driver — disables the PARAMS knob so the upstream
+   default (refinement on, threshold 10.0, normwise-only error
+   bounds) applies. The 4-call workspace footprint is `4*N` real for
+   d-side, `2*N` complex + `2*N` real for z-side, except `zhesvxx`
+   which needs `5*N` complex.
+
+Build wiring: `cmake/CMakeLists.txt` makes `${LIB_PREFIX}lapack`
+PUBLIC-link `${LIB_PREFIX}xblas` whenever both targets exist. No
+opt-in build flag — XBLAS is always built and the bridge is small
+(~280 lines of Fortran).
+
+The original blocker description (preserved below) is now obsolete.
+
+#### Original blocker description (for archaeology)
+
+The xx family in LAPACK delegates to `xla_*_extended` helper routines,
+which in turn call XBLAS extended-precision BLAS
 (`blas_zhemv2_x_`, `blas_zhemv_x_`, `blas_zsymv2_x_`, `blas_zsymv_x_`,
-etc.).  XBLAS is a separate library that the migrator/recipe does not
-currently provide for either the `qlapack` (kind16) reference build or
-the migrated targets.  Adding tests for any xx routine surfaces the
-missing XBLAS symbols at link time and breaks **all** other tests by
-poisoning `liblapack_test_target.a`.
+etc.).  Adding tests for any xx routine surfaced the missing XBLAS
+symbols at link time and broke **all** other tests by poisoning
+`liblapack_test_target.a`.  This is fixed now — see resolution above.
 
-Reproduce link error:
-```bash
-cd /home/kyungminlee/Code/fortran-migrator/src
-uv run python -m pyengine stage /tmp/stg-q --target kind16 --libraries blas lapack
-# Add even a stub test target_dgesvxx wrapper in target_lapack_body.fypp,
-# rebuild liblapack_test_target.a — then any test executable fails to link:
-#   undefined reference to `blas_zhemv2_x_'
-#   undefined reference to `blas_zsymv_x_'
-```
-
-Until XBLAS lands, **do not** add interfaces or wrappers for any xx routine —
-the wrapper module pulls in the xla_* objects at link time even if no test
-uses the wrapper, breaking the whole test suite.
-
-**Resolution: vendor XBLAS as a separate library, opt-in via a build flag.**
-
-#### Scope (what to vendor)
+#### Scope (what was vendored)
 
 The xx family has 28 LAPACK helper files that reach into XBLAS:
 
