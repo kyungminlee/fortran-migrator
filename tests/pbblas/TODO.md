@@ -45,12 +45,20 @@ source-node-sends pattern. All three targets pass on both the
 sandbox 2×2 launch and a real connected 2×2 via the linux-impi
 preset.
 
-The inner LCM-cycle logic still collapses on a 2×2 grid (LCMP=
-LCMQ=1); the WORK-formula factor `MIN(LCMQ,CEIL(M,NB))` only goes
-above 1 on 2×3 / 3×2 / 6+-rank grids, which the local
-`PBBLAS_TEST_NPROC=4` harness can't produce. The branches
-themselves are exercised — that was the gap the original TODO
-bullet referred to.
+2×3 / 3×2 grids with `MIN(LCMQ,CEIL(M,NB)) > 1` covered 2026-05-02
+via `test_pbdtran_lcm6.f90` (2×3, ADIST='C', M=12, N=NB=4 ⇒ LCMQ=2,
+CEIL(M,NB)=3, MIN=2) and `test_pbztran_lcm6.f90` (3×2, ADIST='R',
+M=NB=4, N=12 ⇒ LCMP=2, CEIL(N,NB)=3, MIN=2; TRANS='C'). These need
+a connected 6-rank MPI world, which the default sandbox can't
+provide; the harness exposes a separate `PBBLAS_TEST_NPROC_LCM6=6`
+knob for filenames matching `*_lcm6` and the tests self-skip with a
+"skipped" pseudo-case otherwise. Verified on the linux-impi preset
+(Intel MPI with FI_PROVIDER=tcp + I_MPI_HYDRA_BOOTSTRAP=fork) for
+all three targets — kind16 and kind10 (max_rel_err ≤ 3.3e-20) and
+multifloats (max_rel_err ≤ 6.6e-33). These exercise the LCM-cycle
+DO loops in `pbdtran.f` (DO 20, DO 30) and the `LCMQ.GT.1` /
+`PBDTRGET` / `PBDTRSRT` paths that a 2×2 grid (LCMP=LCMQ=1)
+collapses past.
 
 ### `pbdtrget` / `pbdtrsrt` / `pbdtrst1` (and complex variants)
 

@@ -94,7 +94,15 @@ file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
 set(PBBLAS_TEST_NPROC 4 CACHE STRING
     "MPI process count for tests/pbblas (default 4 → 2x2 grid)")
 
-function(add_pbblas_precision_test test_src)
+# Tests whose filename ends in `_lcm6` need a 6-rank world to form a
+# 2×3 / 3×2 grid where MIN(LCMQ,CEIL(M,NB)) > 1 in pb[dz]tran.f. They
+# self-skip via grid_init_shape's nproc-mismatch path when launched
+# with a different rank count, so this knob is only load-bearing on
+# presets that can deliver a connected MPI world (e.g. linux-impi).
+set(PBBLAS_TEST_NPROC_LCM6 6 CACHE STRING
+    "MPI process count for tests/pbblas *_lcm6 tests (default 6 → 2x3/3x2 grid)")
+
+function(add_pbblas_precision_test test_src nproc)
     get_filename_component(test_name ${test_src} NAME_WE)
     add_executable(${test_name} ${test_src})
     # Same -fno-lto rationale as tests/pblas: Ubuntu's default
@@ -119,7 +127,7 @@ function(add_pbblas_precision_test test_src)
     target_link_libraries(${test_name} PRIVATE
         "$<LINK_GROUP:RESCAN,${_pbblas_cycle}>")
     add_test(NAME pbblas_${test_name}
-             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${PBBLAS_TEST_NPROC}
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${nproc}
                      ${MPIEXEC_PREFLAGS} $<TARGET_FILE:${test_name}> ${MPIEXEC_POSTFLAGS}
              WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
 endfunction()
@@ -127,5 +135,10 @@ endfunction()
 file(GLOB _tests CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_*.f90)
 foreach(_t ${_tests})
-    add_pbblas_precision_test(${_t})
+    get_filename_component(_tn ${_t} NAME_WE)
+    if(_tn MATCHES "_lcm6$")
+        add_pbblas_precision_test(${_t} ${PBBLAS_TEST_NPROC_LCM6})
+    else()
+        add_pbblas_precision_test(${_t} ${PBBLAS_TEST_NPROC})
+    endif()
 endforeach()
