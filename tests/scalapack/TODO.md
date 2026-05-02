@@ -132,20 +132,21 @@ Both ``test_pzhetrd`` (matrix-element residual) and ``test_pzheev``
 (eigenvalue + residual on JOBZ='V') now pass to full target
 precision (32+ digits on kind16).
 
-## pdgecon / pdpocon (condition-number estimators)
+## pdgecon / pdpocon (condition-number estimators) — RESOLVED 2026-05-01
 
-- **Symptom**: `target_pdgecon` / `target_pdpocon` wrappers run cleanly
-  but a straight `rel_err_scalar(rcond_scalapack, rcond_lapack)`
-  comparison drifts to 50-200% disagreement, scaling roughly with n.
-- **Diagnosis**: ScaLAPACK's `PDLACON` and LAPACK's `DLACON` are
-  iterative 1-norm estimators (Hager-Higham). Same input matrix,
-  different parallel ordering / starting vectors → different estimates.
-  This is algorithmic non-determinism, not a precision bug, so a
-  `target_eps`-driven tolerance does not apply.
-- **Action**: A meaningful test would compute true `kappa_1(A)` from a
-  quad SVD of A on rank 0, then verify the documented LACON guarantee
-  `kappa_true / 3 <= kappa_est <= kappa_true`. Deferred until that
-  helper exists; the wrappers remain exposed.
+Implemented the κ-true reference helper and Hager-Higham bound check.
+`tests/scalapack/common/cond_helpers.f90` exposes
+`true_kappa1_general` / `true_kappa1_general_z` (LU + dgetri / zgetri
+inverse) and `true_kappa1_posdef` / `true_kappa1_posdef_z` (Cholesky +
+dpotri / zpotri). `tests/scalapack/auxiliary/test_pdgecon.f90` and
+`test_pdpocon.f90` factor the matrix on the distributed side, call the
+estimator, and assert
+``rel_err_scalar(kappa_est, kappa_true) <= 0.7`` — covers the
+worst-case 1/3 LACON ratio with margin for fp noise.
+
+Results (kind16, 2×2 grid):
+- `test_pdgecon`  3/3 PASS, κ_est ≈ 0.78 · κ_true (~22% rel-err)
+- `test_pdpocon`  3/3 PASS, κ_est ≈ 0.83 · κ_true (~17% rel-err)
 
 (pzheev fix folded into the pxhetrd/pxheev entry above.)
 
@@ -169,19 +170,23 @@ precision (32+ digits on kind16).
   T_L * X_got ≡ B_orig directly. Deferred until an upstream-doc
   read pins down exactly what each *trsv variant computes.
 
-## pdposvx / pzposvx — fail via internal pdpocon / pzpocon
+## pdposvx / pzposvx — RESOLVED 2026-05-01
 
-- **Status**: pdposvx and pzposvx wrappers exist. Drivers reliably
-  abort with "On entry to P{Q,Y}POCON parameter number 10 had an
-  illegal value", and on kind16 the gathered X disagrees with the
-  reference by 10^3. pdgesvx / pzgesvx pass cleanly on all targets.
-- **Diagnosis**: both *posvx drivers funnel through pd/pzpocon for
-  rcond. Param 10 is the work pointer; the workspace size that
-  *posvx passes into *pocon does not match upstream's expectations
-  (or upstream's pocon workspace contract is wrong). Same root
-  cause as the existing pdpocon/pzpocon entry above.
-- **Action**: Fix or sandbox pd/pzpocon workspace handling, then
-  re-enable a *posvx driver. Wrappers remain exposed.
+Two upstream LWMIN bugs in `pdposvx.f` / `pzposvx.f`. Both were
+fixed via `recipes/scalapack/source_overrides/p[dz]posvx.f` plus
+`prefer_source: PDPOSVX, PZPOSVX` in `recipes/scalapack.yaml`.
+
+1. `LWMIN = 3*DESCA(LLD_)` is too small for the internal PDPOCON /
+   PZPOCON contract (param-10 abort). Documented contract is
+   `MAX(PDPOCON_LWMIN, PDPORFS_LWMIN)`.
+2. Companion bug in `pzposvx.f`: `LRWMIN = MAX(2*NQ, NP)` doesn't
+   cover PZLANHE('1', ...) which needs `2*NQMOD + NPMOD + LDW`.
+   PZLANHE then writes past RWORK and corrupts the heap, surfacing
+   as a `free()` SIGSEGV during cleanup.
+
+Both bugs documented in `doc/UPSTREAM_BUGS.md`. Tests:
+`tests/scalapack/linear_solve/test_pdposvx.f90` / `test_pzposvx.f90`
+both 3/3 PASS at ~33-digit accuracy on kind16 / 2×2 grid.
 
 ## pdtrsen — heap corruption on every call
 
