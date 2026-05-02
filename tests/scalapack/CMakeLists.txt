@@ -151,6 +151,14 @@ function(add_scalapack_precision_test test_src)
     if(TARGET ${LIB_PREFIX}scalapack_c)
         list(APPEND _sp_cycle ${LIB_PREFIX}scalapack_c)
     endif()
+    # qxblas is a PUBLIC dep of qlapack (cmake/CMakeLists.txt:600) for
+    # the iterative-refinement extra-precision routines. It pulls qblas,
+    # which is already in the cycle — must include qxblas explicitly so
+    # the LINK_GROUP closes; otherwise CMake reports a strongly-connected
+    # component cycle (group ↔ qxblas).
+    if(TARGET ${LIB_PREFIX}xblas)
+        list(APPEND _sp_cycle ${LIB_PREFIX}xblas)
+    endif()
     foreach(_common blas_common blacs_common ptzblas_common pblas_common lapack_common scalapack_common scalapack_c_common)
         if(TARGET ${_common})
             list(APPEND _sp_cycle ${_common})

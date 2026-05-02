@@ -286,6 +286,12 @@ set(_mumps_link_group_archives
     ${LIB_PREFIX}lapack
     ${LIB_PREFIX}blas
 )
+# qxblas is a PUBLIC dep of qlapack (cmake/CMakeLists.txt:600). qblas is
+# already in the cycle, so qxblas → qblas → group → qxblas closes a
+# cycle CMake refuses to build unless qxblas is named in the LINK_GROUP.
+if(TARGET ${LIB_PREFIX}xblas)
+    list(APPEND _mumps_link_group_archives ${LIB_PREFIX}xblas)
+endif()
 
 function(add_mumps_fortran_test test_src)
     get_filename_component(name ${test_src} NAME_WE)
