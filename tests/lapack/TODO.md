@@ -70,8 +70,8 @@ The L23 audit (awk script below) returns only 2 deferred kernel-internal
 routines (`dsb2st_kernels` / `zhb2st_kernels`, see "sb2st kernels" entry
 below). All other user-facing L6..L23 routines now ship a test driver.
 
-Inventory at the start of work was 43 missing routines — 37 landed, 6
-deferred (see L15 caveat below):
+All 43 missing routines now landed (37 in the initial closeout + 6
+orbdb2/3/4 + unbdb2/3/4 closing the L15 caveat below):
 
 | Stage | Phase | Routines landed |
 |-------|-------|---|
@@ -80,7 +80,8 @@ deferred (see L15 caveat below):
 | 1 | L8  | dsytri_3, zsytri_3 |
 | 1 | L13 | dtpqrt2, ztpqrt2, dtplqt2, ztplqt2 (and tpmlqt was already in tree) |
 | 2 | L9  | dsytri2, zsytri2, dsytrs2, zsytrs2, dsytrs_3, zsytrs_3, dsycon_3, zsycon_3 |
-| 3 | L15 | dorbdb1, zunbdb1, dorbdb5, zunbdb5, dorbdb6, zunbdb6, dorm22, zunm22 (8/14) |
+| 3 | L15 | dorbdb1/5/6 + zunbdb1/5/6 + dorm22/zunm22 (initial pass: 8) |
+| 3 | L15 | dorbdb2/3/4 + zunbdb2/3/4 (closeout: 6 — see entry below) |
 | 4 | L6+L7 | dggsvd3, zggsvd3, dggsvp3, zggsvp3, dorcsd2by1, zuncsd2by1 |
 | 5 | L23 | audit clean |
 
@@ -88,22 +89,67 @@ L17 (P17xx XX drivers) and L22 (DMD) were already shipped in earlier
 phases.  L10/L11/L12/L16/L21 turned out to be already covered when the
 audit was actually performed — none of those phases needed new work.
 
-### L15 — orbdb2/orbdb3/orbdb4 + unbdb2/unbdb3/unbdb4 (6 deferred)
+### L15 — orbdb2/orbdb3/orbdb4 + unbdb2/unbdb3/unbdb4 — RESOLVED 2026-05-02
 
-Wrappers (target_dorbdb2/3/4 + target_zunbdb2/3/4) and ref interfaces
-landed in `target_lapack_body.fypp` and `ref_quad_lapack.f90`, but the
-test drivers were removed because the migrated qorbdb2/qorbdb3/qorbdb4
-(and z-prefix counterparts) produce theta values that diverge ~50% from
-the reflapack_quad reference even with identical column-orthonormal
-input. orbdb1, orbdb5, orbdb6 (and z-counterparts) all match bit-exact
-on all three precision targets, so the reflapack_quad pipeline + the
-orbdb-family wrapper template both work; the discrepancy is local to
-qorbdb2/3/4 specifically and looks like a real migration bug not a test
-bug. Re-introducing the tests is straightforward (the wrappers are
-already in place); the gating action is to diff the migrated qorbdb2
-against the dorbdb2 reference to find the inconsistency. The 6 test
-files were authored and removed in the same session — recoverable from
-the git reflog if useful.
+Status: bit-exact PASS on kind16, ~18 digits on kind10, ~31 digits on
+multifloats for all 6 routines (m=12 and m=16 sweeps). Tests at
+`tests/lapack/factorization/test_{d,z}{orbdb,unbdb}{2,3,4}.f90`.
+
+Resolution had three load-bearing pieces (the original ~50% theta
+divergence was misdiagnosed as a migration bug):
+
+1. **Test bug (orbdb2/3/4)** — `theta` is declared dimension `Q` per
+   the LAPACK API but only `min(P, M-P, M-Q)` entries are filled by
+   the routine (loop runs `1..P` for orbdb2, `1..M-P` for orbdb3,
+   `1..M-Q` for orbdb4). The remaining entries are output as
+   undefined. The original test compared all `Q` entries → uninit
+   memory diff between the two calls → spurious ~50% relative error.
+   Fix: each test now slices to the routine's actual write range:
+   `theta(1:p)` / `theta(1:m-p)` / `theta(1:m-q)`.
+
+2. **Upstream LAPACK 3.12.1 bug in {s,d,c,z}orbdb3/unbdb3** — the
+   early `DROT/SROT/CSROT/ZDROT` call inside the `I=2..M-P` loop
+   passes `LDX11` for *both* INCX and INCY:
+
+   ```fortran
+   CALL DROT( Q-I+1, X11(I-1,I), LDX11, X21(I,I), LDX11, C, S )
+   ```
+
+   The rotated row sits in X21, so INCY must be `LDX21`. With
+   `LDX11 /= LDX21` (typical when M-P < P, the actual orbdb3
+   regime), the upstream form strides past the X21 buffer and
+   corrupts heap. Manifests as `munmap_chunk(): invalid pointer`
+   on the next free.
+
+   Fix shape (touches three places):
+
+   - `recipes/lapack/source_overrides/{s,d,c,z}orbdb3.f` — patched
+     bodies wired through the migrator's normal precision-substitution
+     pipeline. Patch changes only the single `LDX11` → `LDX21`
+     argument in each variant (one location per file). Same fix in
+     all four precisions.
+   - `recipes/lapack.yaml` — new `source_overrides:` block listing
+     the four files. Mirrors the BLAS pattern (dnrm2/dznrm2/etc).
+   - `tests/lapack/reflapack/overrides/{dorbdb3,zunbdb3}.f` — same
+     patched bodies for the `reflapack_quad` reference path
+     (compiled with `-freal-8-real-16` from the Netlib SRC tree).
+     Without this the upstream bug would also corrupt heap on the
+     reference side. Only D and Z variants are needed because the
+     test driver only calls those (S and C aren't reachable via the
+     `ref_quad_lapack` interface).
+
+3. **Test drivers** — `tests/lapack/factorization/test_d{orbdb,
+   orbdb3,orbdb4}.f90` and `test_z{unbdb2,unbdb3,unbdb4}.f90` (6
+   files) follow the same pattern as the existing test_dorbdb1.f90,
+   sized to satisfy each routine's invariant: P=M/4 for orbdb2
+   (P ≤ min(M-P, Q, M-Q)), P=3M/4 for orbdb3 (M-P ≤ min(P, Q, M-Q)),
+   Q=3M/4 for orbdb4 (M-Q ≤ min(P, M-P, Q)).
+
+| Target      | dorbdb2/3/4 + zunbdb2/3/4 (m=12,16) |
+|-------------|--------------------------------------|
+| kind16      | 12/12 PASS (bit-exact)               |
+| kind10      | 12/12 PASS (~18 digits)              |
+| multifloats | 12/12 PASS (~31 digits)              |
 
 ## Older blocked-T routines that need a wider scope to test
 
