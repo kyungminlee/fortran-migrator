@@ -1,32 +1,38 @@
 /*
- * Basic smoke test for the QMUMPS C bridge (dmumps_c → qmumps_c via
- * the include/qmumps_c.h header overrides). Mirrors
+ * Basic smoke test for the migrated MUMPS C bridge (real path).  Mirrors
  * tests/mumps/fortran/test_dmumps_basic.f90 in shape but operates
  * end-to-end through the C interface.
  *
  * Hand-coded (no quad-precision random helpers shared from Fortran)
  * with a small fixed problem: n=4 diagonally-dominant unsymmetric
- * matrix, x_true known, b = A·x_true. Pass/fail decided by JSON
+ * matrix, x_true known, b = A*x_true.  Pass/fail decided by JSON
  * report comparing |x_solve − x_true| / |x_true| against an
- * O(n^3) tolerance scaled by target eps (= __float128 epsilon).
+ * O(n^3) tolerance scaled by target eps.
+ *
+ * Target portability is provided by ``test_real_compat.h`` (test_real
+ * + TR_LIT/TR_FABS/TR_SQRT/TR_EPS/TR_MIN macros) and the
+ * TARGET_REAL_HEADER / TARGET_REAL_MUMPS_C / TARGET_REAL_STRUC_C
+ * macros wired in by the cmake glue.
  */
 
 #include <math.h>
-#include <quadmath.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <mpi.h>
-#include "qmumps_c.h"
+
+#include "test_real_compat.h"
+#include TARGET_REAL_HEADER
+
+#define MUMPS_C       TARGET_REAL_MUMPS_C
+#define MUMPS_STRUC_C TARGET_REAL_STRUC_C
 
 /* Same JSON report layout as prec_report.f90 produces, hand-rolled
  * here so the C test side doesn't need to call back into Fortran. */
 static FILE *gJson = NULL;
 static int gAnyFail = 0;
 static int gCaseCount = 0;
-
-static __float128 target_eps_q(void) { return FLT128_EPSILON; }
 
 static void report_init_c(const char *test_name, const char *target_name)
 {
@@ -38,13 +44,13 @@ static void report_init_c(const char *test_name, const char *target_name)
             test_name, target_name);
 }
 
-static void report_case_c(const char *case_label, __float128 max_rel, __float128 tol)
+static void report_case_c(const char *case_label, test_real max_rel, test_real tol)
 {
     char relbuf[64], tolbuf[64];
     int passed = (max_rel <= tol);
     if (!passed) gAnyFail = 1;
-    quadmath_snprintf(relbuf, sizeof relbuf, "%.6Qe", max_rel);
-    quadmath_snprintf(tolbuf, sizeof tolbuf, "%.6Qe", tol);
+    test_real_snprintf(relbuf, sizeof relbuf, max_rel);
+    test_real_snprintf(tolbuf, sizeof tolbuf, tol);
     if (gCaseCount > 0) fprintf(gJson, "    ,\n");
     gCaseCount++;
     fprintf(gJson,
@@ -74,25 +80,25 @@ int main(int argc, char **argv)
      * first JOB=-1 call (mumps_c.c reads &id.metis_options before
      * MUMPS_INI_DRIVER overwrites it with defaults). Functionally
      * harmless today but flagged by sanitizers. */
-    QMUMPS_STRUC_C id = {0};
+    MUMPS_STRUC_C id = {0};
     int n = 4;
     /* Diagonally-dominant unsymmetric A (column-major triplet). */
     MUMPS_INT  irn[16];
     MUMPS_INT  jcn[16];
-    __float128 a_vals[16];
-    __float128 x_true[4] = {  1.0q, -2.0q,  3.0q,  -4.0q };
-    __float128 rhs[4];
+    test_real  a_vals[16];
+    test_real  x_true[4] = { TR_LIT(1.0), TR_LIT(-2.0), TR_LIT(3.0), TR_LIT(-4.0) };
+    test_real  rhs[4];
 
     MPI_Init(&argc, &argv);
 
     /* Fill A (4x4): diagonal entries large, off-diagonals small.
      * Layout matches dense_to_triplet (column-major flatten). */
     {
-        __float128 A[4][4] = {
-            {  5.0q,  0.5q, -0.25q,  0.1q  },
-            {  0.3q, -6.0q,  0.5q,   0.2q  },
-            { -0.4q,  0.2q,  7.0q,  -0.3q  },
-            {  0.1q, -0.3q,  0.4q,  -8.0q  },
+        test_real A[4][4] = {
+            { TR_LIT( 5.0),  TR_LIT( 0.5),  TR_LIT(-0.25), TR_LIT( 0.1) },
+            { TR_LIT( 0.3),  TR_LIT(-6.0),  TR_LIT( 0.5),  TR_LIT( 0.2) },
+            { TR_LIT(-0.4),  TR_LIT( 0.2),  TR_LIT( 7.0),  TR_LIT(-0.3) },
+            { TR_LIT( 0.1),  TR_LIT(-0.3),  TR_LIT( 0.4),  TR_LIT(-8.0) },
         };
         int i, j, k = 0;
         for (j = 0; j < n; j++) {
@@ -104,20 +110,20 @@ int main(int argc, char **argv)
         }
         /* b = A * x_true */
         for (i = 0; i < n; i++) {
-            __float128 s = 0.0q;
+            test_real s = TR_LIT(0.0);
             for (j = 0; j < n; j++) s += A[i][j] * x_true[j];
             rhs[i] = s;
         }
     }
 
-    report_init_c("test_dmumps_c_basic", "kind16");
+    report_init_c("test_dmumps_c_basic", TEST_TARGET_NAME);
 
     /* ── Init ─────────────────────────────────────────────────────── */
     id.par = 1;
     id.sym = 0;
     id.comm_fortran = MPI_Comm_c2f(MPI_COMM_WORLD);
     id.job = -1;
-    qmumps_c(&id);
+    MUMPS_C(&id);
     if (id.infog[0] < 0) {
         fprintf(stderr, "JOB=-1 failed: infog[0]=%d\n", id.infog[0]);
         return 1;
@@ -139,7 +145,7 @@ int main(int argc, char **argv)
 
     /* ── Solve ───────────────────────────────────────────────────── */
     id.job = 6;
-    qmumps_c(&id);
+    MUMPS_C(&id);
     if (id.infog[0] < 0) {
         fprintf(stderr, "JOB=6 failed: infog[0]=%d, infog[1]=%d\n",
                 id.infog[0], id.infog[1]);
@@ -148,25 +154,25 @@ int main(int argc, char **argv)
 
     /* On exit, rhs[] holds the solution. */
     {
-        __float128 max_rel = 0.0q, denom = 0.0q;
+        test_real max_rel = TR_LIT(0.0), denom = TR_LIT(0.0);
         int i;
         for (i = 0; i < n; i++) {
-            __float128 ax = fabsq(x_true[i]);
+            test_real ax = TR_FABS(x_true[i]);
             if (ax > denom) denom = ax;
         }
         for (i = 0; i < n; i++) {
-            __float128 d = fabsq(rhs[i] - x_true[i]);
+            test_real d = TR_FABS(rhs[i] - x_true[i]);
             if (d > max_rel) max_rel = d;
         }
-        if (denom > FLT128_MIN) max_rel /= denom;
+        if (denom > TR_MIN) max_rel /= denom;
 
-        __float128 tol = 16.0q * (__float128) (n * n * n) * target_eps_q();
+        test_real tol = TR_LIT(16.0) * (test_real) (n * n * n) * TR_EPS;
         report_case_c("n=4", max_rel, tol);
     }
 
     /* ── Cleanup ─────────────────────────────────────────────────── */
     id.job = -2;
-    qmumps_c(&id);
+    MUMPS_C(&id);
 
     report_finalize_c();
     MPI_Finalize();

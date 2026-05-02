@@ -938,11 +938,29 @@ alongside the existing `LIB_PREFIX`.
 | Target       | Total tests | mumps tests | Notes                                |
 | ------------ | ----------- | ----------- | ------------------------------------ |
 | kind16       | 1045        | 23          | unchanged                            |
-| kind10       | 1040        | 18          | C-side tests + parity tests gated    |
+| kind10       | 1043        | 21          | C-side tests now portable (test_real_compat.h); parity tests still kind16-only |
 | multifloats  | 1022        | 0 (skipped) | mumps-test executables deferred (B9b)|
 
 #### Follow-ups (B9b — deferred test-harness rework)
 
+- **C-side tests (test_dmumps_c_basic, test_zmumps_c_basic,
+  test_dmumps_c_sym) — RESOLVED 2026-05-01 for kind10.** The
+  hardcoded `__float128` / `quadmath.h` / `0.0q` literal syntax was
+  replaced by a target-aware shim
+  (`tests/mumps/c/include/test_real_compat.h`) that picks `__float128`
+  for kind16 and `long double` for kind10 along with matching literal
+  suffix (`q` / `L`), math functions (`fabsq` / `fabsl`,
+  `sqrtq` / `sqrtl`), epsilon (`FLT128_EPSILON` / `LDBL_EPSILON`), and
+  snprintf wrapper. The CMake glue (`add_mumps_c_test()`) wires the
+  same `TARGET_REAL_HEADER` / `TARGET_REAL_MUMPS_C` /
+  `TARGET_REAL_STRUC_C` (plus complex counterparts) macros that
+  `c_parity_helpers.c` uses, plus `TEST_TARGET_NAME` and
+  `TEST_TARGET_<NAME_UPPER>`. Tests now build and pass for both
+  kind16 and kind10 (the kind10 mumps suite went from 18 → 21 tests,
+  the kind16 suite is unchanged at 23). Multifloats stays skipped —
+  its real type is a POD struct (`mumps_float64x2 = { double[2] }`)
+  with no scalar arithmetic / literal syntax in plain C, so the
+  shim's `TR_LIT(0.0)` / `TR_FABS(x)` pattern doesn't apply.
 - Multifloats mumps test executables: the existing test sources use
   `real(ep)` (== REAL(16)) for input data and assign directly to
   `id%A` / `id%RHS` (TYPE(real64x2) in mmumps), and there's no
@@ -951,11 +969,6 @@ alongside the existing `LIB_PREFIX`.
   every host→device boundary, plus a way to drive
   `id%RINFOG` / `id%CNTL` / etc. extraction back to the quad host.
   Tracked separately because it's test-design work, not bridge work.
-- C-side tests (test_dmumps_c_basic, test_zmumps_c_basic,
-  test_dmumps_c_sym): hardcoded `__float128` / `quadmath.h` /
-  `0.0q` literal syntax. Skipped for kind10 / multifloats; they
-  need a portable rewrite using the same `TARGET_*` macros that
-  `c_parity_helpers.c` uses.
 - Fortran parity tests (test_dmumps_c_parity, test_zmumps_c_parity):
   embed `real(16)` in a `bind(C)` interface, kind16-only. Skipped
   for non-kind16 targets pending a portable rewrite.
