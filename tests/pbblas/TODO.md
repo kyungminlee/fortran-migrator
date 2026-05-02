@@ -12,11 +12,12 @@ not cover them here.
 TRANS='T' (and TRANS='C' for the complex variant) with NZ=0 and a
 generously-sized WORK buffer (`4*(N+NB)`) that envelopes the
 upstream `CEIL(Nqb,LCMQ)*NB` formula on the 1×1 / 2×2 grids these
-tests run on. Coverage gaps still open:
+tests run on. XDIST='R' added 2026-05-02 via `test_pb[dz]trnv_xdistr.f90`
+(row-vector input → column-vector output, 2×2 grid, all three
+targets pass). Coverage gaps still open:
 
   - NZ > 0 (block-offset start) — the upstream NZ bookkeeping in
     pbdtrnv.f is not exercised.
-  - XDIST='R' (row-vector input, column-vector output).
   - IXCOL=-1 / IYROW=-1 replicated paths.
   - Larger / non-square grids where `LCMP > 1` or `LCMQ > 1` (the
     sandbox's mpiexec produces unconnected MPI worlds, so the
