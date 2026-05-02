@@ -18,17 +18,14 @@ targets pass). Replicated paths (IXCOL=-1 and IYROW=-1 simultaneously)
 added 2026-05-02 via `test_pb[dz]trnv_replicated.f90` — X populated
 on every process column, Y verified on row 0 against the reference
 and cross-checked byte-equal against row `nprow-1`; all three targets
-pass. Coverage gaps still open:
+pass. NZ > 0 added 2026-05-02 via `test_pb[dz]trnv_nzoffset.f90`
+(NB=4, NZ=2, N=12; source-row / source-column local layouts honor
+the `numroc(NN)-NZ` shrink for the offset extended NN=N+NZ space);
+all three targets pass. Coverage gaps still open:
 
-  - NZ > 0 (block-offset start) — the upstream NZ bookkeeping in
-    pbdtrnv.f is not exercised.
   - Larger / non-square grids where `LCMP > 1` or `LCMQ > 1` (the
     sandbox's mpiexec produces unconnected MPI worlds, so the
     distributed paths degenerate to local).
-
-Closing these would benefit from copying the PBLAS-level call site
-that drives pbdtrnv (e.g. `PB_Cpgemv`) and using it as a reference
-fixture rather than open-coding the LCM/IGD bookkeeping.
 
 ### `pbdtran` / `pbztran` — replicated-A (IACOL=-1) variant
 
