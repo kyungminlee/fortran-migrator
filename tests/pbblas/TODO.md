@@ -32,18 +32,25 @@ and passing on every target (kind10 / kind16 / multifloats):
 
 No remaining coverage gaps for `pbdtrnv` / `pbztrnv`.
 
-### `pbdtran` / `pbztran` — replicated-A (IACOL=-1) variant
+### `pbdtran` / `pbztran` — covered
 
-`test_pbdtran.f90` covers ADIST='C' with IACOL=0 and ADIST='R' with
-IAROW=0. The replicated paths (IACOL=-1 for ADIST='C', or IAROW=-1
-for ADIST='R') require a different WORK size:
-  Size(WORK) = N * CEIL(Mqb,LCMQ)*NB * MIN(LCMQ,CEIL(M,NB))
-and a different in-WORK assembly via `PBDTRGET` / `PBDTRSRT`. These
-paths only matter when every process column already holds a copy of
-A; in 1×1 / 2×2 grids LCMQ=1 and the path collapses, so the added
-test would not exercise its distinguishing logic on the sandbox.
-Skipping until either a real distributed harness is available or a
-regression motivates digging in.
+Baseline `test_pbdtran.f90` / `test_pbztran.f90` cover ADIST='C'
+with IACOL=0 and ADIST='R' with IAROW=0. Replicated-A added
+2026-05-02 via `test_pb[dz]tran_replicated.f90` — both ADIST='C'
+with IACOL=-1 (every process column holds A) and ADIST='R' with
+IAROW=-1 (every process row holds A). These exercise the separate
+"all column processors have a copy" branch in pbdtran.f (line ~352
+onward) which uses `PBDTRGET` / `PBDTRSRT` rather than the
+source-node-sends pattern. All three targets pass on both the
+sandbox 2×2 launch and a real connected 2×2 via the linux-impi
+preset.
+
+The inner LCM-cycle logic still collapses on a 2×2 grid (LCMP=
+LCMQ=1); the WORK-formula factor `MIN(LCMQ,CEIL(M,NB))` only goes
+above 1 on 2×3 / 3×2 / 6+-rank grids, which the local
+`PBBLAS_TEST_NPROC=4` harness can't produce. The branches
+themselves are exercised — that was the gap the original TODO
+bullet referred to.
 
 ### `pbdtrget` / `pbdtrsrt` / `pbdtrst1` (and complex variants)
 
@@ -53,8 +60,10 @@ Their inputs are intermediate buffers laid out by the caller and have
 no standalone semantic meaning — testing them in isolation would
 require fabricating a contrived data layout that may not match what
 the caller actually produces. These are exercised transitively
-through `test_pbdtran` / `test_pbztran` and are best left at that
-coverage level until a regression motivates digging in.
+through the now-comprehensive `pb[dz]tran` / `pb[dz]trnv` test
+families (baseline + replicated + non-square-grid + NZ-offset), and
+are best left at that coverage level until a regression motivates
+digging in.
 
 ## Cross-tree follow-ups
 
