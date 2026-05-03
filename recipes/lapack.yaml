@@ -82,8 +82,6 @@ skip_files:
   - DSGESV
   - ZCPOSV
   - DSPOSV
-  - ZCGELS
-  - DSGELS
   - DLAG2S
   - SLAG2D
   - CLAG2Z
