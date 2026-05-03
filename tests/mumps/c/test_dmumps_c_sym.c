@@ -68,7 +68,11 @@ static int report_status_c(void) { return gAnyFail; }
 
 /* Solve A*x = b via the migrated MUMPS bridge, given a triplet
  * (irn, jcn, a) of nz entries and an n-vector b (overwritten with x
- * on exit). */
+ * on exit). On multifloats the test data is plain double — widen
+ * to the bridge's mumps_float64x2 buffer at the boundary, narrow
+ * back into rhs after the solve. The compile-time-bounded N*(N+1)/2
+ * upper-triangle worst-case is N*N; the bridge buffers are sized
+ * accordingly. */
 static int mumps_solve(int sym, MUMPS_INT n, MUMPS_INT8 nnz,
                         MUMPS_INT *irn, MUMPS_INT *jcn,
                         test_real *a_vals, test_real *rhs)
@@ -87,11 +91,23 @@ static int mumps_solve(int sym, MUMPS_INT n, MUMPS_INT8 nnz,
     id.nnz = nnz;
     id.irn = irn;
     id.jcn = jcn;
+#ifdef TEST_TARGET_MULTIFLOATS
+    mumps_float64x2 a_bridge[16], rhs_bridge[4];
+    for (MUMPS_INT8 k = 0; k < nnz; k++) a_bridge[k]   = tr_widen(a_vals[k]);
+    for (MUMPS_INT  k = 0; k < n;   k++) rhs_bridge[k] = tr_widen(rhs[k]);
+    id.a   = a_bridge;
+    id.rhs = rhs_bridge;
+#else
     id.a   = a_vals;
     id.rhs = rhs;
+#endif
     id.job = 6;
     MUMPS_C(&id);
     int code = id.infog[0];
+
+#ifdef TEST_TARGET_MULTIFLOATS
+    for (MUMPS_INT k = 0; k < n; k++) rhs[k] = tr_narrow(rhs_bridge[k]);
+#endif
 
     id.job = -2;
     MUMPS_C(&id);
