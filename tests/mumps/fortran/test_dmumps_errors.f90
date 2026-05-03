@@ -16,6 +16,7 @@ program test_dmumps_errors
                                      report_finalize, report_check_status
     use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
     use target_mumps,          only: target_name, dmumps_struc, target_qmumps, &
+                                     q2t_r, &
                                      check_dmumps_input, &
                                      MIC_OK, MIC_BAD_N, MIC_BAD_NNZ, &
                                      MIC_BAD_IRN, MIC_BAD_JCN, MIC_SIZE_MISMATCH
@@ -56,8 +57,8 @@ program test_dmumps_errors
     id%NNZ  = int(nz, kind=8)
     allocate(id%IRN(nz));  id%IRN = irn
     allocate(id%JCN(nz));  id%JCN = jcn
-    allocate(id%A(nz));    id%A   = A_trip
-    allocate(id%RHS(n));   id%RHS = b
+    allocate(id%A(nz));    id%A   = q2t_r(A_trip)
+    allocate(id%RHS(n));   id%RHS = q2t_r(b)
 
     saved_n     = id%N
     saved_nnz   = id%NNZ

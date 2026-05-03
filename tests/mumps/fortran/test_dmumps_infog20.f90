@@ -30,7 +30,8 @@ program test_dmumps_infog20
     use prec_report,           only: report_init, report_case, &
                                      report_finalize, report_check_status
     use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
-    use target_mumps,          only: target_name, dmumps_struc, target_qmumps
+    use target_mumps,          only: target_name, dmumps_struc, target_qmumps, &
+                                     q2t_r
     use mpi
     implicit none
 
@@ -66,8 +67,8 @@ program test_dmumps_infog20
     id%NNZ  = int(nz, kind=8)
     allocate(id%IRN(nz));  id%IRN = irn
     allocate(id%JCN(nz));  id%JCN = jcn
-    allocate(id%A(nz));    id%A   = A_trip
-    allocate(id%RHS(n));   id%RHS = b
+    allocate(id%A(nz));    id%A   = q2t_r(A_trip)
+    allocate(id%RHS(n));   id%RHS = q2t_r(b)
 
     id%JOB = 6
     call target_qmumps(id)
