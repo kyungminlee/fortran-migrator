@@ -41,23 +41,6 @@ if(NOT IS_DIRECTORY ${_wrapper_dir})
     return()
 endif()
 
-# Mumps tests for multifloats are deferred — the test sources currently
-# use ``real(ep)`` (== REAL(16)) for input data and assign directly to
-# ``id%A``/``id%RHS`` (TYPE(real64x2) in mmumps), which has no implicit
-# kind conversion. Driving the migrated mmumps from a quad-host harness
-# needs an intermediate ``real(real64x2, ...)`` shim per assignment
-# site. Track as a follow-up; for now we still build the bridge to
-# verify the cmake parameterisation, but skip the test-executable
-# registration.
-if(TARGET_NAME STREQUAL "multifloats")
-    message(STATUS "tests/mumps: skipping test executables for "
-                   "target 'multifloats' — needs harness rework "
-                   "(see tests/mumps/TODO.md B9 follow-up)")
-    set(_MUMPS_TESTS_SKIP_EXECUTABLES TRUE)
-else()
-    set(_MUMPS_TESTS_SKIP_EXECUTABLES FALSE)
-endif()
-
 set(_MUMPS_C_SRC ${PROJECT_SOURCE_DIR}/_mumps_upstream_src)
 set(_MUMPS_C_INC ${PROJECT_SOURCE_DIR}/_mumps_upstream_include)
 if(NOT IS_DIRECTORY ${_MUMPS_C_SRC} OR NOT IS_DIRECTORY ${_MUMPS_C_INC})
@@ -240,6 +223,13 @@ target_include_directories(mumps_test_target PUBLIC
     $<BUILD_INTERFACE:${_mp_moddir}>
 )
 target_link_libraries(mumps_test_target PUBLIC mumps_test_common target_conv)
+if(NEEDS_MULTIFLOATS AND TARGET multifloats_mpi_f)
+    # On multifloats, target_qmumps / target_xmumps lazily call
+    # ``multifloats_mpi_init`` to register the custom MPI datatypes /
+    # ops that MUMPS uses internally (MPI_FLOAT64X2, MPI_DD_SUM, ...).
+    target_link_libraries(mumps_test_target PUBLIC
+        $<BUILD_INTERFACE:multifloats_mpi_f>)
+endif()
 # qmumps + scalapack + lapack + blas + mumps_c_bridge are NOT attached
 # as PUBLIC dependencies because cmake's PUBLIC propagation would place
 # them OUTSIDE the per-test LINK_GROUP wrapper. They're listed
@@ -344,37 +334,33 @@ function(add_mumps_c_test test_src)
     _mumps_register_test(${name})
 endfunction()
 
-if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
-    file(GLOB _ftests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.f90)
-    foreach(_t ${_ftests})
-        add_mumps_fortran_test(${_t})
-    endforeach()
+file(GLOB _ftests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.f90)
+foreach(_t ${_ftests})
+    add_mumps_fortran_test(${_t})
+endforeach()
 
-    # Per-target fypp Fortran tests (parity tests, etc.). Each .fypp
-    # file is processed with ``-Dtarget=${TARGET_NAME}`` so the body
-    # can switch bind(C) interfaces and bridge buffers per precision.
+# Per-target fypp Fortran tests (parity tests, etc.). Each .fypp file
+# is processed with ``-Dtarget=${TARGET_NAME}`` so the body can switch
+# bind(C) interfaces and bridge buffers per precision.
+file(GLOB _ffypp_tests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.fypp)
+foreach(_t ${_ffypp_tests})
+    get_filename_component(_stem ${_t} NAME_WE)
+    set(_out ${CMAKE_CURRENT_BINARY_DIR}/${_stem}.f90)
     # fypp -D evaluates the RHS as Python, so wrap the target name in
     # quotes so it parses as a string literal rather than an identifier.
-    file(GLOB _ffypp_tests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.fypp)
-    foreach(_t ${_ffypp_tests})
-        get_filename_component(_stem ${_t} NAME_WE)
-        set(_out ${CMAKE_CURRENT_BINARY_DIR}/${_stem}.f90)
-        add_custom_command(
-            OUTPUT ${_out}
-            COMMAND ${FYPP} -Dtarget=\"${TARGET_NAME}\" ${_t} ${_out}
-            DEPENDS ${_t}
-            COMMENT "fypp ${_t} -> ${_out}"
-            VERBATIM
-        )
-        add_mumps_fortran_test(${_out})
-    endforeach()
-endif()
+    add_custom_command(
+        OUTPUT ${_out}
+        COMMAND ${FYPP} -Dtarget=\"${TARGET_NAME}\" ${_t} ${_out}
+        DEPENDS ${_t}
+        COMMENT "fypp ${_t} -> ${_out}"
+        VERBATIM
+    )
+    add_mumps_fortran_test(${_out})
+endforeach()
 
 # C-side tests now portable across all targets — the multifloats
 # branch in test_real_compat.h widens at the bridge boundary.
-if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
-    file(GLOB _ctests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/c/test_*.c)
-    foreach(_t ${_ctests})
-        add_mumps_c_test(${_t})
-    endforeach()
-endif()
+file(GLOB _ctests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/c/test_*.c)
+foreach(_t ${_ctests})
+    add_mumps_c_test(${_t})
+endforeach()

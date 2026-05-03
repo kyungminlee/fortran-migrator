@@ -22,6 +22,14 @@ module target_mumps
     use target_conv, only: q2t_r, t2q_r, q2t_c, t2q_c
     use ${real_struc_mod}$,    only: dmumps_struc
     use ${complex_struc_mod}$, only: zmumps_struc
+#:if target == 'multifloats'
+    ! On multifloats, MUMPS calls MPI_BCAST/REDUCE with custom datatypes
+    ! (MPI_FLOAT64X2 / MPI_COMPLEX64X2 / MPI_DD_SUM / etc.) that must be
+    ! registered via ``multifloats_mpi_init`` before the first MUMPS call.
+    ! The wrapper below calls it lazily so test drivers don't need a
+    ! per-target init step.
+    use multifloats_mpi_f, only: multifloats_mpi_init
+#:endif
     implicit none
 
     character(len=*), parameter :: target_name = '${target_name}$'
@@ -54,11 +62,17 @@ contains
 
     subroutine target_qmumps(id)
         type(dmumps_struc), intent(inout) :: id
+#:if target == 'multifloats'
+        call multifloats_mpi_init()  ! idempotent; registers MPI handles on first call
+#:endif
         call ${prefix_real}$(id)
     end subroutine target_qmumps
 
     subroutine target_xmumps(id)
         type(zmumps_struc), intent(inout) :: id
+#:if target == 'multifloats'
+        call multifloats_mpi_init()
+#:endif
         call ${prefix_complex}$(id)
     end subroutine target_xmumps
 
