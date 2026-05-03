@@ -239,7 +239,7 @@ set_target_properties(mumps_test_target PROPERTIES
 target_include_directories(mumps_test_target PUBLIC
     $<BUILD_INTERFACE:${_mp_moddir}>
 )
-target_link_libraries(mumps_test_target PUBLIC mumps_test_common)
+target_link_libraries(mumps_test_target PUBLIC mumps_test_common target_conv)
 # qmumps + scalapack + lapack + blas + mumps_c_bridge are NOT attached
 # as PUBLIC dependencies because cmake's PUBLIC propagation would place
 # them OUTSIDE the per-test LINK_GROUP wrapper. They're listed

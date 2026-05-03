@@ -16,7 +16,8 @@ program test_dmumps_jobs_extra
     use compare,               only: max_rel_err_vec
     use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
     use target_mumps,          only: target_name, target_eps, &
-                                     dmumps_struc, target_qmumps
+                                     dmumps_struc, target_qmumps, &
+                                     q2t_r, t2q_r
     use mpi
     implicit none
 
@@ -40,7 +41,7 @@ program test_dmumps_jobs_extra
     call init_id(id, n, nz, irn, jcn, A_trip, b)
     call run_job(id, 4, 'job=4 analyze+factor')
     call run_job(id, 3, 'job=3 solve after job=4')
-    allocate(x_solve(n));  x_solve = id%RHS
+    allocate(x_solve(n));  x_solve = t2q_r(id%RHS)
     err = max_rel_err_vec(x_solve, x_true)
     call report_case('seq=-1,4,3,-2', err, tol)
     call end_id(id);  deallocate(x_solve)
@@ -49,7 +50,7 @@ program test_dmumps_jobs_extra
     call init_id(id, n, nz, irn, jcn, A_trip, b)
     call run_job(id, 1, 'job=1 analyze')
     call run_job(id, 5, 'job=5 factor+solve')
-    allocate(x_solve(n));  x_solve = id%RHS
+    allocate(x_solve(n));  x_solve = t2q_r(id%RHS)
     err = max_rel_err_vec(x_solve, x_true)
     call report_case('seq=-1,1,5,-2', err, tol)
     call end_id(id);  deallocate(x_solve)
@@ -64,10 +65,10 @@ program test_dmumps_jobs_extra
     call run_job(id, 3, 'job=3 (round 1)')
     call run_job(id, -4, 'job=-4 free factors')
     ! Replace RHS for round 2 since round 1 overwrote it.
-    id%RHS = b
+    id%RHS = q2t_r(b)
     call run_job(id, 2, 'job=2 re-factor')
     call run_job(id, 3, 'job=3 re-solve')
-    allocate(x_solve(n));  x_solve = id%RHS
+    allocate(x_solve(n));  x_solve = t2q_r(id%RHS)
     err = max_rel_err_vec(x_solve, x_true)
     call report_case('seq=-1,4,3,-4,2,3,-2', err, tol)
     call end_id(id);  deallocate(x_solve)
@@ -99,8 +100,8 @@ contains
         id%NNZ  = int(nz, kind=8)
         allocate(id%IRN(nz));  id%IRN = irn
         allocate(id%JCN(nz));  id%JCN = jcn
-        allocate(id%A(nz));    id%A   = A_trip
-        allocate(id%RHS(n));   id%RHS = b
+        allocate(id%A(nz));    id%A   = q2t_r(A_trip)
+        allocate(id%RHS(n));   id%RHS = q2t_r(b)
     end subroutine init_id
 
     subroutine run_job(id, job, label)

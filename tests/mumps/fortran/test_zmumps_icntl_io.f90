@@ -6,7 +6,8 @@ program test_zmumps_icntl_io
     use compare,               only: max_rel_err_vec_z
     use test_data_mumps,       only: gen_dense_problem_z, dense_to_triplet_z
     use target_mumps,          only: target_name, target_eps, &
-                                     zmumps_struc, target_xmumps
+                                     zmumps_struc, target_xmumps, &
+                                     q2t_c, t2q_c
     use mpi
     implicit none
 
@@ -40,7 +41,7 @@ program test_zmumps_icntl_io
                 ' failed: INFOG(1)=', id%INFOG(1)
             error stop 1
         end if
-        allocate(x_solve(n));  x_solve = id%RHS
+        allocate(x_solve(n));  x_solve = t2q_c(id%RHS)
         err = max_rel_err_vec_z(x_solve, x_true)
         write(label, '(a,i0)') 'icntl8=', sc
         call report_case(trim(label), err, tol)
@@ -63,7 +64,7 @@ program test_zmumps_icntl_io
         complex(ep) :: x_perm(n)
         integer  :: idx
         do idx = 1, n
-            x_perm(id%ISOL_loc(idx)) = id%SOL_loc(idx)
+            x_perm(id%ISOL_loc(idx)) = t2q_c(id%SOL_loc(idx))
         end do
         err = max_rel_err_vec_z(x_perm, x_true)
     end block
@@ -77,24 +78,24 @@ program test_zmumps_icntl_io
     id%NNZ  = int(nz, kind=8)
     allocate(id%IRN(nz));  id%IRN = irn
     allocate(id%JCN(nz));  id%JCN = jcn
-    allocate(id%A(nz));    id%A   = A_trip
+    allocate(id%A(nz));    id%A   = q2t_c(A_trip)
     id%NRHS    = 1
     id%LRHS    = n
     id%NZ_RHS  = n
-    allocate(id%RHS_SPARSE(n));   id%RHS_SPARSE  = b
+    allocate(id%RHS_SPARSE(n));   id%RHS_SPARSE  = q2t_c(b)
     allocate(id%IRHS_SPARSE(n))
     allocate(id%IRHS_PTR(2))
     do i = 1, n;  id%IRHS_SPARSE(i) = i;  end do
     id%IRHS_PTR(1) = 1
     id%IRHS_PTR(2) = n + 1
-    allocate(id%RHS(n));  id%RHS = cmplx(0.0_ep, 0.0_ep, kind=ep)
+    allocate(id%RHS(n));  id%RHS = q2t_c(cmplx(0.0_ep, 0.0_ep, kind=ep))
     id%JOB = 6
     call target_xmumps(id)
     if (id%INFOG(1) < 0) then
         write(*, '(a,i0)') 'ICNTL(20)=1 failed: INFOG(1)=', id%INFOG(1)
         error stop 1
     end if
-    allocate(x_solve(n));  x_solve = id%RHS
+    allocate(x_solve(n));  x_solve = t2q_c(id%RHS)
     err = max_rel_err_vec_z(x_solve, x_true)
     call report_case('icntl20=1', err, tol)
     deallocate(id%RHS_SPARSE, id%IRHS_SPARSE, id%IRHS_PTR, x_solve)
@@ -122,8 +123,8 @@ contains
         id%NNZ = int(nz, kind=8)
         allocate(id%IRN(nz));  id%IRN = irn
         allocate(id%JCN(nz));  id%JCN = jcn
-        allocate(id%A(nz));    id%A   = A_trip
-        allocate(id%RHS(n));   id%RHS = b
+        allocate(id%A(nz));    id%A   = q2t_c(A_trip)
+        allocate(id%RHS(n));   id%RHS = q2t_c(b)
     end subroutine attach_dense
 
     subroutine end_id(id)

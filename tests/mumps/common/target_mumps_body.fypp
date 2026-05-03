@@ -19,6 +19,7 @@
 
 module target_mumps
     use prec_kinds, only: ep
+    use target_conv, only: q2t_r, t2q_r, q2t_c, t2q_c
     use ${real_struc_mod}$,    only: dmumps_struc
     use ${complex_struc_mod}$, only: zmumps_struc
     implicit none
