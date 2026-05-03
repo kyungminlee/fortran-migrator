@@ -1,0 +1,158 @@
+#! Fortran-vs-C parity test for the real MUMPS path. Same problem driven
+#! through both target_qmumps (Fortran wrapper) and the C bridge
+#! (c_real_mumps_solve → ${prefix_real}$_c → ${prefix_real}$_f77_).
+#! If the bridge correctly mirrors the Fortran derived-type
+#! extraction, the two solutions must be bit-identical (modulo any
+#! precision loss the conversion to/from the target type might
+#! introduce, which is symmetric across both paths).
+#!
+#! The bind(C) interface and bridge-buffer types vary per target:
+#!   kind16       — real(16)         (same as host real(ep), no copy)
+#!   kind10       — real(10)         (intrinsic narrow + widen)
+#!   multifloats  — bind(C) shadow of mumps_float64x2 (real(c_double)
+#!                  pair; the upstream real64x2 type is SEQUENCE-only,
+#!                  not BIND(C), so we can't pass it through bind(C)
+#!                  directly — declare a layout-compatible shadow).
+#!
+#! Set by CMake via fypp's -Dtarget=${TARGET_NAME}.
+
+program test_dmumps_c_parity
+    use prec_kinds,            only: ep
+    use prec_report,           only: report_init, report_case, report_finalize, report_check_status
+    use compare,               only: max_rel_err_vec
+    use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
+    use target_mumps,          only: target_name, target_eps, &
+                                     dmumps_struc, target_qmumps, &
+                                     q2t_r, t2q_r
+    use mpi
+    use iso_c_binding,         only: c_int, c_int64_t, c_double
+    implicit none
+
+#:if target == 'multifloats'
+    type, bind(C) :: bridge_real_t
+        real(c_double) :: limbs(2)
+    end type
+#:endif
+
+    interface
+        function c_real_mumps_solve(n, nnz, irn, jcn, a_vals, rhs) result(code) &
+            bind(C, name='c_real_mumps_solve')
+            import :: c_int, c_int64_t
+#:if target == 'multifloats'
+            import :: bridge_real_t
+#:endif
+            integer(c_int)              :: code
+            integer(c_int)              :: n
+            integer(c_int64_t)          :: nnz
+            integer(c_int)              :: irn(*), jcn(*)
+#:if target == 'multifloats'
+            type(bridge_real_t)         :: a_vals(*), rhs(*)
+#:elif target == 'kind10'
+            real(10)                    :: a_vals(*), rhs(*)
+#:else
+            real(16)                    :: a_vals(*), rhs(*)
+#:endif
+        end function c_real_mumps_solve
+    end interface
+
+    integer, parameter :: n = 16
+    integer            :: ierr, nz, c_code
+    real(ep), allocatable :: A(:,:), x_true(:), b(:)
+    integer,  allocatable :: irn(:), jcn(:)
+    real(ep), allocatable :: A_trip(:)
+    real(ep), allocatable :: x_fortran(:), x_c(:)
+    type(dmumps_struc)    :: id
+    integer(c_int)        :: n_c
+    integer(c_int64_t)    :: nnz_c
+    real(ep)              :: err, tol
+
+    call MPI_INIT(ierr)
+    call report_init('test_dmumps_c_parity', target_name)
+
+    call gen_dense_problem(n, A, x_true, b, seed = 31001)
+    call dense_to_triplet (A, irn, jcn, A_trip, nz)
+    tol = 16.0_ep * real(n, ep)**3 * target_eps
+
+    ! Path A — Fortran: target_qmumps → migrated qmumps_f77_
+    id%COMM = MPI_COMM_WORLD;  id%PAR = 1;  id%SYM = 0;  id%JOB = -1
+    call target_qmumps(id)
+    id%ICNTL(1) = -1; id%ICNTL(2) = -1; id%ICNTL(3) = -1; id%ICNTL(4) = 0
+    id%N   = n
+    id%NNZ = int(nz, kind=8)
+    allocate(id%IRN(nz));  id%IRN = irn
+    allocate(id%JCN(nz));  id%JCN = jcn
+    allocate(id%A(nz));    id%A   = q2t_r(A_trip)
+    allocate(id%RHS(n));   id%RHS = q2t_r(b)
+    id%JOB = 6
+    call target_qmumps(id)
+    if (id%INFOG(1) < 0) then
+        write(*, '(a,i0)') 'Fortran path failed, INFOG(1)=', id%INFOG(1)
+        error stop 1
+    end if
+    allocate(x_fortran(n));  x_fortran = t2q_r(id%RHS)
+    deallocate(id%IRN, id%JCN, id%A, id%RHS)
+    nullify(id%IRN, id%JCN, id%A, id%RHS)
+    id%JOB = -2;  call target_qmumps(id)
+
+    ! Path B — C bridge: c_real_mumps_solve → migrated qmumps_c → qmumps_f77_
+    n_c   = n
+    nnz_c = int(nz, kind=8)
+#:if target == 'multifloats'
+    block
+        type(bridge_real_t), allocatable :: a_bridge(:), x_bridge(:)
+        integer :: i
+        allocate(a_bridge(nz))
+        do i = 1, nz
+            a_bridge(i)%limbs(1) = real(A_trip(i), c_double)
+            a_bridge(i)%limbs(2) = 0.0_c_double
+        end do
+        allocate(x_bridge(n))
+        do i = 1, n
+            x_bridge(i)%limbs(1) = real(b(i), c_double)
+            x_bridge(i)%limbs(2) = 0.0_c_double
+        end do
+        c_code = c_real_mumps_solve(n_c, nnz_c, irn, jcn, a_bridge, x_bridge)
+        allocate(x_c(n))
+        do i = 1, n
+            x_c(i) = real(x_bridge(i)%limbs(1), ep) + real(x_bridge(i)%limbs(2), ep)
+        end do
+        deallocate(a_bridge, x_bridge)
+    end block
+#:elif target == 'kind10'
+    block
+        real(10), allocatable :: a_bridge(:), x_bridge(:)
+        allocate(a_bridge(nz));  a_bridge = q2t_r(A_trip)
+        allocate(x_bridge(n));   x_bridge = q2t_r(b)
+        c_code = c_real_mumps_solve(n_c, nnz_c, irn, jcn, a_bridge, x_bridge)
+        allocate(x_c(n));        x_c = t2q_r(x_bridge)
+        deallocate(a_bridge, x_bridge)
+    end block
+#:else
+    ! kind16: real(ep) == real(16) bit-for-bit; pass directly.
+    allocate(x_c(n));  x_c = b
+    c_code = c_real_mumps_solve(n_c, nnz_c, irn, jcn, A_trip, x_c)
+#:endif
+    if (c_code < 0) then
+        write(*, '(a,i0)') 'C path failed, code=', c_code
+        error stop 1
+    end if
+
+    ! The two paths feed the migrated f77 entry the same scalar/array
+    ! arguments via different boundaries (Fortran derived-type fields
+    ! vs. C struct fields). Both go through the same q2t_r conversion
+    ! before reaching the f77 call, so any non-zero diff would mean
+    ! the bridge mishandles a struct field — silent ABI corruption
+    ! that the per-side basic tests can't catch.
+    err = max_rel_err_vec(x_fortran, x_c)
+    call report_case('fortran-vs-c', err, 0.0_ep)
+
+    err = max_rel_err_vec(x_fortran, x_true)
+    call report_case('fortran-vs-truth', err, tol)
+    err = max_rel_err_vec(x_c, x_true)
+    call report_case('c-vs-truth', err, tol)
+
+    deallocate(A, x_true, b, irn, jcn, A_trip, x_fortran, x_c)
+    call report_finalize()
+    call MPI_FINALIZE(ierr)
+    call report_check_status()
+end program test_dmumps_c_parity

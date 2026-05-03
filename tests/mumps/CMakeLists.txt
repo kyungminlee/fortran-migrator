@@ -346,28 +346,35 @@ endfunction()
 
 if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
     file(GLOB _ftests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.f90)
-    # c_parity tests embed a hard-coded ``real(16)`` interface to
-    # c_qmumps_solve — kind16-only. Skip them for other targets until
-    # parity-test infrastructure is templatised over precision.
-    if(NOT TARGET_NAME STREQUAL "kind16")
-        list(FILTER _ftests EXCLUDE REGEX "_c_parity\\.f90$")
-    endif()
     foreach(_t ${_ftests})
         add_mumps_fortran_test(${_t})
     endforeach()
+
+    # Per-target fypp Fortran tests (parity tests, etc.). Each .fypp
+    # file is processed with ``-Dtarget=${TARGET_NAME}`` so the body
+    # can switch bind(C) interfaces and bridge buffers per precision.
+    # fypp -D evaluates the RHS as Python, so wrap the target name in
+    # quotes so it parses as a string literal rather than an identifier.
+    file(GLOB _ffypp_tests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.fypp)
+    foreach(_t ${_ffypp_tests})
+        get_filename_component(_stem ${_t} NAME_WE)
+        set(_out ${CMAKE_CURRENT_BINARY_DIR}/${_stem}.f90)
+        add_custom_command(
+            OUTPUT ${_out}
+            COMMAND ${FYPP} -Dtarget=\"${TARGET_NAME}\" ${_t} ${_out}
+            DEPENDS ${_t}
+            COMMENT "fypp ${_t} -> ${_out}"
+            VERBATIM
+        )
+        add_mumps_fortran_test(${_out})
+    endforeach()
 endif()
 
-# C-side tests are portable across kind16 and kind10 via the
-# ``test_real_compat.h`` shim plus the ``TARGET_REAL_HEADER`` /
-# ``TARGET_REAL_MUMPS_C`` macros wired in ``add_mumps_c_test()``.
-# Multifloats has no scalar-arithmetic real type in plain C (the bridge
-# typedef is a POD struct), so the C tests still skip there.
-if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES AND NOT TARGET_NAME STREQUAL "multifloats")
+# C-side tests now portable across all targets — the multifloats
+# branch in test_real_compat.h widens at the bridge boundary.
+if(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
     file(GLOB _ctests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/c/test_*.c)
     foreach(_t ${_ctests})
         add_mumps_c_test(${_t})
     endforeach()
-elseif(NOT _MUMPS_TESTS_SKIP_EXECUTABLES)
-    message(STATUS "tests/mumps: skipping C-side tests for target "
-                   "'${TARGET_NAME}' — POD real type, no plain-C arithmetic")
 endif()
