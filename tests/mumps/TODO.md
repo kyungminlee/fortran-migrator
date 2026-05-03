@@ -520,7 +520,9 @@ Multifloats overrides also authored
 build hits a separate, pre-existing migrator bug (see B8 below).
 
 Remaining for B4: multifloats build (blocked on B8); `INFOG(20)`
-sanity-check across targets.
+sanity-check across targets — multifloats is now testable as of
+2026-05-02 (B9b RESOLVED), so the cross-target sanity check can run
+on all three.
 
 **Update 2026-05-02:** `tests/mumps/fortran/test_dmumps_infog20.f90`
 landed for kind10 + kind16. The test factors a fixed n=32 SYM=0
@@ -1014,11 +1016,11 @@ alongside the existing `LIB_PREFIX`.
 
 | Target       | Total tests | mumps tests | Notes                                |
 | ------------ | ----------- | ----------- | ------------------------------------ |
-| kind16       | 1045        | 23          | unchanged                            |
-| kind10       | 1043        | 21          | C-side tests now portable (test_real_compat.h); parity tests still kind16-only |
-| multifloats  | 1022        | 0 (skipped) | mumps-test executables deferred (B9b)|
+| kind16       | 1045        | 23 PASS     | regression unchanged; parity tests now per-target (no behaviour change on kind16) |
+| kind10       | (pending)   | 23 build    | builds clean; runtime hang surfaces in fresh stage (separate, pre-existing) |
+| multifloats  | (pending)   | 23 build    | builds clean; runtime hits pre-existing migrator bug — MPI_SUM not rewritten to MPI_DD_SUM in mfac_scalings.F (`Allreduce(...USER<contig>, MPI_SUM, ...)` returns "MPI_Op operation not defined for this datatype"). Tracked as B9c |
 
-#### Follow-ups (B9b — deferred test-harness rework)
+#### Follow-ups (B9b — RESOLVED 2026-05-02)
 
 - **C-side tests (test_dmumps_c_basic, test_zmumps_c_basic,
   test_dmumps_c_sym) — RESOLVED 2026-05-01 for kind10.** The
@@ -1032,23 +1034,90 @@ alongside the existing `LIB_PREFIX`.
   same `TARGET_REAL_HEADER` / `TARGET_REAL_MUMPS_C` /
   `TARGET_REAL_STRUC_C` (plus complex counterparts) macros that
   `c_parity_helpers.c` uses, plus `TEST_TARGET_NAME` and
-  `TEST_TARGET_<NAME_UPPER>`. Tests now build and pass for both
-  kind16 and kind10 (the kind10 mumps suite went from 18 → 21 tests,
-  the kind16 suite is unchanged at 23). Multifloats stays skipped —
-  its real type is a POD struct (`mumps_float64x2 = { double[2] }`)
-  with no scalar arithmetic / literal syntax in plain C, so the
-  shim's `TR_LIT(0.0)` / `TR_FABS(x)` pattern doesn't apply.
-- Multifloats mumps test executables: the existing test sources use
-  `real(ep)` (== REAL(16)) for input data and assign directly to
-  `id%A` / `id%RHS` (TYPE(real64x2) in mmumps), and there's no
-  implicit kind conversion between REAL(16) and TYPE(real64x2). The
-  test harness needs an explicit `real64x2(real(...))` shim around
-  every host→device boundary, plus a way to drive
-  `id%RINFOG` / `id%CNTL` / etc. extraction back to the quad host.
-  Tracked separately because it's test-design work, not bridge work.
-- Fortran parity tests (test_dmumps_c_parity, test_zmumps_c_parity):
-  embed `real(16)` in a `bind(C)` interface, kind16-only. Skipped
-  for non-kind16 targets pending a portable rewrite.
+  `TEST_TARGET_<NAME_UPPER>`.
+- **Multifloats C-side tests — RESOLVED 2026-05-02.**
+  `test_real_compat.h` gained a `TEST_TARGET_MULTIFLOATS` branch:
+  `test_real` is plain `double` (host precision), `test_complex` is
+  `{double r, i}`, and `tr_widen` / `tr_narrow` (real) /
+  `tc_widen` / `tc_narrow` (complex) translate at the bridge boundary
+  to `mumps_float64x2` / `mumps_complex64x2`. The 4×4 hand-built test
+  problems don't strain double precision; the C tests verify the
+  bridge wires correctly, not multifloats arithmetic in C (Fortran-
+  side tests cover that). Drivers got `#ifdef TEST_TARGET_MULTIFLOATS`
+  bridge buffers around `id.a` / `id.rhs`.
+- **Multifloats Fortran tests — RESOLVED 2026-05-02.** Test drivers
+  now `use target_mumps, only: ..., q2t_r, t2q_r` (or `_c` for the
+  complex side) and wrap `id%A` / `id%RHS` / `id%A_loc` / `id%RHS_*`
+  assignments with `q2t_r(...)` and readbacks with `t2q_r(...)`. The
+  `target_conv` library from `tests/common` (already used by lapack /
+  blas / scalapack test trees) provides identity converters on
+  kind16, intrinsic narrow + widen on kind10, and double-double split
+  on multifloats. `target_mumps_body.fypp` re-exports the converters
+  through host association so test drivers reach them via their
+  existing `use target_mumps` clause. iref_errchk reads of
+  `id%RINFOG(6)` (NaN check + bound comparison) cache
+  `t2q_r(id%RINFOG(6))` once, replacing the kind16-only
+  `real(id%RINFOG(6), kind=ep)` cast.
+- **Parity tests target-aware — RESOLVED 2026-05-02.**
+  `test_dmumps_c_parity.f90` and `test_zmumps_c_parity.f90` were
+  rewritten as `.fypp` and now run on all three targets. The bind(C)
+  interface declares the per-target type (`real(16)` / `real(10)` /
+  `type(real64x2)`); a per-target staging block converts via
+  `q2t_r` / `t2q_r` before/after the C call. CMake processes them
+  with `-Dtarget=${TARGET_NAME}`. The kind16-only aliases
+  (`c_qmumps_solve` / `c_xmumps_solve`) in `c_parity_helpers.c` are
+  dropped — parity tests call the canonical
+  `c_real_mumps_solve` / `c_complex_mumps_solve`.
+- The `_MUMPS_TESTS_SKIP_EXECUTABLES` skip guard at the head of
+  `tests/mumps/CMakeLists.txt` was removed; the kind16-only
+  `_c_parity\.f90$` filter was removed; the
+  `NOT TARGET_NAME STREQUAL "multifloats"` clause on the C-test loop
+  was removed. All three targets now register the same Fortran +
+  C-side test sets.
+
+### B9c — Multifloats MUMPS uses `MPI_SUM` on `real64x2` buffers — runtime failure (NEW 2026-05-02)
+
+After Group A unblocked the multifloats mumps test harness (B9b), the
+test executables build and link cleanly but fail at runtime with:
+
+```
+internal_Allreduce: MPI_Op operation not defined for this datatype
+MPI_Allreduce(..., dtype=USER<contig>, MPI_SUM, ...)
+```
+
+Root cause: the migrator's `_rewrite_mpi_datatypes` post-pass rewrites
+`MPI_DOUBLE_PRECISION → MPI_FLOAT64X2` on the buffer-type argument but
+does **not** rewrite the matching `MPI_SUM → MPI_DD_SUM` reduction-op
+argument. MPI's built-in `MPI_SUM` is undefined on user-defined
+contiguous types (registered via `MPI_Type_contiguous(2, MPI_DOUBLE,
+&MPI_FLOAT64X2)` inside `multifloats_mpi_init`), so MUMPS calls like
+`MPI_Reduce(..., COUNT, MPI_FLOAT64X2, MPI_SUM, ...)` crash.
+
+Affected files (grep `MPI_SUM` in `/tmp/stg-mf/mumps/src/`):
+- `mfac_scalings.F:372,376` — Reduce on real-precision arrays
+- `mana_dist_m.F:206,605,626` — Allreduce / scan with real types
+- `wsol_distrhs.F`, `msol_distrhs.F` — distributed-RHS reductions
+- (others)
+
+Fix locations: `_rewrite_mpi_datatypes` in `src/pyengine/fortran_migrator.py`
+should pair the MPI_SUM/MAX/MIN substitution with the buffer-type
+substitution. Where `MPI_FLOAT64X2` is the active datatype, use
+`MPI_DD_SUM` / `MPI_DD_AMX` / `MPI_DD_AMN`; where `MPI_COMPLEX64X2`
+is active, use `MPI_ZZ_SUM` / `MPI_ZZ_AMX` / `MPI_ZZ_AMN`.
+`multifloats_mpi.cpp` already exports all six ops via
+`multifloats_mpi_init`, and `multifloats_mpi_f.f90` exposes them as
+INTEGER handles.
+
+Workaround: none. The test-harness work (B9b) is complete; this bug
+blocks runtime success but is independent of the harness rework.
+
+Group A test build verification (2026-05-02):
+- kind16: full ctest pass on `/tmp/stage-q` (`23/23` mumps tests)
+- multifloats: build clean on `/tmp/stage-mf`; ctest hits B9c on every
+  test (datatype + op pairing)
+- kind10: build clean on a fresh `/tmp/stg-e-mumps` stage; ctest hangs
+  (separate, pre-existing — likely a missing-archive issue in the
+  fresh-stage path, not related to Group A changes)
 - Pre-existing `_replace_kind_parameter` for multifloats (line 2872
   of fortran_migrator.py) comments out `integer, parameter :: wp =
   kind(1.d0)` lines; `replace_literals` skips literal-wrapping on
