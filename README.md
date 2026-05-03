@@ -132,9 +132,12 @@ stage` + CMake (see **Quick start**).
   target end-to-end: kind10 / kind16 pass 1 124 / 1 125 (one
   ScaLAPACK test crashes at MPI_Finalize on all targets — see
   `tests/REPORT.md` Known regressions); multifloats passes
-  1 098 / 1 125 — same ScaLAPACK crash plus all 26 MUMPS tests
-  blocked on a missing custom-MPI-op registration for the
-  multifloats datatype inside MUMPS's internal Allreduce.
+  1 118 / 1 125 — same ScaLAPACK crash plus 6 residual MUMPS
+  failures (5 C-side bridge tests that bypass the lazy
+  multifloats MPI init, and an n=1 tolerance edge in
+  `dmumps_basic`). The Fortran-side reduction-op gap that
+  blocked all 26 MUMPS tests last cycle was closed by the
+  per-call-site MPI_SUM/MAX/MIN rewriter in the Fortran migrator.
 - MUMPS kind10 / kind16 build and pass all 26 MUMPS tests
   (Fortran drivers + C-bridge parity / basic / sym). Keep-kind
   manifest + EP bridge modules handle the DP-stable shared modules;

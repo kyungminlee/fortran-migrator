@@ -8,17 +8,19 @@ reports via `scripts/precision_report.py`.
 
 | target       | tests run | tests passed | wall-clock |
 |--------------|----------:|-------------:|-----------:|
-| **kind10**       |     1 125 |    **1 124** |    527 sec |
-| **kind16**       |     1 125 |    **1 124** |    381 sec |
-| **multifloats**  |     1 125 |    **1 098** |    307 sec |
-| **total**        |     3 375 |    **3 346** |          — |
+| **kind10**       |     1 125 |    **1 124** |    318 sec |
+| **kind16**       |     1 125 |    **1 124** |    343 sec |
+| **multifloats**  |     1 125 |    **1 118** |    308 sec |
+| **total**        |     3 375 |    **3 366** |          — |
 
 Coverage: **1 125 tests per target** spanning every migrated library
 (BLAS + BLACS + LAPACK + PBLAS + PBBLAS + PTZBLAS + ScaLAPACK + MUMPS).
 Pass rate: **>99% on kind10/kind16** (one shared ScaLAPACK test
-crashes at MPI_Finalize), **97.6% on multifloats** (one ScaLAPACK
-crash + all 26 MUMPS tests blocked by a missing MPI custom-op
-registration on the multifloats datatype).
+crashes at MPI_Finalize), **99.4% on multifloats** (one ScaLAPACK
+crash + 6 MUMPS tests still failing — five C-side bridge tests
+that bypass the lazy `multifloats_mpi_init` wired into
+`target_qmumps`/`target_xmumps`, plus an `n=1` numerical edge in
+`dmumps_basic` unmasked once F2 below unblocked the run).
 
 See **[Known regressions](#known-regressions)** below for the failing
 test list and references to the underlying issues. Per-routine
@@ -50,7 +52,9 @@ otherwise breaks ASan link-time symbol resolution).
 ## Known regressions
 
 The latest end-to-end run (this date — see commit log of
-`tests/REPORT.md` for cadence) flushed two persistent failures.
+`tests/REPORT.md` for cadence) shows the persistent ScaLAPACK driver
+crash on all three targets plus a residual multifloats × MUMPS gap
+that closed from 26 to 6 with the F1 + F2 fixes below.
 
 ### `scalapack_test_pzdbtrsv` — heap corruption at MPI_Finalize
 
@@ -65,36 +69,43 @@ specific to the test driver (or `target_scalapack`'s `pzdbtrsv`
 wrapper), not a precision regression in the migrated archive.
 Action: triage in `tests/scalapack/`.
 
-### Multifloats × MUMPS — `MPI_Op operation not defined for this datatype`
+### Multifloats × MUMPS — residual gap (6 / 26)
 
-All 26 MUMPS tests fail on **multifloats** with `Fatal error in
-internal_Allreduce: MPI_Op operation not defined for this datatype`
-during the very first `id%JOB = …; CALL XMUMPS(id)` call. kind10
-and kind16 pass all 26 in the same run.
+The 26-test multifloats MUMPS gap that was open last run closed to
+6 here. Two changes landed:
 
-Root cause: MUMPS's internal Allreduce uses MPI types (e.g. its own
-`MUMPS_MPI_REAL`) that map to the multifloats `MPI_FLOAT64X2`
-custom datatype, but the matching `MPI_Op` implementations
-(`MPI_DD_SUM`, `MPI_DD_MAX`, …) are not registered against MUMPS's
-internal type aliases. The `multifloats_mpi_init` lazy-init path
-documented in `tests/mumps/CMakeLists.txt:226–232` registers ops
-on the wrapper bridge's types but not on whatever MUMPS picks up
-internally.
+* **F1** (commit `3bbaef7`) added the missing `q2t_r`/`q2t_c`
+  host↔device shim to `test_dmumps_errors`, `test_dmumps_infog20`,
+  `test_zmumps_errors` (D1-era drivers that pre-dated A1's wrap
+  pattern) — they now compile on multifloats.
+* **F2** (commit `eb83d5a`) extended the Fortran migrator with a
+  per-call-site `MPI_SUM` / `MPI_MAX` / `MPI_MIN` rewriter keyed off
+  the rewritten datatype token. MUMPS's
+  `MPI_Allreduce(..., MPI_FLOAT64X2, MPI_SUM, ...)` (and the
+  `MPI_MAX` variant in `mfac_driver`) now reach the registered
+  `MPI_DD_SUM` / `MPI_DD_AMX` ops instead of stock `MPI_SUM`.
+  Integer reductions in the same translation unit are left alone
+  by construction (their dtype token isn't `MPI_FLOAT64X2`).
 
-This is `tests/mumps/TODO.md` Group A's runtime extension: the A1–
-A4 fixes (commits `9d3a92b`–`cd82659`) made the multifloats build
-+ link succeed (and 1 098 / 1 125 of the rest of the suite passes),
-but full Allreduce wiring for MUMPS's internal MPI types is still
-open. The kind10 / kind16 paths are unaffected — both use IEEE
-real(10/16) which MPI handles natively.
+What's left, with current symptoms:
 
-Two of the multifloats MUMPS test sources also fail to compile
-(`test_dmumps_errors.f90`, `test_dmumps_infog20.f90`,
-`test_zmumps_errors.f90`) — the host↔device shim from the A-group
-TODO has not been applied to the `errors` / `infog20` drivers
-that landed under D1. The build proceeds via `-k` (keep-going),
-their absent binaries register as `Failed` execvp errors. Total
-multifloats MUMPS failures: 26 (compile-misses + runtime aborts).
+* `mumps_test_dmumps_basic` — n=8 / n=32 pass at ~32 digits;
+  n=1 yields max_rel_err=1.24e-32 (≈ 1 dd-double ulp) which trips
+  the `16·n³·target_eps` tolerance for n=1. A multifloats-specific
+  tolerance calibration issue, not a precision regression. Likely
+  fixed by widening the n=1 tolerance floor or by rounding the
+  expected exact-zero result.
+* `mumps_test_{d,z}mumps_c_basic`, `dmumps_c_sym`,
+  `{d,z}mumps_c_parity` — the C-side bridge drivers call
+  `MPI_Bcast` / `MPI_Allreduce` against the user-defined datatype
+  directly without going through `target_qmumps` /
+  `target_xmumps`, so the lazy `multifloats_mpi_init` documented
+  at `tests/mumps/CMakeLists.txt:226–232` is never invoked. The
+  C tests need an explicit init call (or a static-ctor hook in
+  the bridge linked into the C-side test binaries). Tracked as a
+  follow-up under `tests/mumps/TODO.md`.
+
+kind10 / kind16 are 26 / 26.
 
 
 ## Coverage by suite
@@ -375,7 +386,7 @@ matrix:
 | PBBLAS      | ✓ 20   | ✓ 20   | ✓ 20        |
 | PTZBLAS     | ✓ 34   | ✓ 34   | ✓ 34        |
 | ScaLAPACK   | ✓ 177  | ✓ 177  | ✓ 177       |
-| MUMPS       | ✓ 26   | ✓ 26   | ✓ 26 ⚠      |
+| MUMPS       | ✓ 26   | ✓ 26   | ✓ 20 / 26 ⚠ |
 | **per-target total** | **1 125** | **1 125** | **1 125** |
 
 `✓ N` means N test drivers run on that target. All three targets
