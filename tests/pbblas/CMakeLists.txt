@@ -39,13 +39,16 @@ if(NOT TARGET ${LIB_PREFIX}blacs)
     return()
 endif()
 
+# ── Dedicated module directory ──────────────────────────────────────
+# tests/pbblas/common/pblas_grid diverged from tests/pblas/common's
+# copy (pbblas added `grid_init_shape` for the pb[dz]trnv non-square
+# grid coverage in commit 90f76d2). Keep our .mod files in a per-tree
+# subdir so neither version overwrites the other in the shared
+# fmod/${FORTRAN_MOD_COMPAT_TAG} dir.
+set(_pbb_moddir "${PROJECT_BINARY_DIR}/fmod/${FORTRAN_MOD_COMPAT_TAG}/pbblas_tests")
+file(MAKE_DIRECTORY ${_pbb_moddir})
+
 # ── Common helper modules ───────────────────────────────────────────
-# We reuse pblas_grid / pblas_distrib byte-for-byte from tests/pblas;
-# the module names match those in tests/pblas (pblas_grid /
-# pblas_distrib) but the file content is identical, so when both
-# subtrees are staged the .mod produced is the same and there is no
-# collision in ${PROJECT_BINARY_DIR}/fmod (same convention as
-# prec_kinds across tests/blas, tests/ptzblas, tests/pblas, ...).
 add_library(pbblas_test_common STATIC
     common/prec_kinds.f90
     common/compare.f90
@@ -56,7 +59,12 @@ add_library(pbblas_test_common STATIC
     common/pblas_distrib.f90
     common/scalapack_tools.f90
 )
-fortran_module_layout(pbblas_test_common)
+set_target_properties(pbblas_test_common PROPERTIES
+    Fortran_MODULE_DIRECTORY "${_pbb_moddir}"
+)
+target_include_directories(pbblas_test_common PUBLIC
+    $<BUILD_INTERFACE:${_pbb_moddir}>
+)
 target_link_libraries(pbblas_test_common PUBLIC
     refblas_quad
     ${LIB_PREFIX}blacs
@@ -76,7 +84,12 @@ add_fypp_source(_pbblas_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(pbblas_test_target STATIC ${_pbblas_wrapper_src})
-fortran_module_layout(pbblas_test_target)
+set_target_properties(pbblas_test_target PROPERTIES
+    Fortran_MODULE_DIRECTORY "${_pbb_moddir}"
+)
+target_include_directories(pbblas_test_target PUBLIC
+    $<BUILD_INTERFACE:${_pbb_moddir}>
+)
 target_link_libraries(pbblas_test_target PUBLIC
     pbblas_test_common
     target_conv

@@ -37,6 +37,13 @@ if(NOT TARGET ${LIB_PREFIX}blacs)
     return()
 endif()
 
+# ── Dedicated module directory ──────────────────────────────────────
+# pblas_grid / pblas_distrib module names collide with the (now
+# divergent) copies in tests/pbblas and tests/blacs. Per-tree mod dir
+# keeps each tree's .mod files isolated in the shared fmod/ tree.
+set(_pb_moddir "${PROJECT_BINARY_DIR}/fmod/${FORTRAN_MOD_COMPAT_TAG}/pblas_tests")
+file(MAKE_DIRECTORY ${_pb_moddir})
+
 # ── Common helper modules ───────────────────────────────────────────
 add_library(pblas_test_common STATIC
     common/prec_kinds.f90
@@ -47,7 +54,12 @@ add_library(pblas_test_common STATIC
     common/pblas_grid.f90
     common/pblas_distrib.f90
 )
-fortran_module_layout(pblas_test_common)
+set_target_properties(pblas_test_common PROPERTIES
+    Fortran_MODULE_DIRECTORY "${_pb_moddir}"
+)
+target_include_directories(pblas_test_common PUBLIC
+    $<BUILD_INTERFACE:${_pb_moddir}>
+)
 target_link_libraries(pblas_test_common PUBLIC
     refblas_quad
     ${LIB_PREFIX}blacs
@@ -67,7 +79,12 @@ add_fypp_source(_pblas_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(pblas_test_target STATIC ${_pblas_wrapper_src})
-fortran_module_layout(pblas_test_target)
+set_target_properties(pblas_test_target PROPERTIES
+    Fortran_MODULE_DIRECTORY "${_pb_moddir}"
+)
+target_include_directories(pblas_test_target PUBLIC
+    $<BUILD_INTERFACE:${_pb_moddir}>
+)
 target_link_libraries(pblas_test_target PUBLIC
     pblas_test_common
     target_conv

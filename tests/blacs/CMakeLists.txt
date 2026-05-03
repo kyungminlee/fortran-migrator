@@ -25,10 +25,14 @@ if(NOT TARGET ${LIB_PREFIX}blacs)
     return()
 endif()
 
+# ── Dedicated module directory ──────────────────────────────────────
+# pblas_grid module name is shared with tests/{pbblas,pblas} (whose
+# bodies have since diverged), so use a per-tree subdir to keep our
+# .mod files from colliding in the shared fmod/ tree.
+set(_bl_moddir "${PROJECT_BINARY_DIR}/fmod/${FORTRAN_MOD_COMPAT_TAG}/blacs_tests")
+file(MAKE_DIRECTORY ${_bl_moddir})
+
 # ── Common helper modules ───────────────────────────────────────────
-# prec_kinds / compare / test_data / pblas_grid are byte-for-byte
-# identical to the copies in tests/pbblas; shared module names produce
-# the same .mod in the project-wide fmod directory, no collision.
 add_library(blacs_test_common STATIC
     common/prec_kinds.f90
     common/compare.f90
@@ -36,7 +40,12 @@ add_library(blacs_test_common STATIC
     common/test_data.f90
     common/pblas_grid.f90
 )
-fortran_module_layout(blacs_test_common)
+set_target_properties(blacs_test_common PROPERTIES
+    Fortran_MODULE_DIRECTORY "${_bl_moddir}"
+)
+target_include_directories(blacs_test_common PUBLIC
+    $<BUILD_INTERFACE:${_bl_moddir}>
+)
 target_link_libraries(blacs_test_common PUBLIC
     ${LIB_PREFIX}blacs
     MPI::MPI_Fortran
@@ -55,7 +64,12 @@ add_fypp_source(_blacs_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(blacs_test_target STATIC ${_blacs_wrapper_src})
-fortran_module_layout(blacs_test_target)
+set_target_properties(blacs_test_target PROPERTIES
+    Fortran_MODULE_DIRECTORY "${_bl_moddir}"
+)
+target_include_directories(blacs_test_target PUBLIC
+    $<BUILD_INTERFACE:${_bl_moddir}>
+)
 target_link_libraries(blacs_test_target PUBLIC
     blacs_test_common
     target_conv
