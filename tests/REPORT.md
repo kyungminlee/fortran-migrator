@@ -10,17 +10,15 @@ reports via `scripts/precision_report.py`.
 |--------------|----------:|-------------:|-----------:|
 | **kind10**       |     1 125 |    **1 124** |    318 sec |
 | **kind16**       |     1 125 |    **1 124** |    343 sec |
-| **multifloats**  |     1 125 |    **1 118** |    308 sec |
-| **total**        |     3 375 |    **3 366** |          — |
+| **multifloats**  |     1 125 |    **1 124** |    308 sec |
+| **total**        |     3 375 |    **3 372** |          — |
 
 Coverage: **1 125 tests per target** spanning every migrated library
 (BLAS + BLACS + LAPACK + PBLAS + PBBLAS + PTZBLAS + ScaLAPACK + MUMPS).
-Pass rate: **>99% on kind10/kind16** (one shared ScaLAPACK test
-crashes at MPI_Finalize), **99.4% on multifloats** (one ScaLAPACK
-crash + 6 MUMPS tests still failing — five C-side bridge tests
-that bypass the lazy `multifloats_mpi_init` wired into
-`target_qmumps`/`target_xmumps`, plus an `n=1` numerical edge in
-`dmumps_basic` unmasked once F2 below unblocked the run).
+Pass rate: **>99% on all three targets** — one shared ScaLAPACK test
+(`pzdbtrsv`) crashes at MPI_Finalize on every target. The previously
+open multifloats × MUMPS gap (26 → 6 → 0) closed this cycle: see
+the Known regressions section for details.
 
 See **[Known regressions](#known-regressions)** below for the failing
 test list and references to the underlying issues. Per-routine
@@ -53,8 +51,10 @@ otherwise breaks ASan link-time symbol resolution).
 
 The latest end-to-end run (this date — see commit log of
 `tests/REPORT.md` for cadence) shows the persistent ScaLAPACK driver
-crash on all three targets plus a residual multifloats × MUMPS gap
-that closed from 26 to 6 with the F1 + F2 fixes below.
+crash on all three targets as the only remaining failure. The
+multifloats × MUMPS gap that was 26 → 6 last cycle closed to 0 here
+with the F3 + F4 + F5 fixes below; the multifloats suite now matches
+kind10 / kind16 at 1124 / 1125.
 
 ### `scalapack_test_pzdbtrsv` — heap corruption at MPI_Finalize
 
@@ -69,43 +69,39 @@ specific to the test driver (or `target_scalapack`'s `pzdbtrsv`
 wrapper), not a precision regression in the migrated archive.
 Action: triage in `tests/scalapack/`.
 
-### Multifloats × MUMPS — residual gap (6 / 26)
+### Multifloats × MUMPS — closed (26 / 26)
 
-The 26-test multifloats MUMPS gap that was open last run closed to
-6 here. Two changes landed:
+History: the gap was 26 → 6 → 0 across two cycles. Reference for
+posterity:
 
 * **F1** (commit `3bbaef7`) added the missing `q2t_r`/`q2t_c`
-  host↔device shim to `test_dmumps_errors`, `test_dmumps_infog20`,
-  `test_zmumps_errors` (D1-era drivers that pre-dated A1's wrap
-  pattern) — they now compile on multifloats.
-* **F2** (commit `eb83d5a`) extended the Fortran migrator with a
-  per-call-site `MPI_SUM` / `MPI_MAX` / `MPI_MIN` rewriter keyed off
-  the rewritten datatype token. MUMPS's
-  `MPI_Allreduce(..., MPI_FLOAT64X2, MPI_SUM, ...)` (and the
-  `MPI_MAX` variant in `mfac_driver`) now reach the registered
-  `MPI_DD_SUM` / `MPI_DD_AMX` ops instead of stock `MPI_SUM`.
-  Integer reductions in the same translation unit are left alone
-  by construction (their dtype token isn't `MPI_FLOAT64X2`).
+  host↔device shim to three D1-era drivers (`test_dmumps_errors`,
+  `test_dmumps_infog20`, `test_zmumps_errors`) so they compile on
+  multifloats.
+* **F2** (commit `eb83d5a`) added a per-call-site `MPI_SUM` /
+  `MPI_MAX` / `MPI_MIN` rewriter to the Fortran migrator, keyed off
+  the rewritten datatype token. MUMPS's reductions over
+  `MPI_FLOAT64X2` / `MPI_COMPLEX64X2` now reach the registered
+  `MPI_DD_SUM` / `MPI_DD_AMX` ops; integer reductions in the same
+  translation unit are left alone by construction.
+* **F3** (commit `ddcc48f`) added an explicit `multifloats_mpi_init()`
+  call after `MPI_Init` in the three C-bridge tests
+  (`test_dmumps_c_basic`, `test_dmumps_c_sym`, `test_zmumps_c_basic`)
+  that bypass `target_qmumps`/`target_xmumps` and so never triggered
+  the lazy init.
+* **F4** (commit `a5195bb`) fixed the Path-B bridge fill in the two
+  parity tests (`test_dmumps_c_parity`, `test_zmumps_c_parity`):
+  was storing real(ep) inputs as `limbs(1)=hi, limbs(2)=0` —
+  silently truncating to single-double. Now does a proper hi/lo
+  split mirroring `target_conv`'s `q2t_r`/`q2t_c`.
+* **F5** (commit `50467fe`) brought the multifloats MUMPS
+  `target_eps` in line with the rest of the suite: was
+  `epsilon(1.0_ep)` (≈ 1.93e-34, quad), now `2.0_8**(-104)`
+  (≈ 4.93e-32, dd-double). The previous setting overstated
+  achievable precision by ~64×, tripping the `16·n³·target_eps`
+  tolerance at n=1 where conversion-loss alone (~1 dd-ulp) dominates.
 
-What's left, with current symptoms:
-
-* `mumps_test_dmumps_basic` — n=8 / n=32 pass at ~32 digits;
-  n=1 yields max_rel_err=1.24e-32 (≈ 1 dd-double ulp) which trips
-  the `16·n³·target_eps` tolerance for n=1. A multifloats-specific
-  tolerance calibration issue, not a precision regression. Likely
-  fixed by widening the n=1 tolerance floor or by rounding the
-  expected exact-zero result.
-* `mumps_test_{d,z}mumps_c_basic`, `dmumps_c_sym`,
-  `{d,z}mumps_c_parity` — the C-side bridge drivers call
-  `MPI_Bcast` / `MPI_Allreduce` against the user-defined datatype
-  directly without going through `target_qmumps` /
-  `target_xmumps`, so the lazy `multifloats_mpi_init` documented
-  at `tests/mumps/CMakeLists.txt:226–232` is never invoked. The
-  C tests need an explicit init call (or a static-ctor hook in
-  the bridge linked into the C-side test binaries). Tracked as a
-  follow-up under `tests/mumps/TODO.md`.
-
-kind10 / kind16 are 26 / 26.
+All three targets now pass 26 / 26.
 
 
 ## Coverage by suite
@@ -386,7 +382,7 @@ matrix:
 | PBBLAS      | ✓ 20   | ✓ 20   | ✓ 20        |
 | PTZBLAS     | ✓ 34   | ✓ 34   | ✓ 34        |
 | ScaLAPACK   | ✓ 177  | ✓ 177  | ✓ 177       |
-| MUMPS       | ✓ 26   | ✓ 26   | ✓ 20 / 26 ⚠ |
+| MUMPS       | ✓ 26   | ✓ 26   | ✓ 26   |
 | **per-target total** | **1 125** | **1 125** | **1 125** |
 
 `✓ N` means N test drivers run on that target. All three targets
