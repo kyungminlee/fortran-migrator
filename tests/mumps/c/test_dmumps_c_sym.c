@@ -26,6 +26,10 @@
 #define MUMPS_C       TARGET_REAL_MUMPS_C
 #define MUMPS_STRUC_C TARGET_REAL_STRUC_C
 
+#ifdef TEST_TARGET_MULTIFLOATS
+extern void multifloats_mpi_init(void);
+#endif
+
 static FILE *gJson = NULL;
 static int gAnyFail = 0;
 static int gCaseCount = 0;
@@ -120,6 +124,9 @@ int main(int argc, char **argv)
     test_real x_true[N] = { TR_LIT(1.0), TR_LIT(-2.0), TR_LIT(3.0), TR_LIT(-4.0) };
 
     MPI_Init(&argc, &argv);
+#ifdef TEST_TARGET_MULTIFLOATS
+    multifloats_mpi_init();
+#endif
     report_init_c("test_dmumps_c_sym", TEST_TARGET_NAME);
 
     /* ── SYM=0 — general unsymmetric ─────────────────────────────── */

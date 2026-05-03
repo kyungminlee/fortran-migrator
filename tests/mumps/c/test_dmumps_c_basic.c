@@ -28,6 +28,10 @@
 #define MUMPS_C       TARGET_REAL_MUMPS_C
 #define MUMPS_STRUC_C TARGET_REAL_STRUC_C
 
+#ifdef TEST_TARGET_MULTIFLOATS
+extern void multifloats_mpi_init(void);
+#endif
+
 /* Same JSON report layout as prec_report.f90 produces, hand-rolled
  * here so the C test side doesn't need to call back into Fortran. */
 static FILE *gJson = NULL;
@@ -90,6 +94,9 @@ int main(int argc, char **argv)
     test_real  rhs[4];
 
     MPI_Init(&argc, &argv);
+#ifdef TEST_TARGET_MULTIFLOATS
+    multifloats_mpi_init();
+#endif
 
     /* Fill A (4x4): diagonal entries large, off-diagonals small.
      * Layout matches dense_to_triplet (column-major flatten). */

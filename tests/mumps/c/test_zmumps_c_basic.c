@@ -23,6 +23,10 @@
 #define MUMPS_C       TARGET_COMPLEX_MUMPS_C
 #define MUMPS_STRUC_C TARGET_COMPLEX_STRUC_C
 
+#ifdef TEST_TARGET_MULTIFLOATS
+extern void multifloats_mpi_init(void);
+#endif
+
 static FILE *gJson = NULL;
 static int gAnyFail = 0, gCaseCount = 0;
 
@@ -102,6 +106,9 @@ int main(int argc, char **argv)
     test_complex  a_vals[N*N], rhs[N];
 
     MPI_Init(&argc, &argv);
+#ifdef TEST_TARGET_MULTIFLOATS
+    multifloats_mpi_init();
+#endif
     {
         int i, j, k = 0;
         for (j = 0; j < N; j++)
