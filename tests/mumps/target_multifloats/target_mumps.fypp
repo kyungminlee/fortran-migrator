@@ -1,6 +1,6 @@
 #:set target            = 'multifloats'
 #:set target_name       = 'multifloats'
-#:set target_eps        = 'epsilon(1.0_ep)'
+#:set target_eps        = 'real(2.0_8**(-104), ep)'
 #:set prefix_real       = 'mmumps'
 #:set prefix_complex    = 'wmumps'
 #:set real_struc_mod    = 'mmumps_struc_def'
