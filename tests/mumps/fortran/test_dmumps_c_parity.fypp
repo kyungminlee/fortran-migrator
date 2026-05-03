@@ -100,16 +100,21 @@ program test_dmumps_c_parity
 #:if target == 'multifloats'
     block
         type(bridge_real_t), allocatable :: a_bridge(:), x_bridge(:)
+        real(c_double) :: hi
         integer :: i
+        ! Hi/lo split mirroring target_conv's q2t_r — the previous
+        ! limbs(2)=0 fill silently truncated inputs to single-double.
         allocate(a_bridge(nz))
         do i = 1, nz
-            a_bridge(i)%limbs(1) = real(A_trip(i), c_double)
-            a_bridge(i)%limbs(2) = 0.0_c_double
+            hi = real(A_trip(i), c_double)
+            a_bridge(i)%limbs(1) = hi
+            a_bridge(i)%limbs(2) = real(A_trip(i) - real(hi, ep), c_double)
         end do
         allocate(x_bridge(n))
         do i = 1, n
-            x_bridge(i)%limbs(1) = real(b(i), c_double)
-            x_bridge(i)%limbs(2) = 0.0_c_double
+            hi = real(b(i), c_double)
+            x_bridge(i)%limbs(1) = hi
+            x_bridge(i)%limbs(2) = real(b(i) - real(hi, ep), c_double)
         end do
         c_code = c_real_mumps_solve(n_c, nnz_c, irn, jcn, a_bridge, x_bridge)
         allocate(x_c(n))
