@@ -23,6 +23,8 @@ from pyengine.fortran_migrator import (
     insert_use_multifloats,
     rewrite_la_constants_use,
     _la_constants_rename_map,
+    _rewrite_mpi_datatypes,
+    _rewrite_mpi_sum,
     migrate_fixed_form,
     migrate_free_form,
 )
@@ -702,3 +704,151 @@ def test_end_to_end_free_form_pattern_b(mf):
     # Body references stay as the local alias names
     assert 'x == zero' in out
     assert 'one / safmin' in out
+
+
+# ---------------------------------------------------------------------------
+# _rewrite_mpi_sum — multifloats per-call-site MPI_SUM rewriter
+# ---------------------------------------------------------------------------
+
+
+def test_rewrite_mpi_sum_real_call_site():
+    """A reduce call whose arglist contains the rewritten real datatype
+    token gets MPI_SUM swapped for MPI_DD_SUM."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(SBUF, RBUF, 1, MPI_DOUBLE_PRECISION,\n"
+        "     &                   MPI_SUM, COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_FLOAT64X2' in out
+    assert 'MPI_DD_SUM' in out
+    assert 'MPI_SUM' not in out
+
+
+def test_rewrite_mpi_sum_complex_call_site():
+    """Same but for a complex-typed reduce: MPI_SUM → MPI_ZZ_SUM."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_REDUCE(ZB, ZA, N, MPI_DOUBLE_COMPLEX, MPI_SUM,\n"
+        "     &                ROOT, COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_COMPLEX64X2' in out
+    assert 'MPI_ZZ_SUM' in out
+    assert 'MPI_SUM' not in out
+
+
+def test_rewrite_mpi_sum_integer_call_site_untouched():
+    """Integer reductions stay MPI_SUM — MPI_DD_SUM is undefined for
+    MPI_INTEGER. This is the whole reason for token-context dispatch."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(N, NSUM, 1, MPI_INTEGER, MPI_SUM,\n"
+        "     &                   COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_SUM' in out
+    assert 'MPI_DD_SUM' not in out
+    assert 'MPI_ZZ_SUM' not in out
+
+
+def test_rewrite_mpi_sum_mixed_arith_in_one_file():
+    """A single source with all three call sites — each judged
+    independently. Real → DD_SUM, complex → ZZ_SUM, integer untouched."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(R, S, 1, MPI_DOUBLE_PRECISION, MPI_SUM, C, I)\n"
+        "      CALL MPI_ALLREDUCE(Z, W, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, C, I)\n"
+        "      CALL MPI_ALLREDUCE(N, M, 1, MPI_INTEGER, MPI_SUM, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    lines = out.splitlines()
+    assert 'MPI_DD_SUM' in lines[0] and 'MPI_FLOAT64X2' in lines[0]
+    assert 'MPI_ZZ_SUM' in lines[1] and 'MPI_COMPLEX64X2' in lines[1]
+    assert 'MPI_SUM' in lines[2] and 'MPI_INTEGER' in lines[2]
+    assert 'MPI_DD_SUM' not in lines[2]
+    assert 'MPI_ZZ_SUM' not in lines[2]
+
+
+def test_rewrite_mpi_sum_kind16_is_noop():
+    """KIND targets set c_mpi_sum_* = 'MPI_SUM' so the pass returns
+    early and leaves the source untouched."""
+    k16 = load_target('kind16')
+    src = (
+        "      CALL MPI_ALLREDUCE(R, S, 1, MPI_DOUBLE_PRECISION, MPI_SUM, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, k16), k16)
+    assert 'MPI_REAL16' in out
+    assert 'MPI_SUM' in out
+    assert 'MPI_DD_SUM' not in out
+
+
+def test_rewrite_mpi_sum_kind10_is_noop():
+    k10 = load_target('kind10')
+    src = (
+        "      CALL MPI_ALLREDUCE(R, S, 1, MPI_DOUBLE_PRECISION, MPI_SUM, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, k10), k10)
+    assert 'MPI_LONG_DOUBLE' in out
+    assert 'MPI_SUM' in out
+    assert 'MPI_DD_SUM' not in out
+
+
+def test_rewrite_mpi_sum_does_not_touch_non_reduce_calls():
+    """MPI_SUM appearing outside a reduction call (e.g. as a literal in
+    a SAVE / DATA / parameter list) is NOT rewritten by this pass —
+    the regex anchors on MPI_(I?All)Reduce[_scatter]."""
+    mf = load_target('multifloats')
+    src = (
+        "      INTEGER, PARAMETER :: MY_OP = MPI_SUM\n"
+        "      CALL MPI_OP_FREE(MPI_SUM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(src, mf)
+    assert out == src
+
+
+def test_rewrite_mpi_max_real_call_site():
+    """MPI_MAX on a float-typed reduce becomes MPI_DD_AMX (multifloats
+    bridge ships AMX, not a stock-MPI-compatible MAX)."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_REDUCE(SBUF, RBUF, 1, MPI_DOUBLE_PRECISION,\n"
+        "     &                MPI_MAX, MASTER, COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_DD_AMX' in out
+    assert 'MPI_MAX' not in out
+
+
+def test_rewrite_mpi_min_complex_call_site():
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(Z, W, 1, MPI_DOUBLE_COMPLEX, MPI_MIN, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_ZZ_AMN' in out
+    assert 'MPI_MIN' not in out
+
+
+def test_rewrite_mpi_max_integer_call_site_untouched():
+    """MPI_INTEGER + MPI_MAX must stay MPI_MAX — integer reductions
+    don't go through the user-defined op."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(N, M, 1, MPI_INTEGER, MPI_MAX, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_MAX' in out
+    assert 'MPI_DD_AMX' not in out
+
+
+def test_rewrite_mpi_sum_handles_mpi_reduce_scatter():
+    """MPI_REDUCE_SCATTER also takes (op, datatype) — must be covered."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_REDUCE_SCATTER(SB, RB, CNTS, MPI_DOUBLE_PRECISION,\n"
+        "     &                        MPI_SUM, COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_DD_SUM' in out
+    assert 'MPI_SUM' not in out

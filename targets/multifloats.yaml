@@ -162,6 +162,14 @@ c_interop:
   mpi_complex: MPI_COMPLEX64X2
   mpi_sum_real: MPI_DD_SUM
   mpi_sum_complex: MPI_ZZ_SUM
+  # MUMPS issues MPI_Allreduce(..., MPI_FLOAT64X2, MPI_MAX, ...) when
+  # collecting per-rank scaling extrema; stock MPI_MAX is undefined for
+  # the user-defined datatype. The bridge ships AMX/AMN ops; MIN is
+  # listed for symmetry though MUMPS only actually uses MAX today.
+  mpi_max_real: MPI_DD_AMX
+  mpi_max_complex: MPI_ZZ_AMX
+  mpi_min_real: MPI_DD_AMN
+  mpi_min_complex: MPI_ZZ_AMN
   needs_mpi_check: false
   header_mode: include
   header: multifloats_bridge.h
