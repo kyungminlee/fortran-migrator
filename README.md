@@ -129,14 +129,11 @@ stage` + CMake (see **Quick start**).
 - `kind10` (e/y), `kind16` (q/x), and `multifloats` (m/w) all build
   the full blas/xblas/blacs/lapack/pbblas/pblas/ptzblas/scalapack/scalapack_c
   archives. The differential precision suite runs 1 125 tests per
-  target end-to-end and **all three targets pass 1 124 / 1 125**;
-  the lone shared failure is a single ScaLAPACK driver
-  (`pzdbtrsv`) that crashes at `MPI_Finalize` on every target —
-  see `tests/REPORT.md` Known regressions. The multifloats × MUMPS
-  gap (26 → 6 → 0) closed this cycle: per-call-site MPI op
-  rewriting in the migrator, explicit `multifloats_mpi_init` in the
-  C-bridge tests, a parity-test bridge-fill bug fix, and a
-  `target_eps` calibration to dd-double precision.
+  target end-to-end and **all three targets pass 1 125 / 1 125** —
+  the previously-persistent `pzdbtrsv` `MPI_Finalize` crash was
+  closed by extending the upstream `PDDBTRS`/`PZDBTRS` `LWMIN`
+  override to the `*trsv` oracle call site (commit `eec88b3`).
+  See `tests/REPORT.md` for the per-target breakdown.
 - MUMPS kind10 / kind16 build and pass all 26 MUMPS tests
   (Fortran drivers + C-bridge parity / basic / sym). Keep-kind
   manifest + EP bridge modules handle the DP-stable shared modules;
