@@ -8,7 +8,8 @@ program test_zmumps_jobs
     use compare,               only: max_rel_err_vec_z
     use test_data_mumps,       only: gen_dense_problem_z, dense_to_triplet_z
     use target_mumps,          only: target_name, target_eps, &
-                                     zmumps_struc, target_xmumps
+                                     zmumps_struc, target_xmumps, &
+                                     q2t_c, t2q_c
     use mpi
     implicit none
 
@@ -61,8 +62,8 @@ contains
         idl%NNZ = int(nz, kind=8)
         allocate(idl%IRN(nz));  idl%IRN = irn
         allocate(idl%JCN(nz));  idl%JCN = jcn
-        allocate(idl%A(nz));    idl%A   = A_trip
-        allocate(idl%RHS(n));   idl%RHS = b
+        allocate(idl%A(nz));    idl%A   = q2t_c(A_trip)
+        allocate(idl%RHS(n));   idl%RHS = q2t_c(b)
 
         do k = 1, size(jobs)
             idl%JOB = jobs(k)
@@ -75,7 +76,7 @@ contains
         end do
 
         allocate(x_solve(n))
-        x_solve = idl%RHS
+        x_solve = t2q_c(idl%RHS)
 
         deallocate(idl%IRN, idl%JCN, idl%A, idl%RHS)
         nullify(idl%IRN, idl%JCN, idl%A, idl%RHS)

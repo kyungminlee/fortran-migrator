@@ -3259,6 +3259,67 @@ def _rewrite_mpi_datatypes(source: str, target_mode: TargetMode) -> str:
     return source
 
 
+# Token-context MPI reduction-op rewriter for multifloats. The target
+# ships user-defined ops (MPI_DD_SUM / MPI_DD_AMX / MPI_DD_AMN, plus
+# the ZZ-prefixed complex variants) that operate on the user-defined
+# float64x2 / complex64x2 datatypes; the stock MPI_SUM / MPI_MAX /
+# MPI_MIN are undefined for those datatypes and the runtime aborts.
+# The C migrator handles this by file-arithmetic context (real /
+# complex sibling files use separate rule lists) but Fortran sources
+# from MUMPS mix integer reductions (MPI_INTEGER + MPI_SUM, which
+# MUST stay MPI_SUM) with floating-point reductions in the same
+# translation unit, so a blunt file-prefix rewrite would corrupt the
+# integer calls. Instead we match each MPI_(I?All)Reduce[_scatter]
+# call as a whole, run *after* _rewrite_mpi_datatypes, and only
+# rewrite the op inside a call whose argument list contains the
+# rewritten floating datatype token (e.g. MPI_FLOAT64X2). Integer-
+# typed calls are left alone by construction. For KIND targets the
+# c_mpi_(sum|max|min)_* fields expand to 'MPI_(SUM|MAX|MIN)' or are
+# unset, and the pass is a no-op.
+_MPI_REDUCE_CALL_RE = re.compile(
+    r'\bMPI_(?:I?ALL)?REDUCE(?:_SCATTER)?\b\s*'
+    r'\((?:[^()]|\([^()]*\))*\)',
+    re.IGNORECASE,
+)
+_MPI_OP_RE = {
+    'MPI_SUM': re.compile(r'\bMPI_SUM\b'),
+    'MPI_MAX': re.compile(r'\bMPI_MAX\b'),
+    'MPI_MIN': re.compile(r'\bMPI_MIN\b'),
+}
+
+
+def _rewrite_mpi_sum(source: str, target_mode: TargetMode) -> str:
+    real_tok = target_mode.c_mpi_real
+    complex_tok = target_mode.c_mpi_complex
+    rules: list[tuple[re.Pattern, str | None, str | None]] = []
+    for stock, mf_real, mf_complex in (
+        ('MPI_SUM', target_mode.c_mpi_sum_real, target_mode.c_mpi_sum_complex),
+        ('MPI_MAX', target_mode.c_mpi_max_real, target_mode.c_mpi_max_complex),
+        ('MPI_MIN', target_mode.c_mpi_min_real, target_mode.c_mpi_min_complex),
+    ):
+        r = mf_real if mf_real and mf_real != stock else None
+        c = mf_complex if mf_complex and mf_complex != stock else None
+        if r or c:
+            rules.append((_MPI_OP_RE[stock], r, c))
+    if not rules:
+        return source
+
+    def rewrite(m: re.Match) -> str:
+        call = m.group(0)
+        is_complex = bool(complex_tok) and complex_tok in call
+        is_real = bool(real_tok) and real_tok in call
+        if not (is_complex or is_real):
+            return call
+        for pat, r, c in rules:
+            if is_complex and c:
+                call = pat.sub(c, call)
+            elif is_real and r:
+                call = pat.sub(r, call)
+        return call
+
+    return _MPI_REDUCE_CALL_RE.sub(rewrite, source)
+
+
 # Multifloats MPI handle tokens emitted by ``_rewrite_mpi_datatypes`` for
 # the multifloats target (``MPI_DOUBLE_PRECISION`` → ``MPI_FLOAT64X2``,
 # ``MPI_DOUBLE_COMPLEX`` → ``MPI_COMPLEX64X2``) plus the real + complex
@@ -3391,6 +3452,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str], target_mo
         migrated = _restore_keep_kind_sentinel(migrated)
 
     migrated = _rewrite_mpi_datatypes(migrated, target_mode)
+    migrated = _rewrite_mpi_sum(migrated, target_mode)
     migrated = insert_use_multifloats_mpi_f(migrated, target_mode)
     migrated = _rewrite_prefixed_includes(migrated, target_mode)
 

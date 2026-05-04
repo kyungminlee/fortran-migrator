@@ -18,7 +18,8 @@ program test_dmumps_iref_errchk
     use compare,               only: max_rel_err_vec
     use test_data_mumps,       only: gen_dense_problem, dense_to_triplet
     use target_mumps,          only: target_name, target_eps, &
-                                     dmumps_struc, target_qmumps
+                                     dmumps_struc, target_qmumps, &
+                                     q2t_r, t2q_r
     use mpi
     implicit none
 
@@ -47,7 +48,7 @@ program test_dmumps_iref_errchk
         write(*, '(a,i0)') 'ICNTL(10)=5 failed, INFOG(1)=', id%INFOG(1)
         error stop 1
     end if
-    allocate(x_solve(n));  x_solve = id%RHS
+    allocate(x_solve(n));  x_solve = t2q_r(id%RHS)
     err = max_rel_err_vec(x_solve, x_true)
     call report_case('icntl10=5', err, tol)
     deallocate(x_solve);  call end_id(id)
@@ -62,7 +63,7 @@ program test_dmumps_iref_errchk
         write(*, '(a,i0)') 'ICNTL(10)=-2 failed, INFOG(1)=', id%INFOG(1)
         error stop 1
     end if
-    allocate(x_solve(n));  x_solve = id%RHS
+    allocate(x_solve(n));  x_solve = t2q_r(id%RHS)
     err = max_rel_err_vec(x_solve, x_true)
     call report_case('icntl10=-2', err, tol)
     deallocate(x_solve);  call end_id(id)
@@ -81,7 +82,7 @@ program test_dmumps_iref_errchk
         write(*, '(a,i0)') 'ICNTL(11)=2 failed, INFOG(1)=', id%INFOG(1)
         error stop 1
     end if
-    allocate(x_solve(n));  x_solve = id%RHS
+    allocate(x_solve(n));  x_solve = t2q_r(id%RHS)
     err = max_rel_err_vec(x_solve, x_true)
     call report_case('icntl11=2:solution', err, tol)
     ! RINFOG(6) is the scaled solution residual ||Ax-b|| / something.
@@ -96,13 +97,14 @@ program test_dmumps_iref_errchk
     ! typically a small multiple of eps; the bound is generous to
     ! avoid false negatives on platforms with different LTO inlining.
     block
-        real(ep) :: rinfog6_bound
+        real(ep) :: rinfog6_bound, rinfog6_q
         rinfog6_bound = 1.0e6_ep * target_eps
-        if (id%RINFOG(6) /= id%RINFOG(6)) then  ! NaN check
+        rinfog6_q = t2q_r(id%RINFOG(6))
+        if (rinfog6_q /= rinfog6_q) then  ! NaN check
             call report_case('icntl11=2:RINFOG6-finite', 1.0_ep, 0.0_ep)
-        else if (real(id%RINFOG(6), kind=ep) > rinfog6_bound) then
+        else if (rinfog6_q > rinfog6_bound) then
             call report_case('icntl11=2:RINFOG6-bound', &
-                             real(id%RINFOG(6), kind=ep), rinfog6_bound)
+                             rinfog6_q, rinfog6_bound)
         else
             call report_case('icntl11=2:RINFOG6-bound', 0.0_ep, 1.0_ep)
         end if
@@ -131,8 +133,8 @@ contains
         id%NNZ  = int(nz, kind=8)
         allocate(id%IRN(nz));  id%IRN = irn
         allocate(id%JCN(nz));  id%JCN = jcn
-        allocate(id%A(nz));    id%A   = A_trip
-        allocate(id%RHS(n));   id%RHS = b
+        allocate(id%A(nz));    id%A   = q2t_r(A_trip)
+        allocate(id%RHS(n));   id%RHS = q2t_r(b)
     end subroutine attach_dense
 
     subroutine end_id(id)

@@ -83,20 +83,3 @@ int c_complex_mumps_solve(int *n_in, MUMPS_INT8 *nnz_in,
     return code;
 }
 
-/* Backwards-compatible aliases used by the existing kind16 Fortran
- * parity tests (test_dmumps_c_parity / test_zmumps_c_parity). When
- * the parity tests are made target-agnostic, drop these aliases. */
-int c_qmumps_solve(int *n_in, MUMPS_INT8 *nnz_in,
-                   MUMPS_INT *irn, MUMPS_INT *jcn,
-                   DMUMPS_REAL *a_vals, DMUMPS_REAL *rhs)
-{
-    return c_real_mumps_solve(n_in, nnz_in, irn, jcn, a_vals, rhs);
-}
-
-int c_xmumps_solve(int *n_in, MUMPS_INT8 *nnz_in,
-                   MUMPS_INT *irn, MUMPS_INT *jcn,
-                   mumps_double_complex *a_vals,
-                   mumps_double_complex *rhs)
-{
-    return c_complex_mumps_solve(n_in, nnz_in, irn, jcn, a_vals, rhs);
-}

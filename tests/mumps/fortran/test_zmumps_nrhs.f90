@@ -6,7 +6,8 @@ program test_zmumps_nrhs
     use compare,               only: max_rel_err_vec_z, max_rel_err_mat_z
     use test_data_mumps,       only: gen_dense_problem_z, dense_to_triplet_z
     use target_mumps,          only: target_name, target_eps, &
-                                     zmumps_struc, target_xmumps
+                                     zmumps_struc, target_xmumps, &
+                                     q2t_c, t2q_c
     use mpi
     implicit none
 
@@ -97,10 +98,10 @@ contains
         idl%LRHS = n
         allocate(idl%IRN(nz));  idl%IRN = irn
         allocate(idl%JCN(nz));  idl%JCN = jcn
-        allocate(idl%A(nz));    idl%A   = A_trip
+        allocate(idl%A(nz));    idl%A   = q2t_c(A_trip)
         allocate(idl%RHS(n * nrhs))
         do i = 1, nrhs
-            idl%RHS((i - 1) * n + 1 : i * n) = B_in(:, i)
+            idl%RHS((i - 1) * n + 1 : i * n) = q2t_c(B_in(:, i))
         end do
 
         idl%JOB = 6
@@ -113,7 +114,7 @@ contains
 
         allocate(X_out_buf(n, nrhs))
         do i = 1, nrhs
-            X_out_buf(:, i) = idl%RHS((i - 1) * n + 1 : i * n)
+            X_out_buf(:, i) = t2q_c(idl%RHS((i - 1) * n + 1 : i * n))
         end do
 
         deallocate(idl%IRN, idl%JCN, idl%A, idl%RHS)

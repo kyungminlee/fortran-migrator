@@ -23,6 +23,10 @@
 #define MUMPS_C       TARGET_COMPLEX_MUMPS_C
 #define MUMPS_STRUC_C TARGET_COMPLEX_STRUC_C
 
+#ifdef TEST_TARGET_MULTIFLOATS
+extern void multifloats_mpi_init(void);
+#endif
+
 static FILE *gJson = NULL;
 static int gAnyFail = 0, gCaseCount = 0;
 
@@ -62,16 +66,16 @@ static void report_finalize_c(void)
 
 static int report_status_c(void) { return gAnyFail; }
 
-/* Multiplication of mumps_double_complex = {r, i}. */
-static mumps_double_complex cmul(mumps_double_complex a, mumps_double_complex b)
+/* Multiplication of test_complex = {r, i}. */
+static test_complex cmul(test_complex a, test_complex b)
 {
-    mumps_double_complex c;
+    test_complex c;
     c.r = a.r * b.r - a.i * b.i;
     c.i = a.r * b.i + a.i * b.r;
     return c;
 }
 
-static test_real cabs_real(mumps_double_complex z)
+static test_real cabs_real(test_complex z)
 {
     return TR_SQRT(z.r * z.r + z.i * z.i);
 }
@@ -83,7 +87,7 @@ int main(int argc, char **argv)
 
     /* Diagonally-dominant complex unsymmetric A. Hand-built so the
      * test is reproducible and the residual stays bounded. */
-    mumps_double_complex A[N][N] = {
+    test_complex A[N][N] = {
         {{TR_LIT( 5.0), TR_LIT( 0.5)}, {TR_LIT( 0.5), TR_LIT( 0.1)},
          {TR_LIT(-0.25),TR_LIT( 0.05)},{TR_LIT( 0.1), TR_LIT( 0.0)}},
         {{TR_LIT( 0.3), TR_LIT( 0.0)}, {TR_LIT(-6.0), TR_LIT(-0.4)},
@@ -93,15 +97,18 @@ int main(int argc, char **argv)
         {{TR_LIT( 0.1), TR_LIT(-0.05)},{TR_LIT(-0.3), TR_LIT( 0.1)},
          {TR_LIT( 0.4), TR_LIT( 0.0)}, {TR_LIT(-8.0), TR_LIT( 0.5)}},
     };
-    mumps_double_complex x_true[N] = {
+    test_complex x_true[N] = {
         {TR_LIT( 1.0), TR_LIT(-0.5)}, {TR_LIT(-2.0), TR_LIT( 1.0)},
         {TR_LIT( 3.0), TR_LIT(-1.5)}, {TR_LIT(-4.0), TR_LIT( 2.0)},
     };
 
-    MUMPS_INT       irn[N*N], jcn[N*N];
-    mumps_double_complex a_vals[N*N], rhs[N];
+    MUMPS_INT     irn[N*N], jcn[N*N];
+    test_complex  a_vals[N*N], rhs[N];
 
     MPI_Init(&argc, &argv);
+#ifdef TEST_TARGET_MULTIFLOATS
+    multifloats_mpi_init();
+#endif
     {
         int i, j, k = 0;
         for (j = 0; j < N; j++)
@@ -110,9 +117,9 @@ int main(int argc, char **argv)
             }
         /* b = A * x_true */
         for (i = 0; i < N; i++) {
-            mumps_double_complex s = { TR_LIT(0.0), TR_LIT(0.0) };
+            test_complex s = { TR_LIT(0.0), TR_LIT(0.0) };
             for (j = 0; j < N; j++) {
-                mumps_double_complex p = cmul(A[i][j], x_true[j]);
+                test_complex p = cmul(A[i][j], x_true[j]);
                 s.r += p.r; s.i += p.i;
             }
             rhs[i] = s;
@@ -134,8 +141,18 @@ int main(int argc, char **argv)
     id.nnz = (MUMPS_INT8) (N * N);
     id.irn = irn;
     id.jcn = jcn;
+#ifdef TEST_TARGET_MULTIFLOATS
+    /* Bridge expects mumps_complex64x2*; widen test_complex (plain
+     * doubles) at the boundary and narrow back after the solve. */
+    mumps_complex64x2 a_bridge[N*N], rhs_bridge[N];
+    for (int k = 0; k < N*N; k++) a_bridge[k]   = tc_widen(a_vals[k]);
+    for (int k = 0; k < N;   k++) rhs_bridge[k] = tc_widen(rhs[k]);
+    id.a   = a_bridge;
+    id.rhs = rhs_bridge;
+#else
     id.a   = a_vals;
     id.rhs = rhs;
+#endif
 
     id.job = 6;
     MUMPS_C(&id);
@@ -143,6 +160,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "JOB=6 failed: infog=%d %d\n", id.infog[0], id.infog[1]);
         return 1;
     }
+
+#ifdef TEST_TARGET_MULTIFLOATS
+    for (int k = 0; k < N; k++) rhs[k] = tc_narrow(rhs_bridge[k]);
+#endif
 
     {
         test_real max_rel = TR_LIT(0.0), denom = TR_LIT(0.0);
@@ -152,7 +173,7 @@ int main(int argc, char **argv)
             if (a > denom) denom = a;
         }
         for (i = 0; i < N; i++) {
-            mumps_double_complex d = { rhs[i].r - x_true[i].r, rhs[i].i - x_true[i].i };
+            test_complex d = { rhs[i].r - x_true[i].r, rhs[i].i - x_true[i].i };
             test_real m = cabs_real(d);
             if (m > max_rel) max_rel = m;
         }

@@ -836,6 +836,13 @@ if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src)
         ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/mpi.f
         ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/mpic.c
         ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/elapse.c
+        # Per-precision ScaLAPACK stubs covering the Q/X/E/Y prefixes
+        # the migrated qmumps/xmumps/emumps/ymumps archives request
+        # (upstream's mpi.f only ships PD* / DOUBLE PRECISION variants).
+        # Authored in-tree because external/ is read-only. M/W
+        # (multifloats) intentionally absent — see Group A in
+        # tests/mumps/TODO.md.
+        ${CMAKE_CURRENT_SOURCE_DIR}/mpiseq_qx_stubs.f
     )
     target_include_directories(mpiseq PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src>

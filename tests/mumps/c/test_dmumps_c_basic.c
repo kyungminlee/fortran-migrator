@@ -28,6 +28,10 @@
 #define MUMPS_C       TARGET_REAL_MUMPS_C
 #define MUMPS_STRUC_C TARGET_REAL_STRUC_C
 
+#ifdef TEST_TARGET_MULTIFLOATS
+extern void multifloats_mpi_init(void);
+#endif
+
 /* Same JSON report layout as prec_report.f90 produces, hand-rolled
  * here so the C test side doesn't need to call back into Fortran. */
 static FILE *gJson = NULL;
@@ -90,6 +94,9 @@ int main(int argc, char **argv)
     test_real  rhs[4];
 
     MPI_Init(&argc, &argv);
+#ifdef TEST_TARGET_MULTIFLOATS
+    multifloats_mpi_init();
+#endif
 
     /* Fill A (4x4): diagonal entries large, off-diagonals small.
      * Layout matches dense_to_triplet (column-major flatten). */
@@ -140,8 +147,18 @@ int main(int argc, char **argv)
     id.nnz  = (MUMPS_INT8) (n * n);
     id.irn  = irn;
     id.jcn  = jcn;
+#ifdef TEST_TARGET_MULTIFLOATS
+    /* Bridge expects mumps_float64x2*; the test data lives in plain
+     * double.  Widen at the boundary, narrow back after the solve. */
+    mumps_float64x2 a_bridge[16], rhs_bridge[4];
+    for (int i = 0; i < n * n; i++) a_bridge[i]   = tr_widen(a_vals[i]);
+    for (int i = 0; i < n;     i++) rhs_bridge[i] = tr_widen(rhs[i]);
+    id.a    = a_bridge;
+    id.rhs  = rhs_bridge;
+#else
     id.a    = a_vals;
     id.rhs  = rhs;
+#endif
 
     /* ── Solve ───────────────────────────────────────────────────── */
     id.job = 6;
@@ -151,6 +168,10 @@ int main(int argc, char **argv)
                 id.infog[0], id.infog[1]);
         return 1;
     }
+
+#ifdef TEST_TARGET_MULTIFLOATS
+    for (int i = 0; i < n; i++) rhs[i] = tr_narrow(rhs_bridge[i]);
+#endif
 
     /* On exit, rhs[] holds the solution. */
     {

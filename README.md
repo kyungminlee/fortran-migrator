@@ -126,12 +126,21 @@ stage` + CMake (see **Quick start**).
 
 ## Status
 
-- `kind10` (e/y), `kind16` (q/x), and `multifloats` (dd/zz) all build
-  the full blas/blacs/lapack/pbblas/pblas/ptzblas/scalapack/scalapack_c
-  archives and link a trivial `asum` test to 6.0 on `[1,2,3]`.
-- MUMPS kind16 builds (`libqmumps.a` ≈ 24 MB). Keep-kind manifest +
-  EP bridge modules handle the DP-stable shared modules; see
-  `recipes/README.md` for the mechanism.
+- `kind10` (e/y), `kind16` (q/x), and `multifloats` (m/w) all build
+  the full blas/xblas/blacs/lapack/pbblas/pblas/ptzblas/scalapack/scalapack_c
+  archives. The differential precision suite runs 1 125 tests per
+  target end-to-end and **all three targets pass 1 124 / 1 125**;
+  the lone shared failure is a single ScaLAPACK driver
+  (`pzdbtrsv`) that crashes at `MPI_Finalize` on every target —
+  see `tests/REPORT.md` Known regressions. The multifloats × MUMPS
+  gap (26 → 6 → 0) closed this cycle: per-call-site MPI op
+  rewriting in the migrator, explicit `multifloats_mpi_init` in the
+  C-bridge tests, a parity-test bridge-fill bug fix, and a
+  `target_eps` calibration to dd-double precision.
+- MUMPS kind10 / kind16 build and pass all 26 MUMPS tests
+  (Fortran drivers + C-bridge parity / basic / sym). Keep-kind
+  manifest + EP bridge modules handle the DP-stable shared modules;
+  see `recipes/README.md` for the mechanism.
 
 ## License
 
