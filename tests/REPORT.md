@@ -8,17 +8,19 @@ reports via `scripts/precision_report.py`.
 
 | target       | tests run | tests passed | wall-clock |
 |--------------|----------:|-------------:|-----------:|
-| **kind10**       |     1 125 |    **1 124** |    318 sec |
-| **kind16**       |     1 125 |    **1 124** |    343 sec |
-| **multifloats**  |     1 125 |    **1 124** |    308 sec |
-| **total**        |     3 375 |    **3 372** |          — |
+| **kind10**       |     1 125 |    **1 125** |    667 sec |
+| **kind16**       |     1 125 |    **1 125** |    695 sec |
+| **multifloats**  |     1 125 |    **1 125** |    600 sec |
+| **total**        |     3 375 |    **3 375** |          — |
 
 Coverage: **1 125 tests per target** spanning every migrated library
 (BLAS + BLACS + LAPACK + PBLAS + PBBLAS + PTZBLAS + ScaLAPACK + MUMPS).
-Pass rate: **>99% on all three targets** — one shared ScaLAPACK test
-(`pzdbtrsv`) crashes at MPI_Finalize on every target. The previously
-open multifloats × MUMPS gap (26 → 6 → 0) closed this cycle: see
-the Known regressions section for details.
+Pass rate: **100% on all three targets** — the previously persistent
+`scalapack_test_pzdbtrsv` heap-corruption-at-`MPI_Finalize` failure
+(see Known regressions for history) was closed this cycle by
+extending the upstream PDDBTRS/PZDBTRS LWMIN override to the *trsv
+oracle call site (commit `eec88b3`). The previously open multifloats
+× MUMPS gap (26 → 6 → 0) closed in the prior cycle.
 
 See **[Known regressions](#known-regressions)** below for the failing
 test list and references to the underlying issues. Per-routine
@@ -49,25 +51,24 @@ otherwise breaks ASan link-time symbol resolution).
 
 ## Known regressions
 
-The latest end-to-end run (this date — see commit log of
-`tests/REPORT.md` for cadence) shows the persistent ScaLAPACK driver
-crash on all three targets as the only remaining failure. The
-multifloats × MUMPS gap that was 26 → 6 last cycle closed to 0 here
-with the F3 + F4 + F5 fixes below; the multifloats suite now matches
-kind10 / kind16 at 1124 / 1125.
+None. The latest end-to-end run is **1 125 / 1 125 PASS on every
+target**. The two long-running gaps tracked in this section in prior
+cycles are both closed; their root-cause notes are kept below for
+posterity.
 
-### `scalapack_test_pzdbtrsv` — heap corruption at MPI_Finalize
+### `scalapack_test_pzdbtrsv` — closed (1 125 / 1 125)
 
-Fails on **all three targets**. The four problem-shape cases
-themselves pass with `digits=99 (exact)`; the test then crashes
-during `MPI_Finalize` with `free(): invalid size` /
-`corrupted size vs. prev_size` inside libfabric's destructor.
-Symptom signature is identical across kind10 / kind16 / multifloats,
-and only this one ScaLAPACK driver in the 177-test suite
-exhibits it — so it is almost certainly a buffer-management issue
-specific to the test driver (or `target_scalapack`'s `pzdbtrsv`
-wrapper), not a precision regression in the migrated archive.
-Action: triage in `tests/scalapack/`.
+Was the last persistent failure on all three targets: the four
+problem-shape cases passed with `digits=99 (exact)` but the process
+then aborted during `MPI_Finalize` with `free(): invalid size` /
+`corrupted size vs. prev_size` inside libfabric's destructor. Root
+cause was the same upstream PDDBTRS/PZDBTRS `WORK_SIZE_MIN` under-
+report tracked in `tests/scalapack/TODO.md` — the test trusted the
+upstream LQUERY for the oracle `*trs` call, leaking the under-
+allocation; complex precision (32 B/elem) corrupted heap headers
+that real precision happened to step over. Fix in commit `eec88b3`
+takes the same `max(LQUERY, nrhs*max(bwl,bwu) + (nrhs-1)*(bwl+bwu))`
+bound that the dedicated `test_p[dz]dbtrs.f90` already used.
 
 ### Multifloats × MUMPS — closed (26 / 26)
 
@@ -122,9 +123,7 @@ The MUMPS suite is no longer a placeholder: it covers basic /
 distributed-input / icntl I/O / iref err-check / job-sequence /
 nrhs / orderings / sym matrix / errors / infog20 drivers on both
 the real (`q/e/m`) and complex (`x/y/w`) sides, plus C-bridge
-parity / basic / sym tests. Multifloats currently fails all 26
-MUMPS tests at runtime (see Known regressions); kind10 and kind16
-pass all 26.
+parity / basic / sym tests. All three targets pass all 26.
 
 
 ## Testing model
@@ -150,7 +149,7 @@ Pass criterion:
 
 ## Headline observations
 
-Across every passing case (363 reports, 1 386 cases), here's where
+Across every passing case (3 355 reports, 16 820 cases), here's where
 each target lands:
 
 | Target       | Theoretical max digits | Median observed digits |
@@ -475,8 +474,9 @@ across both `pq*` and `px*` halves, including `agemv` / `amax` /
 spanning linear-solve, factorization, eigenvalue/SVD, auxiliary,
 and a substantial complex-side (`pz*`/`px*`) addition that closed
 the historical complex-coverage gap (e.g. `pzgesv`, `pzgeqrf`,
-`pzheev`, `pzlange`, …). One driver is currently failing — see
-the **Known regressions** section above. The remaining ~150
+`pzheev`, `pzlange`, …). All 177 drivers pass on every target;
+see the **Known regressions** section above for the recently-closed
+`pzdbtrsv` history. The remaining ~150
 unexposed entries are deep helpers (`PB_*`, `bx*`
 back-transformations, etc.) exercised transitively through the
 tested drivers.
@@ -495,15 +495,21 @@ dependency; `pip install fypp` works too.
 nproc                                # confirm worker count for -j
 # → suppose 8
 
-# Stage and run all three targets
+# Stage and run all three targets. The linux-impi preset is
+# REQUIRED for ScaLAPACK and PBLAS — it routes builds through
+# Intel MPI 2021.x and injects I_MPI_ADJUST_REDUCE=1 /
+# I_MPI_ADJUST_ALLREDUCE=1, which BLACS user-MPI ops over
+# REAL(KIND=16) need (see TODO entry "RESOLVED 2026-04-30").
+# Other MPIs (OpenMPI / MPICH) may hang or surface heap-corruption
+# at MPI_Finalize.
 for t in kind10 kind16 multifloats; do
     rm -rf /tmp/stg-$t
     PYTHONPATH=src python -m pyengine stage /tmp/stg-$t \
         --target $t \
         --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack scalapack_c mumps
-    cmake -S /tmp/stg-$t -B /tmp/stg-$t/build -DCMAKE_BUILD_TYPE=Release
+    cmake -S /tmp/stg-$t -B /tmp/stg-$t/build --preset=linux-impi
     cmake --build /tmp/stg-$t/build -j8
-    ctest --test-dir /tmp/stg-$t/build --output-on-failure
+    ( cd /tmp/stg-$t && ctest --preset=linux-impi --output-on-failure )
 done
 
 # Aggregate the JSON reports
