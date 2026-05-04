@@ -46,6 +46,11 @@ three test-side fixes:
    stride `MAX_BW+BWL` starting from `WORK(1+MAX_BW-BWU)`. Tests now
    override `lwork` to `nrhs*max(bwl,bwu) + (nrhs-1)*(bwl+bwu)`.
    (Affects `test_p[dz]dbtrf`, `test_p[dz]dbtrs`, `test_p[dz]dbtrsv`.)
+   The override must be applied at *every* `pddbtrs` / `pzdbtrs` call
+   site, including the oracle call in `test_p[dz]dbtrsv` — trusting
+   the LQUERY result there leaks the same upstream under-allocation
+   and corrupts the heap (surfaces at `MPI_Finalize` → libfabric
+   `dlclose` → `free`). Fixed 2026-05-03.
 
 3. **test_pdpttrf invalid reference comparison** — original test
    compared `d_loc, e_loc` against LAPACK `dpttrf`. PDPTTRF's modified

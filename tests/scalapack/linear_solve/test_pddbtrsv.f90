@@ -111,7 +111,11 @@ program test_pddbtrsv
         af = af_save
         call target_pddbtrs('N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                             B_full, 1, descb, af, laf, wopt, -1, info)
-        lwork = max(1, int(wopt(1)))
+        ! Upstream pddbtrs LWMIN under-reports (see TODO entry on
+        ! PDDBTRS / PZDBTRS workspace under-allocation); take the
+        ! verified upper bound used in test_pddbtrs.f90.
+        lwork = max(1, int(wopt(1)), &
+                    nrhs * max(bwl, bwu) + (nrhs - 1) * (bwl + bwu))
         allocate(work(lwork))
         call target_pddbtrs('N', n, bwl, bwu, nrhs, A_loc, 1, desca, &
                             B_full, 1, descb, af, laf, work, lwork, info)
