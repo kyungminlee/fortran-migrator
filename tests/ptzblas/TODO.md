@@ -1,11 +1,5 @@
 # tests/ptzblas — TODO / follow-ups
 
-## Coverage gaps
-
-- Mixed-precision routine `qxvasum` is wired up via the wrapper's
-  `target_dzvasum` and tested. There is no analogous `xqvasum` in the
-  source set, so no symmetric test was written.
-
 ## Potential migrator follow-ups (NOT in this subtree)
 
 None observed during the kind16 build — every test passed on the
