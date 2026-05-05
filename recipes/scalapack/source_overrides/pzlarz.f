@@ -257,8 +257,8 @@
 *     .. External Subroutines ..
       EXTERNAL           BLACS_GRIDINFO, INFOG2L, PB_TOPGET, PBZTRNV,
      $                   ZAXPY, ZCOPY, ZGEBR2D, ZGEBS2D,
-     $                   ZGEMV, ZGERC, ZGERV2D, ZGESD2D,
-     $                   ZGSUM2D, ZLASET
+     $                   ZGEMV, ZGERC, ZGERU, ZGERV2D, ZGESD2D,
+     $                   ZGSUM2D, ZLACGV, ZLASET
 *     ..
 *     .. External Functions ..
       LOGICAL            LSAME
@@ -411,15 +411,16 @@
                         CALL ZLASET( 'All', NQC2, 1, ZERO, ZERO,
      $                               WORK( IPW ), MAX( 1, NQC2 ) )
                      END IF
-*                    UPSTREAM BUG FIX (vs ScaLAPACK 2.2.3): all six
-*                    ZAXPY calls in PZLARZ that target WORK / WORK(IPW)
-*                    used INCY = MAX(1,NQC2) (a leading dimension), but
-*                    WORK is a contiguous vector — the correct stride
-*                    is 1 (cf. LAPACK's ZLARZ: ZAXPY(N,-TAU,WORK,1,...).
-*                    With NQC2>1 the previous stride skipped elements
-*                    and could read/write past the buffer. Fixed in all
-*                    six occurrences below; documented in
-*                    doc/UPSTREAM_BUGS.md.
+*                    UPSTREAM BUG FIX (vs ScaLAPACK 2.2.3): SIDE='L'
+*                    needs an in-place conjugation of the partial
+*                    accumulator before adding C1 and a ZGERU (not
+*                    ZGERC) to apply the rank-1 update. Cf. LAPACK's
+*                    ZLARZ which uses two ZLACGV + ZGERU. Without this,
+*                    the imaginary part of v^H*C is sign-flipped,
+*                    producing an O(1) residual on SIDE='L' for complex
+*                    inputs (real path is unaffected since DGEMV/DGER
+*                    have no conjugation).
+                     CALL ZLACGV( NQC2, WORK( IPW ), 1 )
                      IF( MYROW.EQ.ICROW1 )
      $                  CALL ZAXPY( NQC2, ONE, C( IOFFC1 ), LDC,
      $                              WORK( IPW ), 1 )
@@ -433,7 +434,7 @@
                      IF( MYROW.EQ.ICROW1 )
      $                  CALL ZAXPY( NQC2, -TAULOC( 1 ), WORK( IPW ),
      $                              1, C( IOFFC1 ), LDC )
-                     CALL ZGERC( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
+                     CALL ZGERU( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
      $                           WORK( IPW ), 1, C( IOFFC2 ), LDC )
                   END IF
 *
@@ -463,6 +464,7 @@
                            CALL ZLASET( 'All', NQC2, 1, ZERO, ZERO,
      $                                  WORK, MAX( 1, NQC2 ) )
                         END IF
+                        CALL ZLACGV( NQC2, WORK, 1 )
                         IF( MYROW.EQ.ICROW1 )
      $                     CALL ZAXPY( NQC2, ONE, C( IOFFC1 ), LDC,
      $                                 WORK, 1 )
@@ -477,7 +479,7 @@
      $                     CALL ZAXPY( NQC2, -TAULOC( 1 ), WORK,
      $                                 1, C( IOFFC1 ),
      $                                 LDC )
-                        CALL ZGERC( MPV, NQC2, -TAULOC( 1 ), V( IOFFV ),
+                        CALL ZGERU( MPV, NQC2, -TAULOC( 1 ), V( IOFFV ),
      $                              1, WORK, 1, C( IOFFC2 ), LDC )
                      END IF
 *
@@ -514,6 +516,7 @@
                            CALL ZLASET( 'All', NQC2, 1, ZERO, ZERO,
      $                                  WORK( IPW ), MAX( 1, NQC2 ) )
                         END IF
+                        CALL ZLACGV( NQC2, WORK( IPW ), 1 )
                         IF( MYROW.EQ.ICROW1 )
      $                     CALL ZAXPY( NQC2, ONE, C( IOFFC1 ), LDC,
      $                                 WORK( IPW ), 1 )
@@ -528,7 +531,7 @@
      $                     CALL ZAXPY( NQC2, -TAULOC( 1 ), WORK( IPW ),
      $                                 1, C( IOFFC1 ),
      $                                 LDC )
-                        CALL ZGERC( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
+                        CALL ZGERU( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
      $                              WORK( IPW ), 1, C( IOFFC2 ), LDC )
                      END IF
 *
@@ -580,6 +583,7 @@
                      CALL ZLASET( 'All', NQC2, 1, ZERO, ZERO,
      $                            WORK( IPW ), MAX( 1, NQC2 ) )
                   END IF
+                  CALL ZLACGV( NQC2, WORK( IPW ), 1 )
                   IF( MYROW.EQ.ICROW1 )
      $               CALL ZAXPY( NQC2, ONE, C( IOFFC1 ), LDC,
      $                           WORK( IPW ), 1 )
@@ -593,7 +597,7 @@
                   IF( MYROW.EQ.ICROW1 )
      $               CALL ZAXPY( NQC2, -TAULOC( 1 ), WORK( IPW ),
      $                           1, C( IOFFC1 ), LDC )
-                  CALL ZGERC( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
+                  CALL ZGERU( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
      $                        WORK( IPW ), 1, C( IOFFC2 ), LDC )
                END IF
 *
@@ -632,6 +636,7 @@
                      CALL ZLASET( 'All', NQC2, 1, ZERO, ZERO,
      $                            WORK( IPW ), MAX( 1, NQC2 ) )
                   END IF
+                  CALL ZLACGV( NQC2, WORK( IPW ), 1 )
                   IF( MYROW.EQ.ICROW1 )
      $               CALL ZAXPY( NQC2, ONE, C( IOFFC1 ), LDC,
      $                           WORK( IPW ), 1 )
@@ -645,7 +650,7 @@
                   IF( MYROW.EQ.ICROW1 )
      $               CALL ZAXPY( NQC2, -TAULOC( 1 ), WORK( IPW ),
      $                           1, C( IOFFC1 ), LDC )
-                  CALL ZGERC( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
+                  CALL ZGERU( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
      $                        WORK( IPW ), 1, C( IOFFC2 ), LDC )
                END IF
 *

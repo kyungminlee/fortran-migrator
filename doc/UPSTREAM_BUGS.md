@@ -631,3 +631,89 @@ AXPY into `WORK`. The `MAX(1, NQC2)` expression is retained where it
 is the legitimate LD of the surrounding `LASET` / `GSUM2D` matrix
 calls. Wired via the same `source_overrides` entries as the
 `MPV`/`NQV` fix.
+
+
+## ScaLAPACK 2.2.3: `pzlarz.f` / `pzlarzc.f` SIDE='L' missing ZLACGV; ZGERC should be ZGERU
+
+**Symptom.** `PZUNMRZ` SIDE='L' returns numerically wrong results,
+producing residuals on the order of 1.3–1.8× the input magnitude
+(both `TRANS='N'` via `PZLARZ` and `TRANS='C'` via `PZLARZC`). The
+real-precision analogue (`PDORMRZ` SIDE='L') is unaffected.
+Reproduces bit-identically on 1, 2, and 4 ranks — pure local
+arithmetic, not a distribution issue. Surfaced by
+`tests/scalapack/factorization/test_pzunmrz.f90` after the
+`MPV`/`NQV` and AXPY-stride fixes had been lifted.
+
+**Root cause.** Each SIDE='L' branch of `PZLARZ` / `PZLARZC`
+accumulates `w = v^H * sub(C)` via
+
+```fortran
+CALL ZGEMV( 'Conjugate transpose', MPV, NQC2, ONE,
+$           C( IOFFC2 ), LDC, V, 1, ZERO, WORK( IPW ), 1 )
+IF ( MYROW.EQ.ICROW1 )
+$   CALL ZAXPY( NQC2, ONE, C( IOFFC1 ), LDC, WORK( IPW ), 1 )
+...
+CALL ZAXPY( NQC2, -TAULOC( 1 ), WORK( IPW ), 1, C( IOFFC1 ), LDC )
+CALL ZGERC( MPV, NQC2, -TAULOC( 1 ), WORK, 1,
+$           WORK( IPW ), 1, C( IOFFC2 ), LDC )
+```
+
+But `ZGEMV('C', C2, V)` computes `C2^H * V`, which equals
+`conj(V^H * C2)` — not `V^H * C2`. The subsequent `ZAXPY` of `C1`
+(unconjugated) into `WORK(IPW)` therefore mixes
+`conj(V^H*C2) + C1` rather than producing `w = V^H*C2 + C1`. The
+final `ZGERC` (which computes `A := alpha * x * conj(y^T) + A`) then
+conjugates `WORK(IPW)` again, leaving the rank-1 update with the
+imaginary part of `C2` sign-flipped relative to the math.
+
+LAPACK's serial `zlarz.f` handles this correctly by calling
+`ZLACGV(N, WORK, 1)` twice — once after copying the '1'-row of C
+(to bring it to `conj(C1)`), then again after the GEMV (so
+`WORK = w`, not `conj(w)`) — and using `ZGERU` (no conjugation) for
+the rank-1 update:
+
+```fortran
+CALL ZCOPY( N, C, LDC, WORK, 1 )
+CALL ZLACGV( N, WORK, 1 )
+CALL ZGEMV( 'Conjugate transpose', L, N, ONE, C(M-L+1,1), LDC,
+$           V, INCV, ONE, WORK, 1 )
+CALL ZLACGV( N, WORK, 1 )
+CALL ZAXPY( N, -TAU, WORK, 1, C, LDC )
+CALL ZGERU( L, N, -TAU, V, INCV, WORK, 1, C(M-L+1,1), LDC )
+```
+
+ScaLAPACK's `PZLARZ` translation evidently inlined the GEMV trick
+(swapping the `ZCOPY+ZLACGV` for `ZGEMV` with `beta=ZERO`) but
+dropped the post-GEMV `ZLACGV` and used `ZGERC` instead of `ZGERU`.
+The bug never bites the real path (`PDLARZ` uses `DGEMV`/`DGER`
+which have no conj/no-conj distinction) and never bites SIDE='R'
+(where the rank-1 update wants `ZGERC` legitimately, since
+`H` from the right is `C := C - tau (Cv) v^H`).
+
+**Affected files.**
+- `external/scalapack-2.2.3/SRC/pzlarz.f` — 5 SIDE='L' MPV×NQC2
+  sites.
+- `external/scalapack-2.2.3/SRC/pzlarzc.f` — same 5 sites in the
+  Q**H variant called from `PZUNMR3` when `TRANS='C'`.
+- `external/scalapack-2.2.3/SRC/pclarz.f` and `pclarzc.f` carry the
+  byte-identical buggy formulas in single-complex; the same fix
+  would apply but is not wired here (we don't migrate single-complex
+  RZ).
+
+**Fix.** Override inserts `CALL ZLACGV(NQC2, accum, 1)` after each
+SIDE='L' `ZGEMV('Conjugate transpose', ...)` (where `accum` is
+`WORK(IPW)` or `WORK` depending on the branch) and replaces each
+`ZGERC(MPV, NQC2, -TAULOC(1), x, 1, accum, 1, C(IOFFC2), LDC)` with
+the corresponding `ZGERU(...)`. The SIDE='R' `ZGERC` calls
+(`MPC2×NQV`) are left untouched. `ZLACGV` and `ZGERU` are added to
+the `EXTERNAL` declaration in both files. Wired via the same
+`source_overrides` entries and `prefer_source` pins as the
+`MPV`/`NQV` and AXPY-stride fixes.
+
+**Not in `../scalapack-bugfix/scalapack`.** The four prior `fix-*`
+branches (`fix-larz-buffer-sizing`, `fix-larz-daxpy-stride`,
+`fix-larzb-pbtran-buffer`, `fix-ormrz-post-loop-guard`) addressed
+distribution and stride bugs that hit the real path first; this
+algebraic bug is complex-only and was masked by the other failures
+until they were lifted. Worth submitting upstream as a new
+`fix-larz-side-l-conj` topic branch.

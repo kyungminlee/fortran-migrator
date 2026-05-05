@@ -2,6 +2,40 @@
 
 Resolved items, reverse-chronological. Open work lives in `TODO.md`.
 
+## 2026-05-05 — pzunmrz SIDE='L' resolved (complex path)
+
+Found and fixed a complex-specific algorithmic bug in `PZLARZ` and
+`PZLARZC` SIDE='L' branches that caused `pzunmrz` SIDE='L' to fail
+with O(1) residuals (~1.3-1.8x) on every grid configuration.
+
+`PZLARZ` accumulates `w = v^H * sub(C)` via
+`ZGEMV('Conjugate transpose', ...)` followed by `ZAXPY` of the
+'1'-row of C, and applies the rank-1 update via `ZGERC`. But
+`ZGEMV('C', C2, V)` produces `C2^H * V = conj(V^H * C2)`, not
+`V^H * C2`, and `ZGERC` then conjugates the second operand again —
+so the imaginary part of `v^H * C` is sign-flipped twice
+inconsistently. LAPACK's serial `ZLARZ` handles this by calling
+`ZLACGV` twice (before adding C1, then again after) and using
+`ZGERU` for the rank-1 update; `PZLARZ`/`PZLARZC` translated the
+ZGEMV trick but skipped the `ZLACGV` cleanup AND used `ZGERC`.
+Real path `PDLARZ` works because `DGEMV`/`DGER` have no
+conj/no-conj distinction.
+
+Override applied to all 5 SIDE='L' MPV×NQC2 sites in each of
+`pzlarz.f` and `pzlarzc.f`: insert `CALL ZLACGV(NQC2, accum, 1)`
+after the `ZGEMV` and replace `ZGERC(MPV, NQC2, ...)` with
+`ZGERU(MPV, NQC2, ...)`. SIDE='R' branches are unchanged
+(they correctly use `ZGERC` because `H` from the right is
+`C := C * (I - tau v v^H) = C - tau (Cv) v^H` where the second
+operand really is conjugated).
+
+**Test impact.** `test_pzunmrz` now exercises SIDE in {L, R} ×
+TRANS in {N, C} (4/4 PASS on kind16, residuals ~1e-33 on 1, 2,
+and 4 ranks). `test_pztzrzf` continues to pass (uses `PZLATRZ` →
+`PZLARZ` SIDE='R', branch unchanged). Documented in
+`doc/UPSTREAM_BUGS.md`. Not covered by any existing upstream
+`fix-*` branch in `../scalapack-bugfix/scalapack`.
+
 ## 2026-05-05 — pdormrz SIDE='L' resolved (real path); pzunmrz SIDE='L' narrowed
 
 Carried in two upstream bug-fix branches from
@@ -33,8 +67,9 @@ Documented in `doc/UPSTREAM_BUGS.md`.
 
 **Test impact.** `test_pdormrz` now exercises SIDE in {L, R} ×
 TRANS in {N, T} (4/4 PASS on kind16 / 2×2 grid; previously SIDE='R'
-only). `test_pzunmrz` SIDE='R' continues to pass; SIDE='L' is parked
-as a complex-only residual (~1.3-1.8x), see `TODO.md`.
+only). `test_pzunmrz` SIDE='R' continues to pass; SIDE='L' was
+parked as a complex-only residual (~1.3-1.8x), then resolved
+later the same day — see the entry above.
 
 ## 2026-05-03 — PDDBTRS / PZDBTRS workspace under-allocation (`*trsv` oracle)
 

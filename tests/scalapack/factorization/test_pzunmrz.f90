@@ -13,17 +13,9 @@ program test_pzunmrz
                                  target_pztzrzf, target_pzunmrz
     implicit none
 
-    ! NOTE: SIDE='L' is currently deferred — pzunmrz on SIDE='L'
-    ! reproduces a residual ~factor of 1.3-1.8x even after the
-    ! buffer-sizing / AXPY-stride fixes landed in
-    ! source_overrides/p[dz]larz.f and pzlarzc.f. The real-precision
-    ! analogue (test_pdormrz) now passes SIDE='L' on the same fixes,
-    ! so the remaining bug is complex-specific in the
-    ! PZUNMR3 + PZLARZ / PZLARZC chain (TRANS='N' uses PZLARZ;
-    ! TRANS='C' uses PZLARZC; both fail). See tests/scalapack/TODO.md.
-    integer, parameter :: cases = 2
-    character(len=1), parameter :: sides(*)   = ['R', 'R']
-    character(len=1), parameter :: transes(*) = ['N', 'C']
+    integer, parameter :: cases = 4
+    character(len=1), parameter :: sides(*)   = ['R', 'R', 'L', 'L']
+    character(len=1), parameter :: transes(*) = ['N', 'C', 'N', 'C']
     integer, parameter :: mb = 8, nb = 8
     integer :: ic, mA, nA, k, l, mC, nC, info, info_ref, lwork
     integer :: locmA, locnA, lldA, locmC, locnC, lldC
@@ -39,8 +31,12 @@ program test_pzunmrz
 
     do ic = 1, cases
         mA = 32
-        mC = 48; nC = 64
-        nA = nC
+        nA = 64
+        if (sides(ic) == 'R') then
+            mC = 48; nC = nA
+        else
+            mC = nA; nC = 48
+        end if
         k = mA
         l = nA - mA
 
