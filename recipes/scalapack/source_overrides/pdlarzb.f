@@ -236,7 +236,7 @@
      $                   IPT, IPV, IPW, IROFFC1, IROFFC2, ITOP, IVCOL,
      $                   IVROW, JJBEG, JJEND, JJNXT, JJC1, JJC2, JJV,
      $                   LDC, LDV, LV, LW, MBC, MBV, MPC1, MPC2, MPC20,
-     $                   MQV, MQV0, MYCOL, MYDIST, MYROW, NBC, NBV,
+     $                   MQV0, MYCOL, MYDIST, MYROW, NBC, NBV,
      $                   NPCOL, NPROW, NQC1, NQC2, NQCALL, NQV
 *     ..
 *     .. External Subroutines ..
@@ -373,18 +373,13 @@
 *        doc/UPSTREAM_BUGS.md.
 *
          MQV0 = NUMROC( L+ICOFFV, NBV, MYCOL, IVCOL, NPCOL )
-         IF( MYCOL.EQ.IVCOL ) THEN
-            MQV = MQV0 - ICOFFV
-         ELSE
-            MQV = MQV0
-         END IF
          IF( MYROW.EQ.ICROW2 ) THEN
             MPC20 = MPC2 + IROFFC2
          ELSE
             MPC20 = MPC2
          END IF
 *
-*        Locally V( IOFFV ) is K x MQV, C( IOFFC2 ) is MPC2 x NQC2
+*        Locally V( IOFFV ) is K x NQV, C( IOFFC2 ) is MPC2 x NQC2
 *        WORK( IPV ) is MPC20 x K = [ . V( IOFFV ) ]'
 *        WORK( IPW ) is K x MQV0  = [ . V( IOFFV ) ]
 *        WORK( IPT ) is the workspace for PBDTRAN
@@ -397,10 +392,10 @@
 *
          IF( MYROW.EQ.IVROW ) THEN
             IF( MYCOL.EQ.IVCOL ) THEN
-               CALL DLAMOV( 'All', K, MQV, V( IOFFV ), LDV,
+               CALL DLAMOV( 'All', K, NQV, V( IOFFV ), LDV,
      $                      WORK( IPW+ICOFFV*LW ), LW )
             ELSE
-               CALL DLAMOV( 'All', K, MQV, V( IOFFV ), LDV,
+               CALL DLAMOV( 'All', K, NQV, V( IOFFV ), LDV,
      $                      WORK( IPW ), LW )
             END IF
          END IF
