@@ -15,10 +15,9 @@ C  Each stub mirrors upstream's pattern exactly: print "should not be
 C  called", STOP. Single-rank operation never reaches them; they exist
 C  only so the link resolves.
 C
-C  Multifloats prefixes (M, W) are intentionally NOT covered — Group A
-C  (B9b in tests/mumps/TODO.md) is the path that stands up the
-C  multifloats test harness, and adding sequential-link stubs without
-C  the matching test coverage would be premature.
+C  Multifloats prefixes (M, W) live in mpiseq_mw_stubs.f90 — kept in a
+C  separate free-form file because the stubs require TYPE(real64x2) /
+C  TYPE(cmplx64x2) from the multifloats Fortran module.
 C
 C***********************************************************************
       SUBROUTINE PQGETRF( M, N, A, IA, JA, DESCA, IPIV, INFO )

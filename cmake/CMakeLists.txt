@@ -840,10 +840,16 @@ if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src)
         # the migrated qmumps/xmumps/emumps/ymumps archives request
         # (upstream's mpi.f only ships PD* / DOUBLE PRECISION variants).
         # Authored in-tree because external/ is read-only. M/W
-        # (multifloats) intentionally absent — see Group A in
-        # tests/mumps/TODO.md.
+        # (multifloats) live in mpiseq_mw_stubs.f90, appended below
+        # only when NEEDS_MULTIFLOATS — they need TYPE(real64x2) /
+        # TYPE(cmplx64x2) from the multifloats Fortran module.
         ${CMAKE_CURRENT_SOURCE_DIR}/mpiseq_qx_stubs.f
     )
+    if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
+        target_sources(mpiseq PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/mpiseq_mw_stubs.f90)
+        target_link_libraries(mpiseq PUBLIC $<BUILD_INTERFACE:multifloatsf>)
+    endif()
     target_include_directories(mpiseq PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src>
     )

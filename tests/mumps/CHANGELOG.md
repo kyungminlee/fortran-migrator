@@ -2,6 +2,23 @@
 
 Resolved items, reverse-chronological. Open work lives in `TODO.md`.
 
+## 2026-05-05 — Multifloats (M/W) libmpiseq stubs
+
+`cmake/mpiseq_mw_stubs.f90` adds the 10 multifloats-precision ScaLAPACK
+stub forwarders (`p[mw]{getrf,getrs,potrf,potrs,trtrs}_`) symmetric to
+the existing Q/X/E/Y set in `mpiseq_qx_stubs.f`. Free-form Fortran so
+the multifloats module's `TYPE(real64x2)` / `TYPE(cmplx64x2)` can be
+USEd for the array-argument shadows. Wired into the `mpiseq` target in
+`cmake/CMakeLists.txt` only when `NEEDS_MULTIFLOATS AND TARGET
+multifloatsf` (so plain kind10/kind16 builds don't pull multifloats).
+
+Verified the migrated `libmmumps-gfortran-13.a` references exactly
+`p[mw]{getrf,getrs,potrf,potrs}_` (TRTRS goes through the sequential
+`mtrtrs_`/`wtrtrs_` from lapack), all of which the new stubs export.
+The full sequential-link path (mmumps relinking against `mpiseq`
+instead of `MPI::MPI_Fortran`) is still not exercised by any test —
+this lifts the symbol gap so it can be without further migrator work.
+
 ## 2026-05-04 — B4: full multi-target support
 
 All three targets (kind10 / kind16 / multifloats) build, link, and run

@@ -27,14 +27,16 @@ a final valid-input pass that reaches MIC_OK and factors via JOB=6.
 returns the documented `INFOG(1) = -16` / `-6` codes, drop the wrapper
 and let the tests check `INFOG(1)` directly.
 
-## Multifloats sequential MPI (libmpiseq) — deferred
+## Multifloats sequential MPI (libmpiseq) — symbols ship, full link untested
 
-Path-(b) Q/X/E/Y per-precision stubs landed (`cmake/mpiseq_qx_stubs.f`,
-20 stubs covering `p[qxey]{getrf,getrs,potrf,potrs,trtrs}_`).
-Multifloats (M/W) prefixes intentionally **NOT** covered yet — adding
-sequential stubs is a follow-up to Group A whenever a no-MPI multifloats
-build is needed. Tests today keep using `mpiexec -n 1` against real MPI.
+Per-precision stubs now cover all five extended prefixes —
+`cmake/mpiseq_qx_stubs.f` (Q/X/E/Y) plus `cmake/mpiseq_mw_stubs.f90`
+(M/W). The migrated `libmmumps-gfortran-13.a` references exactly the
+`p[mw]{getrf,getrs,potrf,potrs}_` symbols the stubs export, so the
+sequential-link symbol gap is closed. Tests today still use
+`mpiexec -n 1` against real MPI — relinking mmumps against `mpiseq`
+end-to-end is not exercised by any current test.
 
 **Reopen condition**: an environment that can't run real MPI needs the
-multifloats sparse solver, or a regression breaks the
-`linux-impi`-default flow.
+multifloats sparse solver and the relink uncovers a missing symbol or
+ABI mismatch the symbol-list probe didn't catch.
