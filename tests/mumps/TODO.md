@@ -1075,52 +1075,46 @@ alongside the existing `LIB_PREFIX`.
   was removed. All three targets now register the same Fortran +
   C-side test sets.
 
-### B9c — Multifloats MUMPS uses `MPI_SUM` on `real64x2` buffers — runtime failure (NEW 2026-05-02)
+### B9c — Multifloats MUMPS uses `MPI_SUM` on `real64x2` buffers — RESOLVED 2026-05-03 (commit `eb83d5a`)
+
+A token-context MPI reduction-op rewriter was added to the Fortran
+migrator at `src/pyengine/fortran_migrator.py:3291-3320`
+(`_rewrite_mpi_sum`), and wired into the post-migration pipeline at
+`fortran_migrator.py:3454-3455` immediately after
+`_rewrite_mpi_datatypes`. It matches each
+`MPI_(I?All)Reduce[_Scatter]` call as a unit and only swaps
+`MPI_SUM/MPI_MAX/MPI_MIN → MPI_DD_*` (real) or `→ MPI_ZZ_*` (complex)
+inside calls whose argument list contains the rewritten floating
+datatype token (`MPI_FLOAT64X2` / `MPI_COMPLEX64X2`). Integer
+reductions in the same translation unit (`MPI_INTEGER + MPI_SUM`)
+are left alone by construction.
+
+Verification 2026-05-04 on a fresh `/tmp/stage-mf` stage with the
+`linux-impi` preset: 26/26 mumps ctest passes on multifloats;
+spot-check of `mfac_scalings.F:370-376`, `mana_dist_m.F`,
+`wsol_distrhs.F`, `msol_distrhs.F` shows every reduce on
+`MPI_FLOAT64X2` paired with `MPI_DD_SUM` while the
+`MPI_INTEGER + MPI_SUM` integer reductions in the same files are
+preserved.
+
+#### Original B9c description (for archaeology)
 
 After Group A unblocked the multifloats mumps test harness (B9b), the
-test executables build and link cleanly but fail at runtime with:
+test executables built and linked cleanly but failed at runtime with:
 
 ```
 internal_Allreduce: MPI_Op operation not defined for this datatype
 MPI_Allreduce(..., dtype=USER<contig>, MPI_SUM, ...)
 ```
 
-Root cause: the migrator's `_rewrite_mpi_datatypes` post-pass rewrites
-`MPI_DOUBLE_PRECISION → MPI_FLOAT64X2` on the buffer-type argument but
-does **not** rewrite the matching `MPI_SUM → MPI_DD_SUM` reduction-op
+Root cause: the migrator's `_rewrite_mpi_datatypes` post-pass rewrote
+`MPI_DOUBLE_PRECISION → MPI_FLOAT64X2` on the buffer-type argument
+but did not rewrite the matching `MPI_SUM → MPI_DD_SUM` reduction-op
 argument. MPI's built-in `MPI_SUM` is undefined on user-defined
 contiguous types (registered via `MPI_Type_contiguous(2, MPI_DOUBLE,
 &MPI_FLOAT64X2)` inside `multifloats_mpi_init`), so MUMPS calls like
-`MPI_Reduce(..., COUNT, MPI_FLOAT64X2, MPI_SUM, ...)` crash.
+`MPI_Reduce(..., COUNT, MPI_FLOAT64X2, MPI_SUM, ...)` crashed.
 
-Affected files (grep `MPI_SUM` in `/tmp/stg-mf/mumps/src/`):
-- `mfac_scalings.F:372,376` — Reduce on real-precision arrays
-- `mana_dist_m.F:206,605,626` — Allreduce / scan with real types
-- `wsol_distrhs.F`, `msol_distrhs.F` — distributed-RHS reductions
-- (others)
-
-Fix locations: `_rewrite_mpi_datatypes` in `src/pyengine/fortran_migrator.py`
-should pair the MPI_SUM/MAX/MIN substitution with the buffer-type
-substitution. Where `MPI_FLOAT64X2` is the active datatype, use
-`MPI_DD_SUM` / `MPI_DD_AMX` / `MPI_DD_AMN`; where `MPI_COMPLEX64X2`
-is active, use `MPI_ZZ_SUM` / `MPI_ZZ_AMX` / `MPI_ZZ_AMN`.
-`multifloats_mpi.cpp` already exports all six ops via
-`multifloats_mpi_init`, and `multifloats_mpi_f.f90` exposes them as
-INTEGER handles.
-
-Workaround: none. The test-harness work (B9b) is complete; this bug
-blocks runtime success but is independent of the harness rework.
-
-Group A test build verification (2026-05-02):
-- kind16: full ctest pass on `/tmp/stage-q` (`23/23` mumps tests)
-- multifloats: build clean on `/tmp/stage-mf`; ctest hits B9c on every
-  test (datatype + op pairing)
-- kind10: build clean on a fresh `/tmp/stg-e-mumps` stage; ctest hangs
-  (separate, pre-existing — likely a missing-archive issue in the
-  fresh-stage path, not related to Group A changes)
-- Pre-existing `_replace_kind_parameter` for multifloats (line 2872
-  of fortran_migrator.py) comments out `integer, parameter :: wp =
-  kind(1.d0)` lines; `replace_literals` skips literal-wrapping on
-  `INTEGER, PARAMETER :: ` lines so degenerate upstream forms like
-  `INTEGER, PARAMETER :: ZERO = 0.0D0` (dsol_fwd_aux.F:1093) survive
-  the constructor-mode pass intact.
+Originally observed at `mfac_scalings.F:372,376`,
+`mana_dist_m.F:206,605,626`, and `[mw]sol_distrhs.F`. The fix
+addresses every site uniformly without per-file recipe overrides.
