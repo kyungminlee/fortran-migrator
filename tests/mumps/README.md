@@ -2,12 +2,14 @@
 
 Differential precision tests for the migrated MUMPS sparse direct solver.
 Mirrors the tests/blas / tests/lapack pattern: every check happens at
-`REAL(KIND=16)`, the migrated `${LIB_PREFIX}mumps` archive (`qmumps` for
-the kind16 target) is exercised both from Fortran (`call qmumps(id)`) and
-from C (`qmumps_c(&id)` via the bridge described in
+`REAL(KIND=16)`, the migrated `${LIB_PREFIX}mumps` archive
+(`qmumps` / `emumps` / `mmumps` for kind16 / kind10 / multifloats) is
+exercised both from Fortran (`call qmumps(id)`) and from C
+(`qmumps_c(&id)` via the bridge described in
 [`c/include/qmumps_c.h`](c/include/qmumps_c.h)), and per-case JSON
 reports are written under `<build>/precision_reports/` for the standard
-aggregator.
+aggregator. All three targets pass 26/26 mumps ctests under
+`linux-impi` (B4 RESOLVED 2026-05-04).
 
 ## How to run
 
@@ -18,6 +20,22 @@ cmake -S /tmp/stg-q -B /tmp/stg-q/build --preset=linux-impi
 cmake --build /tmp/stg-q/build -j8
 ctest --test-dir /tmp/stg-q/build -R '^mumps_' --output-on-failure
 ```
+
+Swap `--target kind16` for `kind10` or `multifloats` to run the same
+suite on the other targets — no other flags change.
+
+If you restrict the staging via `--libraries`, the mumps tests need
+`scalapack_c` in the list (it ships the precision-promoted C clones
+`*lamov_` / `p*gemr2d_` that the test executables link against).
+Concretely:
+
+```bash
+uv run python -m pyengine stage /tmp/stg-q --target kind16 \
+    --libraries blas blacs ptzblas pbblas pblas \
+                scalapack scalapack_c lapack mumps
+```
+
+(The default — no `--libraries` flag — stages everything and is fine.)
 
 The `recipes/` and `cmake/` trees live in this single repo
 (`fortran-migrator`) — the historical fm-mumps split was retired when
@@ -39,6 +57,8 @@ tests/mumps/
 │                           prec_report, test_data_mumps,
 │                           ref_quad_lapack_solve, target_mumps_body.fypp)
 ├── target_kind16/        — kind16 fypp shim setting prefix=q/x
+├── target_kind10/        — kind10 fypp shim setting prefix=e/y
+├── target_multifloats/   — multifloats fypp shim setting prefix=m/w
 ├── fortran/              — test_*mumps_*.f90 drivers
 └── c/
     ├── include/          — quad-precision header overrides for the bridge

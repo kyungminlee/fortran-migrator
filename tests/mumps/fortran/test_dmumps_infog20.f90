@@ -1,29 +1,16 @@
 ! Cross-target sanity check on INFOG(20) — peak number of
-! real-precision words used during factorization.
+! real-precision words used during factorization. The element
+! count is structurally precision-independent for a fixed
+! (n, SYM, JOB) problem (the multifrontal tree shape depends on
+! matrix structure, not precision), so any drift across kind10 /
+! kind16 / multifloats points at the hand-written byte-accounting
+! overrides for `mumps_memory_mod` / `mumps_lr_stats`.
 !
-! Why this exists: each migrator target ships hand-written byte-
-! accounting overrides for `mumps_memory_mod` / `mumps_lr_stats`
-! (recipe `overrides:`). The override constants encode bytes-per-
-! real, bytes-per-complex etc., and getting those wrong is silent —
-! the factor still works numerically, but the reported memory /
-! work counters drift. INFOG(20) is the most direct user-visible
-! signal: it reports the structural element count (in target-
-! precision words) and should be roughly target-independent for a
-! fixed (n, SYM, JOB) problem because the multifrontal tree shape
-! depends on the matrix structure, not the precision.
-!
-! The bound below is a structural one (n² … 50·n²) rather than a
-! kind16 baseline ±5%, so the test can ship before a per-target
-! baseline has been captured. Tighten to ±5% against a captured
-! reference once enough builds (kind10 + kind16) have logged the
-! value into the JSON report.
-!
-! Multifloats coverage is deferred — tests/mumps/CMakeLists.txt
-! gates multifloats out at the executable level
-! (_MUMPS_TESTS_SKIP_EXECUTABLES), and Group A in
-! tests/mumps/TODO.md tracks the harness rework needed before this
-! test can run there. Re-evaluate the bound as a strict-±5%
-! cross-target check once Group A lands.
+! Captured baseline (n=32, SYM=0, JOB=6, seed=4099): INFOG(20) = 1024
+! on all three targets, bit-exact. A ±5% tolerance against that
+! baseline catches override-sizing drift well below the gross
+! mis-sizing threshold the original structural [n², 50·n²] window
+! covered.
 
 program test_dmumps_infog20
     use prec_kinds,            only: ep
@@ -80,18 +67,14 @@ program test_dmumps_infog20
 
     real_words = id%INFOG(20)
 
-    ! Structural bound: a dense LU on n=32 needs at least ~n² real
-    ! words (full L+U) and shouldn't exceed ~50·n² even with MUMPS's
-    ! internal padding. Anything outside that range strongly suggests
-    ! the target's byte-accounting overrides are mis-sized.
-    write(label, '(a,i0,a,i0)') 'infog20=', real_words, ' n=', n
-    if (real_words >= n*n .and. real_words <= 50 * n * n) then
-        err = 0.0_ep
-    else
-        err = 1.0_ep
-    end if
-    tol = 0.5_ep
-    call report_case(trim(label), err, tol)
+    block
+        integer, parameter :: infog20_baseline = 1024   ! n=32 ⇒ n²
+        write(label, '(a,i0,a,i0)') 'infog20=', real_words, ' n=', n
+        err = abs(real(real_words - infog20_baseline, ep)) / &
+              real(infog20_baseline, ep)
+        tol = 0.05_ep
+        call report_case(trim(label), err, tol)
+    end block
 
     deallocate(id%IRN, id%JCN, id%A, id%RHS)
     nullify(id%IRN, id%JCN, id%A, id%RHS)

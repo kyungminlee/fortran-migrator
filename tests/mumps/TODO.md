@@ -503,45 +503,23 @@ resolve all symbols for kind10 + kind16, but no test in this repo
 exercises that path today (mpiexec -n 1 stays the default). Spot-
 check via `nm libmpiseq.a | grep ' T pqgetrf'`.
 
-### B4 — Only `kind16` target supported  *(PARTIAL — kind10 wired 2026-04-30)*
+### B4 — Only `kind16` target supported — RESOLVED 2026-05-04
 
-**Progress 2026-04-30**: kind10 EP overrides authored
-(`recipes/mumps/kind10/{mumps_memory_mod_ep.F,mumps_lr_stats_ep.F}`),
-recipe wired, `emumps-gfortran-13.a` builds clean against staged
-mumps tree. `tests/mumps/target_kind10/target_mumps.fypp` added.
-A latent line-length issue surfaced (kind10's
-`MPI_C_LONG_DOUBLE_COMPLEX` rewrite pushes fixed-form `.F` past
-column 72) and was fixed by adding `-ffixed-line-length-none`
-(gfortran/flang) / `-extend-source` (Intel) to
-`add_migrated_fortran_library` in `cmake/CMakeLists.txt`.
+All three targets (kind10 / kind16 / multifloats) build, link, and run
+the full mumps test set under `cmake --preset=linux-impi`: 26/26 mumps
+ctests pass on multifloats; the kind10 + kind16 runs match. Recipe
+`overrides:` for all three targets in `recipes/mumps.yaml` ship the
+matching `mumps_memory_mod_ep.F` / `mumps_lr_stats_ep.F`; the
+multifloats variant uses `STORAGE_SIZE`-driven byte accounting so the
+double-double layout (16-byte real, 32-byte complex) is computed at
+compile time rather than hardcoded.
 
-Multifloats overrides also authored
-(`recipes/mumps/multifloats/{...}.F`) and recipe-wired but the
-build hits a separate, pre-existing migrator bug (see B8 below).
-
-Remaining for B4: multifloats build (blocked on B8); `INFOG(20)`
-sanity-check across targets — multifloats is now testable as of
-2026-05-02 (B9b RESOLVED), so the cross-target sanity check can run
-on all three.
-
-**Update 2026-05-02:** `tests/mumps/fortran/test_dmumps_infog20.f90`
-landed for kind10 + kind16. The test factors a fixed n=32 SYM=0
-JOB=6 problem, reads `id%INFOG(20)`, and asserts the result lies in
-the structural bound `[n², 50·n²]`. The structural bound is wider
-than the ±5% kind16-baseline check originally specified — it ships
-before any per-target baseline has been captured, and catches the
-gross-mis-sizing failure mode (off-by-2× / off-by-4× from a wrong
-override constant) without needing a precaptured number. Tighten
-to ±5% once two builds have logged the actual `INFOG(20)` values
-into `precision_reports/test_dmumps_infog20.<target>.json` and the
-spread is known.
-
-Multifloats coverage on this test is deferred: ctest skips test
-executables for `multifloats`
-(`tests/mumps/CMakeLists.txt:52-59`'s `_MUMPS_TESTS_SKIP_EXECUTABLES`),
-and Group A (B9b) is the path that re-enables them. Re-evaluate
-once Group A lands and pull multifloats into the cross-target ±5%
-check at that point.
+Verified `INFOG(20) = 1024 = n²` exactly on every target for the
+fixed (n=32, SYM=0, JOB=6, seed=4099) problem in
+`tests/mumps/fortran/test_dmumps_infog20.f90`. The test was tightened
+from the structural `[n², 50·n²]` window to ±5% against the captured
+`infog20_baseline = 1024` — drift that would fly under the loose bound
+(off by an EP-record-size factor) is now flagged immediately.
 
 Recipe `overrides:` in `recipes/mumps.yaml` declares hand-written
 extended-precision substitutes only for the kind16 target:
