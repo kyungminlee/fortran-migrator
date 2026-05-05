@@ -1,3 +1,6 @@
+! dgelqt: blocked LQ with explicit T. Compares the full overwritten A
+! and the upper triangle of each MB-by-MB T block; the strict-lower of
+! T is workspace per LAPACK convention and is not compared.
 program test_dgelqt
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize
@@ -10,9 +13,8 @@ program test_dgelqt
     integer, parameter :: ms(*) = [12, 20, 28]
     integer, parameter :: ns(*) = [16, 32, 48]
     integer, parameter :: mb    = 4
-    integer :: i, m, n, info, j, k
+    integer :: i, m, n, info, j, kmin, ii, ib, kk
     real(ep), allocatable :: A0(:,:), A_ref(:,:), A_got(:,:), T_ref(:,:), T_got(:,:), work(:)
-    real(ep), allocatable :: L_ref(:,:), L_got(:,:)
     real(ep) :: err, tol
     character(len=48) :: label
 
@@ -24,19 +26,21 @@ program test_dgelqt
         A_ref = A0; A_got = A0
         call dgelqt(m, n, mb, A_ref, m, T_ref, mb, work, info)
         call target_dgelqt(m, n, mb, A_got, m, T_got, mb, info)
-        allocate(L_ref(m, m), L_got(m, m))
-        L_ref = 0.0_ep; L_got = 0.0_ep
-        do k = 1, m
-            do j = k, m
-                L_ref(j, k) = abs(A_ref(j, k))
-                L_got(j, k) = abs(A_got(j, k))
+        kmin = min(m, n)
+        err = max_rel_err_mat(A_got, A_ref)
+        do ii = 1, kmin, mb
+            ib = min(mb, kmin - ii + 1)
+            do kk = 0, ib - 1
+                do j = 1, kk + 1
+                    err = max(err, abs(T_got(j, ii+kk) - T_ref(j, ii+kk)) &
+                                   / max(abs(T_ref(j, ii+kk)), 1.0e-50_ep))
+                end do
             end do
         end do
-        err = max_rel_err_mat(L_got, L_ref)
         tol = 16.0_ep * real(max(m, n), ep)**2 * target_eps
         write(label, '(a,i0,a,i0)') 'm=', m, ',n=', n
         call report_case(trim(label), err, tol)
-        deallocate(A0, A_ref, A_got, T_ref, T_got, work, L_ref, L_got)
+        deallocate(A0, A_ref, A_got, T_ref, T_got, work)
     end do
     call report_finalize()
 end program test_dgelqt

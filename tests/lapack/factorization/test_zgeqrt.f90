@@ -1,3 +1,7 @@
+! zgeqrt: recursive blocked QR with explicit T. Compares the full
+! overwritten A and the upper triangle of each NB-by-NB T block; the
+! strict-lower of T is workspace per LAPACK convention and is not
+! compared.
 program test_zgeqrt
     use prec_kinds,      only: ep
     use prec_report,     only: report_init, report_case, report_finalize
@@ -10,9 +14,8 @@ program test_zgeqrt
     integer, parameter :: ms(*) = [16, 32, 48]
     integer, parameter :: ns(*) = [12, 20, 28]
     integer, parameter :: nb    = 4
-    integer :: i, m, n, info, j, k
+    integer :: i, m, n, info, j, kmin, ii, ib, kk
     complex(ep), allocatable :: A0(:,:), A_ref(:,:), A_got(:,:), T_ref(:,:), T_got(:,:), work(:)
-    complex(ep), allocatable :: R_ref(:,:), R_got(:,:)
     real(ep) :: err, tol
     character(len=48) :: label
 
@@ -24,19 +27,21 @@ program test_zgeqrt
         A_ref = A0; A_got = A0
         call zgeqrt(m, n, nb, A_ref, m, T_ref, nb, work, info)
         call target_zgeqrt(m, n, nb, A_got, m, T_got, nb, info)
-        allocate(R_ref(n, n), R_got(n, n))
-        R_ref = (0.0_ep, 0.0_ep); R_got = (0.0_ep, 0.0_ep)
-        do k = 1, n
-            do j = 1, k
-                R_ref(j, k) = cmplx(abs(A_ref(j, k)), 0.0_ep, ep)
-                R_got(j, k) = cmplx(abs(A_got(j, k)), 0.0_ep, ep)
+        kmin = min(m, n)
+        err = max_rel_err_mat_z(A_got, A_ref)
+        do ii = 1, kmin, nb
+            ib = min(nb, kmin - ii + 1)
+            do kk = 0, ib - 1
+                do j = 1, kk + 1
+                    err = max(err, abs(T_got(j, ii+kk) - T_ref(j, ii+kk)) &
+                                   / max(abs(T_ref(j, ii+kk)), 1.0e-50_ep))
+                end do
             end do
         end do
-        err = max_rel_err_mat_z(R_got, R_ref)
         tol = 16.0_ep * real(max(m, n), ep)**2 * target_eps
         write(label, '(a,i0,a,i0)') 'm=', m, ',n=', n
         call report_case(trim(label), err, tol)
-        deallocate(A0, A_ref, A_got, T_ref, T_got, work, R_ref, R_got)
+        deallocate(A0, A_ref, A_got, T_ref, T_got, work)
     end do
     call report_finalize()
 end program test_zgeqrt

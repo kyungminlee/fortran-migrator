@@ -3,28 +3,6 @@
 Resolved items have moved to `CHANGELOG.md`. Remaining work: two parked
 families with explicit reopen conditions.
 
-## Older blocked-T routines that need a wider scope to test — PARKED
-
-The following routines were tested in Phase 35 / Phase 36, but only the
-|R| (or |L|) factor is compared — the lower-triangle reflector storage
-and the workspace `T` (whether the reserved workspace of `dgeqr` or the
-explicit block-T of `dgeqrt`) differ between implementations because
-the recursion / blocking choices in the migrated and reference paths
-diverge:
-
-- `dgeqr` / `zgeqr`, `dgelq` / `zgelq` (Phase 35)
-- `dgeqrt` / `zgeqrt`, `dgelqt` / `zgelqt` (Phase 36)
-
-For the matching `*gemqr` / `*gemlq` and `*gemqrt` / `*gemlqt` apply
-routines the C output is canonical and matches cleanly — those tests
-do compare the full result. So the factorization+apply pipeline is
-covered end-to-end; only the intermediate reflector/T representations
-are loose.
-
-**Reopen condition**: a migrator change (or recipe override) that pins
-both paths to the same blocking heuristic. Until then the |R|/|L|
-comparison is the strongest assertion the test framework can make.
-
 ## sb2st kernels (2 routines) — PARKED
 
 `dsb2st_kernels`, `zhb2st_kernels` — SBR (Successive Band Reduction)
