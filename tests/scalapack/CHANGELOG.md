@@ -2,6 +2,21 @@
 
 Resolved items, reverse-chronological. Open work lives in `TODO.md`.
 
+## 2026-05-05 — p?larz / p?larzc PBxTRNV M-vs-L fix
+
+Lifted upstream commit `c408393` ("fix PBxTRNV N-arg in p?larz /
+p?larzc") into `pdlarz.f`, `pzlarz.f`, and `pzlarzc.f` overrides:
+the row-V SIDE='L' and column-V SIDE='R' branches passed `M` /
+`N` as the global vector length to PBxTRNV, but only the trailing
+`L` entries of V are physically stored — same pattern as the
+P?LARZB fix landed earlier. Changed to `L` in 4 sites per file.
+
+Not observed in our test matrix because our companion MPV/NQV
+redefinition constrains the consuming GEMV to the meaningful L
+local rows, but the OOB read in PBxTRNV is unsound on its own
+and aborts on NPROW=3 upstream. Documented in
+`doc/UPSTREAM_BUGS.md`.
+
 ## 2026-05-05 — pzunmrz SIDE='L' resolved (complex path)
 
 Found and fixed a complex-specific algorithmic bug in `PZLARZ` and

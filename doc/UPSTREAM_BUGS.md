@@ -717,3 +717,36 @@ distribution and stride bugs that hit the real path first; this
 algebraic bug is complex-only and was masked by the other failures
 until they were lifted. Worth submitting upstream as a new
 `fix-larz-side-l-conj` topic branch.
+
+
+## ScaLAPACK 2.2.3: `p?larz.f` / `p?larzc.f` PBxTRNV reads M elements where only L are stored
+
+**Symptom.** `P?LARZ` / `P?LARZC` SIDE='L' rowwise (and SIDE='R'
+columnwise) calls `PBxTRNV` with the global vector length set to
+`M` (resp. `N`), but only the trailing `L` entries of `V` are
+physically stored — the leading `M-L` (resp. `N-L`) entries are
+implicit zeros from the RZ Householder convention. `PBxTRNV` reads
+`M` (or `N`) elements from `V(IOFFV)`, picking up garbage past the
+stored tail. The transpose buffer ends up corrupt; the subsequent
+`?GEMV`/`?GER` reads it. On grids with non-uniform row distribution
+the OOB read can also touch heap-managed memory and produce
+"corrupted size vs. prev_size" aborts.
+
+**Why we didn't observe it under our overrides.** The companion
+`MPV` / `NQV` redefinition (sub(C2)'s distribution rather than V's)
+already constrains the subsequent `?GEMV` to the meaningful `L`
+local rows, so the garbage in the trailing `M-L` slots of the
+transpose buffer is never consumed. The specific NPROW=3 heap-abort
+case that surfaced the bug upstream is not in our test matrix
+(ctest runs at 4 ranks → 2×2 grid).
+
+**Affected files.**
+- `external/scalapack-2.2.3/SRC/pdlarz.f` (and `pslarz.f`).
+- `external/scalapack-2.2.3/SRC/pzlarz.f` (and `pclarz.f`).
+- `external/scalapack-2.2.3/SRC/pzlarzc.f` (and `pclarzc.f`).
+
+**Fix.** Override changes the third argument of `PBxTRNV` from `M`
+(rowwise SIDE='L') / `N` (columnwise SIDE='R') to `L` in all four
+sites of each file. Same `N`-vs-`L` pattern as the `P?LARZB`
+PBxTRAN fix landed earlier (commit `75714cb` upstream). Wired via
+the same `source_overrides` entries.
