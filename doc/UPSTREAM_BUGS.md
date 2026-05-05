@@ -543,3 +543,91 @@ Wired via `recipes/scalapack.yaml` plus matching `prefer_source:
 PDORMRZ, PZUNMRZ` pins.
 
 **Upstream report.** Not yet filed.
+
+
+## ScaLAPACK 2.2.3: `p?larz.f` MPV/NQV undersizing (heap overrun)
+
+**Symptom.** On NPROW > 1 grids with non-uniform A row distribution
+(e.g. NPROW = 3, 5, 6 with K/NB blocks not divisible by NPROW),
+`PDORMRZ` / `PZUNMRZ` (and `PCUNMRZ` / `PSORMRZ`) crash with glibc
+"corrupted size vs. prev_size" inside `free()` during cleanup, or
+produce silently wrong results when the overrun lands somewhere
+benign. Reproduces with the migrator's standard 3×2 / 1×3 grids.
+
+**Root cause.** `pdlarz.f:288` (and the s/c/z byte-identical copies)
+defines the receiver-buffer size for the SIDE='L' branch as
+
+```fortran
+MPV = NUMROC( L+IROFFV, DESCV( MB_ ), MYROW, IVROW, NPROW )
+```
+
+— derived from V's row distribution (`IVROW` / `IROFFV` / `MB_V`).
+But the row-V SIDE='L' `PBDTRNV` calls a few lines later transpose V
+into a column at sub(C2)'s procrow `ICROW2` and write the local row
+count of sub(C2). When `PDORMR3` iterates `IV` across blocks of A,
+the `PDLARZ` alignment restriction documented in its header is
+violated: V's row distribution no longer matches sub(C2)'s. `MPV`
+underestimates the receiver write by 1-3 elements per call, and the
+unpacked write into Y overruns into the adjacent aux WORK region,
+landing on glibc heap metadata.
+
+The same shape appears in the SIDE='R' branch at `pdlarz.f:292` for
+`NQV` (col-V branch, exposed by direct callers passing `INCV=1`):
+
+```fortran
+NQV = NUMROC( L+ICOFFV, DESCV( NB_ ), MYCOL, IVCOL, NPCOL )
+```
+
+**Affected files.**
+- `external/scalapack-2.2.3/SRC/pdlarz.f`, `pclarz.f`, `pslarz.f`,
+  `pzlarz.f` (lines ~288 and ~292).
+- `external/scalapack-2.2.3/SRC/pzlarzc.f` (and `pclarzc.f`) — the
+  Q**H variant called from `PZUNMR3` when `TRANS='C'` / `'H'`. Same
+  byte-identical formulas.
+
+**Fix.** Override redefines `MPV` / `NQV` in the relevant branches
+from sub(C2)'s distribution (`L+IROFFC2` / `DESCC(MB_)` / `ICROW2` for
+SIDE='L'; `L+ICOFFC2` / `DESCC(NB_)` / `ICCOL2` for SIDE='R'). The
+upstream `LWMIN` already sizes the leading WORK region to `MPC0`
+(full sub(C) local rows), which dominates the new `MPV`, so no
+`LWMIN` change is needed. Wired via
+`recipes/scalapack/source_overrides/p[dz]larz.f` and
+`recipes/scalapack/source_overrides/pzlarzc.f`, with
+`prefer_source: PDLARZ, PZLARZ, PZLARZC` pins.
+
+
+## ScaLAPACK 2.2.3: `p?larz.f` ZAXPY stride uses LDA where vector wants 1
+
+**Symptom.** Companion bug to the `MPV`/`NQV` undersizing above: even
+on aligned-grid calls where the buffer is sized correctly, the
+SIDE='L' update path inside `P?LARZ` skips elements in `WORK` and
+can read/write past the buffer when `NQC2 > 1`.
+
+**Root cause.** `pdlarz.f` makes ten `DAXPY` calls into `WORK` /
+`WORK(IPW)` using `INCY = MAX(1, NQC2)`, e.g.
+
+```fortran
+CALL DAXPY( NQC2, ONE, C( IOFFC1 ), LDC,
+$           WORK( IPW ), MAX( 1, NQC2 ) )
+```
+
+`WORK` here is a contiguous local vector, so the correct stride is
+`1`. `MAX(1, NQC2)` is a legitimate leading dimension elsewhere
+nearby (for matrix-shaped `DLASET` / `DGSUM2D`); the bug looks like a
+copy-paste of that LDA into the AXPY's stride slot. Compare LAPACK's
+`dlarz.f`:
+
+```fortran
+CALL DAXPY( N, -TAU, WORK, 1, C, LDC )
+```
+
+**Affected files.**
+- `external/scalapack-2.2.3/SRC/p[dscz]larz.f` (six pairs in the
+  d/s variants, five pairs in the c/z and `pzlarzc` variants).
+- `external/scalapack-2.2.3/SRC/p[cz]larzc.f` (same shape).
+
+**Fix.** Override changes `INCY` from `MAX(1, NQC2)` to `1` in every
+AXPY into `WORK`. The `MAX(1, NQC2)` expression is retained where it
+is the legitimate LD of the surrounding `LASET` / `GSUM2D` matrix
+calls. Wired via the same `source_overrides` entries as the
+`MPV`/`NQV` fix.

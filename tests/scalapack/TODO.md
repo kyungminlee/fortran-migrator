@@ -2,21 +2,26 @@
 
 Resolved items have moved to `CHANGELOG.md`.
 
-## pdormrz / pzunmrz — SIDE='L' deferred
+## pzunmrz — SIDE='L' deferred (complex only)
 
-SIDE='R' (both TRANS='N' and TRANS='C/T') passes to target precision on
-kind16 / 2×2 grid after two upstream-bug fixes landed in
-`recipes/scalapack/source_overrides/p[dz]larzb.f` and
-`recipes/scalapack/source_overrides/p[dz]ormrz.f` (see CHANGELOG entry
-for the SIDE='R' resolution and `doc/UPSTREAM_BUGS.md` for both bugs).
+The real-precision SIDE='L' path now passes after four upstream-bug
+fixes landed in `recipes/scalapack/source_overrides/`: the
+`p[dz]larzb.f` PBxTRAN buffer mismatch, the `p[dz]ormrz.f` post-loop
+guard, the `p[dz]larz.f` MPV/NQV undersizing + ZAXPY-stride fix
+(carried in from the upstream bug-fix branches; see CHANGELOG and
+`doc/UPSTREAM_BUGS.md`), and the analogous `pzlarzc.f` fix. With these
+in place, **`test_pdormrz` covers SIDE in {L, R} × TRANS in {N, T}**
+(4/4 PASS on kind16 / 2×2 grid).
 
-**SIDE='L' (both TRANS='N' and TRANS='T')** still fails by a factor of
-~2.5. The failure reproduces with `K=mA=4` / `mC=nA=K+L=8` (single-block
-path, where PDLARZB is *not* called and only the post-loop PDORMR3
-fires), ruling out PDLARZB. The bug appears to live in the
-PDORMR3 + PDLARZ chain for SIDE='L' (the SIDE='R' chain works
-correctly).
+**`test_pzunmrz` SIDE='L' still fails** by a residual factor of
+~1.3-1.8x — distinct from the original ~2.5x. The failure reproduces
+on 1, 2, and 4 ranks (so it is not an MPI-distribution issue), and on
+both TRANS='N' (1.83x; routes through PZLARZ) and TRANS='C' (1.33x;
+routes through PZLARZC). Since the same algorithm structurally works
+for the real variant, the remaining bug is complex-specific somewhere
+in the PZUNMR3 + PZLARZ / PZLARZC chain — most likely a missed
+conjugation or complex-only divergence not yet isolated.
 
-Test drivers `tests/scalapack/factorization/test_p[dz]ormrz.f90`
-currently restrict to SIDE='R' only. Re-add SIDE='L' once the
-underlying PDORMR3 / PDLARZ bug is identified.
+`tests/scalapack/factorization/test_pzunmrz.f90` currently restricts
+to SIDE='R' only. Re-add SIDE='L' once the complex-only bug is
+identified.

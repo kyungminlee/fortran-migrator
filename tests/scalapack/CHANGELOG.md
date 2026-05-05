@@ -2,6 +2,40 @@
 
 Resolved items, reverse-chronological. Open work lives in `TODO.md`.
 
+## 2026-05-05 — pdormrz SIDE='L' resolved (real path); pzunmrz SIDE='L' narrowed
+
+Carried in two upstream bug-fix branches from
+`scalapack-bugfix/scalapack` and added a companion fix for the
+conjugate variant:
+
+- `fix-larz-buffer-sizing` (commits `0a58017` MPV / `c429b7b` NQV):
+  `P?LARZ` derived the receiver-buffer size for the SIDE='L' / SIDE='R'
+  PBxTRNV transpose from V's distribution; the actual write goes to
+  sub(C2)'s distribution. Under PDORMR3's IV iteration the alignment
+  restriction is violated, the buffer is undersized by 1-3 elements,
+  and the unpacked write into Y overruns into adjacent aux WORK —
+  observed as glibc "corrupted size vs. prev_size" aborts on
+  NPROW > 1 grids with non-uniform row distribution.
+- `fix-larz-daxpy-stride` (commit `36abce7`): the six (real) /
+  five (complex) `?AXPY` calls in `P?LARZ` that target `WORK` /
+  `WORK(IPW)` used `INCY = MAX(1, NQC2)` (a leading dimension) where
+  `WORK` is a contiguous vector — correct stride is `1`. Looks like
+  copy-paste of the legitimate LD on the surrounding `?LASET` /
+  `?GSUM2D` matrix calls.
+- Override `pzlarzc.f` (the `Q**H` variant called from `PZUNMR3` when
+  `TRANS='C'`) carries the same MPV/NQV + AXPY-stride fixes — the
+  byte-identical formulas exist there too, but the upstream bug-fix
+  branches did not patch the conjugate variant.
+
+Wired via `recipes/scalapack/source_overrides/p[dz]larz.f`,
+`pzlarzc.f`, and `prefer_source: PDLARZ, PZLARZ, PZLARZC` pins.
+Documented in `doc/UPSTREAM_BUGS.md`.
+
+**Test impact.** `test_pdormrz` now exercises SIDE in {L, R} ×
+TRANS in {N, T} (4/4 PASS on kind16 / 2×2 grid; previously SIDE='R'
+only). `test_pzunmrz` SIDE='R' continues to pass; SIDE='L' is parked
+as a complex-only residual (~1.3-1.8x), see `TODO.md`.
+
 ## 2026-05-03 — PDDBTRS / PZDBTRS workspace under-allocation (`*trsv` oracle)
 
 Extended the LWMIN override (originally for `*dbtrs`) to every

@@ -13,15 +13,9 @@ program test_pdormrz
                                  target_pdtzrzf, target_pdormrz
     implicit none
 
-    ! NOTE: SIDE='L' is currently deferred — pdormrz on SIDE='L' fails
-    ! by ~factor of 2 even after the LV/PBDTRAN and post-loop-condition
-    ! fixes in source_overrides/. The remaining bug appears to live in
-    ! the PDORMR3 + PDLARZ chain for SIDE='L' (both single-block K=4 and
-    ! multi-block K=32 cases reproduce); SIDE='R' passes cleanly. See
-    ! tests/scalapack/TODO.md for the open investigation.
-    integer, parameter :: cases = 2
-    character(len=1), parameter :: sides(*)   = ['R', 'R']
-    character(len=1), parameter :: transes(*) = ['N', 'T']
+    integer, parameter :: cases = 4
+    character(len=1), parameter :: sides(*)   = ['R', 'R', 'L', 'L']
+    character(len=1), parameter :: transes(*) = ['N', 'T', 'N', 'T']
     integer, parameter :: mb = 8, nb = 8
     integer :: ic, mA, nA, k, l, mC, nC, info, info_ref, lwork
     integer :: locmA, locnA, lldA, locmC, locnC, lldC
@@ -39,10 +33,15 @@ program test_pdormrz
         ! For RZ: A is m_A-by-n_A with m_A <= n_A. The factor is
         ! T (m_A-by-m_A upper triangular) in A(:, 1:m_A) and m_A
         ! Householder vectors of length L = n_A - m_A in A(:, m_A+1:n_A).
-        ! Q has order n_A. SIDE='R' applies Q on the right with n_C = n_A.
+        ! Q has order n_A. SIDE='R' applies Q on the right (n_C = n_A);
+        ! SIDE='L' applies Q on the left (m_C = n_A).
         mA = 32
-        mC = 48; nC = 64
-        nA = nC
+        nA = 64
+        if (sides(ic) == 'R') then
+            mC = 48; nC = nA
+        else
+            mC = nA; nC = 48
+        end if
         k = mA
         l = nA - mA
 

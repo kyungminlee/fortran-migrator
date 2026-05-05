@@ -13,11 +13,14 @@ program test_pzunmrz
                                  target_pztzrzf, target_pzunmrz
     implicit none
 
-    ! NOTE: SIDE='L' is currently deferred — pzunmrz on SIDE='L' fails
-    ! by ~factor of 2 even after the LV/PBZTRAN and post-loop-condition
-    ! fixes in source_overrides/. The remaining bug appears to live in
-    ! the PZUNMR3 + PZLARZ chain for SIDE='L'; SIDE='R' passes cleanly.
-    ! See tests/scalapack/TODO.md for the open investigation.
+    ! NOTE: SIDE='L' is currently deferred — pzunmrz on SIDE='L'
+    ! reproduces a residual ~factor of 1.3-1.8x even after the
+    ! buffer-sizing / AXPY-stride fixes landed in
+    ! source_overrides/p[dz]larz.f and pzlarzc.f. The real-precision
+    ! analogue (test_pdormrz) now passes SIDE='L' on the same fixes,
+    ! so the remaining bug is complex-specific in the
+    ! PZUNMR3 + PZLARZ / PZLARZC chain (TRANS='N' uses PZLARZ;
+    ! TRANS='C' uses PZLARZC; both fail). See tests/scalapack/TODO.md.
     integer, parameter :: cases = 2
     character(len=1), parameter :: sides(*)   = ['R', 'R']
     character(len=1), parameter :: transes(*) = ['N', 'C']
