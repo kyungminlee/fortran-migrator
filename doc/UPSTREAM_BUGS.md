@@ -512,6 +512,68 @@ heap corruption a few iterations later.
 
 ---
 
+## ScaLAPACK 2.2.3: `pdsyevx.f` / `pzheevx.f` LQUERY-path WORK/RWORK(1:3) early-write
+
+**Symptom.** Calling `PDSYEVX` (or `PZHEEVX`) with `LWORK = -1`
+(workspace query) and a 1-element `WORK` (the documented contract for
+the query) corrupts the heap, surfacing as a `free(): invalid
+pointer` or "corrupted size vs. prev_size" abort during cleanup of
+any unrelated buffer. The query *also* returns the correct optimal
+`LWORK` (and `LRWORK` for the complex variant) in `WORK(1)` /
+`RWORK(1)`, so a follow-up properly sized call runs to completion and
+produces correct eigenvalues — the heap damage shows up only at
+deallocate time.
+
+`PZHEEVX` carries the same shape on `RWORK(1:3)` (rank 0 broadcasts
+`ABSTOL` / `VL` / `VU` into the real-typed `RWORK` before reporting
+`LRWORK`); a 1-element `RWORK` is similarly trampled.
+
+**Root cause.** Inside `PDSYEVX`'s LQUERY branch, before computing
+the optimal `LWORK` to return in `WORK(1)`, rank 0 broadcasts the
+real-typed `ABSTOL`, `VL`, and `VU` into `WORK(1:3)` so the other
+ranks see the same values. The broadcast happens unconditionally
+(both LQUERY and full-call paths execute it), so on the LQUERY path
+`WORK(2)` and `WORK(3)` get written before the LQUERY return at the
+end of the routine. A caller passing `WORK(1)` for the query —
+exactly the documented two-pass contract (`WORK(1)` for the query,
+then size to the returned `LWORK`) — has `WORK(2..3)` written past
+the end of its 1-element buffer.
+
+`PZHEEVX` does the same broadcast, but into `RWORK(1:3)` since
+`ABSTOL` / `VL` / `VU` are real-typed (the complex variant's `WORK`
+is `complex`).
+
+**Files affected.**
+- `external/scalapack-2.2.3/SRC/pdsyevx.f` (rank-0 broadcast block
+  ahead of the LQUERY return).
+- `external/scalapack-2.2.3/SRC/pzheevx.f` — same shape on `RWORK`.
+- `external/scalapack-2.2.3/SRC/{ps,pc}{sy,he}evx.f` carry the
+  byte-identical pattern; not exercised by us (we don't migrate
+  single precision).
+
+**Fix.** Wrapper-side, in `tests/scalapack/common/target_scalapack_body.fypp`:
+- `target_pdsyevx` / `target_pssyevx` / `target_p{q,e,m}syevx` allocate
+  a local `work_t(3)` for the LQUERY branch and forward it to upstream
+  instead of the caller's `WORK`; `work_t(1)` (= `LWMIN`) is copied
+  back to `work(1)` after the query returns.
+- `target_pzheevx` / `target_pcheevx` / `target_p{x,y,w}heevx`
+  additionally allocate `rwork_t(3)` for the LQUERY branch.
+
+Same pattern as the `target_pdtrsen` `iwork_t(max(1,n))` fix
+documented in the next section. Both fixes live wrapper-side rather
+than as `recipes/scalapack/source_overrides/` entries because they
+adjust caller workspace expectations rather than the algorithm; they
+don't need to ship into migrated builds the way an algorithm fix does.
+
+**Why upstream's tests miss it.** ScaLAPACK's own test driver allocates
+`WORK` / `RWORK` from a precomputed `LWMIN` upper bound *before*
+the query, so the early-write fits comfortably. A caller that follows
+the documented two-pass contract trips the heap corruption.
+
+**Upstream report.** Not yet filed.
+
+---
+
 ## ScaLAPACK 2.2.3: `pdtrsen.f` IWORK(1:N) early-write during LQUERY
 
 **Symptom.** Calling `PDTRSEN` with `LIWORK = -1` (workspace query)
