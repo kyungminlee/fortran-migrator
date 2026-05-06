@@ -27,7 +27,7 @@ from typing import Iterable
 
 # Stable, sensible target column order — matches the build's prefix
 # scheme. Anything unexpected is appended at the end alphabetically.
-TARGET_ORDER = ['kind10', 'kind16', 'multifloats']
+TARGET_ORDER = ['kind4', 'kind8', 'kind10', 'kind16', 'multifloats']
 
 
 def load_reports(reports_dir: Path) -> list[dict]:

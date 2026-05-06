@@ -1,0 +1,8 @@
+#:set target         = 'kind8'
+#:set target_name    = 'kind8'
+#:set target_eps     = 'real(epsilon(1.0_8), ep)'
+#:set target_real    = 'real(8)'
+#:set target_complex = 'complex(8)'
+#:set prefix_real    = 'pd'
+#:set prefix_complex = 'pz'
+#:include 'target_pblas_body.fypp'

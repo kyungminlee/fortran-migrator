@@ -149,7 +149,7 @@ def main() -> int:
         by_routine[r['routine']][r['target']] = r
 
     targets = order_targets({r['target'] for r in reports}) \
-        if reports else ['kind10', 'kind16', 'multifloats']
+        if reports else ['kind4', 'kind8', 'kind10', 'kind16', 'multifloats']
 
     out: list[str] = []
     out.append('# Per-routine precision results')

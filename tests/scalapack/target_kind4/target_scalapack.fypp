@@ -1,0 +1,8 @@
+#:set target         = 'kind4'
+#:set target_name    = 'kind4'
+#:set target_eps     = 'real(epsilon(1.0_4), ep)'
+#:set target_real    = 'real(4)'
+#:set target_complex = 'complex(4)'
+#:set prefix_real    = 'ps'
+#:set prefix_complex = 'pc'
+#:include 'target_scalapack_body.fypp'
