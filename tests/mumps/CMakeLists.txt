@@ -375,13 +375,20 @@ function(_mumps_attach_link_group tgt variant want_c)
             mumps_test_target          # test harness — needs to scan
             mumps_c_bridge             #   alongside mmumps
             ${LIB_PREFIX}mumps
-            mumps_common               # mumps_abort_ etc. (std)
             ${LIB_PREFIX}lapack
             ${LIB_PREFIX}blas
             mumps_test_common
             target_conv
             mpiseq                     # MPI / BLACS / scalapack stubs
         )
+        # Std non-precision archives carry shared helpers (mumps_abort_,
+        # qisnan_ for the kind16 EP NaN check, ...). Append whichever
+        # exist in this build.
+        foreach(_std mumps_common lapack_common blas_common)
+            if(TARGET ${_std})
+                list(APPEND _archives ${_std})
+            endif()
+        endforeach()
         if(TARGET ${LIB_PREFIX}xblas)
             list(APPEND _archives ${LIB_PREFIX}xblas)
         endif()

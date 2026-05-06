@@ -828,21 +828,51 @@ endif()
 # no ``mpiexec`` needed, even on machines without MPI installed.
 #
 # Constraints: NPROCS=1 only — collectives that require multi-rank
-# coordination print "should not be called" and abort. The migrated
-# qmumps archive was compiled against real MPI's ``mpif.h``, so its
-# baked-in ``MPI_DOUBLE_PRECISION``/etc. integer constants come from
-# whatever MPI ``find_package`` detected; libseq's stubs are
-# constants-agnostic so the mismatch is harmless for single-rank
-# operation.
+# coordination print "should not be called" and abort.
+#
+# ABI matching with the configured MPI: libseq ships its own mpif.h /
+# mpi.h with hardcoded constant values (MPI_DOUBLE_PRECISION = 12,
+# MPI_INTEGER = 13, ...) and its own COMMON-block names
+# (/mpif_libseq/MPI_IN_PLACE). Migrated archives are compiled against
+# the configured MPI's headers (Intel MPI: MPI_DOUBLE_PRECISION =
+# 1275070495, MPI_IN_PLACE in /MPIPRIV1/, ...). For libseq's stubs to
+# correctly identify the in-place sentinel and dispatch on datatypes
+# in MUMPS_COPY, the stubs must see the SAME constants as the callers.
+# We achieve this by overlaying the configured MPI's mpif.h / mpi.h
+# onto _mpiseq_src/ at configure time — libseq's source still uses
+# ``INCLUDE 'mpif.h'`` / ``#include "mpi.h"`` literally, but those
+# resolve to the real-MPI copies. Skipped silently if find_package(MPI)
+# didn't locate the headers.
 #
 # Sources are staged into ``_mpiseq_src/`` by ``pyengine stage`` (see
 # ``_std_dirs`` in ``src/pyengine/__main__.py``); the build silently
 # skips when that directory is absent (e.g., a bare repo with no
 # upstream MUMPS vendored).
 if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src)
+    # Replace libseq's mpif.h / mpi.h with the configured MPI's so
+    # libmpiseq.a is ABI-compatible with archives compiled against
+    # real MPI: same constant values (MPI_INTEGER = 1275069467, etc.)
+    # and same COMMON-block layout (MPI_IN_PLACE in /MPIPRIV1/).
+    # Implementation: delete libseq's bundled headers from the staging
+    # tree and prepend the configured MPI's include dir to mpiseq's
+    # PRIVATE include path. Fortran INCLUDE 'mpif.h' / C #include
+    # "mpi.h" then resolve to the real-MPI copies, which also pulls in
+    # auxiliary headers like mpio.h / mpiof.h that live in the same
+    # directory. Skipped silently if find_package(MPI) didn't locate
+    # the headers (libseq's bundled copies are then used as-is).
+    if(MPI_Fortran_FOUND)
+        file(REMOVE ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/mpif.h)
+    endif()
+    if(MPI_C_FOUND)
+        file(REMOVE ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/mpi.h)
+    endif()
     add_library(mpiseq STATIC
         ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/mpi.f
-        ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/mpic.c
+        # libseq's bundled mpic.c is replaced by cmake/mpiseq_c_stubs.c
+        # (added below). Intel MPI defines MPI_Comm_f2c as a function-
+        # like macro; libseq's mpic.c declares it as a function and the
+        # two collide before any compile-flag tricks. Replacing the
+        # whole file is cleaner.
         ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src/elapse.c
         # Per-precision ScaLAPACK stubs covering the Q/X/E/Y prefixes
         # the migrated qmumps/xmumps/emumps/ymumps archives request
@@ -868,11 +898,35 @@ if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src)
     target_include_directories(mpiseq PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src>
     )
+    # Prepend configured MPI's include path so libseq's INCLUDE 'mpif.h'
+    # and #include "mpi.h" resolve to the real-MPI copies (we deleted
+    # libseq's bundled headers above when MPI was found).
+    if(MPI_Fortran_FOUND AND MPI_Fortran_INCLUDE_DIRS)
+        target_include_directories(mpiseq BEFORE PRIVATE
+            ${MPI_Fortran_INCLUDE_DIRS})
+    endif()
+    if(MPI_C_FOUND AND MPI_C_INCLUDE_DIRS)
+        target_include_directories(mpiseq BEFORE PRIVATE
+            ${MPI_C_INCLUDE_DIRS})
+    endif()
     # Add_ matches gfortran's lowercase + trailing-underscore Fortran
     # symbol convention: elapse.h's #define mumps_elapse mumps_elapse_
     # fires under Add_, so the Fortran-side mpi.f's MPI_WTIME (which
     # calls ``mumps_elapse_``) resolves cleanly.
     target_compile_definitions(mpiseq PRIVATE Add_)
+    # libseq's bundled mpic.c uses ``LIBSEQ_CALL`` (calling-convention
+    # tag) and ``LIBSEQ_INT`` / ``LIBSEQ_INT8`` (Fortran-INTEGER shadow
+    # types) macros that came from libseq's own mpi.h. With the
+    # configured MPI's mpi.h overlaid those macros aren't defined —
+    # plumb them in here. ``LIBSEQ_INT`` matches the Fortran INTEGER
+    # default kind on this build (always ``int`` for our gfortran
+    # target since we don't pass -fdefault-integer-8); ``LIBSEQ_INT8``
+    # always picks the 8-byte kind for MUMPS_CHECKADDREQUAL's address
+    # arithmetic.
+    target_compile_definitions(mpiseq PRIVATE
+        LIBSEQ_CALL=
+        LIBSEQ_INT=int
+        LIBSEQ_INT8=int64_t)
     fortran_module_layout(mpiseq)
 endif()
 

@@ -152,6 +152,64 @@ def _is_free_form_comment(line: str) -> bool:
     return not line or line.lstrip().startswith('!')
 
 
+def _patch_libseq_mpi_f(path: Path) -> None:
+    """Extend libseq's ``MUMPS_COPY`` with MPI_REAL16 / MPI_COMPLEX32
+    cases so reductions on REAL(KIND=16) / COMPLEX(KIND=16) buffers
+    dispatch correctly under our libmpiseq variant. Upstream's
+    ``MUMPS_COPY`` only knows the standard MPI datatypes; the migrated
+    qmumps archive passes MPI_REAL16 (Intel MPI = 1275072555) for
+    kind16 reductions.
+
+    Patches the staged copy at ``_mpiseq_src/mpi.f``; upstream's
+    ``external/MUMPS_5.8.2/libseq/mpi.f`` stays read-only. BLACS /
+    ScaLAPACK forwarders inside the same file are deliberately KEPT
+    — libmpiseq stands in for those archives in the ``_seq`` test
+    link, and the real BLACS / ScaLAPACK archives aren't linked there
+    so there's no duplicate-symbol collision.
+    """
+    src = path.read_text()
+
+    # Extend MUMPS_COPY's dispatch with MPI_REAL16 / MPI_COMPLEX32
+    # cases, and append matching MUMPS_COPY_* helpers. Anchor the
+    # insertion before the existing ``ELSE\n IERR=1`` fallthrough.
+    fallthrough = '      ELSE\n        IERR=1\n        RETURN\n      END IF'
+    extra_dispatch = (
+        '      ELSE IF ( DATATYPE .EQ. MPI_REAL16 ) THEN\n'
+        '      CALL MUMPS_COPY_REAL16( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        '      ELSE IF ( DATATYPE .EQ. MPI_COMPLEX32 ) THEN\n'
+        '      CALL MUMPS_COPY_COMPLEX32( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+    )
+    if 'MPI_REAL16' not in src and fallthrough in src:
+        src = src.replace(fallthrough, extra_dispatch + fallthrough, 1)
+
+    extra_helpers = """
+      SUBROUTINE MUMPS_COPY_REAL16( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      REAL(KIND=16) S(N),R(N)
+      INTEGER I
+      DO I = 1, N
+        R(I+RS) = S(I+SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_REAL16
+      SUBROUTINE MUMPS_COPY_COMPLEX32( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      COMPLEX(KIND=16) S(N),R(N)
+      INTEGER I
+      DO I = 1, N
+        R(I+RS) = S(I+SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_COMPLEX32
+"""
+    if 'SUBROUTINE MUMPS_COPY_REAL16' not in src:
+        src = src.rstrip() + '\n' + extra_helpers
+
+    path.write_text(src)
+
+
 def _collect_source_files(src_dir: Path, language: str) -> list[Path]:
     """Discover migrated source files in ``src_dir`` for the given language.
 
@@ -1036,6 +1094,15 @@ set(STAGED_LIBRARIES {staged_list})
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(src, dst)
+
+    # libseq's mpi.f bundles BLACS/ScaLAPACK forwarders (which collide
+    # with the real migrated archives) and only knows the standard MPI
+    # datatypes in MUMPS_COPY (no MPI_REAL16 / MPI_COMPLEX32 needed by
+    # qmumps reductions). Patch the staged copy to fix both. Upstream
+    # external/ stays read-only.
+    mpiseq_dst = staging_dir / '_mpiseq_src' / 'mpi.f'
+    if mpiseq_dst.is_file():
+        _patch_libseq_mpi_f(mpiseq_dst)
 
     print(f'\n{"=" * 60}')
     print(f'  Staging complete: {len(staged)} libraries')

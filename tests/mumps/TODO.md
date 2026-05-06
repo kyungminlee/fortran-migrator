@@ -27,16 +27,33 @@ a final valid-input pass that reaches MIC_OK and factors via JOB=6.
 returns the documented `INFOG(1) = -16` / `-6` codes, drop the wrapper
 and let the tests check `INFOG(1)` directly.
 
-## Multifloats sequential MPI (libmpiseq) — symbols ship, full link untested
+## libmpiseq linkage — kind16/kind10 land, multifloats blocked
 
-Per-precision stubs now cover all five extended prefixes —
-`cmake/mpiseq_qx_stubs.f` (Q/X/E/Y) plus `cmake/mpiseq_mw_stubs.f90`
-(M/W). The migrated `libmmumps-gfortran-13.a` references exactly the
-`p[mw]{getrf,getrs,potrf,potrs}_` symbols the stubs export, so the
-sequential-link symbol gap is closed. Tests today still use
-`mpiexec -n 1` against real MPI — relinking mmumps against `mpiseq`
-end-to-end is not exercised by any current test.
+Each test source under `tests/mumps/{fortran,c}/` is now built twice
+— once linked against real MPI (`mpiexec -n 1`), once linked against
+the in-tree `mpiseq` archive (plain binary, suffix `_seq`). libmpiseq
+is now Intel-MPI ABI compatible: cmake/CMakeLists.txt overlays the
+configured MPI's `mpi.h` / `mpif.h` onto `_mpiseq_src/`, libseq's own
+bundled `mpic.c` is replaced by `cmake/mpiseq_c_stubs.c` (compiled
+against Intel's signatures), and `pyengine stage` patches libseq's
+`mpi.f` to extend `MUMPS_COPY` with `MPI_REAL16` / `MPI_COMPLEX32`
+cases the standard upstream dispatch doesn't ship.
 
-**Reopen condition**: an environment that can't run real MPI needs the
-multifloats sparse solver and the relink uncovers a missing symbol or
-ABI mismatch the symbol-list probe didn't catch.
+**kind16**: 26/26 `_seq` ctests pass; per-test JSON precision reports
+are bit-identical to the impi-linked runs (verified via `md5sum`).
+
+**multifloats**: `_seq` binaries STOP at runtime with
+`MPI_ALLREDUCE, DATATYPE = 201326592` (Intel's `MPI_DATATYPE_NULL`).
+Root cause: the C++ `multifloats_mpi.cpp` registers `MPI_FLOAT64X2`
+/ `MPI_DD_SUM` / etc. via `MPI_Type_create_struct` /
+`MPI_Op_create`, which our libmpiseq stubs return as `MPI_DATATYPE_NULL`
+since they're inert. The runtime handle ends up null, and libseq's
+extended `MUMPS_COPY` doesn't recognize null. Fix path: replace the
+stubs with a libmpiseq-mode variant that returns specific sentinel
+handle values, and extend `MUMPS_COPY`'s dispatch to recognize those
+sentinels with the multifloats element sizes (16-byte real, 32-byte
+complex). Out of scope for this iteration.
+
+**Reopen condition** (multifloats specifically): an environment that
+can't run real MPI needs the multifloats sparse solver, OR a follow-up
+adds the multifloats-mode datatype-registration stubs.

@@ -2,6 +2,63 @@
 
 Resolved items, reverse-chronological. Open work lives in `TODO.md`.
 
+## 2026-05-05 — End-to-end libmpiseq linkage on kind16
+
+Each `tests/mumps/{fortran,c}/test_*.{f90,c}` source now produces a
+second executable suffixed `_seq` that links the in-tree `mpiseq`
+archive in place of `MPI::*` / `mblacs` / `mscalapack` / `mpblas` /
+`mpbblas` / `mptzblas`. Same compiled archives, two link variants —
+exercises the libmpiseq path downstream consumers use when they want
+a no-MPI executable. The `_seq` ctests run as plain binaries (no
+mpiexec), about ~150× faster per test than the impi-wrapped variant.
+
+**kind16 result**: 26/26 `_seq` tests pass; per-test JSON precision
+reports are bit-identical to the impi-linked runs (`md5sum` confirms
+all 26 files match across the two link variants).
+
+Implementation breakdown:
+
+- **Header overlay** (cmake/CMakeLists.txt) — when `MPI_*_FOUND`,
+  replace `_mpiseq_src/{mpi.h,mpif.h}` with the configured MPI's copies
+  via `file(REMOVE)` + `target_include_directories(mpiseq BEFORE ...)`,
+  so libmpiseq's stubs see the **same constants and COMMON-block
+  layout** (`MPI_DOUBLE_PRECISION = 1275070495`, `MPI_IN_PLACE` in
+  `/MPIPRIV1/`, ...) as the migrated archives that consume them.
+- **mpic.c replacement** (cmake/mpiseq_c_stubs.c) — libseq's bundled
+  `mpic.c` declares `MPI_Comm_f2c` as a function but Intel's `mpi.h`
+  defines it as a function-like macro; the two collide before any
+  compile-flag tricks. Folded the four lifecycle functions
+  (`MPI_Init` / `MPI_Comm_rank` / `MPI_Finalize` / `MPI_Comm_f2c` /
+  `MPI_Wtime` + `MUMPS_CHECKADDREQUAL` aliases) into our supplementary
+  C stubs file; libseq's `mpic.c` is dropped from the mpiseq target
+  source list. C signatures match Intel's exactly (`const` qualifiers,
+  no `LIBSEQ_CALL` macro, opaque types from Intel's `mpi.h`).
+- **MUMPS_COPY extension** (src/pyengine/__main__.py:_patch_libseq_mpi_f) —
+  pyengine stage patches the staged copy of `_mpiseq_src/mpi.f` to add
+  `MPI_REAL16` / `MPI_COMPLEX32` cases plus matching
+  `MUMPS_COPY_REAL16` / `MUMPS_COPY_COMPLEX32` helpers, so kind16
+  reductions (which pass `MPI_REAL16 = 1275072555` to MPI_ALLREDUCE)
+  dispatch correctly. Upstream `external/MUMPS_5.8.2/libseq/mpi.f`
+  stays read-only.
+- **PUBLIC → PRIVATE on MPI deps** — `multifloats_mpi`,
+  `${LIB_PREFIX}mumps`, `mumps_common`, `mumps_c_bridge` flipped from
+  `PUBLIC MPI::*` to `PRIVATE MPI::*`. The `_seq` link path then
+  doesn't get Intel MPI dragged back in via STATIC-archive PRIVATE-dep
+  propagation; the impi test exes were already adding `MPI::*`
+  explicitly via `_mumps_apply_link_variant`.
+- **Manual link group** (tests/mumps/CMakeLists.txt) — the `_seq`
+  archive list is hand-rolled inside a single `-Wl,--start-group`
+  block via `$<TARGET_FILE:>`, bypassing cmake's link-graph cycle
+  detector (mmumps PUBLICly chains scalapack / blacs / pblas etc.
+  that we deliberately replace with libmpiseq).
+
+**Multifloats**: `_seq` binaries currently STOP at
+`MPI_ALLREDUCE, DATATYPE = 201326592` (Intel's `MPI_DATATYPE_NULL`)
+because the C++ `multifloats_mpi.cpp` registers `MPI_FLOAT64X2` /
+`MPI_DD_SUM` etc. via `MPI_Type_create_struct` / `MPI_Op_create` and
+our stubs return `MPI_DATATYPE_NULL`. Multifloats-specific follow-up,
+documented in TODO.md.
+
 ## 2026-05-05 — Multifloats (M/W) libmpiseq stubs
 
 `cmake/mpiseq_mw_stubs.f90` adds the 10 multifloats-precision ScaLAPACK
