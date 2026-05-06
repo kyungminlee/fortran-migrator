@@ -22,6 +22,16 @@ include(FortranCompiler)
 # ── Global compiler flags ────────────────────────────────────────────
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
+# Pin C standard to gnu17. The migrated ScaLAPACK C sources retain
+# K&R-style empty parameter lists (``void f();``) which the C migrator
+# treats as legal under ANSI C semantics. C23 (the default on GCC 15
+# and recent Clang/icx) reinterprets ``()`` as ``(void)`` and turns
+# call sites with arguments into hard errors, not warnings — so -w
+# alone does not suppress them. Forcing gnu17 keeps the legacy
+# semantics across GCC, Clang, icx, and flang.
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -w")
 if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=legacy")

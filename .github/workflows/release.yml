@@ -273,6 +273,9 @@ jobs:
       - name: Install OpenMPI
         run: sudo apt-get install -y libopenmpi-dev
 
+      - name: Install fypp (required by tests/)
+        run: pipx install fypp
+
       - name: Configure
         run: |
           cmake -S staging -B build \
