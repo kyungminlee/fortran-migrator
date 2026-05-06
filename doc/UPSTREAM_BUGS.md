@@ -25,6 +25,90 @@ always ``P`` — so it sorts alphabetically by file name).
 
 ---
 
+## LAPACK 3.12.1: `?orbdb3.f` `?ROT` stride uses LDX11 where it should be LDX21
+
+**Symptom.** Migrated extended-precision `?orbdb3` runs cleanly (the
+override carries the fix), but the kind4 / kind8 baseline ctest cycle
+— which links the unmodified `external/lapack-3.12.1/SRC/` archive —
+trips one of two heap-corruption manifestations. `lapack_test_zunbdb3`
+SIGSEGVs in `arena_for_chunk → __libc_free` during the wrapper's
+auto-deallocate. `lapack_test_dorbdb3` doesn't crash but reports
+`digits ~= 1` against the quad reference (it presents as a precision
+shortfall — the actual mechanism is corruption of an adjacent buffer
+on the heap, presented as wrong values in `theta` / `phi`). The
+`s` / `c` precision halves carry the byte-identical bug; would
+surface under the kind4 baseline once that column is wired.
+
+**Root cause.** Inside the `IF( I .GT. 1 )` branch of `?orbdb3.f`'s
+main loop, the plane-rotation call passes `LDX11` as the `INCY` for
+`X21`:
+
+```fortran
+DO I = 1, M-P
+   IF( I .GT. 1 ) THEN
+      CALL DROT( Q-I+1, X11(I-1,I), LDX11, X21(I,I), LDX11, C, S )
+   END IF
+   ...
+END DO
+```
+
+`LDX11` is correct for the `X` operand (which lives in `X11`). But
+`Y` is `X21` — its leading dimension is `LDX21`. The orbdb3 regime
+requires `M-P <= min(P, Q, M-Q)`, so `M-P < P` and the two leading
+dimensions disagree (typical: `LDX11 = P`, `LDX21 = M-P`). With
+`INCY = LDX11 > LDX21`, the rotation strides `Q-I+1` elements through
+`X21` at stride `LDX11`, walking off the end of `X21`'s allocated
+buffer and overwriting whatever heap chunk follows.
+
+Layout decides whether the corruption surfaces as a SIGSEGV (when
+the trampled bytes are chunk metadata) or as silently wrong numerics
+(when they're data words of an adjacent allocation). Both
+manifestations are heap-state-dependent — the same input shape can
+flip between modes across builds.
+
+**Why M-norm-style accidental passes don't apply.** Unlike the
+ScaLAPACK lanhs-style "missed elements happen to be zero" stories
+below, every test invocation that reaches `I > 1` triggers the
+out-of-bounds write. The bug is data-independent; what varies is
+only whether the heap corruption surfaces immediately or silently.
+
+**Affected files.**
+
+* `external/lapack-3.12.1/SRC/dorbdb3.f` (used by our migrated D-half).
+* `external/lapack-3.12.1/SRC/zorbdb3.f` (used by our migrated Z-half).
+* `external/lapack-3.12.1/SRC/sorbdb3.f` (S-half — same bug, exercised
+  only under the kind4 baseline column).
+* `external/lapack-3.12.1/SRC/corbdb3.f` (C-half — same status).
+
+**Fix.** One-character change: `LDX11` → `LDX21` on the `?ROT` `INCY`
+argument inside the `I .GT. 1` branch. Carried in
+`recipes/lapack/source_overrides/{d,s,z,c}orbdb3.f` and wired via
+`recipes/lapack.yaml`'s `source_overrides:` map. Every migrated target
+(kind10, kind16, multifloats) builds against the patched form. The
+`prefer_source` pin isn't needed here — LAPACK's canonical-rank picker
+prefers D over the other halves by default, and the override matches
+that choice.
+
+**Standard-precision archive still buggy.** The kind4 / kind8 baseline
+path (`migrator stage --target kind{4,8}`) skips migration and stages
+upstream `external/lapack-3.12.1/SRC/` verbatim into `_reflapack_src/`,
+so the std `lapack` archive that the baseline links against still has
+the typo. Two of the residual failures in
+`tests/KIND48_BASELINE_STATUS.md` (`zunbdb3`, `dorbdb3`) trace to this
+gap and are parked under `tests/lapack/TODO.md` until the staging path
+overlays `recipes/lapack/source_overrides/` on top of the upstream
+copy. Confirmed both clear when the override is overlaid.
+
+**Why upstream's tests miss it.** Reference LAPACK's `?orbdb3` test
+shapes happen to use `LDX11 = LDX21` (the bug is silent when the two
+strides match). The mismatch surfaces only when a caller invokes
+`?orbdb3` with `LDX11 /= LDX21`, which the upstream test driver
+doesn't exercise but a real CSD-driver call path does.
+
+**Upstream report.** Not yet filed.
+
+---
+
 ## ScaLAPACK 2.2.3: `p?lanhs.f` NPROW=1 underestimate (1/F/I norms)
 
 **Symptom.** Migrated `pqlanhs` / `pxlanhs` (and the upstream halves
