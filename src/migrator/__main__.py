@@ -1070,6 +1070,16 @@ set(STAGED_LIBRARIES {staged_list})
         else:
             print(f'Warning: {src} not found')
 
+    # Plant the refblas_quad / reflapack_quad symbol-rename helper
+    # alongside the other build-time scripts so tests/blas/refblas and
+    # tests/lapack/reflapack can locate it via find_file in the staging
+    # tree (see those CMakeLists for the search-path list).
+    scripts_src = proj_root / 'scripts' / 'refquad_rename_archive.sh'
+    if scripts_src.exists():
+        scripts_dst = staging_dir / 'scripts'
+        scripts_dst.mkdir(exist_ok=True)
+        shutil.copy2(scripts_src, scripts_dst / scripts_src.name)
+
     # Copy tests/ subtree so the unified CMakeLists.txt can pick it up
     # via add_subdirectory(tests) when BUILD_TESTING=ON.
     tests_src = proj_root / 'tests'
@@ -1232,6 +1242,12 @@ def _stage_baseline(args, target_name: str):
         src = cmake_dir / cmake_file
         if src.exists():
             shutil.copy2(src, staging_dir / cmake_file)
+
+    scripts_src = proj_root / 'scripts' / 'refquad_rename_archive.sh'
+    if scripts_src.exists():
+        scripts_dst = staging_dir / 'scripts'
+        scripts_dst.mkdir(exist_ok=True)
+        shutil.copy2(scripts_src, scripts_dst / scripts_src.name)
 
     # tests/ subtree.
     tests_src = proj_root / 'tests'

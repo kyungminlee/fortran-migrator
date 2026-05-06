@@ -97,6 +97,35 @@ target_compile_options(reflapack_quad PRIVATE
     -w
     -std=legacy
 )
+
+# Rename exports `<name>_` -> `<name>_quad_` (mirrors refblas_quad —
+# see tests/blas/refblas/CMakeLists.txt for rationale). Consumer side:
+# tests/lapack/common/ref_quad_lapack.f90 (and the analogous PBLAS /
+# ScaLAPACK ref_quad_*.f90) get a thin module-procedure forward layer.
+find_file(REFQUAD_RENAME_SCRIPT refquad_rename_archive.sh
+    PATHS
+        ${CMAKE_SOURCE_DIR}/scripts
+        ${CMAKE_SOURCE_DIR}/../scripts
+        ${PROJECT_SOURCE_DIR}/scripts
+        ${PROJECT_SOURCE_DIR}/../scripts
+    NO_DEFAULT_PATH)
+file(GLOB _refquad_whitelists CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/tests/blas/common/ref_quad_blas.quad_renames.txt
+    ${CMAKE_SOURCE_DIR}/tests/lapack/common/ref_quad_lapack.quad_renames.txt
+    ${CMAKE_SOURCE_DIR}/tests/pblas/common/ref_quad_blas.quad_renames.txt
+    ${CMAKE_SOURCE_DIR}/tests/scalapack/common/ref_quad_blas.quad_renames.txt
+    ${CMAKE_SOURCE_DIR}/tests/scalapack/common/ref_quad_lapack.quad_renames.txt)
+if(REFQUAD_RENAME_SCRIPT AND _refquad_whitelists)
+    add_custom_command(TARGET reflapack_quad POST_BUILD
+        COMMAND sh ${REFQUAD_RENAME_SCRIPT}
+                $<TARGET_FILE:reflapack_quad>
+                ${_refquad_whitelists}
+        COMMENT "reflapack_quad: rename whitelisted symbols -> *_quad_"
+        VERBATIM)
+else()
+    message(WARNING "reflapack_quad: rename script or whitelists not found; "
+                    "kind4/kind8 baseline tests will see symbol collisions")
+endif()
 # LAPACK internally calls BLAS. Link the quad-promoted refblas_quad so
 # every routine in the reference chain operates at KIND=16.
 target_link_libraries(reflapack_quad PUBLIC refblas_quad)

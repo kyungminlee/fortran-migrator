@@ -56,5 +56,48 @@ target_compile_options(refblas_quad PRIVATE
     -w
     -std=legacy
 )
+
+# Rename Fortran-mangled exports from `<name>_` to `<name>_quad_` so
+# refblas_quad doesn't collide with the standard ``blas`` archive's
+# native-precision symbols when the kind4 / kind8 baseline tests link
+# both. The matching update on the consumer side lives in
+# tests/blas/common/ref_quad_blas.f90: every routine declared in the
+# interface block is suffixed ``_quad``, with a thin module procedure
+# under the original name forwarding to the renamed external. Test
+# files keep ``use ref_quad_blas, only: dasum`` unchanged.
+#
+# Looks for the rename script in two places — the in-tree path
+# scripts/refquad_rename_archive.sh (when this CMakeLists is consumed
+# from the repo) and ../scripts/... (when consumed from the staging
+# tree, where ``migrator stage`` plants the cmake/ files alongside
+# ``scripts/``). Skipped silently if neither path resolves.
+find_file(REFQUAD_RENAME_SCRIPT refquad_rename_archive.sh
+    PATHS
+        ${CMAKE_SOURCE_DIR}/scripts
+        ${CMAKE_SOURCE_DIR}/../scripts
+        ${PROJECT_SOURCE_DIR}/scripts
+        ${PROJECT_SOURCE_DIR}/../scripts
+    NO_DEFAULT_PATH)
+# Whitelist of routines to rename. Pulls from every ref_quad_*.f90
+# sidecar so cross-calls (e.g. reflapack_quad's dgesv → dgemm) stay
+# consistent. The script intersects with `nm` output, so listing names
+# that don't exist in this archive is harmless.
+file(GLOB _refquad_whitelists CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/tests/blas/common/ref_quad_blas.quad_renames.txt
+    ${CMAKE_SOURCE_DIR}/tests/lapack/common/ref_quad_lapack.quad_renames.txt
+    ${CMAKE_SOURCE_DIR}/tests/pblas/common/ref_quad_blas.quad_renames.txt
+    ${CMAKE_SOURCE_DIR}/tests/scalapack/common/ref_quad_blas.quad_renames.txt
+    ${CMAKE_SOURCE_DIR}/tests/scalapack/common/ref_quad_lapack.quad_renames.txt)
+if(REFQUAD_RENAME_SCRIPT AND _refquad_whitelists)
+    add_custom_command(TARGET refblas_quad POST_BUILD
+        COMMAND sh ${REFQUAD_RENAME_SCRIPT}
+                $<TARGET_FILE:refblas_quad>
+                ${_refquad_whitelists}
+        COMMENT "refblas_quad: rename whitelisted symbols -> *_quad_"
+        VERBATIM)
+else()
+    message(WARNING "refblas_quad: rename script or whitelists not found; "
+                    "kind4/kind8 baseline tests will see symbol collisions")
+endif()
 # .f90 files are free-form by extension; the rest are fixed-form.
 # No per-file form override needed.
