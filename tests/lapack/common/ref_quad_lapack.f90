@@ -4505,10 +4505,10 @@ module ref_quad_lapack
 
         ! P-misc — small utilities & unblocked apply/generate Householder
 
-        logical function disnan(din)
+        logical function disnan_quad(din)
             import :: ep
             real(ep), intent(in) :: din
-        end function disnan
+        end function disnan_quad
 
         subroutine drscl_quad(n, sa, sx, incx)
             import :: ep
@@ -11325,6 +11325,11 @@ contains
         integer,     intent(out) :: info
         call ztrttp_quad(uplo, n, A, lda, AP, info)
     end subroutine ztrttp
+
+    logical function disnan(din)
+        real(ep), intent(in) :: din
+        disnan = disnan_quad(din)
+    end function disnan
 
     subroutine drscl(n, sa, sx, incx)
         integer,  intent(in)    :: n, incx

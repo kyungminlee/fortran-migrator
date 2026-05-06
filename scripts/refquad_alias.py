@@ -41,6 +41,11 @@ from pathlib import Path
 
 SIG_START_RE = re.compile(
     r"""^(?P<indent>\s+)
+        (?P<type_prefix>
+          (?:logical|integer|real|complex|character|
+             double\s+precision|double\s+complex)
+          (?:\s*\([^)]*\))?
+          \s+)?
         (?P<kind>function|subroutine)
         \s+(?P<name>[a-zA-Z_][a-zA-Z_0-9]*)
         \s*\(""", re.VERBOSE)
@@ -175,11 +180,13 @@ def parse_routines(block: str) -> list[dict]:
         leading_buffer = []
         args = extract_args(joined)
         result_var = find_result_var(joined) if kind == 'function' else None
+        type_prefix = (m.group('type_prefix') or '').strip()
         routines.append(dict(
             kind=kind, name=name,
             sig_lines=sig_lines, body_lines=body_lines,
             end_line=end_line, sig_joined=joined,
             args=args, result_var=result_var,
+            type_prefix=type_prefix,
             block_text=block_text,
             leading=leading_text,
         ))
@@ -249,9 +256,17 @@ def render_wrapper(r: dict) -> str:
     indent_inner = '        '
     args = r['args']
     if r['kind'] == 'function':
-        rv = r['result_var'] or 'r'
-        lines.append(_format_signature(indent_outer, f"function {r['name']}",
-                                       args, f" result({rv})"))
+        type_prefix = r.get('type_prefix') or ''
+        if type_prefix:
+            # Typed function (e.g. `logical function disnan`) — no
+            # result clause; the function name itself is the result.
+            head = f"{type_prefix} function {r['name']}"
+            lines.append(_format_signature(indent_outer, head, args))
+            rv = r['name']
+        else:
+            rv = r['result_var'] or 'r'
+            lines.append(_format_signature(indent_outer, f"function {r['name']}",
+                                           args, f" result({rv})"))
     else:
         lines.append(_format_signature(indent_outer, f"subroutine {r['name']}",
                                        args))
