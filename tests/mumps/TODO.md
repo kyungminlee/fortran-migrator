@@ -37,10 +37,12 @@ configured MPI's `mpi.h` / `mpif.h` onto `_mpiseq_src/`, libseq's own
 bundled `mpic.c` is replaced by `cmake/mpiseq_c_stubs.c` (compiled
 against Intel's signatures), and `pyengine stage` patches libseq's
 `mpi.f` to extend `MUMPS_COPY` with `MPI_REAL16` / `MPI_COMPLEX32`
-cases the standard upstream dispatch doesn't ship.
+(kind16) and `MPI_LONG_DOUBLE` / `MPI_C_LONG_DOUBLE_COMPLEX` (kind10
+maps the 80-bit extended types to MPI's long-double tokens).
 
-**kind16**: 26/26 `_seq` ctests pass; per-test JSON precision reports
-are bit-identical to the impi-linked runs (verified via `md5sum`).
+**kind16 + kind10**: 26/26 `_seq` ctests pass on each; per-test JSON
+precision reports are bit-identical to the impi-linked runs (verified
+via `md5sum`).
 
 **multifloats**: `_seq` binaries STOP at runtime with
 `MPI_ALLREDUCE, DATATYPE = 201326592` (Intel's `MPI_DATATYPE_NULL`).

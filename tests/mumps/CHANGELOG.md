@@ -2,7 +2,7 @@
 
 Resolved items, reverse-chronological. Open work lives in `TODO.md`.
 
-## 2026-05-05 — End-to-end libmpiseq linkage on kind16
+## 2026-05-05 — End-to-end libmpiseq linkage on kind16 + kind10
 
 Each `tests/mumps/{fortran,c}/test_*.{f90,c}` source now produces a
 second executable suffixed `_seq` that links the in-tree `mpiseq`
@@ -12,9 +12,9 @@ exercises the libmpiseq path downstream consumers use when they want
 a no-MPI executable. The `_seq` ctests run as plain binaries (no
 mpiexec), about ~150× faster per test than the impi-wrapped variant.
 
-**kind16 result**: 26/26 `_seq` tests pass; per-test JSON precision
-reports are bit-identical to the impi-linked runs (`md5sum` confirms
-all 26 files match across the two link variants).
+**kind16 + kind10 result**: 26/26 `_seq` tests pass on each target;
+per-test JSON precision reports are bit-identical to the impi-linked
+runs (`md5sum` confirms all 26 files match on both stages).
 
 Implementation breakdown:
 
@@ -35,11 +35,13 @@ Implementation breakdown:
   no `LIBSEQ_CALL` macro, opaque types from Intel's `mpi.h`).
 - **MUMPS_COPY extension** (src/pyengine/__main__.py:_patch_libseq_mpi_f) —
   pyengine stage patches the staged copy of `_mpiseq_src/mpi.f` to add
-  `MPI_REAL16` / `MPI_COMPLEX32` cases plus matching
-  `MUMPS_COPY_REAL16` / `MUMPS_COPY_COMPLEX32` helpers, so kind16
-  reductions (which pass `MPI_REAL16 = 1275072555` to MPI_ALLREDUCE)
-  dispatch correctly. Upstream `external/MUMPS_5.8.2/libseq/mpi.f`
-  stays read-only.
+  `MPI_REAL16` / `MPI_COMPLEX32` (kind16) and `MPI_LONG_DOUBLE` /
+  `MPI_C_LONG_DOUBLE_COMPLEX` (kind10 — there's no `MPI_REAL10` in
+  standard MPI, so the migrator emits the long-double tokens) cases
+  plus matching `MUMPS_COPY_REAL{10,16}` / `MUMPS_COPY_COMPLEX{20,32}`
+  helpers, so reductions on extended-precision buffers dispatch
+  correctly. Upstream `external/MUMPS_5.8.2/libseq/mpi.f` stays
+  read-only.
 - **PUBLIC → PRIVATE on MPI deps** — `multifloats_mpi`,
   `${LIB_PREFIX}mumps`, `mumps_common`, `mumps_c_bridge` flipped from
   `PUBLIC MPI::*` to `PRIVATE MPI::*`. The `_seq` link path then

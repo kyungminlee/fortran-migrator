@@ -174,10 +174,17 @@ def _patch_libseq_mpi_f(path: Path) -> None:
     # insertion before the existing ``ELSE\n IERR=1`` fallthrough.
     fallthrough = '      ELSE\n        IERR=1\n        RETURN\n      END IF'
     extra_dispatch = (
+        # kind16: REAL(16) / COMPLEX(16)
         '      ELSE IF ( DATATYPE .EQ. MPI_REAL16 ) THEN\n'
         '      CALL MUMPS_COPY_REAL16( SENDBUF, RECVBUF, CNT, SS, RS )\n'
         '      ELSE IF ( DATATYPE .EQ. MPI_COMPLEX32 ) THEN\n'
         '      CALL MUMPS_COPY_COMPLEX32( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        # kind10: 80-bit extended real / complex map to MPI's long
+        # double tokens (no MPI_REAL10 in standard MPI).
+        '      ELSE IF ( DATATYPE .EQ. MPI_LONG_DOUBLE ) THEN\n'
+        '      CALL MUMPS_COPY_REAL10( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        '      ELSE IF ( DATATYPE .EQ. MPI_C_LONG_DOUBLE_COMPLEX ) THEN\n'
+        '      CALL MUMPS_COPY_COMPLEX20( SENDBUF, RECVBUF, CNT, SS, RS )\n'
     )
     if 'MPI_REAL16' not in src and fallthrough in src:
         src = src.replace(fallthrough, extra_dispatch + fallthrough, 1)
@@ -203,6 +210,26 @@ def _patch_libseq_mpi_f(path: Path) -> None:
       END DO
       RETURN
       END SUBROUTINE MUMPS_COPY_COMPLEX32
+      SUBROUTINE MUMPS_COPY_REAL10( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      REAL(KIND=10) S(N),R(N)
+      INTEGER I
+      DO I = 1, N
+        R(I+RS) = S(I+SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_REAL10
+      SUBROUTINE MUMPS_COPY_COMPLEX20( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      COMPLEX(KIND=10) S(N),R(N)
+      INTEGER I
+      DO I = 1, N
+        R(I+RS) = S(I+SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_COMPLEX20
 """
     if 'SUBROUTINE MUMPS_COPY_REAL16' not in src:
         src = src.rstrip() + '\n' + extra_helpers
