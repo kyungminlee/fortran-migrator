@@ -16,7 +16,7 @@ recipes/<lib>.yaml           targets/<target>.yaml
         │                            │
         └────────────┬───────────────┘
                      ▼
-            pyengine stage <dir> --target <target> --libraries ...
+            migrator stage <dir> --target <target> --libraries ...
                      │
                      ▼
    ┌─────────────────────────────────────────────────────────┐
@@ -85,7 +85,7 @@ the well-conditioned upstream sources we use).
 
 ## Core components
 
-### Engine — `src/pyengine/`
+### Engine — `src/migrator/`
 
 Twelve modules, ~9,000 LOC. Acyclic, unidirectional dependency
 graph: lower-level modules (`intrinsics`, `target_mode`,
@@ -194,7 +194,7 @@ a clone-and-substitute pattern:
 ## Build system — `cmake/`
 
 The migrator does not ship CMakeLists.txt for individual libraries.
-Instead, `pyengine stage` writes a top-level `CMakeLists.txt` (from
+Instead, `migrator stage` writes a top-level `CMakeLists.txt` (from
 the template in `__main__.py:_generate_cmake`) into the staging
 directory, plus a target-specific `target_config.cmake` that sets
 the prefix, type names, and MPI-datatype symbols.
@@ -264,7 +264,7 @@ in `doc/UPSTREAM_BUGS.md`. Two mechanisms route around them:
 
 Triggered on `v*` tag push or manual dispatch. Three jobs:
 
-1. **stage** (per target) — runs `pyengine stage` and uploads the
+1. **stage** (per target) — runs `migrator stage` and uploads the
    staged tree as an artifact.
 2. **build** (45 combinations: 3 targets × 5 compilers ×
    3 MPI implementations, minus impossible combos like kind10+ifx
@@ -281,7 +281,7 @@ ctest runs.
 
 ```
 fortran-migrator/
-├── src/pyengine/        # The migration engine (12 modules, ~9k LOC)
+├── src/migrator/        # The migration engine (12 modules, ~9k LOC)
 ├── recipes/             # 11 library recipes
 ├── targets/             # 3 precision targets
 ├── tests/               # 10 differential-precision suites (1051 tests)

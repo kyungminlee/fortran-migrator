@@ -1,6 +1,6 @@
 # Migration Recipes
 
-A **recipe** is a YAML file that describes the structure of a numerical library and provides the parameters for its migration. The `pyengine` uses these recipes to identify source files, discover symbols, and apply the correct transformations.
+A **recipe** is a YAML file that describes the structure of a numerical library and provides the parameters for its migration. The `migrator` uses these recipes to identify source files, discover symbols, and apply the correct transformations.
 
 ## Example: `recipes/blas.yaml`
 

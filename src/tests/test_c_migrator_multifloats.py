@@ -1,4 +1,4 @@
-"""Unit tests for the multifloats branch of pyengine.c_migrator.
+"""Unit tests for the multifloats branch of migrator.c_migrator.
 
 These cover the c_migrator changes that unblock multifloats:
 - _build_sub_vars produces the right template variables for both
@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from pyengine.target_mode import load_target
-from pyengine.c_migrator import (
+from migrator.target_mode import load_target
+from migrator.c_migrator import (
     _build_sub_vars,
     _apply_aliases_to_original,
     _apply_overrides,

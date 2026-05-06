@@ -10,7 +10,7 @@ generic intrinsics work on quad types out of the box". For the
 migrator's actual rewrite table — which type-specific names
 (`DABS` → `ABS`, `ZSQRT` → `SQRT`, `DBLE` → `REAL(..., KIND=16)`,
 etc.) get translated and whether each call site needs an explicit
-`KIND=…` argument — see `src/pyengine/intrinsics.py`. The two
+`KIND=…` argument — see `src/migrator/intrinsics.py`. The two
 complement each other: this file describes the surface; the engine
 file is the migration rule table.
 
@@ -400,7 +400,7 @@ The migrator maps **type-specific intrinsic names** (which appear in
 upstream Netlib code as `DABS`, `DCONJG`, `DSQRT`, `CDABS`, `IDINT`,
 etc.) to **generic names** (`ABS`, `CONJG`, `SQRT`, …) that work on
 the target precision automatically. The mapping table is data-only,
-in `src/pyengine/intrinsics.py:INTRINSIC_MAP`. As of 2026-04-30 it
+in `src/migrator/intrinsics.py:INTRINSIC_MAP`. As of 2026-04-30 it
 has ~140 entries. Each entry is keyed on the upstream type-specific
 name and stores `(generic_name, needs_kind_arg)`:
 

@@ -2,7 +2,7 @@
 
 ## Additional Documentation
 
-*   [Usage Guide](USAGE.md) — How to run the `pyengine` CLI.
+*   [Usage Guide](USAGE.md) — How to run the `migrator` CLI.
 *   [Migration Recipes](RECIPES.md) — How to write library recipes.
 *   [Architecture](ARCHITECTURE.md) — Technical overview and component details.
 *   [Intrinsics Reference](INTRINSICS.md) — Fortran generic intrinsics for KIND=16.
@@ -174,9 +174,9 @@ Output files are renamed to reflect the new prefix:
 
 ## Symbol Database
 
-The tool uses a **symbol scanner** (`src/pyengine/symbol_scanner.py`) to discover
+The tool uses a **symbol scanner** (`src/migrator/symbol_scanner.py`) to discover
 routine names from source files or compiled libraries, then a **prefix
-classifier** (`src/pyengine/prefix_classifier.py`) to classify each by its precision
+classifier** (`src/migrator/prefix_classifier.py`) to classify each by its precision
 prefix (S/D/C/Z) and build a rename map. Only symbols with confirmed precision
 variants are renamed, avoiding false positives on identifiers that happen to
 start with `d`/`s`/`c`/`z`.

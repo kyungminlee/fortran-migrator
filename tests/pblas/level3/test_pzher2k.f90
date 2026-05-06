@@ -5,7 +5,7 @@
 ! complex alpha conjugate written by PB_Cconjg into Calph16 is
 ! truncated, and the subsequent gemm call reads garbage for
 ! conjg(alpha). See ``tests/pblas/TODO.md`` for the full diagnosis
-! and the recommended fix in ``src/pyengine/c_migrator.py``. The test
+! and the recommended fix in ``src/migrator/c_migrator.py``. The test
 ! is left in place so the failure is visible until the migrator fix
 ! lands; a real-only alpha would mask the bug and is not what we want.
 !

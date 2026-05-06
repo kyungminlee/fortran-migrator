@@ -44,7 +44,7 @@ jobs:
       - name: Stage ${{ matrix.target }}
         run: |
           cd src
-          uv run python -m pyengine stage \
+          uv run python -m migrator stage \
             ${{ github.workspace }}/staging-${{ matrix.target }} \
             --target ${{ matrix.target }}
 
@@ -63,7 +63,7 @@ jobs:
               fi
               echo "### ${lib}"
               echo '```'
-              uv run python -m pyengine converge "$RECIPE" "$OUTDIR" \
+              uv run python -m migrator converge "$RECIPE" "$OUTDIR" \
                 --target ${{ matrix.target }} --full 2>&1 || true
               echo '```'
               echo ""

@@ -31,7 +31,7 @@ of which half of the family it came from. Divergences — files where
 uv sync
 
 # Migrate and build the full stack for a target into a staging dir
-uv run python -m pyengine stage /tmp/stage-q --target kind16
+uv run python -m migrator stage /tmp/stage-q --target kind16
 cmake -S /tmp/stage-q -B /tmp/stage-q/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/stage-q/build -j8
 ```
@@ -61,13 +61,13 @@ gfortran demo.f90 -o demo \
 ## CLI
 
 ```
-pyengine migrate   <recipe> <out>   # migrate source files only
-pyengine build     <recipe> <out>   # generate CMake + build one library
-pyengine run       <recipe> <work>  # full: migrate + build + verify
-pyengine stage     <dir>            # migrate all libraries into a unified CMake tree
-pyengine diverge   <recipe> <out>   # report s/d vs c/z divergences
-pyengine converge  <recipe> <out>   # whitespace-tolerant convergence check
-pyengine verify    <recipe> <out>   # post-migration verification
+migrator migrate   <recipe> <out>   # migrate source files only
+migrator build     <recipe> <out>   # generate CMake + build one library
+migrator run       <recipe> <work>  # full: migrate + build + verify
+migrator stage     <dir>            # migrate all libraries into a unified CMake tree
+migrator diverge   <recipe> <out>   # report s/d vs c/z divergences
+migrator converge  <recipe> <out>   # whitespace-tolerant convergence check
+migrator verify    <recipe> <out>   # post-migration verification
 ```
 
 All commands accept `--target {kind10,kind16,multifloats}` or a path to a
@@ -79,7 +79,7 @@ self-contained directory that builds with plain CMake.
 ```
 recipes/           # per-library YAML recipes (blas.yaml, lapack.yaml, …)
 targets/           # per-target YAML configs (kind10, kind16, multifloats)
-src/pyengine/      # the migrator
+src/migrator/      # the migrator
 external/          # vendored upstream sources (LAPACK, MUMPS, ScaLAPACK,
                    # Intel MPI headers, multifloats MPI-bridge companion)
 cmake/             # staging build system
@@ -121,7 +121,7 @@ uv run pytest
 ```
 
 The fast unit tests cover the migrator's regex/AST transforms per target.
-The end-to-end build-and-link path is exercised manually via `pyengine
+The end-to-end build-and-link path is exercised manually via `migrator
 stage` + CMake (see **Quick start**).
 
 ## Status

@@ -504,7 +504,7 @@ nproc                                # confirm worker count for -j
 # at MPI_Finalize.
 for t in kind10 kind16 multifloats; do
     rm -rf /tmp/stg-$t
-    PYTHONPATH=src python -m pyengine stage /tmp/stg-$t \
+    PYTHONPATH=src python -m migrator stage /tmp/stg-$t \
         --target $t \
         --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack scalapack_c mumps
     cmake -S /tmp/stg-$t -B /tmp/stg-$t/build --preset=linux-impi
@@ -533,7 +533,7 @@ under instrumentation:
 ```bash
 # multifloats + ASan
 rm -rf /tmp/stg-mf-asan && \
-PYTHONPATH=src python -m pyengine stage /tmp/stg-mf-asan \
+PYTHONPATH=src python -m migrator stage /tmp/stg-mf-asan \
     --target multifloats \
     --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack scalapack_c mumps
 cmake -S /tmp/stg-mf-asan -B /tmp/stg-mf-asan/build \
@@ -551,7 +551,7 @@ ASAN_OPTIONS="detect_leaks=0:abort_on_error=0" \
 
 # kind16 + ASan (no multifloats opts needed)
 rm -rf /tmp/stg-k16-asan && \
-PYTHONPATH=src python -m pyengine stage /tmp/stg-k16-asan \
+PYTHONPATH=src python -m migrator stage /tmp/stg-k16-asan \
     --target kind16 \
     --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack scalapack_c mumps
 cmake -S /tmp/stg-k16-asan -B /tmp/stg-k16-asan/build \

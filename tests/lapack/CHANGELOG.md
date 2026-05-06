@@ -251,7 +251,7 @@ Fix shape (touches three places):
    multifloats's `**` operator is user-defined and not allowed in
    PARAMETER initializer expressions). The renamed identifiers also
    dodge the migrator's nuke-rename match.
-3. `src/pyengine/fortran_migrator.py` — minor migrator fix in
+3. `src/migrator/fortran_migrator.py` — minor migrator fix in
    `replace_intrinsic_calls` and `replace_generic_conversions`:
    `REAL(x, wp)` was being wrapped to `real64x2(x, wp)` (a 2-arg
    structure constructor — fails because `real64x2` has only one

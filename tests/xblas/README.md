@@ -102,7 +102,7 @@ level{1,2,3}/test_blas_*.f90         – the test programs
 
 ```bash
 cd $REPO/src
-uv run python -m pyengine stage /tmp/stg --target kind16 --libraries blas xblas
+uv run python -m migrator stage /tmp/stg --target kind16 --libraries blas xblas
 cmake -S /tmp/stg -B /tmp/stg/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/stg/build -j8
 ctest --test-dir /tmp/stg/build -R 'xblas_' --output-on-failure

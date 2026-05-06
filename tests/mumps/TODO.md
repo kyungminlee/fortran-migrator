@@ -35,7 +35,7 @@ in-tree `mpiseq` archive (plain binary, suffix `_seq`). libmpiseq is
 Intel-MPI ABI compatible: cmake/CMakeLists.txt overlays the configured
 MPI's `mpi.h` / `mpif.h` onto `_mpiseq_src/`, libseq's bundled `mpic.c`
 is replaced by `cmake/mpiseq_c_stubs.c` (compiled against Intel's
-signatures), and `pyengine stage` patches libseq's `mpi.f` to extend
+signatures), and `migrator stage` patches libseq's `mpi.f` to extend
 `MUMPS_COPY` with the precision-specific datatype cases:
 
 - `MPI_REAL16` / `MPI_COMPLEX32` (kind16)

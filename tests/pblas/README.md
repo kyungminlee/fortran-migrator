@@ -179,7 +179,7 @@ per-target shim files only need to set the two single-letter prefixes.
 ## Running
 
 ```bash
-python -m pyengine stage /tmp/staging-kind16 --target kind16 \
+python -m migrator stage /tmp/staging-kind16 --target kind16 \
        --libraries blas blacs ptzblas pbblas pblas
 cmake -S /tmp/staging-kind16 -B /tmp/staging-kind16/build \
       -DCMAKE_BUILD_TYPE=Release

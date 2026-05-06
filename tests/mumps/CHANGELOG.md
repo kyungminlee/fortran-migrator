@@ -23,7 +23,7 @@ derived-type stubs an Intel-disjoint sentinel ABI:
   `0x18000000 + counter` — distinct non-null handles above
   `MPI_OP_NULL`, since the user-op callback never fires under
   single-rank ALLREDUCE (it collapses to memcpy in `MUMPS_COPY`).
-- `src/pyengine/__main__.py` (`_patch_libseq_mpi_f`): adds explicit
+- `src/migrator/__main__.py` (`_patch_libseq_mpi_f`): adds explicit
   `MUMPS_COPY` dispatch cases for the two multifloats sentinels
   (`268435472` → 16-byte real64x2 elements via `MUMPS_COPY_FLOAT64X2`;
   `268435488` → 32-byte complex64x2 elements via
@@ -70,8 +70,8 @@ Implementation breakdown:
   C stubs file; libseq's `mpic.c` is dropped from the mpiseq target
   source list. C signatures match Intel's exactly (`const` qualifiers,
   no `LIBSEQ_CALL` macro, opaque types from Intel's `mpi.h`).
-- **MUMPS_COPY extension** (src/pyengine/__main__.py:_patch_libseq_mpi_f) —
-  pyengine stage patches the staged copy of `_mpiseq_src/mpi.f` to add
+- **MUMPS_COPY extension** (src/migrator/__main__.py:_patch_libseq_mpi_f) —
+  migrator stage patches the staged copy of `_mpiseq_src/mpi.f` to add
   `MPI_REAL16` / `MPI_COMPLEX32` (kind16) and `MPI_LONG_DOUBLE` /
   `MPI_C_LONG_DOUBLE_COMPLEX` (kind10 — there's no `MPI_REAL10` in
   standard MPI, so the migrator emits the long-double tokens) cases
@@ -136,7 +136,7 @@ from the structural `[n², 50·n²]` window to ±5% against the captured
 ## 2026-05-03 — B9c: multifloats MUMPS `MPI_SUM` rewriter (commit `eb83d5a`)
 
 A token-context MPI reduction-op rewriter was added to the Fortran
-migrator at `src/pyengine/fortran_migrator.py:3291-3320`
+migrator at `src/migrator/fortran_migrator.py:3291-3320`
 (`_rewrite_mpi_sum`), wired into the post-migration pipeline
 immediately after `_rewrite_mpi_datatypes`. It matches each
 `MPI_(I?All)Reduce[_Scatter]` call as a unit and only swaps
@@ -301,7 +301,7 @@ with `-Ddmumps_c=${LIB_PREFIX}mumps_c` etc. driving the per-arithmetic
 dispatch. `c_parity_helpers.c` is templated through the C macros
 `TARGET_REAL_HEADER` / `TARGET_REAL_MUMPS_C` / `TARGET_REAL_STRUC_C`
 (plus complex counterparts) so it builds unchanged against any target.
-`pyengine stage` writes `LIB_PREFIX_COMPLEX` to `target_config.cmake`
+`migrator stage` writes `LIB_PREFIX_COMPLEX` to `target_config.cmake`
 alongside the existing `LIB_PREFIX`.
 
 ## 2026-05-01 — B7: cmake/recipe tree consolidation
@@ -314,17 +314,17 @@ sit in one place:
 - `cmake/CMakeLists.txt` — section 9 (MUMPS) at line 747; section 10
   (libmpiseq) at line 779.
 - `recipes/mumps.yaml` — `FAC_FUTURE_NIV2_MOD` wired at line 89.
-- `src/pyengine/__main__.py` — `('mumps', 'mumps.yaml')` in
+- `src/migrator/__main__.py` — `('mumps', 'mumps.yaml')` in
   `LIBRARY_ORDER` at line 724.
 
-`pyengine stage` reads from this repo with no `--project-root`
+`migrator stage` reads from this repo with no `--project-root`
 override needed.
 
 ## 2026-04-30 — B3 partial: libmpiseq stub buildable; Q/X path-b stubs (2026-05-02)
 
 `libmpiseq.a` is buildable. `external/MUMPS_5.8.2/libseq/` copied to
-`_mpiseq_src/` by `pyengine stage` (added to `_std_dirs` in
-`src/pyengine/__main__.py`); `cmake/CMakeLists.txt` (section 10)
+`_mpiseq_src/` by `migrator stage` (added to `_std_dirs` in
+`src/migrator/__main__.py`); `cmake/CMakeLists.txt` (section 10)
 declares `add_library(mpiseq STATIC mpi.f mpic.c elapse.c)` with the
 required `-DAdd_` flag. Exports 157 symbols.
 

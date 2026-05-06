@@ -1,7 +1,7 @@
 # Unified CMake build for migrated extended-precision libraries.
 #
 # This file is copied into the staging directory by:
-#   python -m pyengine stage <staging_dir> --target <target>
+#   python -m migrator stage <staging_dir> --target <target>
 #
 # Usage:
 #   cmake -S <staging_dir> -B <staging_dir>/build -DCMAKE_BUILD_TYPE=Release
@@ -479,7 +479,7 @@ endfunction()
 # 1. BLAS (no deps).
 #
 # Standard-precision archive ``blas`` is built from the vendored Netlib
-# BLAS sources (staged into ``_refblas_src/`` by ``pyengine stage``).
+# BLAS sources (staged into ``_refblas_src/`` by ``migrator stage``).
 # The migrated archive ``${LIB_PREFIX}blas`` carries only Q/X/E/Y/M/W
 # clones and PUBLIC-links the standard archive so downstreams resolve
 # the S/D/C/Z entry points (DGEMM_, ZGEMM_, ...) through one link line.
@@ -844,8 +844,8 @@ endif()
 # resolve to the real-MPI copies. Skipped silently if find_package(MPI)
 # didn't locate the headers.
 #
-# Sources are staged into ``_mpiseq_src/`` by ``pyengine stage`` (see
-# ``_std_dirs`` in ``src/pyengine/__main__.py``); the build silently
+# Sources are staged into ``_mpiseq_src/`` by ``migrator stage`` (see
+# ``_std_dirs`` in ``src/migrator/__main__.py``); the build silently
 # skips when that directory is absent (e.g., a bare repo with no
 # upstream MUMPS vendored).
 if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src)

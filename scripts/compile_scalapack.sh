@@ -29,11 +29,11 @@ export OMPI_FC="${OMPI_FC:-gfortran-15}"
 # ---- Step 1: Migrate ----
 
 echo "[1/4] Migrating ScaLAPACK Fortran..."
-(cd "$REPO/src" && uv run --project .. python -m pyengine migrate \
+(cd "$REPO/src" && uv run --project .. python -m migrator migrate \
     "$REPO/recipes/scalapack.yaml" "$F_DIR" --target multifloats) 2>&1 | tail -5
 
 echo "[2/4] Migrating ScaLAPACK C..."
-(cd "$REPO/src" && uv run --project .. python -m pyengine migrate \
+(cd "$REPO/src" && uv run --project .. python -m migrator migrate \
     "$REPO/recipes/scalapack_c.yaml" "$C_DIR" --target multifloats) 2>&1 | tail -5
 
 # ---- Step 2: Build helper modules ----

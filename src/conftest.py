@@ -1,4 +1,4 @@
-"""Make ``pyengine`` importable from tests."""
+"""Make ``migrator`` importable from tests."""
 
 import sys
 from pathlib import Path

@@ -15,7 +15,7 @@ aggregator. All three targets pass 26/26 mumps ctests under
 
 ```bash
 cd /home/kyungminlee/code/fortran-migrator/src
-uv run python -m pyengine stage /tmp/stg-q --target kind16 --parser gfortran
+uv run python -m migrator stage /tmp/stg-q --target kind16 --parser gfortran
 cmake -S /tmp/stg-q -B /tmp/stg-q/build --preset=linux-impi
 cmake --build /tmp/stg-q/build -j8
 ctest --test-dir /tmp/stg-q/build -R '^mumps_' --output-on-failure
@@ -30,7 +30,7 @@ If you restrict the staging via `--libraries`, the mumps tests need
 Concretely:
 
 ```bash
-uv run python -m pyengine stage /tmp/stg-q --target kind16 \
+uv run python -m migrator stage /tmp/stg-q --target kind16 \
     --libraries blas blacs ptzblas pbblas pblas \
                 scalapack scalapack_c lapack mumps
 ```

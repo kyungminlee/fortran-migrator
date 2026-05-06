@@ -1,7 +1,7 @@
 """Migration pipeline — orchestrates the full migration for any library.
 
 Usage:
-    from pyengine.pipeline import run_migration
+    from migrator.pipeline import run_migration
     run_migration(recipe_path, output_dir, target_mode=16)
 """
 

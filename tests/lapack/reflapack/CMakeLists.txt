@@ -1,7 +1,7 @@
 # reflapack_quad — quad-precision Netlib LAPACK reference.
 #
 # Built from the vendored Netlib LAPACK sources (copied to
-# ${staging}/_reflapack_src by `pyengine stage`) compiled with gfortran's
+# ${staging}/_reflapack_src by `migrator stage`) compiled with gfortran's
 # -freal-8-real-16, which promotes REAL(KIND=8) and DOUBLE PRECISION
 # entities to REAL(KIND=16) without renaming routines. The resulting
 # library exposes the standard D/Z routine names (DGESV, DGETRF, ZHEEV,
@@ -31,7 +31,7 @@ endif()
 set(_reflap_dir ${CMAKE_SOURCE_DIR}/_reflapack_src)
 if(NOT IS_DIRECTORY ${_reflap_dir})
     message(STATUS "tests/lapack/reflapack: ${_reflap_dir} not found "
-                   "(expected to be copied by `pyengine stage`); "
+                   "(expected to be copied by `migrator stage`); "
                    "falling back to system -llapack.")
     add_library(reflapack_quad INTERFACE)
     target_link_libraries(reflapack_quad INTERFACE lapack refblas_quad)

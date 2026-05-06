@@ -2,7 +2,7 @@
 
 **fortran-migrator** provides a multi-step pipeline to migrate numerical Fortran/C libraries to extended precision.
 
-The tool is primarily used through the Python engine (`pyengine`) in `src/`.
+The tool is primarily used through the Python engine (`migrator`) in `src/`.
 
 ## Prerequisite: uv
 
@@ -21,7 +21,7 @@ The most common way to use the tool is the `run` command, which executes the ful
 
 ```bash
 cd src
-uv run python -m pyengine run ../recipes/blas.yaml work/ --target kind16
+uv run python -m migrator run ../recipes/blas.yaml work/ --target kind16
 ```
 
 ## Target Selection
@@ -36,7 +36,7 @@ The `--target` option selects the precision target. It accepts either a built-in
 
 Example:
 ```bash
-uv run python -m pyengine migrate ../recipes/blas.yaml output/ --target multifloats
+uv run python -m migrator migrate ../recipes/blas.yaml output/ --target multifloats
 ```
 
 ## CLI Commands
@@ -47,7 +47,7 @@ All commands are run from the `src/` directory.
 Performs the source-to-source rewriting step.
 
 ```bash
-uv run python -m pyengine migrate ../recipes/blas.yaml output/ --target kind16
+uv run python -m migrator migrate ../recipes/blas.yaml output/ --target kind16
 ```
 *   `recipe`: Path to the library's YAML recipe.
 *   `output_dir`: Where to write the migrated files.
@@ -60,7 +60,7 @@ uv run python -m pyengine migrate ../recipes/blas.yaml output/ --target kind16
 Performs heuristic checks on migrated source files to identify potential issues.
 
 ```bash
-uv run python -m pyengine verify output/
+uv run python -m migrator verify output/
 ```
 Checks for:
 *   Residual precision types (e.g., `DOUBLE PRECISION` that wasn't converted).
@@ -73,7 +73,7 @@ Compiles and archives the migrated files into static libraries. It produces two 
 2.  `lib<library>_common.a`: Contains precision-independent routines.
 
 ```bash
-uv run python -m pyengine build ../recipes/blas.yaml output/ --target kind16 --fc gfortran
+uv run python -m migrator build ../recipes/blas.yaml output/ --target kind16 --fc gfortran
 ```
 *   `--fc`: Path to the Fortran compiler (defaults to `gfortran`).
 
@@ -81,7 +81,7 @@ uv run python -m pyengine build ../recipes/blas.yaml output/ --target kind16 --f
 Reports every co-family pair whose migrated text differs (both halves migrated in memory with a heavy canonicalizer). Useful for preliminary exploration.
 
 ```bash
-uv run python -m pyengine diverge ../recipes/blas.yaml --target kind16
+uv run python -m migrator diverge ../recipes/blas.yaml --target kind16
 ```
 *   `--grep`: Regex to only show entries with diff matching this pattern.
 *   `--exclude`: Regex to drop entries whose diff matches this pattern.
@@ -92,7 +92,7 @@ uv run python -m pyengine diverge ../recipes/blas.yaml --target kind16
 Post-migration verification: reads each pair's canonical from disk, re-migrates the S/C sibling in memory, and compares with a light normalizer. This is the authoritative convergence check.
 
 ```bash
-uv run python -m pyengine converge ../recipes/blas.yaml output/ --target kind16
+uv run python -m migrator converge ../recipes/blas.yaml output/ --target kind16
 ```
 *   Same filtering options as `diverge` (`--grep`, `--exclude`, `--context`, `--full`).
 
@@ -102,7 +102,7 @@ See [Convergence Testing](#convergence-testing) for the underlying methodology.
 Runs the full pipeline: migrate → converge → verify → build.
 
 ```bash
-uv run python -m pyengine run ../recipes/blas.yaml work/ --target kind16
+uv run python -m migrator run ../recipes/blas.yaml work/ --target kind16
 ```
 
 ## Convergence Testing

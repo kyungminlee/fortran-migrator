@@ -91,14 +91,14 @@ hooks:
 1. `cmake/CMakeLists.txt` (the unified build) ends with
    `add_subdirectory(tests)` if `tests/` is present in the staging
    directory.
-2. `src/pyengine/__main__.py:cmd_stage` copies both `tests/` and
+2. `src/migrator/__main__.py:cmd_stage` copies both `tests/` and
    `external/lapack-3.12.1/BLAS/SRC/` (renamed to `_refblas_src/`)
    into the staging directory, making it self-contained.
 
 So the only command needed to test a target is:
 
 ```bash
-python -m pyengine stage /tmp/staging --target kind16 --libraries blas
+python -m migrator stage /tmp/staging --target kind16 --libraries blas
 cmake -S /tmp/staging -B /tmp/staging/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/staging/build -j8
 ctest --test-dir /tmp/staging/build

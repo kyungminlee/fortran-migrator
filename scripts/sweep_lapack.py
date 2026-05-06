@@ -18,11 +18,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / 'src'))
 
-from pyengine.target_mode import load_target  # noqa: E402
-from pyengine.fortran_migrator import migrate_file_to_string  # noqa: E402
-from pyengine.symbol_scanner import scan_symbols  # noqa: E402
-from pyengine.prefix_classifier import classify_symbols  # noqa: E402
-from pyengine.config import load_recipe  # noqa: E402
+from migrator.target_mode import load_target  # noqa: E402
+from migrator.fortran_migrator import migrate_file_to_string  # noqa: E402
+from migrator.symbol_scanner import scan_symbols  # noqa: E402
+from migrator.prefix_classifier import classify_symbols  # noqa: E402
+from migrator.config import load_recipe  # noqa: E402
 
 
 def _migrate_one(args):

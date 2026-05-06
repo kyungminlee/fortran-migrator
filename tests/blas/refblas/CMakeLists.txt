@@ -1,7 +1,7 @@
 # refblas_quad — quad-precision Netlib BLAS reference.
 #
 # Built from the vendored Netlib BLAS sources (copied to
-# ${staging}/_refblas_src by `pyengine stage`) compiled with gfortran's
+# ${staging}/_refblas_src by `migrator stage`) compiled with gfortran's
 # -freal-8-real-16, which promotes REAL(KIND=8) and DOUBLE PRECISION
 # entities to REAL(KIND=16) without renaming routines. The resulting
 # library exposes the standard D/Z routine names (DGEMM, DDOT, ZAXPY,
@@ -31,7 +31,7 @@ endif()
 set(_refsrc_dir ${CMAKE_SOURCE_DIR}/_refblas_src)
 if(NOT IS_DIRECTORY ${_refsrc_dir})
     message(STATUS "tests/blas/refblas: ${_refsrc_dir} not found "
-                   "(expected to be copied by `pyengine stage`); "
+                   "(expected to be copied by `migrator stage`); "
                    "falling back to system -lblas.")
     add_library(refblas_quad INTERFACE)
     target_link_libraries(refblas_quad INTERFACE blas)

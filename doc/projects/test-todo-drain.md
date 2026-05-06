@@ -2,7 +2,7 @@
 
 This doc tracks the upstream-migrator project that drains the bugs
 documented in the various `tests/<lib>/TODO.md` files. The first cut is
-**upstream-only**: each item is a defect in `src/pyengine/`, a recipe, or
+**upstream-only**: each item is a defect in `src/migrator/`, a recipe, or
 build infra that surfaced while the differential precision tests were
 being written. Library-local test additions (the `LG-*` items in the
 backing plan) are out of scope.
@@ -47,7 +47,7 @@ inode-based dedupe so case-insensitive filesystems do not double-stage.
 ```bash
 uv run pytest src/tests/test_main_globs.py -v
 rm -rf /tmp/stg-k16-ub01
-uv run python -m pyengine stage /tmp/stg-k16-ub01 --target kind16 --libraries blas lapack
+uv run python -m migrator stage /tmp/stg-k16-ub01 --target kind16 --libraries blas lapack
 cmake -S /tmp/stg-k16-ub01 -B /tmp/stg-k16-ub01/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/stg-k16-ub01/build -j8
 nm /tmp/stg-k16-ub01/build/liblapack_common-*.a | grep iparam2stage_  # T iparam2stage_
@@ -78,7 +78,7 @@ still be filtered correctly.
 
 ```bash
 rm -rf /tmp/stg-k16-ub06
-uv run python -m pyengine stage /tmp/stg-k16-ub06 --target kind16 --libraries blas lapack
+uv run python -m migrator stage /tmp/stg-k16-ub06 --target kind16 --libraries blas lapack
 cmake -S /tmp/stg-k16-ub06 -B /tmp/stg-k16-ub06/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/stg-k16-ub06/build -j8 --target reflapack_quad
 nm /tmp/stg-k16-ub06/build/tests/lapack/reflapack/libreflapack_quad.a \
@@ -103,7 +103,7 @@ statement and inserted the converted `PARAMETER` assignments above
 IMPLICIT NONE statement`.
 
 **How**: extended the decl-block walker in
-`src/pyengine/fortran_migrator.py` (the `insert_use_multifloats`
+`src/migrator/fortran_migrator.py` (the `insert_use_multifloats`
 function) to skip lines starting with `#`. The body of the `#if/#endif`
 block in this position is itself decl-only (`use omp_lib`) and is
 already matched by the existing `USE` keyword check, so just skipping
@@ -117,7 +117,7 @@ fixture with the same OPENMP-guard pattern and asserts ordering.
 ```bash
 uv run pytest src/tests/test_multifloats_transforms.py -k 'openmp_directive' -v
 rm -rf /tmp/stg-mf-ub02
-uv run python -m pyengine stage /tmp/stg-mf-ub02 --target multifloats --libraries blas lapack
+uv run python -m migrator stage /tmp/stg-mf-ub02 --target multifloats --libraries blas lapack
 cmake -S /tmp/stg-mf-ub02 -B /tmp/stg-mf-ub02/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/stg-mf-ub02/build -j8 --target tlapack
 nm /tmp/stg-mf-ub02/build/libtlapack-*.a | awk '/^[0-9a-f]+ T (tsytrd_sb2st_|vhetrd_hb2st_)$/'
@@ -167,7 +167,7 @@ re-stagings and is target-scoped.
 
 ```bash
 rm -rf /tmp/stg-k16-ub03
-uv run python -m pyengine stage /tmp/stg-k16-ub03 --target kind16 --libraries blas blacs lapack
+uv run python -m migrator stage /tmp/stg-k16-ub03 --target kind16 --libraries blas blacs lapack
 cmake -S /tmp/stg-k16-ub03 -B /tmp/stg-k16-ub03/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/stg-k16-ub03/build -j8
 
@@ -224,9 +224,9 @@ copy 8 of those bytes, leaving the high half garbage. The
 `pzher2k` rank-2k test surfaced this as `max-rel-err ≈ 1.0`.
 
 **How**: added a new helper `_apply_aliases_to_original` in
-`src/pyengine/c_migrator.py` that applies the recipe's
+`src/migrator/c_migrator.py` that applies the recipe's
 `c_type_aliases` rules AND a new `c_pointer_cast_aliases` rule (also
-new, plumbed through `src/pyengine/config.py` and the pipeline) to
+new, plumbed through `src/migrator/config.py` and the pipeline) to
 copy-original C sources. Distinct from the cloned-file pass because
 it omits the broad `double` → `REAL_TYPE` substitution — copy-originals
 contain precision-dispatch logic (`switch( TYPE->type ) { case DCPLX:
@@ -243,7 +243,7 @@ verification.
 ```bash
 uv run pytest src/tests/test_c_migrator_multifloats.py -k 'aliases_to_original' -v
 rm -rf /tmp/stg-k16-ub04
-uv run python -m pyengine stage /tmp/stg-k16-ub04 --target kind16 \
+uv run python -m migrator stage /tmp/stg-k16-ub04 --target kind16 \
   --libraries blas blacs lapack ptzblas pbblas pblas
 grep cmplx16 /tmp/stg-k16-ub04/pblas/src/PB_Ctzher2k.c             # zero hits
 grep '(double\*)' /tmp/stg-k16-ub04/pblas/src/PB_Cconjg.c          # zero hits
@@ -269,7 +269,7 @@ declare `float* AMAX` / `double* AMAX` and the substituted casts
 yielded `float64x2`-typed RHS values that C++ refuses to assign
 to native scalar lvalues.
 
-Refined: in `src/pyengine/c_migrator.py`, scope the alias pass to
+Refined: in `src/migrator/c_migrator.py`, scope the alias pass to
 either (a) precision-independent dispatchers (not in `rename_map`,
 applied on every target) or (b) precision-prefixed originals
 (in `rename_map`, applied **only** when `target_mode.is_kind_based`).
@@ -311,7 +311,7 @@ follow-up project that touches `tests/pblas/`.
 
 ```bash
 rm -rf /tmp/stg-mf-ub05
-uv run python -m pyengine stage /tmp/stg-mf-ub05 --target multifloats \
+uv run python -m migrator stage /tmp/stg-mf-ub05 --target multifloats \
   --libraries blas blacs lapack ptzblas pbblas pblas
 grep -A1 "extern \"C\"" /tmp/stg-mf-ub05/pblas/src/pdgemm_.c | head -3
 cmake -S /tmp/stg-mf-ub05 -B /tmp/stg-mf-ub05/build -DCMAKE_BUILD_TYPE=Release

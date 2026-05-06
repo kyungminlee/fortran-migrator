@@ -1,4 +1,4 @@
-"""Unit tests for the multifloats branch of pyengine.fortran_migrator.
+"""Unit tests for the multifloats branch of migrator.fortran_migrator.
 
 These tests cover the per-pass transformations in isolation plus a few
 small end-to-end migrations of synthetic BLAS-style sources. They run
@@ -11,8 +11,8 @@ import textwrap
 
 import pytest
 
-from pyengine.target_mode import load_target
-from pyengine.fortran_migrator import (
+from migrator.target_mode import load_target
+from migrator.fortran_migrator import (
     replace_type_decls,
     replace_literals,
     replace_intrinsic_calls,
@@ -671,14 +671,14 @@ def test_canonicalize_for_compare_strips_multifloats(mf):
     """The convergence canonicalizer must strip real64x2(...) wrappers
     and TYPE(real64x2) so S/D pairs migrated to multifloats canonicalize
     to the same text as the kind-based canonicalization would."""
-    from pyengine.pipeline import _canonicalize_for_compare
+    from migrator.pipeline import _canonicalize_for_compare
     a = "      X = real64x2('1.0D+0') + real64x2('2.0D+0')"
     b = "      X = 1.0D+0 + 2.0D+0"
     assert _canonicalize_for_compare(a) == _canonicalize_for_compare(b)
 
 
 def test_canonicalize_for_compare_normalizes_type_decl():
-    from pyengine.pipeline import _canonicalize_for_compare
+    from migrator.pipeline import _canonicalize_for_compare
     a = "      TYPE(real64x2) X"
     b = "      DOUBLE PRECISION X"
     # Both should canonicalize to the same form (REAL X after both

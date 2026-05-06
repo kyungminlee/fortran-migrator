@@ -192,7 +192,7 @@ surfaced during that work and are worth keeping written down:
 
 ## Running
 
-Same as PBLAS — configure a staged target (`uv run python -m pyengine
+Same as PBLAS — configure a staged target (`uv run python -m migrator
 stage <dir> --target kind16`), build, and run with `mpirun`:
 
 ```
