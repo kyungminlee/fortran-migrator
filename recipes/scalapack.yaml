@@ -19,10 +19,130 @@ extra_symbol_dirs:
   - external/scalapack-2.2.3/SRC        # re-scan for C symbols (slamov, etc.)
   - external/scalapack-2.2.3/REDIST/SRC # pigemr2d, etc.
 
+# TOOLS/ houses ScaLAPACK's descriptor/grid/communication helpers —
+# numroc_, iceil_, ilcm_, descinit_, pchk1mat_, the pd*/pz* element
+# accessors, pdtreecomb_ (with its embedded DCOMBSSQ), SL_init
+# (sl_gridreshape_), the {s,c,d,z}{matadd,latcpy} families, and the
+# integer-family piXXX helpers. Every symbol a ScaLAPACK routine calls
+# into from TOOLS is sourced from here. The zzdotc.f/zzdotu.f pair is
+# owned by PTZBLAS (migrated via ptzblas.yaml) and is deliberately
+# excluded so the final link isn't ambushed by duplicate xxdotc_/
+# xxdotu_ symbols across two archives.
+extra_migrate_files:
+  # PJLAENV_EP — extended-precision-aware variant of PJLAENV. Lives
+  # under recipes/scalapack/extras/ rather than external/ because it
+  # is a new symbol introduced by the migrator (not a swap of an
+  # upstream file). The 10 callers that pass their own migrated name
+  # to PJLAENV are rerouted via source_overrides below to call
+  # PJLAENV_EP instead, sidestepping upstream PJLAENV's strict
+  # S/D/C/Z precision-letter gate.
+  - recipes/scalapack/extras/pjlaenv_ep.f
+  # PILAENVX_EP is the QR/Hessenberg sibling of PJLAENV_EP — same
+  # S/D/C/Z gate bug at external/scalapack-2.2.3/SRC/pilaenvx.f:212-215
+  # uninitialises the result for migrated names like 'PELAQR0' /
+  # 'PELAQR5' / 'PESYTRD' that the QR eigensolver path passes in.
+  - recipes/scalapack/extras/pilaenvx_ep.f
+  - external/scalapack-2.2.3/TOOLS/ccdotc.f
+  - external/scalapack-2.2.3/TOOLS/ccdotu.f
+  - external/scalapack-2.2.3/TOOLS/chk1mat.f
+  - external/scalapack-2.2.3/TOOLS/clatcpy.f
+  - external/scalapack-2.2.3/TOOLS/cmatadd.f
+  - external/scalapack-2.2.3/TOOLS/dddot.f
+  - external/scalapack-2.2.3/TOOLS/desc_convert.f
+  - external/scalapack-2.2.3/TOOLS/descinit.f
+  - external/scalapack-2.2.3/TOOLS/descset.f
+  - external/scalapack-2.2.3/TOOLS/dlatcpy.f
+  - external/scalapack-2.2.3/TOOLS/dmatadd.f
+  - external/scalapack-2.2.3/TOOLS/dsasum.f
+  - external/scalapack-2.2.3/TOOLS/dscasum.f
+  - external/scalapack-2.2.3/TOOLS/dscnrm2.f
+  - external/scalapack-2.2.3/TOOLS/dsnrm2.f
+  - external/scalapack-2.2.3/TOOLS/iceil.f
+  - external/scalapack-2.2.3/TOOLS/ilacpy.f
+  - external/scalapack-2.2.3/TOOLS/ilcm.f
+  - external/scalapack-2.2.3/TOOLS/indxg2l.f
+  - external/scalapack-2.2.3/TOOLS/indxg2p.f
+  - external/scalapack-2.2.3/TOOLS/indxl2g.f
+  - external/scalapack-2.2.3/TOOLS/infog1l.f
+  - external/scalapack-2.2.3/TOOLS/infog2l.f
+  - external/scalapack-2.2.3/TOOLS/npreroc.f
+  - external/scalapack-2.2.3/TOOLS/numroc.f
+  - external/scalapack-2.2.3/TOOLS/pcchekpad.f
+  - external/scalapack-2.2.3/TOOLS/pccol2row.f
+  - external/scalapack-2.2.3/TOOLS/pcelget.f
+  - external/scalapack-2.2.3/TOOLS/pcelset2.f
+  - external/scalapack-2.2.3/TOOLS/pcelset.f
+  - external/scalapack-2.2.3/TOOLS/pcfillpad.f
+  - external/scalapack-2.2.3/TOOLS/pchkxmat.f
+  - external/scalapack-2.2.3/TOOLS/pclaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pclaread.f
+  - external/scalapack-2.2.3/TOOLS/pclawrite.f
+  - external/scalapack-2.2.3/TOOLS/pcmatadd.f
+  - external/scalapack-2.2.3/TOOLS/pcrow2col.f
+  - external/scalapack-2.2.3/TOOLS/pctreecomb.f
+  - external/scalapack-2.2.3/TOOLS/pdchekpad.f
+  - external/scalapack-2.2.3/TOOLS/pdcol2row.f
+  - external/scalapack-2.2.3/TOOLS/pdelget.f
+  - external/scalapack-2.2.3/TOOLS/pdelset2.f
+  - external/scalapack-2.2.3/TOOLS/pdelset.f
+  - external/scalapack-2.2.3/TOOLS/pdfillpad.f
+  - external/scalapack-2.2.3/TOOLS/pdlaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pdlaread.f
+  - external/scalapack-2.2.3/TOOLS/pdlawrite.f
+  - external/scalapack-2.2.3/TOOLS/pdmatadd.f
+  - external/scalapack-2.2.3/TOOLS/pdrow2col.f
+  - external/scalapack-2.2.3/TOOLS/pdtreecomb.f
+  - external/scalapack-2.2.3/TOOLS/pichekpad.f
+  - external/scalapack-2.2.3/TOOLS/picol2row.f
+  - external/scalapack-2.2.3/TOOLS/pielget.f
+  - external/scalapack-2.2.3/TOOLS/pielset2.f
+  - external/scalapack-2.2.3/TOOLS/pielset.f
+  - external/scalapack-2.2.3/TOOLS/pifillpad.f
+  - external/scalapack-2.2.3/TOOLS/pilaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pirow2col.f
+  - external/scalapack-2.2.3/TOOLS/pitreecomb.f
+  - external/scalapack-2.2.3/TOOLS/pschekpad.f
+  - external/scalapack-2.2.3/TOOLS/pscol2row.f
+  - external/scalapack-2.2.3/TOOLS/pselget.f
+  - external/scalapack-2.2.3/TOOLS/pselset2.f
+  - external/scalapack-2.2.3/TOOLS/pselset.f
+  - external/scalapack-2.2.3/TOOLS/psfillpad.f
+  - external/scalapack-2.2.3/TOOLS/pslaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pslaread.f
+  - external/scalapack-2.2.3/TOOLS/pslawrite.f
+  - external/scalapack-2.2.3/TOOLS/psmatadd.f
+  - external/scalapack-2.2.3/TOOLS/psrow2col.f
+  - external/scalapack-2.2.3/TOOLS/pstreecomb.f
+  - external/scalapack-2.2.3/TOOLS/pzchekpad.f
+  - external/scalapack-2.2.3/TOOLS/pzcol2row.f
+  - external/scalapack-2.2.3/TOOLS/pzelget.f
+  - external/scalapack-2.2.3/TOOLS/pzelset2.f
+  - external/scalapack-2.2.3/TOOLS/pzelset.f
+  - external/scalapack-2.2.3/TOOLS/pzfillpad.f
+  - external/scalapack-2.2.3/TOOLS/pzlaprnt.f
+  - external/scalapack-2.2.3/TOOLS/pzlaread.f
+  - external/scalapack-2.2.3/TOOLS/pzlawrite.f
+  - external/scalapack-2.2.3/TOOLS/pzmatadd.f
+  - external/scalapack-2.2.3/TOOLS/pzrow2col.f
+  - external/scalapack-2.2.3/TOOLS/pztreecomb.f
+  - external/scalapack-2.2.3/TOOLS/SL_init.f
+  - external/scalapack-2.2.3/TOOLS/slatcpy.f
+  - external/scalapack-2.2.3/TOOLS/sltimer.f
+  - external/scalapack-2.2.3/TOOLS/smatadd.f
+  - external/scalapack-2.2.3/TOOLS/ssdot.f
+  - external/scalapack-2.2.3/TOOLS/zlatcpy.f
+  - external/scalapack-2.2.3/TOOLS/zmatadd.f
+
 prefix:
   style: scalapack  # P + S/D/C/Z
 
-skip_files: []
+skip_files:
+  # PJLAENV / PILAENVX are replaced in the migrated archive by their
+  # *_EP variants (see extras/p{jl,il}aenv*_ep.f and the extra_renames
+  # entries below). Skip the upstream files so they don't get migrated
+  # to duplicate symbols.
+  - PJLAENV
+  - PILAENVX
 
 # Override D/Z-first canonical selection for pairs where the Z half
 # carries an upstream bug that the C half does not. PZUNGQL / PZUNML2
@@ -33,7 +153,142 @@ skip_files: []
 prefer_source:
   - PCUNGQL   # fixes restore bug in pzungql.f:292-293
   - PCUNML2   # fixes restore bug in pzunml2.f:394-395
+  # Pin the D/Z half as canonical so the source_overrides on
+  # pdlanhs.f / pzlanhs.f win convergence (the canonical-rank
+  # picker doesn't recognize ScaLAPACK's pd*/pz* prefix shape, so
+  # without an explicit pin it sorts pclanhs.f alphabetically first
+  # and that un-fixed copy becomes canonical). The corresponding
+  # source_overrides entries supply the bug-fixed PD/PZ bodies.
+  - PDLANHS
+  - PZLANHS
+  # Same pin reason as PDLANHS/PZLANHS: the source_overrides for
+  # PDGEEQU/PZGEEQU only patch the D/Z half. Without an explicit
+  # prefer_source pin, the canonical-rank picker sorts pcgeequ.f
+  # alphabetically first and the un-fixed copy becomes canonical.
+  - PDGEEQU
+  - PZGEEQU
+  # Same pin reason: source_overrides for PDPOSVX/PZPOSVX patch the
+  # LWMIN-too-small upstream bug; pin the D/Z half so the canonical-
+  # rank picker doesn't choose an alphabetically-earlier S/C copy.
+  - PDPOSVX
+  - PZPOSVX
+  # Same pin reason: source_overrides for PDLARZB/PZLARZB patch the
+  # PBDTRAN/PBZTRAN LDC mismatch (M+ICOFFV vs L+ICOFFV); pin the D/Z
+  # half so the canonical-rank picker doesn't pick the un-fixed
+  # alphabetically-earlier S/C copy.
+  - PDLARZB
+  - PZLARZB
+  # Same pin reason: source_overrides for PDORMRZ/PZUNMRZ patch the
+  # post-loop-condition copy-paste bug (post-loop should be the
+  # complement of pre-loop, not a duplicate). Pin the D/Z half.
+  - PDORMRZ
+  - PZUNMRZ
+  # Same pin reason: source_overrides for PDLARZ/PZLARZ patch the
+  # MPV/NQV undersizing and the DAXPY stride bug. Pin the D/Z half.
+  - PDLARZ
+  - PZLARZ
+  # Same pin reason: source_overrides for PZLARZC patch the same
+  # buffer/stride bugs in the Q**H variant. Pin to dominate PCLARZC.
+  - PZLARZC
+
+# Mirror the scalapack_c.yaml rename for pdlaiectb_/pdlaiectl_: the
+# Fortran callers PDSTEBZ / PDSYEVX / PDSYGVX / PZHEEVX / PZHEGVX
+# directly reference these C helpers, so the migrated callers (pqstebz
+# etc.) need to call into the extended-precision clones rather than
+# the standard-precision originals (which take double*, not QREAL*).
+extra_renames:
+  PDLAIECTB: P{RPU}LAIECTB
+  PDLAIECTL: P{RPU}LAIECTL
+  # Reroute every PJLAENV call site to PJLAENV_EP, the extended-
+  # precision-aware variant shipped from recipes/scalapack/extras/.
+  # Upstream PJLAENV's strict S/D/C/Z gate returns uninitialised for
+  # migrated names like 'PESYTTRD' / 'PXHETTRD'. PJLAENV is added to
+  # skip_files below so the upstream pjlaenv.f isn't migrated
+  # (otherwise its FUNCTION PJLAENV declaration would be renamed to
+  # FUNCTION PJLAENV_EP and clash with our extras file).
+  PJLAENV: PJLAENV_EP
+  PILAENVX: PILAENVX_EP
+
+# Override upstream ScaLAPACK 2.2.3 sources whose contents we patch
+# locally (without editing external/). The replacement file is in
+# upstream shape (DOUBLE PRECISION names, dgemm-style call sites) and
+# goes through the normal migration pipeline, so a single override
+# produces correctly-renamed/promoted output for every target.
+source_overrides:
+  pdlanhs.f: scalapack/source_overrides/pdlanhs.f
+  pzlanhs.f: scalapack/source_overrides/pzlanhs.f
+  # PDGEEQU / PZGEEQU column-scale RCMAX/RCMIN/INFO reductions used the
+  # 'Columnwise' axis where 'Rowwise' is needed; under multi-MYCOL grids
+  # COLCND was computed from each grid column's local block instead of
+  # the global. Extends the override pattern; see the body comment.
+  pdgeequ.f: scalapack/source_overrides/pdgeequ.f
+  pzgeequ.f: scalapack/source_overrides/pzgeequ.f
+  # PDPOSVX / PZPOSVX upstream LWMIN = 3*DESCA(LLD_) is insufficient
+  # for the internal PDPOCON/PZPOCON + PDPORFS/PZPORFS workspace
+  # contracts (see commented prologue at line 311 of either file).
+  # The internal PDPOCON / PZPOCON call then aborts with INFO=-10
+  # ("LWORK too small") on every grid above the smallest. The override
+  # restores the documented MAX(PDPOCON,PDPORFS) formula.
+  pdposvx.f: scalapack/source_overrides/pdposvx.f
+  pzposvx.f: scalapack/source_overrides/pzposvx.f
+  # PDLARZB / PZLARZB SIDE='L' branch passed M+ICOFFV (the C-row count)
+  # as PBDTRAN/PBZTRAN's N argument while sizing the destination buffer
+  # WORK( IPV ) / LV from MPC20 = local rows of L. Whenever M > L
+  # (typical: M = K+L from PDORMRZ/PZUNMRZ), PBDTRAN's LDC contract
+  # `LDC >= NUMROC( N_arg, NBV, MYROW, ICROW2, NPROW )` fails — the
+  # transpose silently no-ops via PXERBLA(INFO=11) and the trailing
+  # GEMM multiplies uninitialised data into C, surfacing as a ~1.3x
+  # numerical-corruption error in PDORMRZ/PZUNMRZ. The override changes
+  # M+ICOFFV to L+ICOFFV in the PBDTRAN call (and matching MQV0
+  # computation), which matches the only-K×L-meaningful row-stored RZ
+  # convention.
+  pdlarzb.f: scalapack/source_overrides/pdlarzb.f
+  pzlarzb.f: scalapack/source_overrides/pzlarzb.f
+  # PDORMRZ / PZUNMRZ post-loop condition is a copy-paste of the pre-
+  # loop condition (line 458 vs 416 in pdormrz.f, line 459 vs 417 in
+  # pzunmrz.f). For SIDE/TRANS combinations (LEFT,NOTRAN) and
+  # (RIGHT,TRANS), the leftover-block PDORMR3/PZUNMR3 call never fires
+  # — neither pre nor post — leaving the trailing partial-MB block of
+  # reflectors unapplied. The mainline DO loop also misses the missing
+  # block due to its asymmetric I1/I2 bounds. The override fixes the
+  # post-loop condition to be the complement of the pre-loop, matching
+  # the correct structure in PDORMRQ/PZUNMRQ.
+  pdormrz.f: scalapack/source_overrides/pdormrz.f
+  pzunmrz.f: scalapack/source_overrides/pzunmrz.f
+  # PDLARZ / PZLARZ carry two upstream bugs.
+  # (a) Buffer undersizing: MPV (SIDE='L') / NQV (SIDE='R') were
+  #     computed from V's distribution (IVROW/IROFFV/MB_V or
+  #     IVCOL/ICOFFV/NB_V), but the row-V/col-V P?TRNV calls transpose
+  #     V into sub(C2)'s procrow/proccol and write sub(C2)'s local
+  #     count. When PDORMR3/PZUNMR3 iterates IV/JV across blocks the
+  #     P?LARZ alignment restriction is violated and the receiver is
+  #     undersized by 1-3 elements — observed as glibc
+  #     'corrupted size vs. prev_size' aborts on NPROW>1 grids with
+  #     non-uniform A row distribution. Override redefines MPV/NQV
+  #     from sub(C2)'s distribution.
+  # (b) DAXPY stride: six DAXPY/ZAXPY calls into WORK/WORK(IPW) used
+  #     INCY = MAX(1,NQC2) (a leading dimension) where WORK is a
+  #     contiguous vector — correct stride is 1, matching LAPACK's
+  #     DLARZ/ZLARZ. With NQC2>1 the previous stride could skip past
+  #     the buffer.
+  pdlarz.f: scalapack/source_overrides/pdlarz.f
+  pzlarz.f: scalapack/source_overrides/pzlarz.f
+  # PZLARZC carries the same MPV/NQV undersizing and ZAXPY-stride bugs
+  # as PZLARZ (byte-identical formulas; PZLARZC is just the Q**H
+  # variant called from PZUNMR3 when TRANS='C'). Without this fix
+  # PZUNMRZ SIDE='L' for the conjugate-transpose path produces
+  # numerically corrupted output (~factor of 2-2.5 off). PCLARZC has
+  # the same bug; the migrator does not need a separate pclarzc
+  # override because the prefer_source pin below routes through
+  # PZLARZC.
+  pzlarzc.f: scalapack/source_overrides/pzlarzc.f
 
 # local_renames: (reserved for non-precision local-variable drift like
 # CONJTOPH→TTOPH that isn't an S↔D / C↔Z prefix swap. Precision-prefix
 # drift is now auto-filtered at diff time — see _filter_precision_drift.)
+
+# No hand-patched Fortran overrides needed. With multifloats prefixes
+# M/W, the V→VCOPY collisions in pXlahqr/pXlaqr1 and the T→TSCAL
+# collision in pvlattrs no longer occur — the renamed BLAS routines
+# (WCOPY, MSCAL) don't shadow any local in the affected files.
+

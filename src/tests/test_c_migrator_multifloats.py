@@ -19,12 +19,23 @@ import pytest
 from pyengine.target_mode import load_target
 from pyengine.c_migrator import (
     _build_sub_vars,
+    _apply_aliases_to_original,
     _apply_overrides,
     _build_rename_regex,
     _make_rename_substituter,
+    _migrate_blacs_c_directory,
     _patch_bdef_header,
     migrate_c_file_to_string,
 )
+
+
+# Multifloats prefix letters, derived from the loaded target (so tests
+# don't have to be edited every time the prefix is changed).
+_MF = load_target('multifloats')
+_RP = _MF.prefix_map['R'].lower()       # real-prefix, lower
+_CP = _MF.prefix_map['C'].lower()       # complex-prefix, lower
+_RPU = _MF.prefix_map['R']              # real-prefix, upper
+_CPU = _MF.prefix_map['C']              # complex-prefix, upper
 
 
 # ---------------------------------------------------------------------------
@@ -35,17 +46,17 @@ from pyengine.c_migrator import (
 def test_build_sub_vars_multifloats_struct_types():
     mf = load_target('multifloats')
     v = _build_sub_vars(mf)
-    assert v['REAL_TYPE'] == 'float64x2_t'
-    assert v['COMPLEX_TYPE'] == 'complex128x2_t'
-    assert v['C_REAL_TYPE'] == 'float64x2_t'
+    assert v['REAL_TYPE'] == 'float64x2'
+    assert v['COMPLEX_TYPE'] == 'complex64x2'
+    assert v['C_REAL_TYPE'] == 'float64x2'
     assert v['MPI_REAL'] == 'MPI_FLOAT64X2'
-    assert v['MPI_COMPLEX'] == 'MPI_COMPLEX128X2'
+    assert v['MPI_COMPLEX'] == 'MPI_COMPLEX64X2'
     assert v['MPI_SUM_REAL'] == 'MPI_DD_SUM'
     assert v['MPI_SUM_COMPLEX'] == 'MPI_ZZ_SUM'
-    assert v['RP'] == 'dd'
-    assert v['CP'] == 'zz'
-    assert v['RPU'] == 'DD'
-    assert v['CPU'] == 'ZZ'
+    assert v['RP'] == _RP
+    assert v['CP'] == _CP
+    assert v['RPU'] == _RPU
+    assert v['CPU'] == _CPU
 
 
 def test_build_sub_vars_kind16_unchanged():
@@ -100,17 +111,17 @@ def test_blacs_real_clone_multifloats(tmp_path):
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
-    assert new_name == 'BI_ddvvsum.c'
-    assert 'float64x2_t *v1' in text
-    assert 'float64x2_t *v2' in text
+    assert new_name == f'BI_{_RP}vvsum.c'
+    assert 'float64x2 *v1' in text
+    assert 'float64x2 *v2' in text
     assert 'MPI_FLOAT64X2' in text
     assert 'MPI_DOUBLE' not in text
     # MPI_SUM must be rewritten to the user-defined op
     assert 'MPI_DD_SUM' in text
     assert 'MPI_SUM,' not in text  # the old constant is gone
     # Routine name renames cover both Cd* and BI_d* prefixes
-    assert 'Cddgebs2d_aux' in text
-    assert 'BI_ddMPI_sum' in text
+    assert f'C{_RP}gebs2d_aux' in text
+    assert f'BI_{_RP}MPI_sum' in text
 
 
 def test_blacs_real_clone_kind16_still_uses_mpi_sum(tmp_path):
@@ -158,14 +169,14 @@ def test_blacs_complex_clone_multifloats(tmp_path):
     result = migrate_c_file_to_string(src, target)
     assert result is not None
     new_name, text = result
-    assert new_name == 'BI_zzvvsum.c'
-    assert 'complex128x2_t *v1' in text
-    assert 'float64x2_t *r1' in text
-    assert 'MPI_COMPLEX128X2' in text
+    assert new_name == f'BI_{_CP}vvsum.c'
+    assert 'complex64x2 *v1' in text
+    assert 'float64x2 *r1' in text
+    assert 'MPI_COMPLEX64X2' in text
     # Complex files use the zz reduction op
     assert 'MPI_ZZ_SUM' in text
     assert 'MPI_SUM,' not in text
-    assert 'Czzgebs2d_aux' in text
+    assert f'C{_CP}gebs2d_aux' in text
 
 
 # ---------------------------------------------------------------------------
@@ -197,11 +208,11 @@ def test_patch_bdef_header_multifloats_includes_mfc_header(tmp_path):
     assert '__float128' not in out
     assert 'typedef __float128' not in out
     # Forward decls for the BI_*mvcopy/vmcopy helpers still present
-    assert 'BI_ddmvcopy' in out
-    assert 'BI_ddvmcopy' in out
+    assert f'BI_{_RP}mvcopy' in out
+    assert f'BI_{_RP}vmcopy' in out
     # Name-mangling defines for the dd/zz prefixes
-    assert 'ddgamn2d_' in out
-    assert 'zzgamn2d_' in out
+    assert f'{_RP}gamn2d_' in out
+    assert f'{_CP}gamn2d_' in out
 
 
 def test_patch_bdef_header_kind16_emits_legacy_typedef(tmp_path):
@@ -227,20 +238,21 @@ def test_apply_overrides_overwrites_clone(tmp_path):
     src_dir = tmp_path / 'src'
     src_dir.mkdir()
 
+    name = f'BI_{_RP}vvsum.c'
     # Pre-existing clone (e.g. produced by the regex pass) -- will be
     # overwritten.
-    (output_dir / 'BI_ddvvsum.c').write_text('// clone produced by regex\n')
+    (output_dir / name).write_text('// clone produced by regex\n')
 
     # Hand-written override.
-    override_text = '// hand-written override\nvoid BI_ddvvsum(...) {}\n'
-    (src_dir / 'BI_ddvvsum.c').write_text(override_text)
+    override_text = f'// hand-written override\nvoid BI_{_RP}vvsum(...) {{}}\n'
+    (src_dir / name).write_text(override_text)
 
     applied = _apply_overrides(
         output_dir,
-        [(src_dir / 'BI_ddvvsum.c', 'BI_ddvvsum.c')],
+        [(src_dir / name, name)],
     )
-    assert applied == ['BI_ddvvsum.c']
-    assert (output_dir / 'BI_ddvvsum.c').read_text() == override_text
+    assert applied == [name]
+    assert (output_dir / name).read_text() == override_text
 
 
 def test_apply_overrides_missing_source_raises(tmp_path):
@@ -249,8 +261,98 @@ def test_apply_overrides_missing_source_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         _apply_overrides(
             output_dir,
-            [(tmp_path / 'does_not_exist.c', 'BI_ddvvsum.c')],
+            [(tmp_path / 'does_not_exist.c', f'BI_{_RP}vvsum.c')],
         )
+
+
+# ---------------------------------------------------------------------------
+# _migrate_blacs_c_directory -- source_overrides
+# ---------------------------------------------------------------------------
+
+
+def _stub_bdef_header() -> str:
+    """Minimal Bdef.h that the BLACS migrator will leave alone (no
+    SCOMPLEX typedef means _patch_bdef_header is a no-op)."""
+    return '/* stub */\n'
+
+
+def test_blacs_source_overrides_replace_upstream(tmp_path):
+    """An override for an upstream basename swaps the file before clone.
+
+    The replacement goes through the same d→{rp} substitution as the
+    upstream file, so the override's body — not the upstream body —
+    determines what lands in the migrated clone.
+    """
+    src = tmp_path / 'src'
+    src.mkdir()
+    (src / 'Bdef.h').write_text(_stub_bdef_header())
+    (src / 'dgsum2d_.c').write_text(
+        '#include "Bdef.h"\n'
+        'void dgsum2d_(void) { /* upstream body, MPI_SUM */ }\n'
+    )
+
+    override_dir = tmp_path / 'overrides'
+    override_dir.mkdir()
+    (override_dir / 'dgsum2d_.c').write_text(
+        '#include "Bdef.h"\n'
+        'void BI_dMPI_sum(void *, void *, int *, int *);\n'
+        'void dgsum2d_(void) { /* OVERRIDDEN: uses MPI_Op_create */ }\n'
+    )
+
+    out = tmp_path / 'out'
+    mf = load_target('multifloats')
+    _migrate_blacs_c_directory(
+        src, out, mf, copy_originals=False,
+        source_overrides={'dgsum2d_.c': override_dir / 'dgsum2d_.c'},
+    )
+
+    clone = out / f'{_RP}gsum2d_.c'
+    assert clone.exists(), 'd→prefix clone should be created'
+    text = clone.read_text()
+    assert 'OVERRIDDEN' in text, 'override body, not upstream, should win'
+    # And the d→prefix substitution still ran on the override body —
+    # BI_dMPI_sum is renamed to BI_{rp}MPI_sum (e.g. BI_mMPI_sum).
+    assert f'BI_{_RP}MPI_sum' in text
+
+
+def test_blacs_source_overrides_add_new_source(tmp_path):
+    """An override for a basename that does not exist upstream is
+    treated as a new source file and goes through the clone pipeline.
+
+    This is how ``BI_dMPI_sum.c`` (no upstream counterpart) reaches
+    the migrated archive as ``BI_{rp}MPI_sum.c``.
+    """
+    src = tmp_path / 'src'
+    src.mkdir()
+    (src / 'Bdef.h').write_text(_stub_bdef_header())
+    # Provide BI_dvvsum so the precision-prefix-detection code has a
+    # plausible BLACS-shaped tree even though the test only cares
+    # about the override-only addition.
+    (src / 'BI_dvvsum.c').write_text(
+        '#include "Bdef.h"\n'
+        'void BI_dvvsum(int N, char *v1, char *v2) { (void)N; (void)v1; (void)v2; }\n'
+    )
+
+    override_dir = tmp_path / 'overrides'
+    override_dir.mkdir()
+    (override_dir / 'BI_dMPI_sum.c').write_text(
+        '#include "Bdef.h"\n'
+        'void BI_dMPI_sum(void *in, void *inout, int *N, int *dt)\n'
+        '{ void BI_dvvsum(int, char *, char *); BI_dvvsum(*N, inout, in); }\n'
+    )
+
+    out = tmp_path / 'out'
+    mf = load_target('multifloats')
+    _migrate_blacs_c_directory(
+        src, out, mf, copy_originals=False,
+        source_overrides={'BI_dMPI_sum.c': override_dir / 'BI_dMPI_sum.c'},
+    )
+
+    clone = out / f'BI_{_RP}MPI_sum.c'
+    assert clone.exists(), 'override-only file must produce a clone'
+    text = clone.read_text()
+    assert f'void BI_{_RP}MPI_sum(' in text
+    assert f'BI_{_RP}vvsum' in text  # body's d→rp rewrite ran
 
 
 # ---------------------------------------------------------------------------
@@ -299,3 +401,77 @@ def test_rename_substituter_does_not_match_inside_longer_identifier():
 
     assert pattern.sub(sub, 'pdger_') == 'pdger_'    # untouched
     assert pattern.sub(sub, 'dger_') == 'ddger_'
+
+
+# ---------------------------------------------------------------------------
+# _apply_aliases_to_original — copy-original alias / pointer-cast pass (UB-04)
+# ---------------------------------------------------------------------------
+
+
+def test_aliases_to_original_renames_local_decl():
+    """Regression for UB-04: a precision-independent dispatcher like
+    PB_Ctzher2k declares ``cmplx16 Calph16;`` as a local. The
+    copy-originals path must apply ``c_type_aliases`` so the local
+    declaration becomes ``cmplxQ Calph16;`` on the kind16 target —
+    otherwise PB_Cconjg writes only 16 of 32 bytes into the buffer
+    and the conjugated alpha is corrupted."""
+    src = textwrap.dedent("""\
+        void PB_Ctzher2k(...) {
+            cmplx16 Calph16;
+            int i;
+        }
+    """)
+    template_vars = {'REAL_TYPE': 'quad', 'RPU': 'Q'}
+    aliases = [{'from': ['cmplx', 'cmplx16'], 'to': 'cmplx{RPU}'}]
+    out = _apply_aliases_to_original(src, template_vars, aliases, None)
+    assert 'cmplxQ Calph16;' in out
+    assert 'cmplx16' not in out
+
+
+def test_aliases_to_original_pointer_cast_replacement():
+    """Regression for UB-04: PB_Cconjg.c uses ``((double*)CALPHA)`` and
+    ``((float*)CALPHA)`` to step through scalar buffers in 8-byte and
+    4-byte strides. The copy-originals path must rewrite the casts so
+    a kind16 cmplxQ buffer (32 bytes total, 16 bytes per real component)
+    is stepped in 16-byte strides."""
+    src = textwrap.dedent("""\
+        case DCPLX:
+            ((double*)(CALPHA))[REAL_PART] =  ((double*)(ALPHA))[REAL_PART];
+            ((double*)(CALPHA))[IMAG_PART] = -((double*)(ALPHA))[IMAG_PART];
+            break;
+        case SCPLX:
+            ((float*)(CALPHA))[REAL_PART]  =  ((float*)(ALPHA))[REAL_PART];
+            ((float*)(CALPHA))[IMAG_PART]  = -((float*)(ALPHA))[IMAG_PART];
+            break;
+    """)
+    template_vars = {'REAL_TYPE': 'quad', 'RPU': 'Q'}
+    cast_aliases = [{'from': ['(double*)', '(float*)'], 'to': '({REAL_TYPE}*)'}]
+    out = _apply_aliases_to_original(src, template_vars, None, cast_aliases)
+    assert '(quad*)' in out
+    assert '(double*)' not in out
+    assert '(float*)' not in out
+    # The bare ``DCPLX``/``SCPLX`` dispatch labels must NOT be touched —
+    # they are enum constants, not types. The function deliberately
+    # avoids the broad ``double``/``float`` substitution for this reason.
+    assert 'case DCPLX:' in out
+    assert 'case SCPLX:' in out
+
+
+def test_aliases_to_original_does_not_promote_bare_double_keyword():
+    """The copy-originals pass must NOT do the broad ``double`` →
+    ``REAL_TYPE`` substitution. A precision-independent dispatcher may
+    have a literal ``double`` type that is part of the dispatch logic
+    (e.g. ``case DREAL: double_field = ...``); the broad sub would
+    wrongly turn it into ``quad`` on kind16, breaking SCPLX/DCPLX
+    discrimination."""
+    src = 'double tmp; float other;\n'
+    template_vars = {'REAL_TYPE': 'quad', 'RPU': 'Q'}
+    out = _apply_aliases_to_original(src, template_vars, None, None)
+    # No aliases configured → text unchanged.
+    assert out == src
+
+
+def test_aliases_to_original_no_aliases_is_identity():
+    src = 'cmplx16 X; ((double*)P)[0] = 0.0;\n'
+    out = _apply_aliases_to_original(src, {}, None, None)
+    assert out == src

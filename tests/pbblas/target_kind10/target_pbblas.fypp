@@ -1,0 +1,8 @@
+#:set target         = 'kind10'
+#:set target_name    = 'kind10'
+#:set target_eps     = 'real(epsilon(1.0_10), ep)'
+#:set target_real    = 'real(10)'
+#:set target_complex = 'complex(10)'
+#:set prefix_real    = 'e'
+#:set prefix_complex = 'y'
+#:include 'target_pbblas_body.fypp'

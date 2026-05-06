@@ -24,7 +24,7 @@ compares the results in REAL(KIND=16) space:
 Inputs are generated at REAL(KIND=16). The reference call is direct;
 the target call goes through a per-target wrapper that converts the
 inputs to the target's precision (REAL(KIND=10) for kind10,
-TYPE(float64x2) for multifloats) and converts the result back to quad
+TYPE(real64x2) for multifloats) and converts the result back to quad
 for comparison. Comparison precision is **always REAL(KIND=16)**,
 regardless of which target is being tested.
 
@@ -79,7 +79,7 @@ tests/
     ├── target_kind16/
     │   └── target_blas.f90   ← wraps q/x-prefix routines (passthrough — kind=16 already)
     ├── target_multifloats/
-    │   └── target_blas.f90   ← wraps dd/zz-prefix routines, splits ep ↔ TYPE(float64x2)
+    │   └── target_blas.f90   ← wraps dd/zz-prefix routines, splits ep ↔ TYPE(real64x2)
     ├── level1/               ← 17 BLAS Level 1 tests (dasum, daxpy, …, zscal, dzasum)
     ├── level2/               ← 13 BLAS Level 2 tests (dgemv, dgbmv, …, zhemv, zgerc)
     └── level3/               ← 10 BLAS Level 3 tests (dgemm, dsymm, …, ztrsm)

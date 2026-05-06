@@ -88,6 +88,11 @@ class SymbolClassification:
         C→X/Y). So SGEMM and DGEMM both map to QGEMM; CGEMM and ZGEMM
         both map to XGEMM. Collisions between co-family members are
         expected and checked for convergence at migration time.
+
+        Cross-family collisions (two distinct upstream families
+        producing the same target name) are caught by
+        ``build_rename_map`` below and surface as a RuntimeError so
+        the offending target prefix can be re-picked.
         """
         upper = name.upper()
         family = self._symbol_to_family.get(upper)
@@ -107,6 +112,84 @@ class SymbolClassification:
             new_name = self.target_name(sym, target_mode)
             if new_name and new_name != sym:
                 rename[sym] = new_name
+
+        # Collision diagnostic 1: an orphaned (un-renamed) symbol whose
+        # name equals another symbol's rename target will silently
+        # shadow that target at link time. We hit this with multifloats'
+        # DD/ZZ prefixes: BLAS DDOT renamed to DDDOT collided with
+        # ScaLAPACK's orphaned DDDOT wrapper, corrupting pddpotf2.
+        # Surface the conflict so the developer can investigate
+        # (re-pick the prefix, force-rename, etc.) rather than letting
+        # the migrator emit a silent miscompile.
+        #
+        # Collision diagnostic 2: two distinct source symbols both
+        # rename to the same target. We hit this with multifloats'
+        # D→T, Z→V where DVASUM and DZASUM both rename to TVASUM.
+        # That's a hard merge; one of them needs an explicit
+        # ``name_overrides`` entry in targets/<target>.yaml.
+        targets: dict[str, list[str]] = {}
+        for src, tgt in rename.items():
+            targets.setdefault(tgt, []).append(src)
+        collisions = sorted(
+            (tgt, sorted(srcs)) for tgt, srcs in targets.items()
+            if tgt in self.independent
+        )
+        # Flag only CROSS-family collisions. Co-family pairs (SGEMM,
+        # DGEMM) both rename to QGEMM by design — the same family
+        # converges. The dangerous case is two DISTINCT families
+        # (different upstream patterns) producing the same target,
+        # which would silently merge two unrelated routines.
+        cross_family: list[tuple[str, list[str]]] = []
+        for tgt, srcs in targets.items():
+            if len(srcs) <= 1:
+                continue
+            # Two sources are in the same family iff their classifier
+            # entry is the same Python object. id() gives a stable
+            # cross-family discriminator without needing the family
+            # dataclass to be hashable.
+            fam_ids = {id(self._symbol_to_family.get(s.upper())) for s in srcs}
+            if len(fam_ids) > 1:
+                cross_family.append((tgt, sorted(srcs)))
+        cross_family.sort()
+        if cross_family:
+            lines = [
+                f"  {tgt!r}: produced by {srcs}"
+                for tgt, srcs in cross_family
+            ]
+            raise RuntimeError(
+                "prefix-classifier cross-family rename collisions:\n"
+                + "\n".join(lines)
+                + "\n  Two distinct upstream families rename to the "
+                "same target — the migrator would silently merge "
+                "them, leading to nondeterministic link-time symbol "
+                "selection and (typically) a SEGV from a calling "
+                "convention mismatch. Add a ``name_overrides:`` entry "
+                "in targets/<target>.yaml that pins one of the "
+                "conflicting sources to a distinct target name "
+                "(see targets/multifloats.yaml for an example), or "
+                "switch the conflicting prefix to an unused letter "
+                "(W and U are unused across the entire BLAS / LAPACK "
+                "/ ScaLAPACK / MUMPS source corpus)."
+            )
+        if collisions:
+            import sys
+            lines = [
+                f"  {tgt!r}: rename target of {srcs}, "
+                f"but also exists as an orphaned (un-renamed) symbol"
+                for tgt, srcs in collisions
+            ]
+            print(
+                "WARNING: prefix-classifier rename-map collisions:\n"
+                + "\n".join(lines)
+                + "\n  Orphan symbols and rename targets share names; the "
+                "linker may silently pick the wrong definition. If the "
+                "orphan is the intended implementation (e.g. an "
+                "upstream-provided helper), this is benign. Otherwise, "
+                "investigate the family-discovery picker or change the "
+                "target prefix to avoid the overlap.",
+                file=sys.stderr,
+            )
+
         return rename
 
 

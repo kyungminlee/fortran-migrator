@@ -1,0 +1,8 @@
+#:set target            = 'kind16'
+#:set target_name       = 'kind16'
+#:set target_eps        = 'epsilon(1.0_ep)'
+#:set prefix_real       = 'qmumps'
+#:set prefix_complex    = 'xmumps'
+#:set real_struc_mod    = 'qmumps_struc_def'
+#:set complex_struc_mod = 'xmumps_struc_def'
+#:include 'target_mumps_body.fypp'

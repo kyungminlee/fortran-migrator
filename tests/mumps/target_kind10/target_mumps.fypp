@@ -1,0 +1,8 @@
+#:set target            = 'kind10'
+#:set target_name       = 'kind10'
+#:set target_eps        = 'real(epsilon(1.0_10), kind=ep)'
+#:set prefix_real       = 'emumps'
+#:set prefix_complex    = 'ymumps'
+#:set real_struc_mod    = 'emumps_struc_def'
+#:set complex_struc_mod = 'ymumps_struc_def'
+#:include 'target_mumps_body.fypp'

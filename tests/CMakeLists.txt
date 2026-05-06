@@ -4,6 +4,34 @@
 # library was migrated for this target) AND whose CMakeLists.txt
 # exists in the staging copy.
 
+# fypp is used to expand the per-framework target_*_body.fypp template
+# into per-target target_*.f90 sources. Available via `uv run fypp`
+# from the project venv.
+find_program(FYPP fypp REQUIRED)
+
+# Helper for per-target wrapper shims:
+#   add_fypp_source(<out_var> <shim.fypp> <body_dir>)
+# generates <build>/.../<basename>.f90 from <shim.fypp>, with -I
+# pointing at <body_dir> so #:include resolves the shared body file.
+function(add_fypp_source out_var shim_path body_dir)
+    get_filename_component(_stem ${shim_path} NAME_WE)
+    set(_out ${CMAKE_CURRENT_BINARY_DIR}/${_stem}.f90)
+    # Depend on every .fypp in body_dir so edits to the shared body
+    # (or any future #:include sibling) trigger regeneration.
+    file(GLOB _body_fypps CONFIGURE_DEPENDS ${body_dir}/*.fypp)
+    add_custom_command(
+        OUTPUT ${_out}
+        COMMAND ${FYPP} -I ${body_dir} ${shim_path} ${_out}
+        DEPENDS ${shim_path} ${_body_fypps}
+        COMMENT "fypp ${shim_path} -> ${_out}"
+        VERBATIM
+    )
+    set(${out_var} ${_out} PARENT_SCOPE)
+endfunction()
+
+# Per-target conversion library shared by every framework's test wrappers.
+add_subdirectory(common)
+
 foreach(_lib ${STAGED_LIBRARIES})
     set(_libdir ${CMAKE_CURRENT_SOURCE_DIR}/${_lib})
     if(TARGET ${LIB_PREFIX}${_lib}

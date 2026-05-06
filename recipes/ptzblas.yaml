@@ -12,6 +12,21 @@ symbols:
 depends:
   - blas.yaml
 
+# PTZBLAS's zvvdotc.f / zvvdotu.f kernels call ZZDOTC / ZZDOTU, which are
+# wrapper routines defined in ScaLAPACK's TOOLS/ directory. Scanning
+# TOOLS puts ZZDOTC/ZZDOTU into the rename map so the call sites get
+# rewritten to the precision-family equivalent (XDOTC/XDOTU at kind16,
+# EDOTC/EDOTU at kind10, DDZDOTC/DDZDOTU at multifloats). The two
+# wrapper sources themselves are pulled in via extra_migrate_files so
+# the referenced symbol is defined in the migrated PTZBLAS library —
+# without migrating the rest of TOOLS/, which belongs to ScaLAPACK.
+extra_symbol_dirs:
+  - external/scalapack-2.2.3/TOOLS
+
+extra_migrate_files:
+  - external/scalapack-2.2.3/TOOLS/zzdotc.f
+  - external/scalapack-2.2.3/TOOLS/zzdotu.f
+
 prefix:
   style: direct
 

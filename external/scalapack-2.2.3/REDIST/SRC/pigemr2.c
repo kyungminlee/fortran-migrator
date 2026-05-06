@@ -135,14 +135,8 @@ freememory(Int *ptrtobefreed)
  * intersections on the local processor. result must be long enough to
  * contains the result that are stocked in IDESC structure, the function
  * returns the number of intersections found */
-Int 
-scan_intervals(type, ja, jb, n, ma, mb, q0, q1, col0, col1,
-	       result)
-  char  type;
-  Int   ja, jb, n, q0, q1, col0, col1;
-  MDESC *ma, *mb;
-  IDESC *result;
-{
+Int
+scan_intervals(char type, Int ja, Int jb, Int n, MDESC *ma, MDESC *mb, Int q0, Int q1, Int col0, Int col1, IDESC *result){
   Int   offset, j0, j1, templatewidth0, templatewidth1, nbcol0, nbcol1;
   Int   l;	/* local indice on the beginning of the interval */
   assert(type == 'c' || type == 'r');

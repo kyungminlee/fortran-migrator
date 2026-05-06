@@ -282,16 +282,9 @@ static2 Int block2buff();
 static2 void buff2block();
 static2 void gridreshape( Int *ctxtp );
 void
-Cpctrmr2do(uplo, diag, m, n,
-	   ptrmyblock, ia, ja, ma,
-	   ptrmynewblock, ib, jb, mb)
-  char *uplo, *diag;
-  complex *ptrmyblock, *ptrmynewblock;
-/* pointers to the memory location of the matrix and the redistributed matrix */
-  MDESC *ma;
-  MDESC *mb;
-  Int   ia, ja, ib, jb, m, n;
-{
+Cpctrmr2do(char *uplo, char *diag, Int m, Int n,
+           complex *ptrmyblock, Int ia, Int ja, MDESC *ma,
+           complex *ptrmynewblock, Int ib, Int jb, MDESC *mb){
   Int   dummy, nprocs;
   Int   gcontext;
   /* first we initialize a global grid which serve as a reference to
@@ -307,16 +300,10 @@ Cpctrmr2do(uplo, diag, m, n,
 			 * idem B puis ia,ja puis ib,jb */
 #define MAGIC_MAX 100000000
 void
-Cpctrmr2d(uplo, diag, m, n,
-	  ptrmyblock, ia, ja, ma,
-	  ptrmynewblock, ib, jb, mb, globcontext)
-  char *uplo, *diag;
-  complex *ptrmyblock, *ptrmynewblock;
-/* pointers to the memory location of the matrix and the redistributed matrix */
-  MDESC *ma;
-  MDESC *mb;
-  Int   ia, ja, ib, jb, m, n, globcontext;
-{
+Cpctrmr2d(char *uplo, char *diag, Int m, Int n,
+           complex *ptrmyblock, Int ia, Int ja, MDESC *ma,
+           complex *ptrmynewblock, Int ib, Int jb, MDESC *mb,
+           Int globcontext){
   complex *ptrsendbuff, *ptrrecvbuff, *ptrNULL = 0;
   complex *recvptr;
   MDESC newa, newb;

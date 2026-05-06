@@ -10,11 +10,28 @@
 /*
 *  Include files
 */
+#include <string.h>
 #include "../pblas.h"
 #include "../PBpblas.h"
 #include "../PBtools.h"
 #include "../PBblacs.h"
 #include "../PBblas.h"
+
+/*
+*  Size-aware scalar equality check. Upstream hardcodes ``double`` / ``float``
+*  casts to test ALPHA against 0/1, which reads ``sizeof(double)`` /
+*  ``sizeof(float)`` bytes regardless of the actual scalar size. For the
+*  fortran-migrator precision-upgraded types (QREAL, EREAL, float64x2_t),
+*  the scalar is larger than a double, so the hardcoded cast reads only a
+*  prefix — which collides with values like 0.25 in __float128 whose
+*  low 8 bytes are identically zero. That false match triggers the
+*  "alpha == 0 → zero the matrix" fast path and silently wipes C.
+*  ``PB_CSCAL_EQ`` (and _EQR for the real-part-only variant on complex)
+*  use the type's own pre-baked zero/one scalars via memcmp, matching the
+*  full precision-correct byte width on every target.
+*/
+#define PB_CSCAL_EQ( ALPHA, REF, NBYTES ) \
+    ( memcmp( (ALPHA), (REF), (NBYTES) ) == 0 )
 
 #ifdef __STDC__
 void PB_Cplascal( PBTYP_T * TYPE, char * UPLO, char * CONJUG, Int M,
@@ -195,73 +212,52 @@ void PB_Cplascal( TYPE, UPLO, CONJUG, M, N, ALPHA, A, IA, JA, DESCA )
    UploA = Mupcase( UPLO[0] );
    herm  = ( UploA == CALL ? CNOCONJG : Mupcase( CONJUG[0] ) );
 
-   if( type == SREAL )
    {
-      if( ((float*)(ALPHA))[REAL_PART] == ZERO )
+      /* usiz = bytes per real scalar; for complex types the second
+         usiz-byte half holds the imaginary part. TYPE->zero / TYPE->one
+         are pre-baked type-correct scalars (1+0i for complex ``one``),
+         so comparing the real-part prefix works uniformly across
+         {S,D}{REAL,CPLX} and their precision-upgraded migrations. */
+      Int            usiz = TYPE->usiz;
+      char         * zero = TYPE->zero;
+      char         * one  = TYPE->one;
+      if( type == SREAL || type == DREAL )
       {
-         PB_Cplapad( TYPE, UPLO, NOCONJG, M, N, TYPE->zero, TYPE->zero, A, IA,
-                     JA, DESCA );
-         return;
-      }
-      else if( ((float*)(ALPHA))[REAL_PART] == ONE ) return;
-   }
-   else if( type == DREAL )
-   {
-      if( ((double*)(ALPHA))[REAL_PART] == ZERO )
-      {
-         PB_Cplapad( TYPE, UPLO, NOCONJG, M, N, TYPE->zero, TYPE->zero, A, IA,
-                     JA, DESCA );
-         return;
-      }
-      else if( ((double*)(ALPHA))[REAL_PART] == ONE ) return;
-   }
-   else if( type == SCPLX )
-   {
-      if( herm == CCONJG )
-      {
-         if( ((float*)(ALPHA))[REAL_PART] == ZERO )
+         if( PB_CSCAL_EQ( ALPHA, zero, usiz ) )
          {
             PB_Cplapad( TYPE, UPLO, NOCONJG, M, N, TYPE->zero, TYPE->zero, A,
                         IA, JA, DESCA );
             return;
          }
+         else if( PB_CSCAL_EQ( ALPHA, one, usiz ) ) return;
       }
-      else
+      else if( type == SCPLX || type == DCPLX )
       {
-         if( ((float*)(ALPHA))[IMAG_PART] == ZERO )
+         if( herm == CCONJG )
          {
-            if( ((float*)(ALPHA))[REAL_PART] == ZERO )
+            /* Hermitian scaling: only the real part of ALPHA matters,
+               so compare the first ``usiz`` bytes. */
+            if( PB_CSCAL_EQ( ALPHA, zero, usiz ) )
             {
                PB_Cplapad( TYPE, UPLO, NOCONJG, M, N, TYPE->zero, TYPE->zero, A,
                            IA, JA, DESCA );
                return;
             }
-            else if( ((float*)(ALPHA))[REAL_PART] == ONE ) return;
          }
-      }
-   }
-   else if( type == DCPLX )
-   {
-      if( herm == CCONJG )
-      {
-         if( ((double*)(ALPHA))[REAL_PART] == ZERO )
+         else
          {
-            PB_Cplapad( TYPE, UPLO, NOCONJG, M, N, TYPE->zero, TYPE->zero, A,
-                        IA, JA, DESCA );
-            return;
-         }
-      }
-      else
-      {
-         if( ((double*)(ALPHA))[IMAG_PART] == ZERO )
-         {
-            if( ((double*)(ALPHA))[REAL_PART] == ZERO )
+            /* Full complex-scalar scaling: fast paths apply only when
+               the imaginary part is zero. */
+            if( PB_CSCAL_EQ( ALPHA + usiz, zero, usiz ) )
             {
-               PB_Cplapad( TYPE, UPLO, NOCONJG, M, N, TYPE->zero, TYPE->zero, A,
-                           IA, JA, DESCA );
-               return;
+               if( PB_CSCAL_EQ( ALPHA, zero, usiz ) )
+               {
+                  PB_Cplapad( TYPE, UPLO, NOCONJG, M, N, TYPE->zero, TYPE->zero,
+                              A, IA, JA, DESCA );
+                  return;
+               }
+               else if( PB_CSCAL_EQ( ALPHA, one, usiz ) ) return;
             }
-            else if( ((double*)(ALPHA))[REAL_PART] == ONE ) return;
          }
       }
    }

@@ -9,8 +9,42 @@ symbols:
 prefix:
   style: direct
 
-# Cross-precision routines — these mix single and double precision
-# (e.g., double result from single inputs). No single-kind target.
+# Files dropped entirely from the migrated archive:
+#  - DSDOT / SDSDOT — cross-precision routines (single+double mixed).
+#    No single-kind target; not migratable to extended precision.
+#  - LSAME / XERBLA / XERBLA_ARRAY — precision-independent helpers.
+#    They live in the standard-precision archive ``blas`` (built from
+#    the same Netlib sources without -freal-8-real-16) which the
+#    migrated archive PUBLIC-links — no need to ship a duplicate copy
+#    in the extended-precision archive.
 skip_files:
-  - DSDOT    # double result from single·single dot product
-  - SDSDOT   # single result with double accumulator
+  - DSDOT
+  - SDSDOT
+  - LSAME
+  - XERBLA
+  - XERBLA_ARRAY
+
+# Source overrides — patched upstream bodies that go through the normal
+# migration pipeline. dnrm2.f90 / dznrm2.f90 originally embed Blue's
+# scaling constants (tsml/tbig/ssml/sbig) as inline parameter
+# declarations. On the multifloats target the migrator's nuke-rename
+# turns those references into imports of upstream multifloats's
+# DD_TSML/DD_TBIG/DD_SSML/DD_SBIG, which use 1e±100 / 1e±50 magnitudes.
+# Those values cause `(ax * sbig)^2` to overflow at fp64 once
+# ax exceeds ~1e+104, breaking dgesvj's protect-from-underflow
+# up-scaling pass. The overrides re-route the imports through
+# LA_CONSTANTS so the migrator dispatches to LA_CONSTANTS_MF
+# (corrected) / LA_CONSTANTS_EP (already correct) per target.
+source_overrides:
+  dnrm2.f90:  blas/source_overrides/dnrm2.f90
+  dznrm2.f90: blas/source_overrides/dznrm2.f90
+  # drotg/zrotg PARAMETER initializers use `radix(0._wp)**max(...)`
+  # and `sqrt(safmin)`. ** and sqrt are user-defined for the
+  # multifloats target's real64x2 / cmplx64x2 types, so gfortran
+  # rejects them in PARAMETER context. Override moves the constants
+  # to SAVE-then-init-at-first-call. kind10/kind16 are unaffected
+  # (they still get the same numerical values; the PARAMETER vs
+  # SAVE choice only matters for gfortran's PARAMETER-expression
+  # validator).
+  drotg.f90:  blas/source_overrides/drotg.f90
+  zrotg.f90:  blas/source_overrides/zrotg.f90

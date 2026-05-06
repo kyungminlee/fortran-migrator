@@ -8,35 +8,127 @@ symbols:
 
 depends:
   - blas.yaml
+  # XBLAS extended-precision routines are called from the LAPACK
+  # *la_*rfsx_extended iterative-refinement family (qla_gbrfsx_extended,
+  # xla_gerfsx_extended, ...). Declaring xblas as a dep brings its
+  # BLAS_{s,d,c,z}*_x symbols into the classifier's universe, so the
+  # position-5 precision-letter family (BLAS_DGBMV_X ↔ BLAS_SGBMV_X,
+  # BLAS_ZGEMV_X ↔ BLAS_CGEMV_X, ...) is paired and renamed to the
+  # target prefix (BLAS_QGBMV_X / BLAS_XGEMV_X for kind16, etc.) by the
+  # standard classifier — no special-case rename rule needed. Without
+  # this dep the call sites kept their D/Z form and silently linked
+  # against fp64 XBLAS inside a quad/multifloats build.
+  - xblas.yaml
 
 # INSTALL directory contains slamch/dlamch, sroundup_lwork, etc.
 extra_symbol_dirs:
   - external/lapack-3.12.1/INSTALL
 
+# dlamch / droundup_lwork are called from dozens of LAPACK SRC routines
+# (dlascl, dsyev, dgesvd, dgetrf2, …). The files themselves live in
+# INSTALL/ alongside test programs, timer-routine variants, and an
+# already-in-BLAS copy of lsame.f — so we pull just these two into the
+# migrated library instead of sweeping the whole directory.
+extra_migrate_files:
+  - external/lapack-3.12.1/INSTALL/dlamch.f
+  - external/lapack-3.12.1/INSTALL/droundup_lwork.f
+  # ILAENV_EP / ILAENV2STAGE_EP / IPARAM2STAGE_EP — extended-precision-
+  # aware variants of the LAPACK environmental-inquiry helpers. Lives
+  # under recipes/lapack/extras/ rather than external/ because they
+  # are new symbols introduced by the migrator (no upstream
+  # counterpart). The migrator post-pass automatically rewrites every
+  # call site of ILAENV / ILAENV2STAGE / IPARAM2STAGE in migrated
+  # files to the *_EP variants — sidestepping the upstream S/D/C/Z
+  # precision-letter gate that returns uninitialised for migrated
+  # routine names like 'EGEMM'/'PESYTTRD'/'YHETRD'.
+  - recipes/lapack/extras/ilaenv_ep.f
+  - recipes/lapack/extras/ilaenv2stage_ep.f
+  - recipes/lapack/extras/iparam2stage_ep.F
+
 prefix:
   style: direct
 
-# Mixed-precision / iterative-refinement / cross-precision conversion
+# Source overrides — patched upstream bodies that go through the normal
+# migration pipeline. Overrides displace the same-named upstream files
+# in source_dir before the migrator scans them.
+#
+# {s,d,c,z}orbdb3 / unbdb3: upstream LAPACK 3.12.1 passes LDX11 as the
+# INCY argument to the early DROT/SROT/CSROT/ZDROT call inside the
+# I=2..M-P main loop. The rotated row sits in X21, so INCY must be
+# LDX21. When LDX11 /= LDX21 (typical when M-P < P, the actual orbdb3
+# regime) the upstream form strides past the X21 buffer and corrupts
+# heap — manifests as munmap_chunk: invalid pointer on the next free.
+# Identical bug across all four precision variants. Patches change
+# only that single argument.
+source_overrides:
+  dorbdb3.f: lapack/source_overrides/dorbdb3.f
+  sorbdb3.f: lapack/source_overrides/sorbdb3.f
+  zunbdb3.f: lapack/source_overrides/zunbdb3.f
+  cunbdb3.f: lapack/source_overrides/cunbdb3.f
+
+# Files dropped from the migrated archive:
+#  - ZC*/DS* mixed-precision iterative-refinement drivers and
+#    cross-precision converters (DLAG2S/SLAG2D/CLAG2Z/ZLAG2C/DLAT2S/
+#    ZLAT2C) — not expressible in an extended-precision target.
+#  - Precision-independent helpers (CHLA_TRANSTYPE / IEEECK / ILA* /
+#    IPARAM2STAGE / IPARMQ / LA_CONSTANTS / LA_XISNAN / LSAMEN /
+#    XERBLA / XERBLA_ARRAY) — these come from the standard-precision
+#    archive ``lapack`` (built from the same Netlib sources without
+#    -freal-8-real-16) which the migrated archive PUBLIC-links. The
+#    extended-precision-only helpers (LA_CONSTANTS_EP / LA_XISNAN_EP)
+#    DO ride in the migrated archive — they have no standard sibling.
 skip_files:
   - ZCGESV
   - DSGESV
   - ZCPOSV
   - DSPOSV
-  - ZCGELS
-  - DSGELS
-  # Cross-precision type conversion routines
   - DLAG2S
   - SLAG2D
   - CLAG2Z
   - ZLAG2C
   - DLAT2S
   - ZLAT2C
-
-# Multi-precision utility modules — copy unchanged
-copy_files:
+  - CHLA_TRANSTYPE
+  - IEEECK
+  - ILADIAG
+  - ILAENV
+  - ILAENV2STAGE
+  - ILAPREC
+  - ILATRANS
+  - ILAUPLO
+  - IPARAM2STAGE
+  - IPARMQ
   - LA_CONSTANTS
+  - LA_XISNAN
+  - LSAMEN
+  - XERBLA
+  - XERBLA_ARRAY
+
+# Multi-precision utility modules — copy unchanged. Note that
+# LA_CONSTANTS and LA_XISNAN are also in skip_files above (the std-
+# precision originals do not ride into the migrated archive); only the
+# _EP and _MF siblings are actually emitted here. Listing the
+# precision-independent stems anyway documents intent and is harmless
+# (skip_files runs first).
+copy_files:
   - LA_CONSTANTS_EP
   - LA_CONSTANTS_MF
-  - LA_XISNAN
   - LA_XISNAN_EP
   - LA_XISNAN_MF
+
+# Reroute every ILAENV / ILAENV2STAGE / IPARAM2STAGE call site in
+# migrated source to the *_EP variants shipped from
+# recipes/lapack/extras/. The upstream env-inquiry helpers gate on
+# the routine name's precision letter being one of S/D/C/Z; for
+# migrated names like 'EGEMM' / 'PESYTTRD' / 'MSYTRD_2STAGE' the gate
+# fires and the function returns *uninitialised* (ILAENV/ILAENV2STAGE)
+# or -1 (IPARAM2STAGE). The *_EP variants accept E/Q/M (real) and
+# Y/X/W (complex) on top of S/D/C/Z and initialise their result to 0
+# as a safety net. See recipes/lapack/extras/*.f for the patched
+# bodies. The original ILAENV/ILAENV2STAGE/IPARAM2STAGE entries are
+# already in skip_files above, so this rename does not duplicate
+# upstream symbols in the migrated archive.
+extra_renames:
+  ILAENV: ILAENV_EP
+  ILAENV2STAGE: ILAENV2STAGE_EP
+  IPARAM2STAGE: IPARAM2STAGE_EP

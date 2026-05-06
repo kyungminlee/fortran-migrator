@@ -23,9 +23,20 @@ from pyengine.fortran_migrator import (
     insert_use_multifloats,
     rewrite_la_constants_use,
     _la_constants_rename_map,
+    _rewrite_mpi_datatypes,
+    _rewrite_mpi_sum,
     migrate_fixed_form,
     migrate_free_form,
 )
+
+
+# Multifloats prefix letters, derived from the loaded target so tests
+# don't need editing whenever the prefix changes.
+_MF = load_target('multifloats')
+_RP = _MF.prefix_map['R'].lower()
+_CP = _MF.prefix_map['C'].lower()
+_RPU = _MF.prefix_map['R']
+_CPU = _MF.prefix_map['C']
 
 
 # ---------------------------------------------------------------------------
@@ -37,17 +48,19 @@ def test_multifloats_target_basic_shape():
     mf = load_target('multifloats')
     assert mf.name == 'multifloats'
     assert mf.is_kind_based is False
-    assert mf.real_type == 'TYPE(float64x2)'
-    assert mf.complex_type == 'TYPE(complex64x2)'
-    assert mf.real_constructor == 'float64x2'
-    assert mf.complex_constructor == 'complex64x2'
+    assert mf.real_type == 'TYPE(real64x2)'
+    assert mf.complex_type == 'TYPE(cmplx64x2)'
+    assert mf.real_constructor == 'real64x2'
+    assert mf.complex_constructor == 'cmplx64x2'
     assert mf.module_name == 'multifloats'
-    # DD (real) / ZZ (complex) — double-double prefixes. Single-letter
-    # prefixes like W collide with LAPACK's workspace-size idiom (e.g.
-    # WLALSD in DGELSD); the two-letter DD/ZZ form eliminates that
-    # whole class of collisions.
-    assert mf.prefix_map['R'] == 'DD'
-    assert mf.prefix_map['C'] == 'ZZ'
+    # Prefix letters are loaded from targets/multifloats.yaml. The
+    # specific choice (currently M/W) was made after a per-file shadow
+    # analysis ruling out same-translation-unit collisions; tests below
+    # use the loaded values via _RP/_CP rather than hard-coded letters.
+    assert isinstance(mf.prefix_map['R'], str) and len(mf.prefix_map['R']) == 1
+    assert isinstance(mf.prefix_map['C'], str) and len(mf.prefix_map['C']) == 1
+    assert mf.prefix_map['R'].isupper()
+    assert mf.prefix_map['C'].isupper()
 
 
 def test_kind_target_is_kind_based():
@@ -78,11 +91,11 @@ def mf():
 
 
 @pytest.mark.parametrize('src,expected', [
-    ('      DOUBLE PRECISION X', '      TYPE(float64x2) X'),
-    ('      DOUBLE COMPLEX Z', '      TYPE(complex64x2) Z'),
-    ('      COMPLEX*16 Z', '      TYPE(complex64x2) Z'),
-    ('      REAL*8 X', '      TYPE(float64x2) X'),
-    ('      REAL*4 X', '      TYPE(float64x2) X'),
+    ('      DOUBLE PRECISION X', '      TYPE(real64x2) X'),
+    ('      DOUBLE COMPLEX Z', '      TYPE(cmplx64x2) Z'),
+    ('      COMPLEX*16 Z', '      TYPE(cmplx64x2) Z'),
+    ('      REAL*8 X', '      TYPE(real64x2) X'),
+    ('      REAL*4 X', '      TYPE(real64x2) X'),
 ])
 def test_replace_type_decls_keywords(mf, src, expected):
     assert replace_type_decls(src, mf) == expected
@@ -91,7 +104,7 @@ def test_replace_type_decls_keywords(mf, src, expected):
 def test_replace_type_decls_preserves_attrs(mf):
     src = '      DOUBLE PRECISION, INTENT(IN) :: A(LDA,*)'
     out = replace_type_decls(src, mf)
-    assert 'TYPE(float64x2)' in out
+    assert 'TYPE(real64x2)' in out
     assert 'INTENT(IN)' in out
     assert 'A(LDA,*)' in out
 
@@ -172,31 +185,31 @@ def test_strip_kind_target_is_noop():
 def test_replace_literals_d_exponent(mf):
     src = "      X = 1.0D+0 + 2.5D-3"
     out = replace_literals(src, mf)
-    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
-    assert "float64x2(limbs=[2.5D-3, 0.0_8])" in out
+    assert "real64x2(limbs=[1.0D0, 0.0_8])" in out
+    assert "real64x2(limbs=[2.5D-3, 0.0_8])" in out
 
 
 def test_replace_literals_bare_float(mf):
     src = "      X = 0.5"
     out = replace_literals(src, mf)
-    assert "float64x2(limbs=[0.5D0, 0.0_8])" in out
+    assert "real64x2(limbs=[0.5D0, 0.0_8])" in out
 
 
 def test_replace_literals_wp_suffix(mf):
     src = "   x = 0.5_wp + 1.0_wp"
     out = replace_literals(src, mf)
-    assert "float64x2(limbs=[0.5D0, 0.0_8])" in out
-    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
+    assert "real64x2(limbs=[0.5D0, 0.0_8])" in out
+    assert "real64x2(limbs=[1.0D0, 0.0_8])" in out
 
 
 def test_replace_literals_does_not_double_wrap(mf):
     """Idempotence: re-running on already-wrapped output is a no-op."""
-    src = "      X = float64x2(limbs=[1.0D0, 0.0_8])"
+    src = "      X = real64x2(limbs=[1.0D0, 0.0_8])"
     out1 = replace_literals(src, mf)
     out2 = replace_literals(out1, mf)
     # Second pass mustn't add another constructor layer.
-    assert out1.count('float64x2(') == 1
-    assert out2.count('float64x2(') == 1
+    assert out1.count('real64x2(') == 1
+    assert out2.count('real64x2(') == 1
 
 
 def test_replace_literals_preserves_strings(mf):
@@ -204,7 +217,7 @@ def test_replace_literals_preserves_strings(mf):
     src = "      WRITE(*,*) '1.0D+0 in a string'"
     out = replace_literals(src, mf)
     assert "'1.0D+0 in a string'" in out
-    assert 'float64x2(' not in out
+    assert 'real64x2(' not in out
 
 
 def test_replace_literals_skips_fortran_operators(mf):
@@ -212,7 +225,7 @@ def test_replace_literals_skips_fortran_operators(mf):
     src = "      IF (X.EQ.1.0D+0) GO TO 10"
     out = replace_literals(src, mf)
     assert '.EQ.' in out
-    assert "float64x2(limbs=[1.0D0, 0.0_8])" in out
+    assert "real64x2(limbs=[1.0D0, 0.0_8])" in out
 
 
 # ---------------------------------------------------------------------------
@@ -263,36 +276,36 @@ def test_replace_known_constants_kind_mode_is_noop():
 
 
 def test_intrinsic_dble_uses_universal_constructor(mf):
-    """``DBLE(x)`` becomes ``float64x2(x)`` — the universal generic
+    """``DBLE(x)`` becomes ``real64x2(x)`` — the universal generic
     constructor in multifloats handles every input type (integer,
-    real(sp/dp), float64x2, complex64x2 → real part)."""
+    real(sp/dp), real64x2, cmplx64x2 → real part)."""
     src = "      Y = DBLE(ZX(I))"
     out = replace_intrinsic_calls(src, mf)
-    assert 'float64x2(ZX(I))' in out
+    assert 'real64x2(ZX(I))' in out
 
 
 def test_intrinsic_dble_integer_uses_constructor(mf):
-    """``DBLE(N)`` for integer N must become ``float64x2(N)``, not
+    """``DBLE(N)`` for integer N must become ``real64x2(N)``, not
     ``DD_REAL(N)`` (which only takes float64x2/complex64x2)."""
     src = "      Y = DBLE(N)"
     out = replace_intrinsic_calls(src, mf)
-    assert 'float64x2(N)' in out
+    assert 'real64x2(N)' in out
 
 
-def test_intrinsic_dcmplx_to_complex64x2(mf):
-    """``DCMPLX(A, B)`` becomes ``complex64x2(float64x2(A), float64x2(B))``
+def test_intrinsic_dcmplx_to_cmplx64x2(mf):
+    """``DCMPLX(A, B)`` becomes ``cmplx64x2(real64x2(A), real64x2(B))``
     so the call dispatches to multifloats's cx_from_mf_2 interface.
-    Args known to be float64x2 are not double-wrapped (see
+    Args known to be real64x2 are not double-wrapped (see
     test_intrinsic_dcmplx_skips_known_real)."""
     src = "      Z = DCMPLX(A, B)"
     out = replace_intrinsic_calls(src, mf)
-    assert 'complex64x2(float64x2(A),float64x2(B))' in out
+    assert 'cmplx64x2(real64x2(A),real64x2(B))' in out
 
 
 def test_intrinsic_dcmplx_skips_known_real(mf):
     src = "      Z = DCMPLX(A, B)"
     out = replace_intrinsic_calls(src, mf, real_names={'A', 'B'})
-    assert 'complex64x2(A, B)' in out
+    assert 'cmplx64x2(A, B)' in out
 
 
 def test_intrinsic_dimag_to_aimag(mf):
@@ -410,10 +423,10 @@ def test_insert_use_multifloats_placement_after_decls(mf):
               A = 1.0D0
               END
         ''')
-    out = insert_use_multifloats(src, mf, extra_lines=['      X = float64x2(\'1.0D0\')\n'])
+    out = insert_use_multifloats(src, mf, extra_lines=['      X = real64x2(\'1.0D0\')\n'])
     lines = out.splitlines()
     use_idx = next(i for i, l in enumerate(lines) if 'USE multifloats' in l)
-    assign_idx = next(i for i, l in enumerate(lines) if 'X = float64x2' in l)
+    assign_idx = next(i for i, l in enumerate(lines) if 'X = real64x2' in l)
     int_idx = next(i for i, l in enumerate(lines) if 'INTEGER N' in l)
     real_idx = next(i for i, l in enumerate(lines) if 'DOUBLE PRECISION A' in l)
     # USE comes right after the header, before any declaration
@@ -439,9 +452,9 @@ def test_insert_use_multifloats_dedupes(mf):
 
 def test_la_constants_rename_map_uses_dd_zz_for_multifloats(mf):
     m = _la_constants_rename_map(mf)
-    assert m['DZERO'] == 'DDZERO'
-    assert m['DSAFMIN'] == 'DDSAFMIN'
-    assert m['ZZERO'] == 'ZZZERO'
+    assert m['DZERO'] == f'{_RPU}ZERO'
+    assert m['DSAFMIN'] == f'{_RPU}SAFMIN'
+    assert m['ZZERO'] == f'{_CPU}ZERO'
     # Unprefixed forms must NOT be in the map (would clobber USE alias LHS)
     assert 'ZERO' not in m
     assert 'SAFMIN' not in m
@@ -466,9 +479,9 @@ def test_rewrite_la_constants_use_pattern_b(mf):
     assert 'LA_CONSTANTS_MF' in out
     # wp=>dp removed, but local aliases preserved with DD-prefixed RHS
     assert 'wp=>dp' not in out
-    assert 'zero=>ddzero' in out
-    assert 'safmin=>ddsafmin' in out
-    assert 'safmax=>ddsafmax' in out
+    assert f'zero=>{_RP}zero' in out
+    assert f'safmin=>{_RP}safmin' in out
+    assert f'safmax=>{_RP}safmax' in out
 
 
 # ---------------------------------------------------------------------------
@@ -509,8 +522,8 @@ def test_end_to_end_fixed_form(mf):
     # USE multifloats inserted right after the header
     assert 'USE multifloats' in out
     # Type decls converted
-    assert 'TYPE(float64x2) ALPHA' in out
-    assert 'TYPE(float64x2) X(*)' in out
+    assert 'TYPE(real64x2) ALPHA' in out
+    assert 'TYPE(real64x2) X(*)' in out
     # PARAMETER block + decl for ONE/ZERO are gone (the PARAMETER line
     # may survive as a `! Converted to assignments: ...` comment).
     assert 'DOUBLE PRECISION ONE,ZERO' not in out
@@ -534,9 +547,86 @@ def test_end_to_end_fixed_form(mf):
     assert not _re.search(r'\bONE\b', body)
 
 
+# Capital-F preprocessed Fortran (e.g. iparam2stage.F, dsytrd_sb2st.F) has
+# a ``#if defined(_OPENMP) / use omp_lib / #endif`` block sitting between
+# the USE clause and the IMPLICIT NONE line. The PARAMETER-conversion
+# anchor walker MUST skip those preprocessor directives — otherwise it
+# treats ``#if`` as the first executable line, inserts the converted
+# assignments above IMPLICIT NONE, and gfortran rejects the result with
+# ``Unexpected IMPLICIT NONE statement``.
+SYNTHETIC_LAPACK_F_OPENMP = """\
+      SUBROUTINE FOO(N, X)
+#if defined(_OPENMP)
+      use omp_lib
+#endif
+      IMPLICIT NONE
+*     .. Scalar Arguments ..
+      INTEGER N
+*     ..
+*     .. Array Arguments ..
+      DOUBLE PRECISION X(*)
+*     ..
+*     .. Parameters ..
+      DOUBLE PRECISION ONE, ZERO
+      PARAMETER (ONE=1.0D+0, ZERO=0.0D+0)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I
+*     ..
+      DO 10 I = 1, N
+          X(I) = ZERO
+   10 CONTINUE
+      RETURN
+      END
+"""
+
+
+def test_param_assignment_lands_below_implicit_none_with_openmp_directive(mf):
+    """Regression for the .F PARAMETER-ordering bug (UB-02): in the
+    presence of a ``#if defined(_OPENMP) / use omp_lib / #endif`` block
+    between USE and IMPLICIT NONE, the converted PARAMETER assignments
+    must be inserted AFTER IMPLICIT NONE and the type declarations,
+    not above them."""
+    out = migrate_fixed_form(SYNTHETIC_LAPACK_F_OPENMP, {}, mf)
+
+    lines = out.splitlines()
+
+    def first_index(predicate):
+        for idx, line in enumerate(lines):
+            if predicate(line):
+                return idx
+        return -1
+
+    implicit_idx = first_index(lambda l: l.lstrip().upper().startswith('IMPLICIT NONE'))
+    # Match either a literal assignment (``ONE = real64x2(...)``) or the
+    # known-constant rename (``DD_ONE = ...``); the migrator may emit
+    # either depending on whether the constant is in its known table.
+    assignment_idx = first_index(
+        lambda l: l.lstrip().startswith(('ONE =', 'ZERO =', 'DD_ONE =', 'DD_ZERO ='))
+    )
+    openmp_if_idx = first_index(lambda l: l.lstrip().startswith('#if defined(_OPENMP)'))
+    openmp_endif_idx = first_index(lambda l: l.lstrip().startswith('#endif'))
+
+    assert implicit_idx >= 0, 'IMPLICIT NONE missing from output'
+    assert openmp_if_idx >= 0, '#if defined(_OPENMP) directive was dropped'
+    assert openmp_endif_idx >= 0, '#endif directive was dropped'
+    # The directive block must remain intact and ABOVE IMPLICIT NONE
+    # (Fortran allows USE + #if-guarded USE before IMPLICIT NONE).
+    assert openmp_if_idx < implicit_idx
+    assert openmp_endif_idx < implicit_idx
+    # The converted assignment(s) — if emitted at all — must land below
+    # IMPLICIT NONE. ZERO is a known constant that may be dropped; ONE
+    # is unknown and survives as an assignment in fixed-form.
+    if assignment_idx >= 0:
+        assert assignment_idx > implicit_idx, (
+            f'PARAMETER assignment at line {assignment_idx} '
+            f'must come AFTER IMPLICIT NONE at line {implicit_idx}'
+        )
+
+
 def test_equivalence_no_diagnostic_after_sequence(mf, capsys):
-    """The mock multifloats module now declares both float64x2 and
-    complex64x2 with the SEQUENCE attribute, so EQUIVALENCE on
+    """The mock multifloats module now declares both real64x2 and
+    cmplx64x2 with the SEQUENCE attribute, so EQUIVALENCE on
     migrated FP variables compiles cleanly. The migrator therefore
     does not emit a warning anymore.
     """
@@ -578,25 +668,25 @@ end subroutine
 
 
 def test_canonicalize_for_compare_strips_multifloats(mf):
-    """The convergence canonicalizer must strip float64x2(...) wrappers
-    and TYPE(float64x2) so S/D pairs migrated to multifloats canonicalize
+    """The convergence canonicalizer must strip real64x2(...) wrappers
+    and TYPE(real64x2) so S/D pairs migrated to multifloats canonicalize
     to the same text as the kind-based canonicalization would."""
     from pyengine.pipeline import _canonicalize_for_compare
-    a = "      X = float64x2('1.0D+0') + float64x2('2.0D+0')"
+    a = "      X = real64x2('1.0D+0') + real64x2('2.0D+0')"
     b = "      X = 1.0D+0 + 2.0D+0"
     assert _canonicalize_for_compare(a) == _canonicalize_for_compare(b)
 
 
 def test_canonicalize_for_compare_normalizes_type_decl():
     from pyengine.pipeline import _canonicalize_for_compare
-    a = "      TYPE(float64x2) X"
+    a = "      TYPE(real64x2) X"
     b = "      DOUBLE PRECISION X"
     # Both should canonicalize to the same form (REAL X after both
     # type-name normalizations)
     ca = _canonicalize_for_compare(a)
     cb = _canonicalize_for_compare(b)
-    # The migrator only ever produces TYPE(float64x2) for multifloats,
-    # so we just need to confirm `TYPE(float64x2)` doesn't survive
+    # The migrator only ever produces TYPE(real64x2) for multifloats,
+    # so we just need to confirm `TYPE(real64x2)` doesn't survive
     # canonicalization.
     assert 'FLOAT64X2' not in ca
     assert 'TYPE(' not in ca
@@ -607,10 +697,158 @@ def test_end_to_end_free_form_pattern_b(mf):
     assert 'LA_CONSTANTS_MF' in out
     assert 'wp=>dp' not in out
     # Local aliases preserved (lowercase) with DD-prefixed RHS
-    assert 'zero=>ddzero' in out
-    assert 'safmin=>ddsafmin' in out
-    # real(wp) → TYPE(float64x2)
-    assert 'TYPE(float64x2)' in out
+    assert f'zero=>{_RP}zero' in out
+    assert f'safmin=>{_RP}safmin' in out
+    # real(wp) → TYPE(real64x2)
+    assert 'TYPE(real64x2)' in out
     # Body references stay as the local alias names
     assert 'x == zero' in out
     assert 'one / safmin' in out
+
+
+# ---------------------------------------------------------------------------
+# _rewrite_mpi_sum — multifloats per-call-site MPI_SUM rewriter
+# ---------------------------------------------------------------------------
+
+
+def test_rewrite_mpi_sum_real_call_site():
+    """A reduce call whose arglist contains the rewritten real datatype
+    token gets MPI_SUM swapped for MPI_DD_SUM."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(SBUF, RBUF, 1, MPI_DOUBLE_PRECISION,\n"
+        "     &                   MPI_SUM, COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_FLOAT64X2' in out
+    assert 'MPI_DD_SUM' in out
+    assert 'MPI_SUM' not in out
+
+
+def test_rewrite_mpi_sum_complex_call_site():
+    """Same but for a complex-typed reduce: MPI_SUM → MPI_ZZ_SUM."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_REDUCE(ZB, ZA, N, MPI_DOUBLE_COMPLEX, MPI_SUM,\n"
+        "     &                ROOT, COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_COMPLEX64X2' in out
+    assert 'MPI_ZZ_SUM' in out
+    assert 'MPI_SUM' not in out
+
+
+def test_rewrite_mpi_sum_integer_call_site_untouched():
+    """Integer reductions stay MPI_SUM — MPI_DD_SUM is undefined for
+    MPI_INTEGER. This is the whole reason for token-context dispatch."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(N, NSUM, 1, MPI_INTEGER, MPI_SUM,\n"
+        "     &                   COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_SUM' in out
+    assert 'MPI_DD_SUM' not in out
+    assert 'MPI_ZZ_SUM' not in out
+
+
+def test_rewrite_mpi_sum_mixed_arith_in_one_file():
+    """A single source with all three call sites — each judged
+    independently. Real → DD_SUM, complex → ZZ_SUM, integer untouched."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(R, S, 1, MPI_DOUBLE_PRECISION, MPI_SUM, C, I)\n"
+        "      CALL MPI_ALLREDUCE(Z, W, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, C, I)\n"
+        "      CALL MPI_ALLREDUCE(N, M, 1, MPI_INTEGER, MPI_SUM, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    lines = out.splitlines()
+    assert 'MPI_DD_SUM' in lines[0] and 'MPI_FLOAT64X2' in lines[0]
+    assert 'MPI_ZZ_SUM' in lines[1] and 'MPI_COMPLEX64X2' in lines[1]
+    assert 'MPI_SUM' in lines[2] and 'MPI_INTEGER' in lines[2]
+    assert 'MPI_DD_SUM' not in lines[2]
+    assert 'MPI_ZZ_SUM' not in lines[2]
+
+
+def test_rewrite_mpi_sum_kind16_is_noop():
+    """KIND targets set c_mpi_sum_* = 'MPI_SUM' so the pass returns
+    early and leaves the source untouched."""
+    k16 = load_target('kind16')
+    src = (
+        "      CALL MPI_ALLREDUCE(R, S, 1, MPI_DOUBLE_PRECISION, MPI_SUM, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, k16), k16)
+    assert 'MPI_REAL16' in out
+    assert 'MPI_SUM' in out
+    assert 'MPI_DD_SUM' not in out
+
+
+def test_rewrite_mpi_sum_kind10_is_noop():
+    k10 = load_target('kind10')
+    src = (
+        "      CALL MPI_ALLREDUCE(R, S, 1, MPI_DOUBLE_PRECISION, MPI_SUM, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, k10), k10)
+    assert 'MPI_LONG_DOUBLE' in out
+    assert 'MPI_SUM' in out
+    assert 'MPI_DD_SUM' not in out
+
+
+def test_rewrite_mpi_sum_does_not_touch_non_reduce_calls():
+    """MPI_SUM appearing outside a reduction call (e.g. as a literal in
+    a SAVE / DATA / parameter list) is NOT rewritten by this pass —
+    the regex anchors on MPI_(I?All)Reduce[_scatter]."""
+    mf = load_target('multifloats')
+    src = (
+        "      INTEGER, PARAMETER :: MY_OP = MPI_SUM\n"
+        "      CALL MPI_OP_FREE(MPI_SUM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(src, mf)
+    assert out == src
+
+
+def test_rewrite_mpi_max_real_call_site():
+    """MPI_MAX on a float-typed reduce becomes MPI_DD_AMX (multifloats
+    bridge ships AMX, not a stock-MPI-compatible MAX)."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_REDUCE(SBUF, RBUF, 1, MPI_DOUBLE_PRECISION,\n"
+        "     &                MPI_MAX, MASTER, COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_DD_AMX' in out
+    assert 'MPI_MAX' not in out
+
+
+def test_rewrite_mpi_min_complex_call_site():
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(Z, W, 1, MPI_DOUBLE_COMPLEX, MPI_MIN, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_ZZ_AMN' in out
+    assert 'MPI_MIN' not in out
+
+
+def test_rewrite_mpi_max_integer_call_site_untouched():
+    """MPI_INTEGER + MPI_MAX must stay MPI_MAX — integer reductions
+    don't go through the user-defined op."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_ALLREDUCE(N, M, 1, MPI_INTEGER, MPI_MAX, C, I)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_MAX' in out
+    assert 'MPI_DD_AMX' not in out
+
+
+def test_rewrite_mpi_sum_handles_mpi_reduce_scatter():
+    """MPI_REDUCE_SCATTER also takes (op, datatype) — must be covered."""
+    mf = load_target('multifloats')
+    src = (
+        "      CALL MPI_REDUCE_SCATTER(SB, RB, CNTS, MPI_DOUBLE_PRECISION,\n"
+        "     &                        MPI_SUM, COMM, IERR)\n"
+    )
+    out = _rewrite_mpi_sum(_rewrite_mpi_datatypes(src, mf), mf)
+    assert 'MPI_DD_SUM' in out
+    assert 'MPI_SUM' not in out

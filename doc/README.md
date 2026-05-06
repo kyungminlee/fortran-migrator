@@ -31,8 +31,8 @@ Uses `float64x2` (double-double) arithmetic via an external module:
 
 | Data Type | Target Type | New Prefix | Example Conversion |
 | :--- | :--- | :--- | :--- |
-| `REAL` | `TYPE(float64x2)` | `DD` | `dgemm` → `ddgemm` |
-| `COMPLEX` | `TYPE(complex64x2)` | `ZZ` | `zgemm` → `zzgemm` |
+| `REAL` | `TYPE(float64x2)` | `M` | `dgemm` → `mgemm` |
+| `COMPLEX` | `TYPE(complex64x2)` | `W` | `zgemm` → `wgemm` |
 
 ## Implementation Details
 

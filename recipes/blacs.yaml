@@ -9,15 +9,49 @@ symbols:
 prefix:
   style: direct
 
-copy_all_originals: true
+# copy_all_originals removed: the upstream S/D/C/Z entry points
+# (dgesd2d_, sgebr2d_, igsum2d_, ...) and precision-independent
+# helpers (BI_BlacsErr, BI_GetBuff, blacs_setup_, ...) live in the
+# standard-precision archive ``blacs`` built directly from
+# external/scalapack-2.2.3/BLACS/SRC/. The migrated archive
+# ``${LIB_PREFIX}blacs`` ships only the Q/X/E/Y/M/W clones
+# (qgesd2d_, xgebr2d_, BI_qgemm, ...) and PUBLIC-links the standard
+# archive so consumers resolve both symbol families through one link.
 
 skip_files: []
+
+# Pre-migration source replacements + new sources. Both go through the
+# regular BLACS d→{q,e,m} / z→{x,y,w} clone pipeline so a single set of
+# upstream-shape patches services every extended-precision target.
+#
+#   dgsum2d_.c     -- patched to use ``MPI_Op_create(BI_dMPI_sum, ...)``
+#                     instead of the stock ``MPI_SUM``. Intel MPI
+#                     2021.17's ``MPI_SUM`` is broken on ``MPI_REAL16``
+#                     (segfault) and ``MPI_LONG_DOUBLE`` (returns
+#                     nonsense), and MPICH ``mpiexec`` deadlocks rank 0
+#                     on REAL16 — so every kind16/kind10 caller hangs or
+#                     crashes the moment a default-topology PDSYEVR /
+#                     PZHEEVR / PDSYEVX / PZHEEVX issues a real-side
+#                     gsum. The user-op routes the per-element add
+#                     through ``BI_dvvsum`` (target-promoted to
+#                     ``BI_qvvsum`` / ``BI_evvsum`` / ``BI_mvvsum`` by
+#                     the BLACS C migrator), which uses the native
+#                     ``+=`` operator on the target's real type.
+#                     Mirrors upstream ``zgsum2d_.c``'s long-standing
+#                     pattern. Tracked as audit task #24.
+#   BI_dMPI_sum.c  -- new file (no upstream counterpart) defining the
+#                     user-op kernel — analogous to upstream
+#                     ``BI_zMPI_sum.c``. Cloned into ``BI_qMPI_sum.c`` /
+#                     ``BI_eMPI_sum.c`` / ``BI_mMPI_sum.c`` automatically.
+source_overrides:
+  dgsum2d_.c: blacs/source_overrides/dgsum2d_.c
+  BI_dMPI_sum.c: blacs/source_overrides/BI_dMPI_sum.c
 
 # Multifloats target: patch blacs_pinfo_.c to call multifloats_mpi_init()
 # so the custom MPI datatypes and ops are registered before any BLACS
 # communication.  The BI_*vv* reduction kernels no longer need overrides:
 # Bdef.h is patched to redefine Rabs/Cabs as mf_abs/mf_cabs1, and
-# complex128x2_t uses .r/.i members matching the BLACS convention.
+# complex64x2 uses .r/.i members matching the BLACS convention.
 #
 # The BI_*Buff*.c / BI_Pack.c overrides add explicit ``(char *)`` casts
 # to their ``malloc`` calls. In multifloats mode the BLACS C sources

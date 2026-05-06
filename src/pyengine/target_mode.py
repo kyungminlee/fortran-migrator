@@ -19,8 +19,8 @@ class TargetMode:
     # Literal replacement strategy
     literal_mode: str                  # 'kind_suffix' or 'constructor'
     kind_suffix: Optional[int]         # 10 or 16 for KIND, None for module-based
-    real_constructor: Optional[str]    # None for KIND, 'float64x2' for MF
-    complex_constructor: Optional[str] # None for KIND, 'complex128x2' for MF
+    real_constructor: Optional[str]    # None for KIND, 'real64x2' for MF
+    complex_constructor: Optional[str] # None for KIND, 'cmplx64x2' for MF
 
     # Intrinsic call transformation
     intrinsic_mode: str                # 'add_kind' or 'wrap_constructor'
@@ -43,13 +43,17 @@ class TargetMode:
     # C-interop fields.  Used by c_migrator to substitute types / MPI
     # handles / reduction ops in cloned BLACS and PBLAS C sources.
     # All targets (KIND and module-based) populate these via YAML.
-    c_real_type: Optional[str] = None         # 'QREAL' / 'float64x2_t'
-    c_complex_type: Optional[str] = None      # 'XCOMPLEX' / 'complex128x2_t'
-    c_c_real_type: Optional[str] = None       # '__float128' / 'float64x2_t'
+    c_real_type: Optional[str] = None         # 'QREAL' / 'float64x2'
+    c_complex_type: Optional[str] = None      # 'XCOMPLEX' / 'complex64x2'
+    c_c_real_type: Optional[str] = None       # '__float128' / 'float64x2'
     c_mpi_real: Optional[str] = None          # 'MPI_REAL16' / 'MPI_FLOAT64X2'
-    c_mpi_complex: Optional[str] = None       # 'MPI_COMPLEX32' / 'MPI_COMPLEX128X2'
+    c_mpi_complex: Optional[str] = None       # 'MPI_COMPLEX32' / 'MPI_COMPLEX64X2'
     c_mpi_sum_real: Optional[str] = None      # 'MPI_SUM' / 'MPI_DD_SUM'
     c_mpi_sum_complex: Optional[str] = None   # 'MPI_SUM' / 'MPI_ZZ_SUM'
+    c_mpi_max_real: Optional[str] = None      # 'MPI_MAX' / 'MPI_DD_AMX'
+    c_mpi_max_complex: Optional[str] = None   # 'MPI_MAX' / 'MPI_ZZ_AMX'
+    c_mpi_min_real: Optional[str] = None      # 'MPI_MIN' / 'MPI_DD_AMN'
+    c_mpi_min_complex: Optional[str] = None   # 'MPI_MIN' / 'MPI_ZZ_AMN'
     c_needs_mpi_check: bool = False           # True only for KIND=16
     c_header_mode: Optional[str] = None       # 'typedef' or 'include'
     c_header: Optional[str] = None            # 'multifloats_bridge.h'
@@ -147,6 +151,10 @@ def _load_target_yaml(path: Path) -> TargetMode:
         c_mpi_complex=c.get('mpi_complex'),
         c_mpi_sum_real=c.get('mpi_sum_real'),
         c_mpi_sum_complex=c.get('mpi_sum_complex'),
+        c_mpi_max_real=c.get('mpi_max_real'),
+        c_mpi_max_complex=c.get('mpi_max_complex'),
+        c_mpi_min_real=c.get('mpi_min_real'),
+        c_mpi_min_complex=c.get('mpi_min_complex'),
         c_needs_mpi_check=c.get('needs_mpi_check', False),
         c_header_mode=c.get('header_mode'),
         c_header=c.get('header'),

@@ -1,0 +1,157 @@
+#! Fortran-vs-C parity test for the complex MUMPS path. Mirror of
+#! test_dmumps_c_parity.fypp; see that file for design notes.
+#!
+#! Set by CMake via fypp's -Dtarget=${TARGET_NAME}.
+
+program test_zmumps_c_parity
+    use prec_kinds,            only: ep
+    use prec_report,           only: report_init, report_case, report_finalize, report_check_status
+    use compare,               only: max_rel_err_vec_z
+    use test_data_mumps,       only: gen_dense_problem_z, dense_to_triplet_z
+    use target_mumps,          only: target_name, target_eps, &
+                                     zmumps_struc, target_xmumps, &
+                                     q2t_c, t2q_c
+    use mpi
+    use iso_c_binding,         only: c_int, c_int64_t, c_double
+    implicit none
+
+#:if target == 'multifloats'
+    type, bind(C) :: bridge_real_t
+        real(c_double) :: limbs(2)
+    end type
+    type, bind(C) :: bridge_complex_t
+        type(bridge_real_t) :: re, im
+    end type
+#:endif
+
+    interface
+        function c_complex_mumps_solve(n, nnz, irn, jcn, a_vals, rhs) result(code) &
+            bind(C, name='c_complex_mumps_solve')
+            import :: c_int, c_int64_t
+#:if target == 'multifloats'
+            import :: bridge_complex_t
+#:endif
+            integer(c_int)              :: code
+            integer(c_int)              :: n
+            integer(c_int64_t)          :: nnz
+            integer(c_int)              :: irn(*), jcn(*)
+#:if target == 'multifloats'
+            type(bridge_complex_t)      :: a_vals(*), rhs(*)
+#:elif target == 'kind10'
+            complex(10)                 :: a_vals(*), rhs(*)
+#:else
+            complex(16)                 :: a_vals(*), rhs(*)
+#:endif
+        end function c_complex_mumps_solve
+    end interface
+
+    integer, parameter :: n = 16
+    integer            :: ierr, nz, c_code
+    complex(ep), allocatable :: A(:,:), x_true(:), b(:)
+    integer,     allocatable :: irn(:), jcn(:)
+    complex(ep), allocatable :: A_trip(:)
+    complex(ep), allocatable :: x_fortran(:), x_c(:)
+    type(zmumps_struc)       :: id
+    integer(c_int)           :: n_c
+    integer(c_int64_t)       :: nnz_c
+    real(ep)                 :: err, tol
+
+    call MPI_INIT(ierr)
+    call report_init('test_zmumps_c_parity', target_name)
+
+    call gen_dense_problem_z(n, A, x_true, b, seed = 32001)
+    call dense_to_triplet_z (A, irn, jcn, A_trip, nz)
+    tol = 16.0_ep * real(n, ep)**3 * target_eps
+
+    ! Path A — Fortran: target_xmumps → migrated xmumps_f77_
+    id%COMM = MPI_COMM_WORLD;  id%PAR = 1;  id%SYM = 0;  id%JOB = -1
+    call target_xmumps(id)
+    id%ICNTL(1) = -1; id%ICNTL(2) = -1; id%ICNTL(3) = -1; id%ICNTL(4) = 0
+    id%N   = n
+    id%NNZ = int(nz, kind=8)
+    allocate(id%IRN(nz));  id%IRN = irn
+    allocate(id%JCN(nz));  id%JCN = jcn
+    allocate(id%A(nz));    id%A   = q2t_c(A_trip)
+    allocate(id%RHS(n));   id%RHS = q2t_c(b)
+    id%JOB = 6
+    call target_xmumps(id)
+    if (id%INFOG(1) < 0) then
+        write(*, '(a,i0)') 'Fortran path failed, INFOG(1)=', id%INFOG(1)
+        error stop 1
+    end if
+    allocate(x_fortran(n));  x_fortran = t2q_c(id%RHS)
+    deallocate(id%IRN, id%JCN, id%A, id%RHS)
+    nullify(id%IRN, id%JCN, id%A, id%RHS)
+    id%JOB = -2;  call target_xmumps(id)
+
+    ! Path B — C bridge: c_complex_mumps_solve → migrated xmumps_c → xmumps_f77_
+    n_c   = n
+    nnz_c = int(nz, kind=8)
+#:if target == 'multifloats'
+    block
+        type(bridge_complex_t), allocatable :: a_bridge(:), x_bridge(:)
+        real(c_double) :: hi_r, hi_i
+        real(ep) :: vr, vi
+        integer :: i
+        ! Hi/lo split per component, mirroring target_conv's q2t_c — the
+        ! previous limbs(2)=0 fill silently truncated to single-double.
+        allocate(a_bridge(nz))
+        do i = 1, nz
+            vr = real(A_trip(i), ep);  vi = aimag(A_trip(i))
+            hi_r = real(vr, c_double);  hi_i = real(vi, c_double)
+            a_bridge(i)%re%limbs(1) = hi_r
+            a_bridge(i)%re%limbs(2) = real(vr - real(hi_r, ep), c_double)
+            a_bridge(i)%im%limbs(1) = hi_i
+            a_bridge(i)%im%limbs(2) = real(vi - real(hi_i, ep), c_double)
+        end do
+        allocate(x_bridge(n))
+        do i = 1, n
+            vr = real(b(i), ep);  vi = aimag(b(i))
+            hi_r = real(vr, c_double);  hi_i = real(vi, c_double)
+            x_bridge(i)%re%limbs(1) = hi_r
+            x_bridge(i)%re%limbs(2) = real(vr - real(hi_r, ep), c_double)
+            x_bridge(i)%im%limbs(1) = hi_i
+            x_bridge(i)%im%limbs(2) = real(vi - real(hi_i, ep), c_double)
+        end do
+        c_code = c_complex_mumps_solve(n_c, nnz_c, irn, jcn, a_bridge, x_bridge)
+        allocate(x_c(n))
+        do i = 1, n
+            x_c(i) = cmplx( &
+                real(x_bridge(i)%re%limbs(1), ep) + real(x_bridge(i)%re%limbs(2), ep), &
+                real(x_bridge(i)%im%limbs(1), ep) + real(x_bridge(i)%im%limbs(2), ep), &
+                kind=ep)
+        end do
+        deallocate(a_bridge, x_bridge)
+    end block
+#:elif target == 'kind10'
+    block
+        complex(10), allocatable :: a_bridge(:), x_bridge(:)
+        allocate(a_bridge(nz));  a_bridge = q2t_c(A_trip)
+        allocate(x_bridge(n));   x_bridge = q2t_c(b)
+        c_code = c_complex_mumps_solve(n_c, nnz_c, irn, jcn, a_bridge, x_bridge)
+        allocate(x_c(n));        x_c = t2q_c(x_bridge)
+        deallocate(a_bridge, x_bridge)
+    end block
+#:else
+    ! kind16: complex(ep) == complex(16) bit-for-bit; pass directly.
+    allocate(x_c(n));  x_c = b
+    c_code = c_complex_mumps_solve(n_c, nnz_c, irn, jcn, A_trip, x_c)
+#:endif
+    if (c_code < 0) then
+        write(*, '(a,i0)') 'C path failed, code=', c_code
+        error stop 1
+    end if
+
+    err = max_rel_err_vec_z(x_fortran, x_c)
+    call report_case('fortran-vs-c', err, 0.0_ep)
+
+    err = max_rel_err_vec_z(x_fortran, x_true)
+    call report_case('fortran-vs-truth', err, tol)
+    err = max_rel_err_vec_z(x_c, x_true)
+    call report_case('c-vs-truth', err, tol)
+
+    deallocate(A, x_true, b, irn, jcn, A_trip, x_fortran, x_c)
+    call report_finalize()
+    call MPI_FINALIZE(ierr)
+    call report_check_status()
+end program test_zmumps_c_parity

@@ -47,7 +47,90 @@ c_type_aliases:
   - from: [cmplx, cmplx16]
     to: 'cmplx{RPU}'
 
+# PB_Cconjg.c (and similar precision-independent dispatchers like
+# PB_Ctzhemm / PB_Ctzher2k) carry hardcoded ``(double*)`` and
+# ``(float*)`` pointer casts that step through scalar buffers in
+# 8-byte / 4-byte strides. On extended-precision targets the buffer
+# elements are wider (16-byte quad on kind16, 12-byte extended on
+# kind10, 16-byte float64x2_t on multifloats), so the strides must
+# match — otherwise PB_Cconjg's DCPLX branch copies only 16 of 32
+# bytes from a kind16 cmplxQ, leaving the high half garbage and
+# corrupting any caller that uses the conjugated alpha
+# (``pzher2k`` rank-2k surfaces this with max-rel-err ≈ 1.0).
+c_pointer_cast_aliases:
+  - from: ['(double*)', '(float*)']
+    to: '({REAL_TYPE}*)'
+
 header_patches:
+  # Multifloats: PBLAS .c sources are compiled as C++ (for operator
+  # overloading on float64x2). Without ``extern "C"`` wrappers, the
+  # Fortran-callable entry points get C++ name-mangled — the matching
+  # declarations in PBpblas.h need to agree. Wrap the entire header
+  # body in extern "C" via the at_bof / at_eof patches; c_migrator
+  # adds the matching wrap to each ``<name>_.c`` definition body
+  # (after the last include, so the bridge templates stay C++).
+  - file: PBpblas.h
+    when: multifloats
+    at_bof: true
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: PBpblas.h
+    when: multifloats
+    at_eof: true
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  # Same wrapping for the other PBLAS headers that declare
+  # Fortran-callable / C-callable entry points the migrated PBLAS
+  # entry points and the test harness need to resolve at link time:
+  # PBblacs.h declares ``Cblacs_*`` and the gather/sum/cast helpers,
+  # PBtools.h declares the PTZBLAS Fortran kernels (``qvasum_``,
+  # ``ddvasum_``, …), PBblas.h declares the serial BLAS forwards.
+  - file: PBblacs.h
+    when: multifloats
+    at_bof: true
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: PBblacs.h
+    when: multifloats
+    at_eof: true
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  - file: PBtools.h
+    when: multifloats
+    at_bof: true
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: PBtools.h
+    when: multifloats
+    at_eof: true
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
+  - file: PBblas.h
+    when: multifloats
+    at_bof: true
+    insert: |
+      #ifdef __cplusplus
+      extern "C" {
+      #endif
+  - file: PBblas.h
+    when: multifloats
+    at_eof: true
+    insert: |
+      #ifdef __cplusplus
+      } /* extern "C" */
+      #endif
   # KIND targets: introduce primitive QREAL/EREAL typedef plus the
   # cmplxQ/cmplxE array form.
   - file: pblas.h
@@ -56,7 +139,7 @@ header_patches:
     insert: |
       typedef    {C_REAL_TYPE}          cmplx{RPU}[2];
       typedef    {C_REAL_TYPE}          {REAL_TYPE};
-  # Multifloats target: float64x2_t comes from the C++ bridge header.
+  # Multifloats target: float64x2 comes from the C++ bridge header.
   # cmplxDD is already defined there, so only the include is needed.
   - file: pblas.h
     when: multifloats
@@ -170,13 +253,36 @@ header_patches:
 # pzhemm_.c, pcsscal_.c, pdznrm2_.c, ...) plus one precision-independent
 # Fortran file (pilaenv.f). All originals are retained so the resulting
 # library still exposes the standard S/D/C/Z names.
-copy_all_originals: true
+# copy_all_originals removed: PBLAS/SRC's 123 precision-specific C
+# entry points (pdgemm_, pzhemm_, pcsscal_, ...) plus the precision-
+# independent PTOOLS helpers (PB_C*) live in the standard-precision
+# archive ``pblas`` built directly from external/scalapack-2.2.3/
+# PBLAS/SRC/. The migrated archive ``${LIB_PREFIX}pblas`` ships only
+# the Q/X/E/Y/M/W clones (pqgemm_, pxhemm_, ...) and PUBLIC-links the
+# standard archive so consumers resolve both symbol families through
+# a single link line.
+
+# pilaenv.f is the only Fortran file in PBLAS/SRC/ — a precision-independent
+# block-size query called by PB_Cplascal / PB_Cpsymm* / PB_Cptrmm* /
+# PB_Cptrsm* etc. ``extensions: [.c, .h]`` above filters it out of the
+# scan, but copy_files bypasses the extension filter so the file is staged
+# verbatim (and because it's precision-independent, no rename is needed).
+copy_files:
+  - PILAENV
 
 skip_files: []
 
+# Source overrides for upstream-bug-class issues. The override file
+# is in upstream-shape (it gets renamed for each migration target via
+# the normal pipeline). Each entry is `<upstream basename>: <path
+# under recipe_dir>`.
+source_overrides:
+  pdatrmv_.c: pblas/source_overrides/pdatrmv_.c
+  pzatrmv_.c: pblas/source_overrides/pzatrmv_.c
+
 # Hand-written replacements for the PB_C[dz]typeset typeset functions.
 # The migrated-by-regex versions try to assign the macro ZERO (= 0.0)
-# directly to a float64x2_t local, which the C type system rejects.
+# directly to a float64x2 local, which the C type system rejects.
 # These overrides use libmfc's struct constructors instead and refer
 # to the migrated BLACS / BLAS / PBBLAS / PTZBLAS routine names by
 # the renamed dd / zz prefixes.
@@ -184,8 +290,8 @@ overrides:
   multifloats:
     src_dir: pblas/mfc_overrides
     files:
-      - pb_cddtypeset.c
-      - pb_czztypeset.c
+      - pb_cmtypeset.c
+      - pb_cwtypeset.c
       # C++ bridge header providing type aliases and operators.
       # Copied to output_dir so -include pblas_mf_bridge.h resolves.
       - pblas_mf_bridge.h

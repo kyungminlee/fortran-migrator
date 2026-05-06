@@ -152,6 +152,143 @@ def _is_free_form_comment(line: str) -> bool:
     return not line or line.lstrip().startswith('!')
 
 
+def _patch_libseq_mpi_f(path: Path) -> None:
+    """Extend libseq's ``MUMPS_COPY`` with MPI_REAL16 / MPI_COMPLEX32
+    cases so reductions on REAL(KIND=16) / COMPLEX(KIND=16) buffers
+    dispatch correctly under our libmpiseq variant. Upstream's
+    ``MUMPS_COPY`` only knows the standard MPI datatypes; the migrated
+    qmumps archive passes MPI_REAL16 (Intel MPI = 1275072555) for
+    kind16 reductions.
+
+    Patches the staged copy at ``_mpiseq_src/mpi.f``; upstream's
+    ``external/MUMPS_5.8.2/libseq/mpi.f`` stays read-only. BLACS /
+    ScaLAPACK forwarders inside the same file are deliberately KEPT
+    — libmpiseq stands in for those archives in the ``_seq`` test
+    link, and the real BLACS / ScaLAPACK archives aren't linked there
+    so there's no duplicate-symbol collision.
+    """
+    src = path.read_text()
+
+    # Extend MUMPS_COPY's dispatch with MPI_REAL16 / MPI_COMPLEX32
+    # cases, and append matching MUMPS_COPY_* helpers. Anchor the
+    # insertion before the existing ``ELSE\n IERR=1`` fallthrough.
+    fallthrough = '      ELSE\n        IERR=1\n        RETURN\n      END IF'
+    extra_dispatch = (
+        # kind16: REAL(16) / COMPLEX(16)
+        '      ELSE IF ( DATATYPE .EQ. MPI_REAL16 ) THEN\n'
+        '      CALL MUMPS_COPY_REAL16( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        '      ELSE IF ( DATATYPE .EQ. MPI_COMPLEX32 ) THEN\n'
+        '      CALL MUMPS_COPY_COMPLEX32( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        # kind10: 80-bit extended real / complex map to MPI's long
+        # double tokens (no MPI_REAL10 in standard MPI).
+        '      ELSE IF ( DATATYPE .EQ. MPI_LONG_DOUBLE ) THEN\n'
+        '      CALL MUMPS_COPY_REAL10( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        '      ELSE IF ( DATATYPE .EQ. MPI_C_LONG_DOUBLE_COMPLEX ) THEN\n'
+        '      CALL MUMPS_COPY_COMPLEX20( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        # multifloats: cmake/mpiseq_c_stubs.c encodes derived-type
+        # sentinels as 0x10000000 | total_bytes. float64x2 → 16-byte
+        # element (sentinel 268435472); complex64x2 → 32-byte
+        # (268435488). MPI_Type_c2f / MPI_Op_c2f in Intel mpi.h are
+        # passthrough casts, so the Fortran handle is the same value.
+        '      ELSE IF ( DATATYPE .EQ. 268435472 ) THEN\n'
+        '      CALL MUMPS_COPY_FLOAT64X2( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        '      ELSE IF ( DATATYPE .EQ. 268435488 ) THEN\n'
+        '      CALL MUMPS_COPY_COMPLEX64X2( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+    )
+    if 'MPI_REAL16' not in src and fallthrough in src:
+        src = src.replace(fallthrough, extra_dispatch + fallthrough, 1)
+
+    extra_helpers = """
+      SUBROUTINE MUMPS_COPY_REAL16( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      REAL(KIND=16) S(N),R(N)
+      INTEGER I
+      DO I = 1, N
+        R(I+RS) = S(I+SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_REAL16
+      SUBROUTINE MUMPS_COPY_COMPLEX32( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      COMPLEX(KIND=16) S(N),R(N)
+      INTEGER I
+      DO I = 1, N
+        R(I+RS) = S(I+SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_COMPLEX32
+      SUBROUTINE MUMPS_COPY_REAL10( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      REAL(KIND=10) S(N),R(N)
+      INTEGER I
+      DO I = 1, N
+        R(I+RS) = S(I+SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_REAL10
+      SUBROUTINE MUMPS_COPY_COMPLEX20( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      COMPLEX(KIND=10) S(N),R(N)
+      INTEGER I
+      DO I = 1, N
+        R(I+RS) = S(I+SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_COMPLEX20
+      SUBROUTINE MUMPS_COPY_FLOAT64X2( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      REAL(KIND=8) S(2*N),R(2*N)
+      INTEGER I
+      DO I = 1, 2*N
+        R(I+2*RS) = S(I+2*SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_FLOAT64X2
+      SUBROUTINE MUMPS_COPY_COMPLEX64X2( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      REAL(KIND=8) S(4*N),R(4*N)
+      INTEGER I
+      DO I = 1, 4*N
+        R(I+4*RS) = S(I+4*SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_COMPLEX64X2
+"""
+    if 'SUBROUTINE MUMPS_COPY_REAL16' not in src:
+        src = src.rstrip() + '\n' + extra_helpers
+
+    path.write_text(src)
+
+
+def _collect_source_files(src_dir: Path, language: str) -> list[Path]:
+    """Discover migrated source files in ``src_dir`` for the given language.
+
+    Honors all four Fortran extension cases (``.f``/``.F``/``.f90``/``.F90``).
+    Dedupe uses ``(st_dev, st_ino)`` so case-insensitive filesystems (where
+    ``*.f`` and ``*.F`` glob the same physical file) do not double-stage.
+    """
+    if language == 'c':
+        patterns = ('*.c', '*.f', '*.F', '*.f90', '*.F90')
+    else:
+        patterns = ('*.f', '*.F', '*.f90', '*.F90')
+    seen: dict[tuple, Path] = {}
+    for pat in patterns:
+        for f in src_dir.glob(pat):
+            try:
+                st = f.stat()
+                key = (st.st_dev, st.st_ino)
+            except OSError:
+                key = ('missing', str(f))
+            seen.setdefault(key, f)
+    return sorted(seen.values())
+
+
 def cmd_verify(args):
     """Verify migrated output: residual types, literals, column width."""
     out_dir = args.output_dir
@@ -163,7 +300,7 @@ def cmd_verify(args):
 
     target_mode = _get_target_mode(args)
 
-    f_files = sorted(src_dir.glob('*.f'))
+    f_files = sorted(list(src_dir.glob('*.f')) + list(src_dir.glob('*.F')))
     f90_files = sorted(list(src_dir.glob('*.f90')) + list(src_dir.glob('*.F90')))
     all_files = f_files + f90_files
 
@@ -401,7 +538,7 @@ else()
 endif()
 
 # Build the la_constants_mf and la_xisnan_mf helper modules. These
-# re-export multifloats's MF_* constants under the DD/ZZ-prefixed names
+# re-export multifloats's MF_* constants under the M/W-prefixed names
 # that the migrated LAPACK source uses via its rewritten
 # ``USE LA_CONSTANTS_MF`` clause.
 set(MF_HELPERS_DIR "{_helpers_default}"
@@ -690,6 +827,7 @@ def cmd_run(args):
 # Each entry is (library_name, recipe_filename).
 LIBRARY_ORDER = [
     ('blas',        'blas.yaml'),
+    ('xblas',       'xblas.yaml'),
     ('blacs',       'blacs.yaml'),
     ('lapack',      'lapack.yaml'),
     ('ptzblas',     'ptzblas.yaml'),
@@ -697,6 +835,7 @@ LIBRARY_ORDER = [
     ('pblas',       'pblas.yaml'),
     ('scalapack',   'scalapack.yaml'),
     ('scalapack_c', 'scalapack_c.yaml'),
+    ('mumps',       'mumps.yaml'),
 ]
 
 
@@ -753,13 +892,13 @@ def cmd_stage(args):
         classification = classify_symbols(symbols)
         independent = classification.independent
 
-        if config.language == 'c':
-            files = sorted(list(src_dir.glob('*.c')))
-        else:
-            files = sorted(
-                list(src_dir.glob('*.f')) + list(src_dir.glob('*.f90'))
-                + list(src_dir.glob('*.F90'))
-            )
+        # Pick up precision-independent Fortran helpers staged via
+        # ``copy_files`` (e.g. PBLAS/SRC/pilaenv.f) when the recipe is C —
+        # CMake's ``add_library(… STATIC …)`` handles mixed C + Fortran
+        # sources because both languages are enabled at the top
+        # project(). Copy-files are precision-independent by contract,
+        # so they land in COMMON_SOURCES below.
+        files = _collect_source_files(src_dir, config.language)
 
         # MF helper modules are built as separate targets; exclude from manifests.
         _mf_helpers = {'la_constants_mf', 'la_xisnan_mf'}
@@ -774,14 +913,48 @@ def cmd_stage(args):
             if f.stem in _mf_helpers:
                 continue
             rel = f'src/{f.name}'
-            if f.stem.upper() in independent:
+            # ``copy_files`` entries are precision-independent by
+            # contract (the file is staged verbatim, no prefix rename).
+            # The symbol scanner may never have visited them — e.g. a
+            # Fortran ``copy_files`` entry in a C recipe — so they
+            # won't appear in ``independent``. Treat them as common
+            # explicitly.
+            if (f.stem.upper() in independent
+                    or f.stem.upper() in config.copy_files):
                 common_files.append(rel)
             else:
                 precision_files.append(rel)
 
+        # Identify C sources that gate their entry-point signature on
+        # the ``INTFACE == C_CALL`` macro (upstream BLACS pattern). Each
+        # such file exposes a Fortran-callable symbol (e.g.
+        # ``blacs_gridinfo_``) in the default build and a C-callable
+        # symbol (``Cblacs_gridinfo``) when compiled with
+        # ``-DCallFromC``. The CMake helper compiles these sources
+        # twice so the final static library ships both entry points.
+        # Detection is a cheap regex scan of the staged source; any
+        # library that does not use the pattern emits an empty list.
+        dual_re = re.compile(
+            r'#\s*if\s*\(?\s*INTFACE\s*==\s*C_CALL\b'
+            r'|#\s*ifdef\s+CallFromC\b'
+            r'|#\s*if\s+defined\s*\(\s*CallFromC\s*\)',
+        )
+        dual_files = []
+        if config.language == 'c':
+            for f in files:
+                if f.suffix.lower() != '.c':
+                    continue
+                try:
+                    text = f.read_text(errors='replace')
+                except OSError:
+                    continue
+                if dual_re.search(text):
+                    dual_files.append(f'src/{f.name}')
+
         # Write manifest.cmake
         common_list = '\n    '.join(common_files) if common_files else ''
         precision_list = '\n    '.join(precision_files) if precision_files else ''
+        dual_list = '\n    '.join(dual_files) if dual_files else ''
         manifest = f"""\
 set({lib_name}_COMMON_SOURCES
     {common_list}
@@ -789,6 +962,10 @@ set({lib_name}_COMMON_SOURCES
 
 set({lib_name}_PRECISION_SOURCES
     {precision_list}
+)
+
+set({lib_name}_DUAL_INTERFACE_SOURCES
+    {dual_list}
 )
 
 set({lib_name}_LANGUAGE {config.language})
@@ -801,10 +978,11 @@ set({lib_name}_LANGUAGE {config.language})
     # Copy MF helper modules into staging so it's self-contained
     pmap = target_mode.prefix_map
     lib_prefix = pmap['R'].lower()
+    lib_prefix_complex = pmap['C'].lower()
     needs_mf = target_mode.module_name is not None
     staged_list = ';'.join(staged)
 
-    helpers_src = proj_root / 'external' / 'lapack-3.12.1' / 'SRC'
+    helpers_src = proj_root / 'recipes' / 'lapack' / 'mf_helpers'
     helpers_dst = staging_dir / '_helpers'
     if needs_mf:
         helpers_dst.mkdir(exist_ok=True)
@@ -818,13 +996,45 @@ set({lib_name}_LANGUAGE {config.language})
         mpi_cpp = mf_local / 'multifloats_mpi.cpp'
         if bridge_h.exists():
             shutil.copy2(bridge_h, helpers_dst / bridge_h.name)
+            # Skip the C++ MPI bindings (mpicxx.h). Without this guard,
+            # any migrated source compiled as C++ that transitively
+            # pulls in <mpi.h> through the bridge gets thousands of
+            # template declarations from mpicxx.h. Those templates
+            # cannot live inside the ``extern "C" { … }`` wrap that
+            # the c_migrator post-pass injects around .c bodies, so
+            # link of scalapack_c (whose REDIST sources include
+            # redist.h → multifloats_bridge.h → mpi.h) fails. Setting
+            # MPICH_SKIP_MPICXX / OMPI_SKIP_MPICXX before the include
+            # is the documented way to compile MPI clients without
+            # the C++ bindings.
+            staged_bridge = helpers_dst / bridge_h.name
+            text = staged_bridge.read_text()
+            text = text.replace(
+                '#include <mpi.h>',
+                '#define MPICH_SKIP_MPICXX 1\n'
+                '#define OMPI_SKIP_MPICXX 1\n'
+                '#include <mpi.h>',
+                1,
+            )
+            staged_bridge.write_text(text)
         if mpi_cpp.exists():
             shutil.copy2(mpi_cpp, helpers_dst / mpi_cpp.name)
+        # multifloats_mpi_f.f90: Fortran module exposing the C-side
+        # MPI_FLOAT64X2 / MPI_DD_SUM / etc. handles via bind(c). MUMPS
+        # and any other library that calls MPI from Fortran directly
+        # USEs this module so the rewritten ``MPI_FLOAT64X2`` token is
+        # a known integer at compile time. (BLACS/PBLAS go through C
+        # and use the extern "C" handles from the bridge header
+        # instead.)
+        mpi_f90 = mf_local / 'multifloats_mpi_f.f90'
+        if mpi_f90.exists():
+            shutil.copy2(mpi_f90, helpers_dst / mpi_f90.name)
 
     target_config = f"""\
 # Generated by: python -m pyengine stage --target {target_mode.name}
 set(TARGET_NAME "{target_mode.name}")
 set(LIB_PREFIX "{lib_prefix}")
+set(LIB_PREFIX_COMPLEX "{lib_prefix_complex}")
 set(NEEDS_MULTIFLOATS {'TRUE' if needs_mf else 'FALSE'})
 set(C_AS_CXX {'TRUE' if needs_mf else 'FALSE'})
 set(MF_HELPERS_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/_helpers")
@@ -832,9 +1042,15 @@ set(STAGED_LIBRARIES {staged_list})
 """
     (staging_dir / 'target_config.cmake').write_text(target_config)
 
-    # Copy CMake files to staging directory
+    # Copy CMake files to staging directory. ``CMakePresets.json`` rides
+    # along so users can `cmake --preset=linux-impi` from the staged
+    # tree without having to re-discover Intel MPI's wrapper paths.
     cmake_dir = proj_root / 'cmake'
-    for cmake_file in ['CMakeLists.txt', 'FortranCompiler.cmake']:
+    for cmake_file in ['CMakeLists.txt', 'FortranCompiler.cmake',
+                       'CMakePresets.json',
+                       'mpiseq_qx_stubs.f',
+                       'mpiseq_mw_stubs.f90',
+                       'mpiseq_c_stubs.c']:
         src = cmake_dir / cmake_file
         if src.exists():
             shutil.copy2(src, staging_dir / cmake_file)
@@ -860,6 +1076,89 @@ set(STAGED_LIBRARIES {staged_list})
         if refblas_dst.exists():
             shutil.rmtree(refblas_dst)
         shutil.copytree(netlib_blas_src, refblas_dst)
+
+    # Same recipe for LAPACK: vendored Netlib SRC/ promoted to quad
+    # precision gives tests/lapack/reflapack/ a KIND=16 reference to
+    # compare the migrated qlapack/elapack/ddlapack against. The
+    # INSTALL/ directory provides dlamch.f / droundup_lwork.f, which
+    # LAPACK SRC routines call but which aren't in SRC/ itself — copy
+    # them into _reflapack_src/ alongside the SRC contents so a single
+    # glob compiles the full reference.
+    netlib_lapack_src = proj_root / 'external' / 'lapack-3.12.1' / 'SRC'
+    if netlib_lapack_src.is_dir():
+        reflapack_dst = staging_dir / '_reflapack_src'
+        if reflapack_dst.exists():
+            shutil.rmtree(reflapack_dst)
+        shutil.copytree(netlib_lapack_src, reflapack_dst)
+        install_src = proj_root / 'external' / 'lapack-3.12.1' / 'INSTALL'
+        for fname in ('dlamch.f', 'droundup_lwork.f'):
+            src = install_src / fname
+            if src.is_file():
+                shutil.copy2(src, reflapack_dst / fname)
+
+    # Stage standard-precision source directories for the std archives
+    # built alongside each migrated extension. The CMakeLists.txt
+    # invokes add_standard_fortran_library / add_standard_c_library
+    # against these directories. Sibling to _refblas_src/_reflapack_src
+    # but used for production link deps, not just tests.
+    # _pblas_src/ includes PTOOLS/ as a child subdirectory (matching
+    # the upstream layout) so PTOOLS sources' ``#include "../pblas.h"``
+    # resolves without an explicit include-path remap. Same shape for
+    # _scalapack_src/ which contains REDIST/SRC and shares the
+    # ``../some_header.h`` convention. PBLAS's internal subdirectories
+    # (PBBLAS, PTZBLAS) are NOT included under _pblas_src — those are
+    # owned by the separate ptzblas / pbblas std archives.
+    # _scalapack_src/ is the upstream SRC/ tree; scalapack_c REDIST
+    # routines live alongside SRC under REDIST/SRC, but we stage them
+    # together inside _scalapack_src/REDIST/ so REDIST sources'
+    # ``#include "../redist.h"`` (or the matching SRC headers)
+    # resolve relative to _scalapack_src/.
+    _std_dirs = [
+        ('_blacs_src',     'scalapack-2.2.3/BLACS/SRC'),
+        ('_pblas_src',     'scalapack-2.2.3/PBLAS/SRC'),
+        ('_ptzblas_src',   'scalapack-2.2.3/PBLAS/SRC/PTZBLAS'),
+        ('_pbblas_src',    'scalapack-2.2.3/PBLAS/SRC/PBBLAS'),
+        ('_scalapack_src', 'scalapack-2.2.3/SRC'),
+        ('_scalapack_tools_src', 'scalapack-2.2.3/TOOLS'),
+        ('_scalapack_redist_src', 'scalapack-2.2.3/REDIST/SRC'),
+        # MUMPS sequential MPI stub. Lets cmake build a single-process
+        # ``libmpiseq`` archive alongside the migrated qmumps; tests can
+        # link it instead of MPI::MPI_Fortran for plain (no mpiexec)
+        # executables. Stubs print a "should not be called" error if a
+        # collective/comm primitive that requires multi-rank coordination
+        # is invoked, so libseq is NPROCS=1-only by construction.
+        ('_mpiseq_src',    'MUMPS_5.8.2/libseq'),
+        # MUMPS upstream src/ + include/. The recipe (which is fortran-
+        # only) skips every *MUMPS_C / MUMPS_C_TYPES header and every
+        # *.c file, so the migrated qmumps archive ships without a C
+        # interface. tests/mumps's C-bridge build re-uses upstream
+        # mumps_c.c (compiled twice with quad-precision type overrides
+        # supplied from tests/mumps/c/include/, see B2 in
+        # tests/mumps/TODO.md), plus mumps_common.c, mumps_addr.c, and
+        # the IO/save/thread/metis/pord/scotch helpers, all of which are
+        # type-agnostic and compile verbatim. Staging the whole src/
+        # tree (including the .F siblings we don't need here) is
+        # cheaper than per-file plumbing and matches the convention.
+        ('_mumps_upstream_src',     'MUMPS_5.8.2/src'),
+        ('_mumps_upstream_include', 'MUMPS_5.8.2/include'),
+    ]
+    for dst_name, rel_src in _std_dirs:
+        src = proj_root / 'external' / rel_src
+        if not src.is_dir():
+            continue
+        dst = staging_dir / dst_name
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(src, dst)
+
+    # libseq's mpi.f bundles BLACS/ScaLAPACK forwarders (which collide
+    # with the real migrated archives) and only knows the standard MPI
+    # datatypes in MUMPS_COPY (no MPI_REAL16 / MPI_COMPLEX32 needed by
+    # qmumps reductions). Patch the staged copy to fix both. Upstream
+    # external/ stays read-only.
+    mpiseq_dst = staging_dir / '_mpiseq_src' / 'mpi.f'
+    if mpiseq_dst.is_file():
+        _patch_libseq_mpi_f(mpiseq_dst)
 
     print(f'\n{"=" * 60}')
     print(f'  Staging complete: {len(staged)} libraries')

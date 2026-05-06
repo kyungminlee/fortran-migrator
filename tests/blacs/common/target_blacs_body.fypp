@@ -1,0 +1,507 @@
+#! Per-target BLACS test wrapper, parameterized by target.
+#!
+#! BLACS p2p / broadcast / reduce routines come in three families:
+#!   real:    [s,d,q,e,dd]gesd2d/gerv2d/trsd2d/trrv2d/gebs2d/gebr2d/
+#!            trbs2d/trbr2d/gsum2d/gamx2d/gamn2d
+#!   complex: [c,z,x,y,v]<same>
+#!   integer: i<same> — no precision conversion at any target, integer
+#!            is integer.
+#!
+#! Each per-target shim sets:
+#!   target          'kind16' | 'kind10' | 'multifloats'
+#!   target_name     human-readable label string
+#!   target_real     Fortran type-spec for the target's real type
+#!   target_complex  Fortran type-spec for the target's complex type
+#!   prefix_real     real prefix at the migrated symbol (e.g. 'q')
+#!   prefix_complex  complex prefix at the migrated symbol (e.g. 'x')
+
+#:set R = prefix_real
+#:set C = prefix_complex
+
+#:def IMPORT_R()
+#:if target == 'multifloats'
+            import :: real64x2
+#:elif target == 'kind16'
+            import :: ep
+#:endif
+#:enddef
+
+#:def IMPORT_C()
+#:if target == 'multifloats'
+            import :: cmplx64x2
+#:elif target == 'kind16'
+            import :: ep
+#:endif
+#:enddef
+
+module target_blacs
+    use prec_kinds, only: ep
+    use target_conv, only: q2t_r, t2q_r, q2t_c, t2q_c
+#:if target == 'multifloats'
+    use multifloats, only: real64x2, cmplx64x2
+#:endif
+    implicit none
+    private
+
+    public :: target_name
+    ! ── Real wrappers ───────────────────────────────────────────────
+    public :: target_qgesd2d, target_qgerv2d
+    public :: target_qtrsd2d, target_qtrrv2d
+    public :: target_qgebs2d, target_qgebr2d
+    public :: target_qtrbs2d, target_qtrbr2d
+    public :: target_qgsum2d, target_qgamx2d, target_qgamn2d
+    ! ── Complex wrappers ────────────────────────────────────────────
+    public :: target_xgesd2d, target_xgerv2d
+    public :: target_xtrsd2d, target_xtrrv2d
+    public :: target_xgebs2d, target_xgebr2d
+    public :: target_xgsum2d, target_xgamx2d, target_xgamn2d
+    ! ── Integer pass-through (no per-target rename) ─────────────────
+    public :: target_igesd2d, target_igerv2d
+    public :: target_igebs2d, target_igebr2d
+    public :: target_igsum2d, target_igamx2d, target_igamn2d
+
+    character(len=*), parameter :: target_name = "${target_name}$"
+
+    interface
+        ! ── Real send/recv ──────────────────────────────────────────
+        subroutine ${R}$gesd2d(icontxt, m, n, A, lda, rdest, cdest)
+$:IMPORT_R()
+            integer, intent(in) :: icontxt, m, n, lda, rdest, cdest
+            ${target_real}$, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine ${R}$gerv2d(icontxt, m, n, A, lda, rsrc, csrc)
+$:IMPORT_R()
+            integer, intent(in)    :: icontxt, m, n, lda, rsrc, csrc
+            ${target_real}$, intent(out) :: A(lda, *)
+        end subroutine
+        subroutine ${R}$trsd2d(icontxt, uplo, diag, m, n, A, lda, rdest, cdest)
+$:IMPORT_R()
+            character, intent(in) :: uplo, diag
+            integer, intent(in)   :: icontxt, m, n, lda, rdest, cdest
+            ${target_real}$, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine ${R}$trrv2d(icontxt, uplo, diag, m, n, A, lda, rsrc, csrc)
+$:IMPORT_R()
+            character, intent(in) :: uplo, diag
+            integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+            ${target_real}$, intent(inout) :: A(lda, *)
+        end subroutine
+
+        ! ── Real broadcast ──────────────────────────────────────────
+        subroutine ${R}$gebs2d(icontxt, scope, top, m, n, A, lda)
+$:IMPORT_R()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda
+            ${target_real}$, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine ${R}$gebr2d(icontxt, scope, top, m, n, A, lda, rsrc, csrc)
+$:IMPORT_R()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+            ${target_real}$, intent(out) :: A(lda, *)
+        end subroutine
+        subroutine ${R}$trbs2d(icontxt, scope, top, uplo, diag, m, n, A, lda)
+$:IMPORT_R()
+            character, intent(in) :: scope, top, uplo, diag
+            integer, intent(in)   :: icontxt, m, n, lda
+            ${target_real}$, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine ${R}$trbr2d(icontxt, scope, top, uplo, diag, m, n, A, lda, rsrc, csrc)
+$:IMPORT_R()
+            character, intent(in) :: scope, top, uplo, diag
+            integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+            ${target_real}$, intent(inout) :: A(lda, *)
+        end subroutine
+
+        ! ── Real reductions ─────────────────────────────────────────
+        subroutine ${R}$gsum2d(icontxt, scope, top, m, n, A, lda, rdest, cdest)
+$:IMPORT_R()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, rdest, cdest
+            ${target_real}$, intent(inout) :: A(lda, *)
+        end subroutine
+        subroutine ${R}$gamx2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+$:IMPORT_R()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, ldia, rdest, cdest
+            ${target_real}$, intent(inout) :: A(lda, *)
+            integer, intent(inout) :: rA(*), cA(*)
+        end subroutine
+        subroutine ${R}$gamn2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+$:IMPORT_R()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, ldia, rdest, cdest
+            ${target_real}$, intent(inout) :: A(lda, *)
+            integer, intent(inout) :: rA(*), cA(*)
+        end subroutine
+
+        ! ── Complex send/recv ───────────────────────────────────────
+        subroutine ${C}$gesd2d(icontxt, m, n, A, lda, rdest, cdest)
+$:IMPORT_C()
+            integer, intent(in) :: icontxt, m, n, lda, rdest, cdest
+            ${target_complex}$, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine ${C}$gerv2d(icontxt, m, n, A, lda, rsrc, csrc)
+$:IMPORT_C()
+            integer, intent(in)    :: icontxt, m, n, lda, rsrc, csrc
+            ${target_complex}$, intent(out) :: A(lda, *)
+        end subroutine
+        subroutine ${C}$trsd2d(icontxt, uplo, diag, m, n, A, lda, rdest, cdest)
+$:IMPORT_C()
+            character, intent(in) :: uplo, diag
+            integer, intent(in)   :: icontxt, m, n, lda, rdest, cdest
+            ${target_complex}$, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine ${C}$trrv2d(icontxt, uplo, diag, m, n, A, lda, rsrc, csrc)
+$:IMPORT_C()
+            character, intent(in) :: uplo, diag
+            integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+            ${target_complex}$, intent(inout) :: A(lda, *)
+        end subroutine
+
+        ! ── Complex broadcast ───────────────────────────────────────
+        subroutine ${C}$gebs2d(icontxt, scope, top, m, n, A, lda)
+$:IMPORT_C()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda
+            ${target_complex}$, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine ${C}$gebr2d(icontxt, scope, top, m, n, A, lda, rsrc, csrc)
+$:IMPORT_C()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+            ${target_complex}$, intent(out) :: A(lda, *)
+        end subroutine
+
+        ! ── Complex reductions ──────────────────────────────────────
+        subroutine ${C}$gsum2d(icontxt, scope, top, m, n, A, lda, rdest, cdest)
+$:IMPORT_C()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, rdest, cdest
+            ${target_complex}$, intent(inout) :: A(lda, *)
+        end subroutine
+        subroutine ${C}$gamx2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+$:IMPORT_C()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, ldia, rdest, cdest
+            ${target_complex}$, intent(inout) :: A(lda, *)
+            integer, intent(inout) :: rA(*), cA(*)
+        end subroutine
+        subroutine ${C}$gamn2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+$:IMPORT_C()
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, ldia, rdest, cdest
+            ${target_complex}$, intent(inout) :: A(lda, *)
+            integer, intent(inout) :: rA(*), cA(*)
+        end subroutine
+
+        ! ── Integer (no per-target rename — always igesd2d etc.) ────
+        subroutine igesd2d(icontxt, m, n, A, lda, rdest, cdest)
+            integer, intent(in) :: icontxt, m, n, lda, rdest, cdest
+            integer, intent(in) :: A(lda, *)
+        end subroutine
+        subroutine igerv2d(icontxt, m, n, A, lda, rsrc, csrc)
+            integer, intent(in)  :: icontxt, m, n, lda, rsrc, csrc
+            integer, intent(out) :: A(lda, *)
+        end subroutine
+        subroutine igebs2d(icontxt, scope, top, m, n, A, lda)
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda
+            integer, intent(in)   :: A(lda, *)
+        end subroutine
+        subroutine igebr2d(icontxt, scope, top, m, n, A, lda, rsrc, csrc)
+            character, intent(in) :: scope, top
+            integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+            integer, intent(out)  :: A(lda, *)
+        end subroutine
+        subroutine igsum2d(icontxt, scope, top, m, n, A, lda, rdest, cdest)
+            character, intent(in) :: scope, top
+            integer, intent(in)    :: icontxt, m, n, lda, rdest, cdest
+            integer, intent(inout) :: A(lda, *)
+        end subroutine
+        subroutine igamx2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+            character, intent(in) :: scope, top
+            integer, intent(in)    :: icontxt, m, n, lda, ldia, rdest, cdest
+            integer, intent(inout) :: A(lda, *)
+            integer, intent(inout) :: rA(*), cA(*)
+        end subroutine
+        subroutine igamn2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+            character, intent(in) :: scope, top
+            integer, intent(in)    :: icontxt, m, n, lda, ldia, rdest, cdest
+            integer, intent(inout) :: A(lda, *)
+            integer, intent(inout) :: rA(*), cA(*)
+        end subroutine
+    end interface
+
+contains
+
+    ! ─── Real send/recv ─────────────────────────────────────────────
+    subroutine target_qgesd2d(icontxt, m, n, A, lda, rdest, cdest)
+        integer, intent(in) :: icontxt, m, n, lda, rdest, cdest
+        real(ep), intent(in) :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gesd2d(icontxt, m, n, At, lda, rdest, cdest)
+    end subroutine
+
+    subroutine target_qgerv2d(icontxt, m, n, A, lda, rsrc, csrc)
+        integer, intent(in) :: icontxt, m, n, lda, rsrc, csrc
+        real(ep), intent(out) :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        call ${R}$gerv2d(icontxt, m, n, At, lda, rsrc, csrc)
+        if (n > 0) A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_qtrsd2d(icontxt, uplo, diag, m, n, A, lda, rdest, cdest)
+        character, intent(in) :: uplo, diag
+        integer, intent(in)   :: icontxt, m, n, lda, rdest, cdest
+        real(ep), intent(in)  :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$trsd2d(icontxt, uplo, diag, m, n, At, lda, rdest, cdest)
+    end subroutine
+
+    subroutine target_qtrrv2d(icontxt, uplo, diag, m, n, A, lda, rsrc, csrc)
+        character, intent(in) :: uplo, diag
+        integer, intent(in)    :: icontxt, m, n, lda, rsrc, csrc
+        real(ep), intent(inout) :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        ! Off-trapezoid entries are not transmitted; preload them so the
+        ! receive doesn't lose untouched cells when we round-trip.
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$trrv2d(icontxt, uplo, diag, m, n, At, lda, rsrc, csrc)
+        if (n > 0) A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    ! ─── Real broadcast ─────────────────────────────────────────────
+    subroutine target_qgebs2d(icontxt, scope, top, m, n, A, lda)
+        character, intent(in) :: scope, top
+        integer, intent(in)   :: icontxt, m, n, lda
+        real(ep), intent(in)  :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gebs2d(icontxt, scope, top, m, n, At, lda)
+    end subroutine
+
+    subroutine target_qgebr2d(icontxt, scope, top, m, n, A, lda, rsrc, csrc)
+        character, intent(in) :: scope, top
+        integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+        real(ep), intent(out) :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        call ${R}$gebr2d(icontxt, scope, top, m, n, At, lda, rsrc, csrc)
+        if (n > 0) A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_qtrbs2d(icontxt, scope, top, uplo, diag, m, n, A, lda)
+        character, intent(in) :: scope, top, uplo, diag
+        integer, intent(in)   :: icontxt, m, n, lda
+        real(ep), intent(in)  :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$trbs2d(icontxt, scope, top, uplo, diag, m, n, At, lda)
+    end subroutine
+
+    subroutine target_qtrbr2d(icontxt, scope, top, uplo, diag, m, n, A, lda, rsrc, csrc)
+        character, intent(in) :: scope, top, uplo, diag
+        integer, intent(in)    :: icontxt, m, n, lda, rsrc, csrc
+        real(ep), intent(inout) :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$trbr2d(icontxt, scope, top, uplo, diag, m, n, At, lda, rsrc, csrc)
+        if (n > 0) A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    ! ─── Real reductions ────────────────────────────────────────────
+    subroutine target_qgsum2d(icontxt, scope, top, m, n, A, lda, rdest, cdest)
+        character, intent(in)   :: scope, top
+        integer, intent(in)     :: icontxt, m, n, lda, rdest, cdest
+        real(ep), intent(inout) :: A(lda, *)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gsum2d(icontxt, scope, top, m, n, At, lda, rdest, cdest)
+        if (n > 0) A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_qgamx2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+        character, intent(in)   :: scope, top
+        integer, intent(in)     :: icontxt, m, n, lda, ldia, rdest, cdest
+        real(ep), intent(inout) :: A(lda, *)
+        integer, intent(inout)  :: rA(*), cA(*)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gamx2d(icontxt, scope, top, m, n, At, lda, rA, cA, ldia, rdest, cdest)
+        if (n > 0) A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    subroutine target_qgamn2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+        character, intent(in)   :: scope, top
+        integer, intent(in)     :: icontxt, m, n, lda, ldia, rdest, cdest
+        real(ep), intent(inout) :: A(lda, *)
+        integer, intent(inout)  :: rA(*), cA(*)
+        ${target_real}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_r(A(1:lda, 1:n))
+        call ${R}$gamn2d(icontxt, scope, top, m, n, At, lda, rA, cA, ldia, rdest, cdest)
+        if (n > 0) A(1:lda, 1:n) = t2q_r(At)
+    end subroutine
+
+    ! ─── Complex send/recv ──────────────────────────────────────────
+    subroutine target_xgesd2d(icontxt, m, n, A, lda, rdest, cdest)
+        integer, intent(in)     :: icontxt, m, n, lda, rdest, cdest
+        complex(ep), intent(in) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gesd2d(icontxt, m, n, At, lda, rdest, cdest)
+    end subroutine
+
+    subroutine target_xgerv2d(icontxt, m, n, A, lda, rsrc, csrc)
+        integer, intent(in)      :: icontxt, m, n, lda, rsrc, csrc
+        complex(ep), intent(out) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        call ${C}$gerv2d(icontxt, m, n, At, lda, rsrc, csrc)
+        if (n > 0) A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_xtrsd2d(icontxt, uplo, diag, m, n, A, lda, rdest, cdest)
+        character, intent(in)   :: uplo, diag
+        integer, intent(in)     :: icontxt, m, n, lda, rdest, cdest
+        complex(ep), intent(in) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$trsd2d(icontxt, uplo, diag, m, n, At, lda, rdest, cdest)
+    end subroutine
+
+    subroutine target_xtrrv2d(icontxt, uplo, diag, m, n, A, lda, rsrc, csrc)
+        character, intent(in)      :: uplo, diag
+        integer, intent(in)        :: icontxt, m, n, lda, rsrc, csrc
+        complex(ep), intent(inout) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        ! Off-trapezoid entries are not transmitted; preload them so the
+        ! receive doesn't lose untouched cells when we round-trip.
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$trrv2d(icontxt, uplo, diag, m, n, At, lda, rsrc, csrc)
+        if (n > 0) A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    ! ─── Complex broadcast ──────────────────────────────────────────
+    subroutine target_xgebs2d(icontxt, scope, top, m, n, A, lda)
+        character, intent(in)   :: scope, top
+        integer, intent(in)     :: icontxt, m, n, lda
+        complex(ep), intent(in) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gebs2d(icontxt, scope, top, m, n, At, lda)
+    end subroutine
+
+    subroutine target_xgebr2d(icontxt, scope, top, m, n, A, lda, rsrc, csrc)
+        character, intent(in)    :: scope, top
+        integer, intent(in)      :: icontxt, m, n, lda, rsrc, csrc
+        complex(ep), intent(out) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        call ${C}$gebr2d(icontxt, scope, top, m, n, At, lda, rsrc, csrc)
+        if (n > 0) A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    ! ─── Complex reductions ─────────────────────────────────────────
+    subroutine target_xgsum2d(icontxt, scope, top, m, n, A, lda, rdest, cdest)
+        character, intent(in)      :: scope, top
+        integer, intent(in)        :: icontxt, m, n, lda, rdest, cdest
+        complex(ep), intent(inout) :: A(lda, *)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gsum2d(icontxt, scope, top, m, n, At, lda, rdest, cdest)
+        if (n > 0) A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_xgamx2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+        character, intent(in)      :: scope, top
+        integer, intent(in)        :: icontxt, m, n, lda, ldia, rdest, cdest
+        complex(ep), intent(inout) :: A(lda, *)
+        integer, intent(inout)     :: rA(*), cA(*)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gamx2d(icontxt, scope, top, m, n, At, lda, rA, cA, ldia, rdest, cdest)
+        if (n > 0) A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    subroutine target_xgamn2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+        character, intent(in)      :: scope, top
+        integer, intent(in)        :: icontxt, m, n, lda, ldia, rdest, cdest
+        complex(ep), intent(inout) :: A(lda, *)
+        integer, intent(inout)     :: rA(*), cA(*)
+        ${target_complex}$, allocatable :: At(:,:)
+        allocate(At(lda, max(1, n)))
+        if (n > 0) At = q2t_c(A(1:lda, 1:n))
+        call ${C}$gamn2d(icontxt, scope, top, m, n, At, lda, rA, cA, ldia, rdest, cdest)
+        if (n > 0) A(1:lda, 1:n) = t2q_c(At)
+    end subroutine
+
+    ! ─── Integer (no precision conversion) ──────────────────────────
+    subroutine target_igesd2d(icontxt, m, n, A, lda, rdest, cdest)
+        integer, intent(in) :: icontxt, m, n, lda, rdest, cdest
+        integer, intent(in) :: A(lda, *)
+        call igesd2d(icontxt, m, n, A, lda, rdest, cdest)
+    end subroutine
+
+    subroutine target_igerv2d(icontxt, m, n, A, lda, rsrc, csrc)
+        integer, intent(in)  :: icontxt, m, n, lda, rsrc, csrc
+        integer, intent(out) :: A(lda, *)
+        call igerv2d(icontxt, m, n, A, lda, rsrc, csrc)
+    end subroutine
+
+    subroutine target_igebs2d(icontxt, scope, top, m, n, A, lda)
+        character, intent(in) :: scope, top
+        integer, intent(in)   :: icontxt, m, n, lda
+        integer, intent(in)   :: A(lda, *)
+        call igebs2d(icontxt, scope, top, m, n, A, lda)
+    end subroutine
+
+    subroutine target_igebr2d(icontxt, scope, top, m, n, A, lda, rsrc, csrc)
+        character, intent(in) :: scope, top
+        integer, intent(in)   :: icontxt, m, n, lda, rsrc, csrc
+        integer, intent(out)  :: A(lda, *)
+        call igebr2d(icontxt, scope, top, m, n, A, lda, rsrc, csrc)
+    end subroutine
+
+    subroutine target_igsum2d(icontxt, scope, top, m, n, A, lda, rdest, cdest)
+        character, intent(in)  :: scope, top
+        integer, intent(in)    :: icontxt, m, n, lda, rdest, cdest
+        integer, intent(inout) :: A(lda, *)
+        call igsum2d(icontxt, scope, top, m, n, A, lda, rdest, cdest)
+    end subroutine
+
+    subroutine target_igamx2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+        character, intent(in)  :: scope, top
+        integer, intent(in)    :: icontxt, m, n, lda, ldia, rdest, cdest
+        integer, intent(inout) :: A(lda, *)
+        integer, intent(inout) :: rA(*), cA(*)
+        call igamx2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+    end subroutine
+
+    subroutine target_igamn2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+        character, intent(in)  :: scope, top
+        integer, intent(in)    :: icontxt, m, n, lda, ldia, rdest, cdest
+        integer, intent(inout) :: A(lda, *)
+        integer, intent(inout) :: rA(*), cA(*)
+        call igamn2d(icontxt, scope, top, m, n, A, lda, rA, cA, ldia, rdest, cdest)
+    end subroutine
+
+end module target_blacs

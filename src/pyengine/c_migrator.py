@@ -158,6 +158,52 @@ _KR_DECL_RE = re.compile(
 )
 
 
+# XBLAS f2c-bridge file naming: ``BLAS_dgemv_x-f2c.c`` carries the
+# Fortran-callable wrapper for the C routine ``BLAS_dgemv_x``. The
+# bridge files share the routine's stem with a ``-f2c`` decoration,
+# so they need the same precision-prefix rewrite as their parent
+# routine. The migrator keys on routine stems though, so we strip
+# this decoration before the rename-map lookup and re-append it on
+# the way out.
+_C_FILE_DECORATIONS: tuple[str, ...] = ('-f2c',)
+
+
+def _strip_decoration(stem: str) -> tuple[str, str]:
+    """Split ``BLAS_dgemv_x-f2c`` into (``BLAS_dgemv_x``, ``-f2c``).
+
+    Returns (base_stem, decoration). Returns (stem, '') if no known
+    decoration is present.
+    """
+    for deco in _C_FILE_DECORATIONS:
+        if stem.endswith(deco):
+            return stem[: -len(deco)], deco
+    return stem, ''
+
+
+def _redist_clone_stem(routine: str,
+                       target_mode: TargetMode | None) -> str | None:
+    """Clone-stem fallback for REDIST/SRC-style C files whose stems are
+    ``p<sdcz><root>`` but whose Fortran-callable exports live behind
+    ``#define`` macros (so the symbol scanner never registers them).
+
+    Returns the precision-substituted lowercase stem (``pdgemr2`` →
+    ``pqgemr2`` for kind16, ``pcgemr`` → ``pxgemr``), or ``None`` if
+    the routine doesn't match the expected ``p<precision-letter>...``
+    shape — which signals to skip the file.
+    """
+    if target_mode is None or len(routine) < 2:
+        return None
+    upper = routine.upper()
+    if upper[0] != 'P' or upper[1] not in ('S', 'D', 'C', 'Z'):
+        return None
+    from .prefix_classifier import CHAR_TYPE
+    family = CHAR_TYPE[upper[1]]
+    new_char = target_mode.prefix_map.get(family)
+    if new_char is None:
+        return None
+    return 'p' + new_char.lower() + routine[2:].lower()
+
+
 def _resolve_stdc_ifdefs(text: str) -> str:
     """Resolve ``#ifdef __STDC__`` / ``#else`` / ``#endif`` blocks.
 
@@ -223,6 +269,21 @@ def _convert_kr_to_ansi(text: str) -> str:
     Only rewrites definitions where *all* parameter names can be
     resolved to a type declaration. Leaves everything else untouched.
     """
+    # Pre-pass A: join split return-type-only lines with the following
+    # ``name(...)`` line. REDIST/SRC sources (pctrmr2.c, …) wrap the
+    # return type onto its own line:
+    #     static2 Int
+    #     insidemat(uplo, diag, i, j, m, n, offset)
+    # which the per-line K&R detector below would otherwise miss.
+    text = re.sub(
+        r'(?m)^([A-Za-z_][\w\s\*]*?[A-Za-z_]\w*)[ \t]*\n'
+        r'([ \t]*[A-Za-z_]\w*[ \t]*\()',
+        lambda m: m.group(1) + ' ' + m.group(2)
+        if not any(kw == w for w in m.group(1).split() for kw in
+                   ('return', 'if', 'else', 'while', 'for', 'do', 'switch',
+                    'case', 'goto', 'break', 'continue', 'sizeof', 'typedef'))
+        else m.group(0),
+        text)
     lines = text.split('\n')
     result: list[str] = []
     i = 0
@@ -248,6 +309,15 @@ def _convert_kr_to_ansi(text: str) -> str:
         # Extract parameter names from between ( and )
         paren_open = sig_text.index('(')
         paren_close = sig_text.index(')')
+        # Forward declaration / extern (closing ``)`` followed by ``;``) —
+        # bail before the K&R fallback below walks until the *next* ``{``
+        # and consumes the intervening extern block. REDIST/SRC sources
+        # interleave dozens of these whose parameter types aren't in
+        # ``type_keywords`` (``MDESC *a``, ``IDESC *result``, …).
+        if sig_text[paren_close + 1:].lstrip().startswith(';'):
+            result.extend(sig_lines)
+            i = j + 1
+            continue
         params_str = sig_text[paren_open + 1:paren_close]
         param_names = [p.strip() for p in params_str.split(',') if p.strip()]
 
@@ -255,64 +325,73 @@ def _convert_kr_to_ansi(text: str) -> str:
         type_keywords = {'int', 'char', 'float', 'double', 'void', 'long',
                          'short', 'unsigned', 'signed', 'struct', 'enum',
                          'const', 'Int', 'complex', 'complex16',
-                         'float64x2_t', 'complex128x2_t',
+                         'float64x2', 'complex64x2',
                          'F_CHAR', 'F_VOID_FCT', 'F_INTG_FCT', 'F_DBLE_FCT',
                          'SCOMPLEX', 'DCOMPLEX'}
-        if any(any(kw in name for kw in type_keywords) for name in param_names):
+        # Use whole-word matching (``\b``) — substring checks would mis-flag
+        # K&R param names that happen to contain a type keyword as a
+        # substring (e.g. ``v_inter`` / ``vinter_nb`` contain ``int``,
+        # which would otherwise short-circuit the converter on every
+        # K&R definition that uses those parameter names).
+        kw_re = re.compile(r'\b(?:' + '|'.join(re.escape(k) for k in type_keywords) + r')\b')
+        if any(kw_re.search(name) for name in param_names):
             # Already ANSI style
             result.extend(sig_lines)
             i = j + 1
             continue
 
         # Collect lines between ')' and '{', parsing declarations
-        j += 1
-        param_type_map: dict[str, str] = {}  # name → "Type *name" or "Type name[]"
-        comment_lines: list[str] = []
+        # Find the matching ``{`` that opens the function body, then
+        # take the entire region between ``)`` and ``{`` as the K&R
+        # parameter-declaration block. This collapses multi-line
+        # declarations and multi-line embedded ``/* … */`` comments
+        # into one piece of text the per-statement parser can handle.
+        param_type_map: dict[str, str] = {}
         decl_region_end = j
-        in_comment = False
-
-        while j < len(lines):
-            line = lines[j]
-            stripped = line.strip()
-
-            # Track block comments
-            if in_comment:
-                comment_lines.append(line)
-                if '*/' in stripped:
-                    in_comment = False
-                j += 1
-                continue
-
-            if stripped.startswith('/*'):
-                comment_lines.append(line)
-                if '*/' not in stripped:
-                    in_comment = True
-                j += 1
-                continue
-
-            if stripped == '{':
-                decl_region_end = j
+        body_start = -1
+        # Start one line past the signature line(s) — the signature
+        # itself ends with ``)`` (already captured in ``sig_lines``)
+        # and isn't part of the declaration region.
+        j += 1
+        for k in range(j, len(lines)):
+            if lines[k].lstrip().startswith('{'):
+                body_start = k
                 break
-
-            if stripped == '':
-                j += 1
+        if body_start < 0:
+            # No opening-brace-on-its-own-line found within file — bail
+            # out. We must not skip past ``j`` here because the
+            # signature might have been a false positive (e.g. an
+            # ``extern void FC_FUNC_(...)`` macro call in an XBLAS
+            # f2c-bridge whose real parameter list is on the *next*
+            # line). Resume at i+1 so subsequent lines still go
+            # through the loop.
+            result.extend(sig_lines)
+            i += 1
+            continue
+        decl_region_end = body_start
+        decl_blob = '\n'.join(lines[j:body_start])
+        # Drop block comments from the decl blob (they may straddle
+        # lines and contain stray ``;`` / quotes that confuse the
+        # statement splitter below).
+        decl_blob = re.sub(r'/\*.*?\*/', '', decl_blob, flags=re.DOTALL)
+        for stmt in decl_blob.split(';'):
+            stmt = stmt.strip()
+            if not stmt:
                 continue
-
-            # Try to parse as a type declaration
-            dm = _KR_DECL_RE.match(line)
-            if dm:
-                base_type = dm.group(1).strip()
-                declarators = dm.group(2)
-                for decl in declarators.split(','):
-                    decl = decl.strip()
-                    # Extract the name from the declarator
-                    # Forms: "*name", "name[]", "* name", "name"
-                    name_m = re.search(r'(\w+)', decl)
-                    if name_m:
-                        name = name_m.group(1)
-                        if name in param_names:
-                            param_type_map[name] = f'{base_type} {decl}'
-            j += 1
+            dm = _KR_DECL_RE.match(stmt + ';')
+            if not dm:
+                continue
+            base_type = dm.group(1).strip()
+            declarators = dm.group(2)
+            for decl in declarators.split(','):
+                decl = decl.strip()
+                name_m = re.search(r'(\w+)', decl)
+                if name_m:
+                    name = name_m.group(1)
+                    if name in param_names:
+                        param_type_map[name] = f'{base_type} {decl}'
+        j = body_start
+        comment_lines: list[str] = []
 
         # Check if all parameter names were resolved
         if len(param_type_map) == len(param_names) and param_names:
@@ -323,7 +402,10 @@ def _convert_kr_to_ansi(text: str) -> str:
             ansi_params = ', '.join(param_type_map[n] for n in param_names)
             result.append(f'{prefix} {ansi_params} )')
             result.extend(comment_lines)
-            result.append('{')
+            # Preserve the body-opening line verbatim — it may carry
+            # trailing content (a comment that opens on the same line
+            # as ``{``, like ``{/* Rmk: ... */``) that the body needs.
+            result.append(lines[decl_region_end])
             i = decl_region_end + 1
         else:
             # Could not resolve — keep original lines
@@ -413,10 +495,13 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                         classification: SymbolClassification | None = None,
                         rename_map: dict[str, str] | None = None,
                         c_type_aliases: list[dict] | None = None,
+                        c_pointer_cast_aliases: list[dict] | None = None,
                         header_patches: list[dict] | None = None,
                         overrides: list[tuple[Path, str]] | None = None,
                         extra_c_dirs: list[Path] | None = None,
-                        skip_files: set[str] | None = None) -> dict:
+                        skip_files: set[str] | None = None,
+                        copy_files: set[str] | None = None,
+                        source_overrides: dict[str, Path] | None = None) -> dict:
     """Migrate a C source directory by cloning real/complex variants.
 
     Two modes:
@@ -447,18 +532,97 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
             src_dir, output_dir, target_mode, copy_originals,
             classification, rename_map,
             c_type_aliases=c_type_aliases,
+            c_pointer_cast_aliases=c_pointer_cast_aliases,
             header_patches=header_patches,
             extra_c_dirs=extra_c_dirs,
             skip_files=skip_files,
+            copy_files=copy_files,
+            source_overrides=source_overrides,
         )
     else:
         result = _migrate_blacs_c_directory(
             src_dir, output_dir, target_mode, copy_originals,
+            source_overrides=source_overrides,
         )
     if overrides:
         applied = _apply_overrides(output_dir, overrides)
         result['overrides'] = applied
+    # Multifloats: ``.c`` sources are compiled as C++ for operator
+    # overloading on float64x2_t. Wrap each file body in ``extern "C"``
+    # *after* the last ``#include`` so the Fortran-callable /
+    # C-callable entry points (blacs_*_, Cblacs_*, BI_*, pddgemm_,
+    # pzzherk_, …) keep C linkage. Bridge headers'
+    # C++ templates and mpicxx.h declarations stay in C++ scope above
+    # the wrap. Bdef.h gets the same after-includes wrap so its
+    # forward declarations agree with the wrapped definitions. Run
+    # this *after* ``_apply_overrides`` so hand-written replacements
+    # are wrapped too.
+    if target_mode is not None and not target_mode.is_kind_based:
+        _wrap_extern_c_after_last_include(output_dir)
     return result
+
+
+def _wrap_extern_c_after_last_include(output_dir: Path) -> None:
+    """Give every Fortran-callable function definition C linkage when
+    the source is compiled as C++.
+
+    Two passes per file:
+
+    1. **Wrap the body after the last #include** with
+       ``#ifdef __cplusplus extern "C" { #endif`` … closing brace at
+       EOF. This covers function definitions while keeping the
+       includes themselves outside the wrap — necessary because some
+       headers (Bdef.h, multifloats_bridge.h, redist.h via the bridge)
+       transitively pull in C++ stdlib templates that cannot live
+       inside ``extern "C"``.
+
+    2. **Wrap each contiguous block of forward ``extern <type> Foo(…);``
+       declarations** in its own ``extern "C"`` block. These appear
+       between #include groups in scalapack_c REDIST sources
+       (pcgemr.c, pctrmr.c, …) and would otherwise mismatch the C
+       linkage of the matching definitions below the cut.
+
+    Idempotent.
+    """
+    targets = list(output_dir.glob('*.c'))
+    # Header files that contain function *definitions* (not just
+    # declarations) need the wrap too, otherwise the migrated entry
+    # point inherits C++ name-mangling. Currently:
+    #   - Bdef.h (BLACS — kept for historical compatibility)
+    #   - lamov.h (scalapack_c — defines the LAMOV/LACPY templates
+    #     instantiated by ddlamov.c, dlamov.c, …)
+    for hdr_name in ('Bdef.h', 'lamov.h'):
+        hdr = output_dir / hdr_name
+        if hdr.exists():
+            targets.append(hdr)
+    open_block = '#ifdef __cplusplus\nextern "C" {\n#endif\n'
+    close_block = '#ifdef __cplusplus\n} /* extern "C" */\n#endif\n'
+    for f in sorted(targets):
+        text = f.read_text(errors='replace')
+        if 'extern "C"' in text:
+            continue
+        includes = list(re.finditer(r'(?m)^\s*#\s*include\b[^\n]*\n', text))
+        if not includes:
+            continue
+        cut = includes[-1].end()
+        body = text[cut:]
+        prefix = text[:cut]
+        # Pass 2: wrap contiguous forward extern declaration blocks in
+        # the prefix region so they share C linkage with definitions.
+        # Match either ``extern <type> Name(...);`` or a bare
+        # ``<type> Name(...);`` single-line forward declaration. Group
+        # consecutive such lines into a single wrap. ``[^;{}\n]*``
+        # forbids the parameter list from spanning lines so the regex
+        # cannot accidentally swallow Fortran-style ``SUBROUTINE Foo(`
+        # text living inside a multi-line C comment.
+        decl_one = (r'^[ \t]*(?:extern[ \t]+)?'
+                    r'[A-Za-z_][\w\s\*]*?'
+                    r'[A-Za-z_]\w*\s*\([^;{}\n]*\)\s*;[ \t]*\n')
+        ext_re = re.compile(r'(?m)(' + decl_one + r'(?:' + decl_one + r')*)')
+        prefix = ext_re.sub(lambda m: open_block + m.group(1) + close_block,
+                            prefix)
+        text = prefix + '\n' + open_block + body + '\n' + close_block
+        f.write_text(text)
 
 
 def _apply_overrides(output_dir: Path,
@@ -601,9 +765,42 @@ def _expand_template(s: str, template_vars: dict[str, str]) -> str:
 # type, otherwise (double) casts and `*=` arithmetic in the cost model
 # stop compiling. Survey of pblas/SRC/p[dz]*.c shows just two declaration
 # lines containing these names; recognising them by name is sufficient.
+#
+# Note: ``tmp\d+`` deliberately excluded — PBLAS pairs them with
+# ABest/ACest/BCest on the same line (so the line still matches via
+# those anchors), while XBLAS uses bare ``double tmp1;`` accumulators
+# that DO need to be promoted to float64x2 for working-precision math.
 _PBLAS_COST_LOCAL = (
-    r'ABest|ACest|BCest|ABestL|ABestR|Best|tmp\d+'
+    r'ABest|ACest|BCest|ABestL|ABestR|Best'
 )
+
+
+def _apply_aliases_to_original(text: str, template_vars: dict[str, str],
+                                c_type_aliases: list[dict] | None,
+                                c_pointer_cast_aliases: list[dict] | None) -> str:
+    """Apply recipe-declared aliases to a copy-original C source.
+
+    Limited to (a) type-name aliases (e.g. ``cmplx16`` → ``cmplxQ``) and
+    (b) pointer-cast aliases (e.g. ``(double*)`` → ``(quad*)``). Does
+    NOT apply the broad ``double``/``float`` → ``REAL_TYPE`` substitution
+    that :func:`_apply_c_type_subs` performs because copy-originals
+    frequently contain precision-dispatch logic — e.g. ``PB_Cconjg``
+    switches on ``TYPE->type`` and uses ``(double*)`` casts in the
+    DCPLX/DREAL branches and ``(float*)`` casts in the SCPLX/SREAL
+    branches. The bare ``double`` / ``float`` keywords inside those
+    branches must stay so the dispatch stays well-formed; only the
+    cast-stride needs upgrading so the kind16 (cmplxQ, 32-byte) target
+    receives a 16-byte stride per real component instead of 8.
+    """
+    for rule in c_type_aliases or []:
+        target = _expand_template(rule['to'], template_vars)
+        for src in rule['from']:
+            text = re.sub(r'\b' + re.escape(src) + r'\b', target, text)
+    for rule in c_pointer_cast_aliases or []:
+        target = _expand_template(rule['to'], template_vars)
+        for src in rule['from']:
+            text = text.replace(src, target)
+    return text
 
 
 def _apply_c_type_subs(text: str, template_vars: dict[str, str],
@@ -634,8 +831,12 @@ def _apply_c_type_subs(text: str, template_vars: dict[str, str],
     cast_marker = '\x00MF_DOUBLE_CAST\x00'
     decl_marker = '\x00MF_DOUBLE_KW\x00'
     if is_multifloats:
-        # (double) cast expressions
-        text = re.sub(r'\(\s*double\s*\)', cast_marker, text)
+        # (double) cast expressions. Negative lookbehind excludes
+        # sizeof(double) / alignof(double), where the parens form a
+        # sizeof argument rather than a cast — those must promote to
+        # sizeof(float64x2_t) so heap allocations get the right size.
+        text = re.sub(r'(?<!sizeof)(?<!alignof)\(\s*double\s*\)',
+                      cast_marker, text)
         # Local declaration lines for cost-estimate locals. Match the
         # leading 'double' keyword on a line that mentions one of the
         # known cost-estimate names somewhere on the same line.
@@ -878,17 +1079,29 @@ def _apply_header_patches(output_dir: Path,
         target = output_dir / patch['file']
         if not target.exists():
             continue
-        anchor = patch['after']
-        insert = _expand_template(patch['insert'], template_vars)
-        if not insert.endswith('\n'):
-            insert = insert + '\n'
+        insert = _expand_template(patch['insert'], template_vars).rstrip('\n')
         text = target.read_text(errors='replace')
-        if anchor not in text:
-            continue
         if insert in text:
             continue  # already patched (idempotent)
-        # Insert on the line after the anchor.
-        text = text.replace(anchor, anchor + '\n' + insert.rstrip('\n'), 1)
+        # Insertion modes:
+        #  - ``at_bof: true`` — prepend at file start
+        #  - ``at_eof: true`` — append at file end
+        #  - ``before: <anchor>`` — insert on the line before the anchor
+        #  - ``after: <anchor>`` — insert on the line after the anchor
+        if patch.get('at_bof'):
+            text = insert + '\n' + text
+        elif patch.get('at_eof'):
+            sep = '' if text.endswith('\n') else '\n'
+            text = text + sep + insert + '\n'
+        else:
+            before = patch.get('before')
+            anchor = before or patch.get('after')
+            if anchor is None or anchor not in text:
+                continue
+            if before is not None:
+                text = text.replace(anchor, insert + '\n' + anchor, 1)
+            else:
+                text = text.replace(anchor, anchor + '\n' + insert, 1)
         target.write_text(text)
 
 
@@ -897,9 +1110,12 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
                                  classification: SymbolClassification,
                                  rename_map: dict[str, str],
                                  c_type_aliases: list[dict] | None = None,
+                                 c_pointer_cast_aliases: list[dict] | None = None,
                                  header_patches: list[dict] | None = None,
                                  extra_c_dirs: list[Path] | None = None,
-                                 skip_files: set[str] | None = None) -> dict:
+                                 skip_files: set[str] | None = None,
+                                 copy_files: set[str] | None = None,
+                                 source_overrides: dict[str, Path] | None = None) -> dict:
     """Rename-map-driven C migration for ScaLAPACK-style libraries.
 
     A file ``foo_.c`` is cloned iff its routine ``FOO`` is a D- or
@@ -920,6 +1136,20 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     if extra_c_dirs:
         all_src_dirs.extend(extra_c_dirs)
 
+    # ``source_overrides`` swaps the upstream copy of a named file with
+    # a recipe-supplied replacement at the start of the migration
+    # pipeline. The override is in upstream shape (S/D/C/Z naming,
+    # ``double`` types, etc.) and goes through the normal C migration
+    # so it produces correctly-renamed output for every target. Used
+    # for upstream-bug patches that affect specific routines in the
+    # SRC tree — e.g. ScaLAPACK PBLAS p[dz]atrmv_.c's missing ALPHA
+    # in the L,T branch (commit 4b2d5ee fixed the test driver; the
+    # migrator-side fix lives here).
+    _source_overrides = source_overrides or {}
+
+    def _apply_src_override(p: Path) -> Path:
+        return _source_overrides.get(p.name, p)
+
     # Copy all originals first (keeps S/D/C/Z entry points available).
     # When extra_c_dirs sources contain `#include "../foo.h"` paths
     # (PTOOLS uses ../pblas.h etc.), strip the `..` part since we're
@@ -927,23 +1157,105 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     # K&R-style function definitions are converted to ANSI so originals
     # compile as C++ (mpicxx).
     _skip = skip_files or set()
-    if copy_originals:
-        for d in all_src_dirs:
-            for f in sorted(d.iterdir()):
-                if f.suffix.lower() in ('.c', '.h'):
-                    stem_upper = (f.stem[:-1] if f.stem.endswith('_')
-                                  else f.stem).upper()
-                    if stem_upper in _skip:
-                        continue
-                    text = f.read_text(errors='replace')
-                    if d != src_dir:
-                        text = re.sub(
-                            r'#include\s*"\.\./([^"]+)"',
-                            r'#include "\1"', text)
-                    if f.suffix.lower() == '.c':
-                        text = _resolve_stdc_ifdefs(text)
-                        text = _convert_kr_to_ansi(text)
-                    (output_dir / f.name).write_text(text)
+    _copy = copy_files or set()
+    # Headers, copy_files entries, AND precision-independent dispatcher
+    # .c files are always staged into the migrated output_dir, even
+    # when ``copy_originals`` is False. The std archive (built directly
+    # from upstream sources by the CMake side) carries the S/D/C/Z
+    # entry points; the migrated archive carries the Q/X/E/Y/M/W
+    # clones plus the dispatchers (PB_Cconjg, PB_CpswapNN, BI_BlacsErr,
+    # ...) — files whose stems are NOT in rename_map. Dispatchers must
+    # ride in the migrated archive because the migrator's
+    # _apply_aliases_to_original pass widens their ``(double*)`` /
+    # ``(float*)`` pointer-casts to ``(QREAL*)`` / ``(EREAL*)`` /
+    # ``(float64x2_t*)`` for KIND targets, so the byte-stride
+    # arithmetic matches the wider type carried by callers. The std
+    # archive's untouched ``(double*)`` copies would corrupt strides
+    # when the migrated entry points dispatch through them.
+    for d in all_src_dirs:
+        for f in (_apply_src_override(p) for p in sorted(d.iterdir())):
+            stem_upper = (f.stem[:-1] if f.stem.endswith('_')
+                          else f.stem).upper()
+            # Also consider the decoration-stripped stem for skip
+            # matching. ``BLAS_cdot_c_s-f2c.c`` is a bridge for the
+            # already-skipped ``BLAS_cdot_c_s.c``; both should drop.
+            base_stem_for_skip, _deco_for_skip = _strip_decoration(
+                f.stem[:-1] if f.stem.endswith('_') else f.stem
+            )
+            base_stem_upper = base_stem_for_skip.upper()
+            is_c_or_h = f.suffix.lower() in ('.c', '.h')
+            is_header = f.suffix.lower() == '.h'
+            is_copy = stem_upper in _copy
+            # A .c file is a "dispatcher" iff it is NOT precision-
+            # prefixed: stem not in rename_map AND not matching the
+            # ``p<sdcz><root>`` pattern that ``_redist_clone_stem``
+            # uses to clone files whose Fortran-callable exports live
+            # behind ``#define`` macros (REDIST/SRC entry points like
+            # pdgemr.c, pztrmr2.c, ScaLAPACK orphan helpers like
+            # pdlaiect.c). Both classes are owned by the std archive;
+            # only true dispatchers (PB_Cconjg, BI_BlacsErr, ...) ride
+            # in the migrated archive.
+            is_dispatcher = False
+            if (f.suffix.lower() == '.c'
+                    and stem_upper not in (rename_map or {})):
+                # XBLAS f2c-bridge files (``BLAS_dgemv_x-f2c.c``) are
+                # not in rename_map under their decorated stem, but
+                # the cloning loop knows how to rewrite them via
+                # ``_strip_decoration``. Don't classify them as
+                # dispatchers; the cloning pass will produce the
+                # correctly-renamed output and the original copy
+                # would just collide with that.
+                base_stem, deco = _strip_decoration(
+                    f.stem[:-1] if f.stem.endswith('_') else f.stem
+                )
+                if (deco
+                        and base_stem.upper() in (rename_map or {})):
+                    pass  # cloned by the rename-map pass
+                elif _redist_clone_stem(f.stem, target_mode) is None:
+                    is_dispatcher = True
+            if not (is_c_or_h or is_copy):
+                continue
+            if stem_upper in _skip or base_stem_upper in _skip:
+                continue
+            if (not copy_originals and not is_header and not is_copy
+                    and not is_dispatcher):
+                continue
+            text = f.read_text(errors='replace')
+            if is_copy and not is_c_or_h:
+                # Fortran copy-files are staged verbatim: no include
+                # rewrites, no K&R conversion, no stdc-ifdef folding.
+                (output_dir / f.name).write_text(text)
+                continue
+            if d != src_dir:
+                text = re.sub(
+                    r'#include\s*"\.\./([^"]+)"',
+                    r'#include "\1"', text)
+            if f.suffix.lower() == '.c':
+                text = _resolve_stdc_ifdefs(text)
+                text = _convert_kr_to_ansi(text)
+                # Aliases (cmplx16 → cmplxQ, (double*) → (REAL_TYPE*))
+                # apply to:
+                #   (a) precision-independent dispatchers (not in
+                #       rename_map, e.g. PB_Cconjg, PB_Ctzher2k) —
+                #       on EVERY target, because cloned entry points
+                #       call them and need the wider types.
+                #   (b) precision-prefixed originals (in rename_map,
+                #       e.g. pdgemm_, pcamax_, PB_Cdtypeset) — only on
+                #       KIND-based targets, where -freal-8-real-16
+                #       promotion means the original is still called
+                #       with quad-stride args and its body must
+                #       widen too. On multifloats targets the
+                #       precision-prefixed originals are dead (callers
+                #       route through clones) and their native
+                #       double*/float* signatures must stay so the
+                #       body still compiles as C++ (struct types
+                #       cannot assign to native scalar lvalues).
+                is_dispatcher = stem_upper not in rename_map
+                if is_dispatcher or target_mode.is_kind_based:
+                    text = _apply_aliases_to_original(
+                        text, template_vars, c_type_aliases,
+                        c_pointer_cast_aliases)
+            (output_dir / f.name).write_text(text)
 
     # Apply recipe-declared header patches to the copied originals so
     # later clones can reference the newly introduced typedefs.
@@ -1001,7 +1313,9 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
 
     all_c_files: list[Path] = []
     for d in all_src_dirs:
-        all_c_files.extend(f for f in d.iterdir() if f.suffix.lower() == '.c')
+        all_c_files.extend(_apply_src_override(f)
+                            for f in d.iterdir()
+                            if f.suffix.lower() == '.c')
     entries = sorted(
         all_c_files,
         key=lambda f: (
@@ -1037,19 +1351,32 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
     for f in entries:
         has_underscore = f.stem.endswith('_')
         routine = f.stem[:-1] if has_underscore else f.stem
-        upper_routine = routine.upper()
+        # XBLAS bridge files (``BLAS_dgemv_x-f2c.c``) share the
+        # routine stem of their parent ``BLAS_dgemv_x`` plus a
+        # decoration; strip it for the rename-map lookup and reapply
+        # to the output filename.
+        base_routine, decoration = _strip_decoration(routine)
+        upper_routine = base_routine.upper()
 
-        if upper_routine in _skip:
-            continue
-        if upper_routine not in rename_map:
-            continue
-        if classification.get_family(upper_routine) is None:
+        if upper_routine in _skip or routine.upper() in _skip:
             continue
 
-        target_upper = rename_map[upper_routine]
-        target_lower = target_upper.lower()
-        new_stem = target_lower + ('_' if has_underscore else '')
-        new_name = new_stem + f.suffix
+        # REDIST-style files like ``pdgemr.c`` / ``pdgemr2.c`` /
+        # ``pdtrmr2.c`` expose Fortran-callable entry points only behind
+        # ``#define fortran_mr2dnew pdgemr2d_`` macros, so the file
+        # stem doesn't match an exported symbol and the symbol scanner
+        # never adds it to rename_map. The stem itself is still
+        # ``p<precision-letter><root>``, so derive the clone stem
+        # directly via the target's precision-family map.
+        if (upper_routine in rename_map
+                and classification.get_family(upper_routine) is not None):
+            new_stem = rename_map[upper_routine].lower() + decoration
+        else:
+            new_stem = _redist_clone_stem(base_routine, target_mode)
+            if new_stem is None:
+                continue
+            new_stem = new_stem + decoration
+        new_name = new_stem + ('_' if has_underscore else '') + f.suffix
         new_path = output_dir / new_name
 
         text = f.read_text(errors='replace')
@@ -1092,24 +1419,70 @@ def _migrate_generic_c_directory(src_dir: Path, output_dir: Path,
 
 
 def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
-                                 target_mode: TargetMode, copy_originals: bool) -> dict:
-    """BLACS-specific C migration (original behavior)."""
+                                 target_mode: TargetMode, copy_originals: bool,
+                                 source_overrides: dict[str, Path] | None = None) -> dict:
+    """BLACS-specific C migration (original behavior).
+
+    ``source_overrides`` maps upstream basenames to recipe-relative
+    replacement paths. A name that exists upstream is swapped for the
+    replacement before the copy / clone passes — so the override goes
+    through the same d→{rp} / z→{cp} substitution as the original.
+    A name that does not exist upstream is added as a new source (used
+    for sibling files like ``BI_dMPI_sum.c`` that have no upstream
+    counterpart). Same semantics as the generic-path
+    ``source_overrides`` field, but adapted to BLACS's hand-rolled
+    file walk.
+    """
     template_vars = _build_sub_vars(target_mode)
     rp = template_vars['RP']
     cp = template_vars['CP']
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy all originals first
-    if copy_originals:
-        for f in sorted(src_dir.iterdir()):
-            if f.suffix.lower() in ('.c', '.h'):
+    _overrides = source_overrides or {}
+
+    # Build the effective source list: every upstream file (with the
+    # override path swapped in if its name is overridden), plus any
+    # override-only files not present upstream. The override file's
+    # ``Path.name`` is used downstream for prefix detection and clone
+    # naming, so override files must keep the upstream-shape basename.
+    upstream_by_name = {p.name: p for p in src_dir.iterdir()}
+    sources: list[Path] = []
+    for name in sorted(upstream_by_name):
+        sources.append(_overrides.get(name, upstream_by_name[name]))
+    for name in sorted(_overrides):
+        if name not in upstream_by_name:
+            sources.append(_overrides[name])
+
+    # Copy headers always; copy precision-prefixed .c originals only
+    # when copy_originals; copy precision-independent dispatcher .c
+    # files always (BI_BlacsErr, BI_GetBuff, blacs_setup_, ...). The
+    # dispatchers ride in the migrated archive because callers reach
+    # them through the BLACS-style symbol map; the std archive picks
+    # them up too via the upstream source dir, but the linker only
+    # ever pulls one definition (whichever resolves an undefined
+    # symbol first), so duplication is benign and the migrated copies
+    # match the precision the migrated bodies expect.
+    def _is_blacs_precision_prefix(stem: str) -> bool:
+        # Mirrors the d/z clone discovery in the loops below.
+        if stem.startswith(('d', 'z')) and not stem.startswith(('BI_',)):
+            return True
+        if stem.startswith(('BI_d', 'BI_z')):
+            return True
+        return False
+
+    for f in sources:
+        ext = f.suffix.lower()
+        if ext == '.h':
+            shutil.copy2(f, output_dir / f.name)
+        elif ext == '.c':
+            if copy_originals or not _is_blacs_precision_prefix(f.stem):
                 shutil.copy2(f, output_dir / f.name)
 
     cloned = []
 
     # Clone d-variant → real-extended
-    for f in sorted(src_dir.iterdir()):
+    for f in sources:
         if f.suffix.lower() != '.c':
             continue
         stem = f.stem
@@ -1131,7 +1504,7 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
             cloned.append(f'{f.name} → {new_name}')
 
     # Clone z-variant → complex-extended
-    for f in sorted(src_dir.iterdir()):
+    for f in sources:
         if f.suffix.lower() != '.c':
             continue
         stem = f.stem
@@ -1148,6 +1521,7 @@ def _migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
     bdef_path = output_dir / 'Bdef.h'
     if bdef_path.exists():
         _patch_bdef_header(bdef_path, target_mode, template_vars)
+
 
     # Generate MPI datatype availability check when the target requires
     # stock MPI datatypes that may not be universally available (e.g.

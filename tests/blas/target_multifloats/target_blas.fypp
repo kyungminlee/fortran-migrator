@@ -1,0 +1,12 @@
+#:set target         = 'multifloats'
+#:set target_name    = 'multifloats'
+#! Double-double effective epsilon ≈ 2^-104 ≈ 4.93e-32.
+#:set target_eps     = 'real(2.0_8**(-104), ep)'
+#:set target_real    = 'type(real64x2)'
+#:set target_complex = 'type(cmplx64x2)'
+#:set prefix_real    = 'm'
+#:set prefix_complex = 'w'
+#:set prefix_mixed   = 'mw'
+#:set prefix_idamax  = 'im'
+#:set prefix_izamax  = 'iw'
+#:include 'target_blas_body.fypp'

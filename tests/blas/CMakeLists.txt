@@ -47,12 +47,15 @@ if(NOT IS_DIRECTORY ${_wrapper_dir})
     return()
 endif()
 
-add_library(blas_test_target STATIC
-    ${_wrapper_dir}/target_blas.f90
+add_fypp_source(_blas_wrapper_src
+    ${_wrapper_dir}/target_blas.fypp
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
+add_library(blas_test_target STATIC ${_blas_wrapper_src})
 fortran_module_layout(blas_test_target)
 target_link_libraries(blas_test_target PUBLIC
     blas_test_common
+    target_conv
     ${LIB_PREFIX}blas
 )
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)

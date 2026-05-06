@@ -1,0 +1,73 @@
+program test_pzggqrf
+    ! Generalized QR factorization: A=Q*R (n×m), B=Q*T*Z (n×p).
+    ! Compare gathered factors against zggqrf.
+    use prec_kinds,        only: ep
+    use compare,           only: max_rel_err_mat_z
+    use pblas_prec_report, only: report_init, report_case, report_finalize
+    use ref_quad_lapack,   only: zggqrf
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
+                                 my_nprow, my_npcol, my_row, my_col, &
+                                 numroc_local, descinit_local
+    use pblas_distrib,     only: gen_distrib_matrix_z, gather_matrix_z
+    use target_scalapack,  only: target_name, target_eps, target_pzggqrf
+    implicit none
+
+    integer, parameter :: n_v(*) = [48, 64, 96]
+    integer, parameter :: m_v(*) = [32, 48, 48]
+    integer, parameter :: p_v(*) = [40, 56, 64]
+    integer, parameter :: mb = 8, nb = 8
+    integer :: i, n, m, p, info, info_ref, lwork
+    integer :: locm_a, locn_a, lld_a, locm_b, locn_b, lld_b
+    integer :: desca(9), descb(9)
+    complex(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:), A_ref(:,:)
+    complex(ep), allocatable :: B_loc(:,:), B_glob(:,:), B_got(:,:), B_ref(:,:)
+    complex(ep), allocatable :: taua(:), taub(:), work(:)
+    complex(ep), allocatable :: taua_ref(:), taub_ref(:), work_ref(:)
+    real(ep) :: err, tol
+    character(len=48) :: label
+
+    call grid_init()
+    call report_init('pzggqrf', target_name, my_rank)
+
+    do i = 1, size(n_v)
+        n = n_v(i); m = m_v(i); p = p_v(i)
+        call gen_distrib_matrix_z(n, m, mb, nb, A_loc, A_glob, seed = 27101 + 31*i)
+        call gen_distrib_matrix_z(n, p, mb, nb, B_loc, B_glob, seed = 27111 + 31*i)
+
+        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
+        locn_a = numroc_local(m, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
+        locm_b = numroc_local(n, mb, my_row, 0, my_nprow)
+        locn_b = numroc_local(p, nb, my_col, 0, my_npcol); lld_b = max(1, locm_b)
+        call descinit_local(desca, n, m, mb, nb, 0, 0, my_context, lld_a, info)
+        call descinit_local(descb, n, p, mb, nb, 0, 0, my_context, lld_b, info)
+
+        allocate(taua(max(1, locn_a)), taub(max(1, locm_b)), work(1))
+        call target_pzggqrf(n, m, p, A_loc, 1, 1, desca, taua, &
+                            B_loc, 1, 1, descb, taub, work, -1, info)
+        lwork = max(1, int(real(work(1))))
+        deallocate(work); allocate(work(lwork))
+        call target_pzggqrf(n, m, p, A_loc, 1, 1, desca, taua, &
+                            B_loc, 1, 1, descb, taub, work, lwork, info)
+        call gather_matrix_z(n, m, mb, nb, A_loc, A_got)
+        call gather_matrix_z(n, p, mb, nb, B_loc, B_got)
+
+        if (my_rank == 0) then
+            allocate(A_ref(n, m), B_ref(n, p), taua_ref(min(n, m)), &
+                     taub_ref(min(n, p)), &
+                     work_ref(max(1, max(n, m, p) * 64)))
+            A_ref = A_glob; B_ref = B_glob
+            call zggqrf(n, m, p, A_ref, n, taua_ref, B_ref, n, taub_ref, &
+                        work_ref, size(work_ref), info_ref)
+            err = max(max_rel_err_mat_z(A_got, A_ref), &
+                      max_rel_err_mat_z(B_got, B_ref))
+            tol = 64.0_ep * real(max(n, m, p), ep)**2 * target_eps
+            write(label, '(a,i0,a,i0,a,i0)') 'n=', n, ',m=', m, ',p=', p
+            call report_case(trim(label), err, tol)
+            deallocate(A_ref, B_ref, taua_ref, taub_ref, work_ref, A_got, B_got)
+        end if
+        deallocate(A_loc, A_glob, B_loc, B_glob, taua, taub, work)
+    end do
+
+    call report_finalize()
+    call grid_exit()
+end program test_pzggqrf

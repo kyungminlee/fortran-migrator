@@ -6,7 +6,27 @@ program test_drotmg
     use ref_quad_blas, only: drotmg
     implicit none
 
-    integer, parameter :: ncases = 4
+    ! Each row is (d1, d2, x1, y1) chosen to drive a specific flag /
+    ! rescale branch in DROTMG:
+    !   1–4: ordinary inputs spanning flag=0 / flag=1 territory
+    !   5  : d1 < 0  → forces flag = -1 (full rescale)
+    !   6  : d2 = 0  → degenerate axis, exercises early return
+    !   7  : y1 = 0  → flag = -2 (identity rotation)
+    !   8  : extreme |q1| → triggers GAMSQ rescale path inside drotmg
+    !   9  : extreme 1/|q1| → triggers 1/GAMSQ rescale path
+    integer, parameter :: ncases = 9
+    real(ep), parameter :: gam = 4096.0_ep
+    real(ep), parameter :: cases(4, ncases) = reshape([ &
+        1.5_ep, 3.2_ep, 0.5_ep, 0.3_ep, &
+        3.0_ep, 2.4_ep, 1.0_ep, 0.6_ep, &
+        4.5_ep, 1.6_ep, 1.5_ep, 0.9_ep, &
+        6.0_ep, 0.8_ep, 2.0_ep, 1.2_ep, &
+        -1.0_ep, 1.0_ep, 0.5_ep, 0.3_ep, &
+        2.0_ep, 0.0_ep, 0.5_ep, 0.3_ep, &
+        2.0_ep, 1.0_ep, 0.5_ep, 0.0_ep, &
+        1.0_ep, 1.0_ep, 1.0_ep / gam, gam, &
+        1.0_ep, 1.0_ep, gam, 1.0_ep / gam], &
+        [4, ncases])
     integer :: i
     real(ep) :: d1_0, d2_0, x1_0, y1_0
     real(ep) :: d1_ref, d2_ref, x1_ref, param_ref(5)
@@ -16,10 +36,8 @@ program test_drotmg
 
     call report_init('drotmg', target_name)
     do i = 1, ncases
-        d1_0 = real(i, ep) * 1.5_ep
-        d2_0 = real(ncases - i + 1, ep) * 0.8_ep
-        x1_0 = real(i, ep) * 0.5_ep
-        y1_0 = real(i, ep) * 0.3_ep
+        d1_0 = cases(1, i); d2_0 = cases(2, i)
+        x1_0 = cases(3, i); y1_0 = cases(4, i)
         d1_ref = d1_0; d2_ref = d2_0; x1_ref = x1_0
         d1_got = d1_0; d2_got = d2_0; x1_got = x1_0
         call drotmg(d1_ref, d2_ref, x1_ref, y1_0, param_ref)

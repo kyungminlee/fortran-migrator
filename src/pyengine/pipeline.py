@@ -14,10 +14,29 @@ from .config import RecipeConfig, load_recipe
 from .symbol_scanner import scan_symbols
 from .prefix_classifier import classify_symbols, build_rename_map
 from .fortran_migrator import migrate_file, migrate_file_to_string, target_filename
-from .c_migrator import migrate_c_directory, migrate_c_file_to_string
+from .c_migrator import migrate_c_directory, migrate_c_file_to_string, _build_sub_vars, _expand_template
 from .target_mode import TargetMode
 
 from tqdm import tqdm
+
+
+def _apply_extra_renames(rename_map: dict[str, str],
+                         config: RecipeConfig,
+                         target_mode: TargetMode) -> dict[str, str]:
+    """Append recipe-declared ``extra_renames`` to ``rename_map``.
+
+    Targets may use ``{RP}/{CP}/{RPU}/{CPU}`` template substitutions.
+    Returns ``rename_map`` mutated in place. See
+    :class:`RecipeConfig.extra_renames` for the canonical use case
+    (precision-prefixed orphan symbols whose S/C sibling does not
+    exist upstream so the classifier cannot pair them).
+    """
+    if not config.extra_renames:
+        return rename_map
+    template_vars = _build_sub_vars(target_mode)
+    for src_upper, tgt_template in config.extra_renames.items():
+        rename_map[src_upper] = _expand_template(tgt_template, template_vars).upper()
+    return rename_map
 
 
 def _strip_fortran_comments(text: str, ext: str) -> str:
@@ -466,9 +485,9 @@ def _canonicalize_for_compare(text: str) -> str:
     """Normalize text to ignore cosmetic precision-specific differences
     that remain after migration.
     """
-    # 0. Strip module-based type constructors: e.g. float64x2('1.0D0') -> '1.0D0'
-    # Matches identifiers containing a digit (type names like float64x2,
-    # complex128x2, real256, etc.) followed by a single-argument call.
+    # 0. Strip module-based type constructors: e.g. real64x2('1.0D0') -> '1.0D0'
+    # Matches identifiers containing a digit (type names like real64x2,
+    # cmplx64x2, real256, etc.) followed by a single-argument call.
     # This avoids matching Fortran keywords or subroutine calls.
     text = re.sub(r"\b(\w*\d\w*)\s*\(\s*'([^']+)'\s*\)", r"\2", text, flags=re.IGNORECASE)
     text = re.sub(r"\b(\w*\d\w*)\s*\(([^)]+)\)", r"\2", text, flags=re.IGNORECASE)
@@ -494,7 +513,7 @@ def _canonicalize_for_compare(text: str) -> str:
         r'COMPLEX', text, flags=re.IGNORECASE)
     # Canonicalize TYPE(...) declarations to REAL/COMPLEX.
     # Any TYPE(...) that remains after KIND canonicalization is a module-
-    # based type (e.g. TYPE(float64x2), TYPE(real256)) — normalize to
+    # based type (e.g. TYPE(real64x2), TYPE(real256)) — normalize to
     # base precision for comparison purposes.
     text = re.sub(
         r'\bTYPE\s*\(\s*\w+\s*\)',
@@ -622,6 +641,27 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
         if p.suffix.lower() in config.extensions
         or p.stem.upper() in config.copy_files
     )
+    # extra_migrate_files pulls in specific leaf files from outside
+    # source_dir / extra_fortran_dirs — used to target individual
+    # helpers that live in a shared directory whose other contents
+    # belong to a different library (LAPACK's INSTALL/dlamch.f,
+    # PTZBLAS's TOOLS/zzdotc.f). The symbol scanner already sees these
+    # via extra_symbol_dirs, so the rename map covers the referenced
+    # names; this line only widens the emit loop to include them.
+    extra_migrate = list(getattr(config, 'extra_migrate_files', []) or [])
+    src_files = sorted(set(src_files).union(
+        p for p in extra_migrate if p.is_file()
+    ))
+    # Swap any upstream source whose filename matches a recipe-level
+    # override. The override file is in upstream shape (DOUBLE PRECISION,
+    # pd*/dz* naming, etc.) and goes through the normal migration
+    # pipeline so it produces correctly-renamed output for every target.
+    if config.source_overrides:
+        src_files = [
+            (config.source_overrides[p.name]
+             if p.name in config.source_overrides else p)
+            for p in src_files
+        ]
 
     # Convergence buffer: first writer of each output name stores its
     # text; subsequent writers must agree or we record a divergence.
@@ -825,6 +865,7 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
     symbols = _collect_all_symbols(config, project_root)
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_mode)
+    rename_map = _apply_extra_renames(rename_map, config, target_mode)
 
     # Group eligible source files by their target output name.
     src_files = sorted(
@@ -937,6 +978,7 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
     symbols = _collect_all_symbols(config, project_root)
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_mode)
+    rename_map = _apply_extra_renames(rename_map, config, target_mode)
 
     src_files = sorted(
         p for p in config.source_dir.iterdir()
@@ -1061,10 +1103,13 @@ def run_c_convergence_report(recipe_path: Path, output_dir: Path,
 
     rename_map: dict[str, str] | None = None
     classification = None
-    if config.prefix_style == 'scalapack':
+    # Every C recipe except BLACS uses the rename-map-driven path —
+    # see the matching gate in run_migration().
+    if config.library != 'blacs':
         symbols = _collect_all_symbols(config, project_root)
         classification = classify_symbols(symbols)
         rename_map = classification.build_rename_map(target_mode)
+        rename_map = _apply_extra_renames(rename_map, config, target_mode)
 
     src_files = sorted(
         p for p in config.source_dir.iterdir()
@@ -1161,10 +1206,13 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         classification=classification,
         rename_map=rename_map,
         c_type_aliases=config.c_type_aliases,
+        c_pointer_cast_aliases=config.c_pointer_cast_aliases,
         header_patches=config.header_patches,
         overrides=overrides,
         extra_c_dirs=config.extra_c_dirs,
         skip_files=config.skip_files,
+        copy_files=config.copy_files,
+        source_overrides=config.source_overrides,
     )
     return result
 
@@ -1248,6 +1296,7 @@ def run_migration(recipe_path: Path, output_dir: Path,
 
     classification = classify_symbols(symbols)
     rename_map = classification.build_rename_map(target_mode)
+    rename_map = _apply_extra_renames(rename_map, config, target_mode)
 
     # NOTE: target_mode.known_constants (ZERO/ONE/...) are handled
     # per-file by strip_known_constants_from_decls +
@@ -1287,15 +1336,21 @@ def run_migration(recipe_path: Path, output_dir: Path,
                 if len(result['divergences']) > 10:
                     print(f'    ... ({len(result["divergences"]) - 10} more)')
     elif config.language == 'c':
-        # ScaLAPACK-style C libraries (PBLAS) use rename-map-driven
-        # cloning; BLACS-style (prefix 'direct') keeps the legacy path.
-        if config.prefix_style == 'scalapack':
+        # BLACS keeps the legacy hardcoded-pattern migrator (it carries
+        # MPI typedef patches, Bdef.h rewrites, MPI_REAL16 check
+        # generation, and BLACS-specific Cd*/BI_d* routine patterns
+        # that have no analogue in other C libraries). Every other C
+        # recipe (PBLAS / ScaLAPACK_C / XBLAS / future libraries) uses
+        # the generic rename-map-driven cloner — the prefix classifier
+        # discovers slot positions empirically, so the cloner is
+        # naming-convention-agnostic.
+        if config.library == 'blacs':
+            result = run_c_migration(config, output_dir, target_mode, dry_run)
+        else:
             result = run_c_migration(
                 config, output_dir, target_mode, dry_run,
                 classification=classification, rename_map=rename_map,
             )
-        else:
-            result = run_c_migration(config, output_dir, target_mode, dry_run)
         if not dry_run:
             print(f'\n  Cloned: {len(result["cloned"])} files')
             if result.get('divergences'):

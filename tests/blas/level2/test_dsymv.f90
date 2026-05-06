@@ -7,7 +7,8 @@ program test_dsymv
     use ref_quad_blas, only: dsymv
     implicit none
 
-    integer, parameter :: cases(*) = [10, 50, 200]
+    integer, parameter :: cases(*)            = [10, 50, 200]
+    character(len=1), parameter :: uplos(*)  = ['U', 'L', 'U']
     integer :: i, n
     real(ep), allocatable :: A(:,:), x(:), y0(:), y_ref(:), y_got(:)
     real(ep) :: alpha, beta, err, tol
@@ -25,11 +26,11 @@ program test_dsymv
         allocate(y_ref(n), y_got(n))
         y_ref = y0
         y_got = y0
-        call dsymv('U', n, alpha, A, n, x, 1, beta, y_ref, 1)
-        call target_dsymv('U', n, alpha, A, n, x, 1, beta, y_got, 1)
+        call dsymv(uplos(i), n, alpha, A, n, x, 1, beta, y_ref, 1)
+        call target_dsymv(uplos(i), n, alpha, A, n, x, 1, beta, y_got, 1)
         err = max_rel_err_vec(y_got, y_ref)
         tol = 16.0_ep * 2.0_ep * real(n, ep) * target_eps
-        write(label, '(a,i0)') 'n=', n
+        write(label, '(a,a,a,i0)') 'uplo=', uplos(i), ',n=', n
         call report_case(trim(label), err, tol)
         deallocate(y_ref, y_got)
     end do

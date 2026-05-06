@@ -10,5 +10,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "fypp>=3.2",
     "pytest>=9.0.3",
 ]

@@ -1,0 +1,6907 @@
+! Explicit interfaces to reflapack_quad — the vendored Netlib LAPACK
+! compiled with gfortran's -freal-8-real-16 so REAL(KIND=8) and
+! DOUBLE PRECISION entities are promoted to REAL(KIND=16) without
+! routine renaming. The D/Z routines below operate at quad precision
+! and serve as the universal reference for the differential precision
+! tests.
+!
+! Calling these via implicit typing would be wrong: a caller without
+! the explicit interface would default DGESV etc. to DOUBLE PRECISION
+! (KIND=8), mismatching the promoted KIND=16 symbol. Always `use
+! ref_quad_lapack`.
+
+module ref_quad_lapack
+    use prec_kinds, only: ep
+    implicit none
+
+    interface
+        ! ── Linear solve / factorization — real ──────────────────────
+        subroutine dgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, lda, ldb
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,  intent(out)   :: ipiv(*), info
+        end subroutine dgesv
+
+        subroutine dgetrf(m, n, A, lda, ipiv, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda
+            real(ep), intent(inout) :: A(lda,*)
+            integer,  intent(out)   :: ipiv(*), info
+        end subroutine dgetrf
+
+        subroutine dgetrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dgetrs
+
+        subroutine dpotrf(uplo, n, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dpotrf
+
+        subroutine dpotrs(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpotrs
+
+        ! ── Linear solve — complex ───────────────────────────────────
+        subroutine zgesv(n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgesv
+
+        subroutine zgetrf(m, n, A, lda, ipiv, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgetrf
+
+        subroutine zgetrs(trans, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgetrs
+
+        subroutine zpotrf(uplo, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotrf
+
+        subroutine zpotrs(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotrs
+
+        subroutine zungqr(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungqr
+
+        subroutine zgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                          work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobvt
+            integer,     intent(in)    :: m, n, lda, ldu, ldvt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: s(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), VT(ldvt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvd
+
+        function zlange(norm, m, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm
+            integer,     intent(in) :: m, n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlange
+
+        function zlanhe(norm, uplo, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function zlanhe
+
+        subroutine zlacpy(uplo, m, n, A, lda, B, ldb)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: m, n, lda, ldb
+            complex(ep), intent(in)  :: A(lda,*)
+            complex(ep), intent(out) :: B(ldb,*)
+        end subroutine zlacpy
+
+        subroutine zlaset(uplo, m, n, alpha, beta, A, lda)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: m, n, lda
+            complex(ep), intent(in)    :: alpha, beta
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zlaset
+
+        ! ── QR factorization — real ──────────────────────────────────
+        subroutine dgeqrf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqrf
+
+        subroutine dorgqr(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgqr
+
+        ! ── QR factorization — complex ───────────────────────────────
+        subroutine zgeqrf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqrf
+
+        ! ── Symmetric / Hermitian eigenvalue ─────────────────────────
+        subroutine dsyev(jobz, uplo, n, A, lda, w, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyev
+
+        subroutine zheev(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zheev
+
+        ! ── SVD ──────────────────────────────────────────────────────
+        subroutine dgesvd(jobu, jobvt, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobu, jobvt
+            integer,   intent(in)    :: m, n, lda, ldu, ldvt, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: s(*), U(ldu,*), VT(ldvt,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgesvd
+
+        ! ── Auxiliary ────────────────────────────────────────────────
+        function dlange(norm, m, n, A, lda, work) result(r)
+            import :: ep
+            character, intent(in) :: norm
+            integer,   intent(in) :: m, n, lda
+            real(ep),  intent(in) :: A(lda,*)
+            real(ep) :: work(*)
+            real(ep) :: r
+        end function dlange
+
+        subroutine dlacpy(uplo, m, n, A, lda, B, ldb)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: m, n, lda, ldb
+            real(ep),  intent(in)  :: A(lda,*)
+            real(ep),  intent(out) :: B(ldb,*)
+        end subroutine dlacpy
+
+        subroutine dlaset(uplo, m, n, alpha, beta, A, lda)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: m, n, lda
+            real(ep),  intent(in)    :: alpha, beta
+            real(ep),  intent(inout) :: A(lda,*)
+        end subroutine dlaset
+
+        ! ── Phase 2 — real user-facing drivers ───────────────────────
+        subroutine dposv(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dposv
+
+        subroutine dsysv(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsysv
+
+        subroutine dsytrf(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsytrf
+
+        subroutine dsytrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs
+
+        subroutine dgels(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgels
+
+        subroutine dsyevd(jobz, uplo, n, A, lda, w, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyevd
+
+        subroutine dgeev(jobvl, jobvr, n, A, lda, wr, wi, &
+                         vl, ldvl, vr, ldvr, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobvl, jobvr
+            integer,   intent(in)    :: n, lda, ldvl, ldvr, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: wr(*), wi(*), vl(ldvl,*), vr(ldvr,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgeev
+
+        subroutine dgesdd(jobz, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                          work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: jobz
+            integer,   intent(in)    :: m, n, lda, ldu, ldvt, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: s(*), U(ldu,*), VT(ldvt,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgesdd
+
+        subroutine dpotri(uplo, n, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dpotri
+
+        subroutine dgetri(n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgetri
+
+        ! ── Phase 3 — triangular + complex driver mirrors ────────────
+        subroutine dtrtri(uplo, diag, n, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo, diag
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dtrtri
+
+        subroutine dtrtrs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dtrtrs
+
+        subroutine ztrtri(uplo, diag, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo, diag
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine ztrtri
+
+        subroutine ztrtrs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine ztrtrs
+
+        subroutine zposv(uplo, n, nrhs, A, lda, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zposv
+
+        subroutine zhesv(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhesv
+
+        subroutine zheevd(jobz, uplo, n, A, lda, w, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, lda, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zheevd
+
+        subroutine zgeev(jobvl, jobvr, n, A, lda, w, vl, ldvl, vr, ldvr, &
+                         work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvl, jobvr
+            integer,     intent(in)    :: n, lda, ldvl, ldvr, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: w(*), vl(ldvl,*), vr(ldvr,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeev
+
+        subroutine zgesdd(jobz, m, n, A, lda, s, U, ldu, VT, ldvt, &
+                          work, lwork, rwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz
+            integer,     intent(in)    :: m, n, lda, ldu, ldvt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: s(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), VT(ldvt,*), work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zgesdd
+
+        subroutine zgels(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgels
+
+        ! ── Phase 4 — selected/generalized eig + QR/LQ family ────────
+        subroutine dsyevr(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, isuppz, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork, liwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dsyevr
+
+        subroutine zheevr(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, isuppz, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, lda, il, iu, ldz, lwork, lrwork, liwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+        end subroutine zheevr
+
+        subroutine dsygv(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                         work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsygv
+
+        subroutine zhegv(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                         work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhegv
+
+        subroutine dgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, ilo, ihi, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgehrd
+
+        subroutine dorghr(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, ilo, ihi, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorghr
+
+        subroutine dgelqf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgelqf
+
+        subroutine dorglq(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorglq
+
+        subroutine zgelqf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgelqf
+
+        subroutine zunglq(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunglq
+
+        ! ── Phase 5 — complex mirrors + QR helpers ───────────────────
+        subroutine zgetri(n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgetri
+
+        subroutine zpotri(uplo, n, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine zpotri
+
+        subroutine zhetrf(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhetrf
+
+        subroutine zhetrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrs
+
+        subroutine zgehrd(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, ilo, ihi, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgehrd
+
+        subroutine zunghr(n, ilo, ihi, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, ilo, ihi, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunghr
+
+        subroutine dgeqp3(m, n, A, lda, jpvt, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            integer,  intent(inout) :: jpvt(*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqp3
+
+        subroutine zgeqp3(m, n, A, lda, jpvt, tau, work, lwork, rwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(inout) :: jpvt(*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqp3
+
+        subroutine dormqr(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormqr
+
+        subroutine zunmqr(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmqr
+
+        ! ── Phase 6 — banded + tridiagonal ───────────────────────────
+        subroutine dgbtrf(m, n, kl, ku, AB, ldab, ipiv, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, kl, ku, ldab
+            real(ep), intent(inout) :: AB(ldab,*)
+            integer,  intent(out)   :: ipiv(*), info
+        end subroutine dgbtrf
+
+        subroutine dgbtrs(trans, n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+            real(ep),  intent(in)    :: AB(ldab,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dgbtrs
+
+        subroutine dgbsv(n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+            real(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer,  intent(out)   :: ipiv(*), info
+        end subroutine dgbsv
+
+        subroutine dpbtrf(uplo, n, kd, AB, ldab, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, ldab
+            real(ep),  intent(inout) :: AB(ldab,*)
+            integer,   intent(out)   :: info
+        end subroutine dpbtrf
+
+        subroutine dpbtrs(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+            real(ep),  intent(in)    :: AB(ldab,*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpbtrs
+
+        subroutine dpbsv(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+            real(ep),  intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpbsv
+
+        subroutine dgttrf(n, dl, d, du, du2, ipiv, info)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(inout) :: dl(*), d(*), du(*)
+            real(ep), intent(out)   :: du2(*)
+            integer,  intent(out)   :: ipiv(*), info
+        end subroutine dgttrf
+
+        subroutine dgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: dl(*), d(*), du(*), du2(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dgttrs
+
+        subroutine dpttrf(n, d, e, info)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(inout) :: d(*), e(*)
+            integer,  intent(out)   :: info
+        end subroutine dpttrf
+
+        subroutine dpttrs(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb
+            real(ep), intent(in)    :: d(*), e(*)
+            real(ep), intent(inout) :: B(ldb,*)
+            integer,  intent(out)   :: info
+        end subroutine dpttrs
+        ! ── Phase 7 — symmetric / Hermitian eigenvalue family ────────
+        subroutine dsyevx(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, lwork, &
+                          iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dsyevx
+
+        subroutine zheevx(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, lwork, &
+                          rwork, iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, lda, il, iu, ldz, lwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+        end subroutine zheevx
+
+        subroutine dstev(jobz, n, d, e, z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: jobz
+            integer,   intent(in)    :: n, ldz
+            real(ep),  intent(inout) :: d(*), e(*)
+            real(ep),  intent(out)   :: z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dstev
+
+        subroutine dstevd(jobz, n, d, e, z, ldz, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz
+            integer,   intent(in)    :: n, ldz, lwork, liwork
+            real(ep),  intent(inout) :: d(*), e(*)
+            real(ep),  intent(out)   :: z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dstevd
+
+        subroutine dstevx(jobz, range, n, d, e, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range
+            integer,   intent(in)    :: n, il, iu, ldz
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: d(*), e(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dstevx
+
+        subroutine dstevr(jobz, range, n, d, e, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, isuppz, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range
+            integer,   intent(in)    :: n, il, iu, ldz, lwork, liwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: d(*), e(*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dstevr
+
+        subroutine dsbev(jobz, uplo, n, kd, AB, ldab, w, z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbev
+
+        subroutine dsbevd(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsbevd
+
+        subroutine dsbevx(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                          vl, vu, il, iu, abstol, m, w, z, ldz, &
+                          work, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: Q(ldq,*), w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dsbevx
+
+        subroutine zhbev(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                         work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldz
+            complex(ep), intent(inout) :: AB(ldab,*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbev
+
+        subroutine zhbevd(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                          work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldz, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: AB(ldab,*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhbevd
+
+        subroutine zhbevx(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                          vl, vu, il, iu, abstol, m, w, z, ldz, &
+                          work, rwork, iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldq, il, iu, ldz
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: AB(ldab,*)
+            complex(ep), intent(out)   :: Q(ldq,*), z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhbevx
+
+        subroutine dspev(jobz, uplo, n, AP, w, z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ldz
+            real(ep),  intent(inout) :: AP(*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dspev
+
+        subroutine dspevd(jobz, uplo, n, AP, w, z, ldz, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AP(*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dspevd
+
+        subroutine dspevx(jobz, range, uplo, n, AP, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, il, iu, ldz
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+        end subroutine dspevx
+
+        subroutine zhpev(jobz, uplo, n, AP, w, z, ldz, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, ldz
+            complex(ep), intent(inout) :: AP(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhpev
+
+        subroutine zhpevd(jobz, uplo, n, AP, w, z, ldz, &
+                          work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, ldz, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: AP(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhpevd
+
+        subroutine zhpevx(jobz, range, uplo, n, AP, vl, vu, il, iu, &
+                          abstol, m, w, z, ldz, work, rwork, &
+                          iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, il, iu, ldz
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: AP(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhpevx
+
+        ! ── Phase 8 — QL / RQ family ─────────────────────────────────
+        subroutine dgeqlf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqlf
+
+        subroutine dorgql(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgql
+
+        subroutine dormql(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormql
+
+        subroutine zgeqlf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqlf
+
+        subroutine zungql(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungql
+
+        subroutine zunmql(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmql
+
+        subroutine dgerqf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgerqf
+
+        subroutine dorgrq(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgrq
+
+        subroutine dormrq(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormrq
+
+        subroutine zgerqf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgerqf
+
+        subroutine zungrq(m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungrq
+
+        subroutine zunmrq(side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmrq
+
+        ! ── Phase 9 — real packed sym factor / solve / inverse ───────
+        subroutine dsptrf(uplo, n, AP, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsptrf
+
+        subroutine dsptrs(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: AP(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsptrs
+
+        subroutine dspsv(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(inout) :: AP(*), B(ldb,*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dspsv
+
+        subroutine dsptri(uplo, n, AP, ipiv, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsptri
+
+        subroutine dpptrf(uplo, n, AP, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: info
+        end subroutine dpptrf
+
+        subroutine dpptrs(uplo, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: AP(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpptrs
+
+        subroutine dppsv(uplo, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(inout) :: AP(*), B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dppsv
+
+        subroutine dpptri(uplo, n, AP, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: info
+        end subroutine dpptri
+
+        ! ── Phase 10 — complex packed factor / solve / inverse ───────
+        subroutine zhptrf(uplo, n, AP, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhptrf
+
+        subroutine zhptrs(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: AP(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhptrs
+
+        subroutine zhpsv(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: AP(*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhpsv
+
+        subroutine zhptri(uplo, n, AP, ipiv, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhptri
+
+        subroutine zsptrf(uplo, n, AP, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsptrf
+
+        subroutine zsptrs(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: AP(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zsptrs
+
+        subroutine zspsv(uplo, n, nrhs, AP, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: AP(*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zspsv
+
+        subroutine zsptri(uplo, n, AP, ipiv, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsptri
+
+        subroutine zpptrf(uplo, n, AP, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: info
+        end subroutine zpptrf
+
+        subroutine zpptrs(uplo, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: AP(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpptrs
+
+        subroutine zppsv(uplo, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: AP(*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zppsv
+
+        subroutine zpptri(uplo, n, AP, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: info
+        end subroutine zpptri
+
+        ! ── Phase 11 — complex banded / tridiagonal ──────────────────
+        subroutine zgbtrf(m, n, kl, ku, AB, ldab, ipiv, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, kl, ku, ldab
+            complex(ep), intent(inout) :: AB(ldab,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgbtrf
+
+        subroutine zgbtrs(trans, n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+            complex(ep), intent(in)    :: AB(ldab,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgbtrs
+
+        subroutine zgbsv(n, kl, ku, nrhs, AB, ldab, ipiv, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldb
+            complex(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgbsv
+
+        subroutine zpbtrf(uplo, n, kd, AB, ldab, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, ldab
+            complex(ep), intent(inout) :: AB(ldab,*)
+            integer,     intent(out)   :: info
+        end subroutine zpbtrf
+
+        subroutine zpbtrs(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+            complex(ep), intent(in)    :: AB(ldab,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpbtrs
+
+        subroutine zpbsv(uplo, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+            complex(ep), intent(inout) :: AB(ldab,*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpbsv
+
+        subroutine zgttrf(n, dl, d, du, du2, ipiv, info)
+            import :: ep
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: dl(*), d(*), du(*)
+            complex(ep), intent(out)   :: du2(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zgttrf
+
+        subroutine zgttrs(trans, n, nrhs, dl, d, du, du2, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: dl(*), d(*), du(*), du2(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgttrs
+
+        subroutine zgtsv(n, nrhs, dl, d, du, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(inout) :: dl(*), d(*), du(*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zgtsv
+
+        subroutine zpttrf(n, d, e, info)
+            import :: ep
+            integer,     intent(in)    :: n
+            real(ep),    intent(inout) :: d(*)
+            complex(ep), intent(inout) :: e(*)
+            integer,     intent(out)   :: info
+        end subroutine zpttrf
+
+        subroutine zpttrs(uplo, n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            real(ep),    intent(in)    :: d(*)
+            complex(ep), intent(in)    :: e(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpttrs
+
+        subroutine zptsv(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: n, nrhs, ldb
+            real(ep),    intent(inout) :: d(*)
+            complex(ep), intent(inout) :: e(*), B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zptsv
+
+        ! ── Phase 12 — triangular packed / banded ────────────────────
+        subroutine dtbtrs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldb
+            real(ep),  intent(in)    :: AB(ldab,*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dtbtrs
+
+        subroutine ztbtrs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldb
+            complex(ep), intent(in)    :: AB(ldab,*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine ztbtrs
+
+        subroutine dtptrs(uplo, trans, diag, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo, trans, diag
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: AP(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dtptrs
+
+        subroutine ztptrs(uplo, trans, diag, n, nrhs, AP, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo, trans, diag
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: AP(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine ztptrs
+
+        subroutine dtptri(uplo, diag, n, AP, info)
+            import :: ep
+            character, intent(in)    :: uplo, diag
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            integer,   intent(out)   :: info
+        end subroutine dtptri
+
+        subroutine ztptri(uplo, diag, n, AP, info)
+            import :: ep
+            character,   intent(in)    :: uplo, diag
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            integer,     intent(out)   :: info
+        end subroutine ztptri
+
+        ! ── Phase 13 — condition number estimators ───────────────────
+        subroutine dgecon(norm, n, A, lda, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*), anorm
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dgecon
+
+        subroutine zgecon(norm, n, A, lda, anorm, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zgecon
+
+        subroutine dpocon(uplo, n, A, lda, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*), anorm
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dpocon
+
+        subroutine zpocon(uplo, n, A, lda, anorm, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zpocon
+
+        subroutine dgbcon(norm, n, kl, ku, AB, ldab, ipiv, anorm, rcond, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm
+            integer,   intent(in)  :: n, kl, ku, ldab
+            real(ep),  intent(in)  :: AB(ldab,*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dgbcon
+
+        subroutine zgbcon(norm, n, kl, ku, AB, ldab, ipiv, anorm, rcond, &
+                          work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm
+            integer,     intent(in)  :: n, kl, ku, ldab
+            complex(ep), intent(in)  :: AB(ldab,*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zgbcon
+
+        subroutine dgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: dl(*), d(*), du(*), du2(*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dgtcon
+
+        subroutine zgtcon(norm, n, dl, d, du, du2, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: norm
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: dl(*), d(*), du(*), du2(*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zgtcon
+
+        subroutine dsycon(uplo, n, A, lda, ipiv, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dsycon
+
+        subroutine zhecon(uplo, n, A, lda, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zhecon
+
+        ! ── Phase 14 — condition estimators part 2 ───────────────────
+        subroutine dpbcon(uplo, n, kd, AB, ldab, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, kd, ldab
+            real(ep),  intent(in)  :: AB(ldab,*), anorm
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dpbcon
+
+        subroutine zpbcon(uplo, n, kd, AB, ldab, anorm, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, kd, ldab
+            complex(ep), intent(in)  :: AB(ldab,*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zpbcon
+
+        subroutine dppcon(uplo, n, AP, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: AP(*), anorm
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dppcon
+
+        subroutine zppcon(uplo, n, AP, anorm, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: AP(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zppcon
+
+        subroutine dptcon(n, d, e, anorm, rcond, work, info)
+            import :: ep
+            integer,  intent(in)  :: n
+            real(ep), intent(in)  :: d(*), e(*), anorm
+            real(ep), intent(out) :: rcond, work(*)
+            integer,  intent(out) :: info
+        end subroutine dptcon
+
+        subroutine zptcon(n, d, e, anorm, rcond, rwork, info)
+            import :: ep
+            integer,     intent(in)  :: n
+            real(ep),    intent(in)  :: d(*), anorm
+            complex(ep), intent(in)  :: e(*)
+            real(ep),    intent(out) :: rcond, rwork(*)
+            integer,     intent(out) :: info
+        end subroutine zptcon
+
+        subroutine dspcon(uplo, n, AP, ipiv, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: AP(*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dspcon
+
+        subroutine zhpcon(uplo, n, AP, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: AP(*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zhpcon
+
+        subroutine zspcon(uplo, n, AP, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: AP(*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zspcon
+
+        subroutine dtrcon(norm, uplo, diag, n, A, lda, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm, uplo, diag
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtrcon
+
+        subroutine ztrcon(norm, uplo, diag, n, A, lda, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm, uplo, diag
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine ztrcon
+
+        subroutine dtpcon(norm, uplo, diag, n, AP, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm, uplo, diag
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: AP(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtpcon
+
+        subroutine ztpcon(norm, uplo, diag, n, AP, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm, uplo, diag
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: AP(*)
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine ztpcon
+
+        subroutine dtbcon(norm, uplo, diag, n, kd, AB, ldab, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: norm, uplo, diag
+            integer,   intent(in)  :: n, kd, ldab
+            real(ep),  intent(in)  :: AB(ldab,*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtbcon
+
+        subroutine ztbcon(norm, uplo, diag, n, kd, AB, ldab, rcond, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: norm, uplo, diag
+            integer,     intent(in)  :: n, kd, ldab
+            complex(ep), intent(in)  :: AB(ldab,*)
+            real(ep),    intent(out) :: rcond, rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine ztbcon
+
+        ! ── Phase 15 — iterative refinement ──────────────────────────
+        subroutine dgerfs(trans, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgerfs
+
+        subroutine zgerfs(trans, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgerfs
+
+        subroutine dporfs(uplo, n, nrhs, A, lda, AF, ldaf, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dporfs
+
+        subroutine zporfs(uplo, n, nrhs, A, lda, AF, ldaf, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zporfs
+
+        ! ── Phase 16 — banded / tridiag refinement ───────────────────
+        subroutine dgbrfs(trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, ipiv, &
+                          B, ldb, X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx
+            real(ep),  intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgbrfs
+
+        subroutine zgbrfs(trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, ipiv, &
+                          B, ldb, X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx
+            complex(ep), intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbrfs
+
+        subroutine dpbrfs(uplo, n, kd, nrhs, AB, ldab, AFB, ldafb, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldafb, ldb, ldx
+            real(ep),  intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dpbrfs
+
+        subroutine zpbrfs(uplo, n, kd, nrhs, AB, ldab, AFB, ldafb, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldafb, ldb, ldx
+            complex(ep), intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zpbrfs
+
+        subroutine dgtrfs(trans, n, nrhs, dl, d, du, dlf, df, duf, du2, ipiv, &
+                          B, ldb, X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: dl(*), d(*), du(*), dlf(*), df(*), duf(*), du2(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(in)    :: B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgtrfs
+
+        subroutine zgtrfs(trans, n, nrhs, dl, d, du, dlf, df, duf, du2, ipiv, &
+                          B, ldb, X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: dl(*), d(*), du(*), dlf(*), df(*), duf(*), du2(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgtrfs
+
+        subroutine dptrfs(n, nrhs, d, e, df, ef, B, ldb, X, ldx, &
+                          ferr, berr, work, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb, ldx
+            real(ep), intent(in)    :: d(*), e(*), df(*), ef(*), B(ldb,*)
+            real(ep), intent(inout) :: X(ldx,*)
+            real(ep), intent(out)   :: ferr(*), berr(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dptrfs
+
+        subroutine zptrfs(uplo, n, nrhs, d, e, df, ef, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),    intent(in)    :: d(*), df(*)
+            complex(ep), intent(in)    :: e(*), ef(*), B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zptrfs
+
+        ! ── Phase 17 — sym/Herm + packed refinement ──────────────────
+        subroutine dsyrfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyrfs
+
+        subroutine zsyrfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyrfs
+
+        subroutine zherfs(uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zherfs
+
+        subroutine dsprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsprfs
+
+        subroutine zsprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsprfs
+
+        subroutine dpprfs(uplo, n, nrhs, AP, AFP, B, ldb, X, ldx, &
+                          ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dpprfs
+
+        subroutine zpprfs(uplo, n, nrhs, AP, AFP, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zpprfs
+
+        ! ── Phase 18 — triangular refinement ─────────────────────────
+        subroutine dtrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, X, ldx, &
+                          ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo, trans, diag
+            integer,   intent(in)  :: n, nrhs, lda, ldb, ldx
+            real(ep),  intent(in)  :: A(lda,*), B(ldb,*), X(ldx,*)
+            real(ep),  intent(out) :: ferr(*), berr(*), work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtrrfs
+
+        subroutine ztrrfs(uplo, trans, diag, n, nrhs, A, lda, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo, trans, diag
+            integer,     intent(in)  :: n, nrhs, lda, ldb, ldx
+            complex(ep), intent(in)  :: A(lda,*), B(ldb,*), X(ldx,*)
+            real(ep),    intent(out) :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine ztrrfs
+
+        subroutine dtprfs(uplo, trans, diag, n, nrhs, AP, B, ldb, X, ldx, &
+                          ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo, trans, diag
+            integer,   intent(in)  :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)  :: AP(*), B(ldb,*), X(ldx,*)
+            real(ep),  intent(out) :: ferr(*), berr(*), work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtprfs
+
+        subroutine ztprfs(uplo, trans, diag, n, nrhs, AP, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo, trans, diag
+            integer,     intent(in)  :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)  :: AP(*), B(ldb,*), X(ldx,*)
+            real(ep),    intent(out) :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine ztprfs
+
+        subroutine dtbrfs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, X, ldx, &
+                          ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo, trans, diag
+            integer,   intent(in)  :: n, kd, nrhs, ldab, ldb, ldx
+            real(ep),  intent(in)  :: AB(ldab,*), B(ldb,*), X(ldx,*)
+            real(ep),  intent(out) :: ferr(*), berr(*), work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dtbrfs
+
+        subroutine ztbrfs(uplo, trans, diag, n, kd, nrhs, AB, ldab, B, ldb, X, ldx, &
+                          ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)  :: uplo, trans, diag
+            integer,     intent(in)  :: n, kd, nrhs, ldab, ldb, ldx
+            complex(ep), intent(in)  :: AB(ldab,*), B(ldb,*), X(ldx,*)
+            real(ep),    intent(out) :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine ztbrfs
+
+        ! ── Equilibration — real ─────────────────────────────────────
+        subroutine dgeequ(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,  intent(in)  :: m, n, lda
+            real(ep), intent(in)  :: A(lda,*)
+            real(ep), intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,  intent(out) :: info
+        end subroutine dgeequ
+
+        subroutine dgbequ(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,  intent(in)  :: m, n, kl, ku, ldab
+            real(ep), intent(in)  :: AB(ldab,*)
+            real(ep), intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,  intent(out) :: info
+        end subroutine dgbequ
+
+        subroutine dpoequ(n, A, lda, S, scond, amax, info)
+            import :: ep
+            integer,  intent(in)  :: n, lda
+            real(ep), intent(in)  :: A(lda,*)
+            real(ep), intent(out) :: S(*), scond, amax
+            integer,  intent(out) :: info
+        end subroutine dpoequ
+
+        subroutine dppequ(uplo, n, AP, S, scond, amax, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: AP(*)
+            real(ep),  intent(out) :: S(*), scond, amax
+            integer,   intent(out) :: info
+        end subroutine dppequ
+
+        subroutine dpbequ(uplo, n, kd, AB, ldab, S, scond, amax, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, kd, ldab
+            real(ep),  intent(in)  :: AB(ldab,*)
+            real(ep),  intent(out) :: S(*), scond, amax
+            integer,   intent(out) :: info
+        end subroutine dpbequ
+
+        ! ── Equilibration — complex ──────────────────────────────────
+        subroutine zgeequ(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,     intent(in)  :: m, n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,     intent(out) :: info
+        end subroutine zgeequ
+
+        subroutine zgbequ(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,     intent(in)  :: m, n, kl, ku, ldab
+            complex(ep), intent(in)  :: AB(ldab,*)
+            real(ep),    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,     intent(out) :: info
+        end subroutine zgbequ
+
+        subroutine zpoequ(n, A, lda, S, scond, amax, info)
+            import :: ep
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            integer,     intent(out) :: info
+        end subroutine zpoequ
+
+        subroutine zppequ(uplo, n, AP, S, scond, amax, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: AP(*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            integer,     intent(out) :: info
+        end subroutine zppequ
+
+        subroutine zpbequ(uplo, n, kd, AB, ldab, S, scond, amax, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, kd, ldab
+            complex(ep), intent(in)  :: AB(ldab,*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            integer,     intent(out) :: info
+        end subroutine zpbequ
+
+        ! ── Improved equilibration (equb) ────────────────────────────
+        subroutine dgeequb(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,  intent(in)  :: m, n, lda
+            real(ep), intent(in)  :: A(lda,*)
+            real(ep), intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,  intent(out) :: info
+        end subroutine dgeequb
+
+        subroutine dgbequb(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,  intent(in)  :: m, n, kl, ku, ldab
+            real(ep), intent(in)  :: AB(ldab,*)
+            real(ep), intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,  intent(out) :: info
+        end subroutine dgbequb
+
+        subroutine dpoequb(n, A, lda, S, scond, amax, info)
+            import :: ep
+            integer,  intent(in)  :: n, lda
+            real(ep), intent(in)  :: A(lda,*)
+            real(ep), intent(out) :: S(*), scond, amax
+            integer,  intent(out) :: info
+        end subroutine dpoequb
+
+        subroutine dsyequb(uplo, n, A, lda, S, scond, amax, work, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*)
+            real(ep),  intent(out) :: S(*), scond, amax, work(*)
+            integer,   intent(out) :: info
+        end subroutine dsyequb
+
+        subroutine zgeequb(m, n, A, lda, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,     intent(in)  :: m, n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,     intent(out) :: info
+        end subroutine zgeequb
+
+        subroutine zgbequb(m, n, kl, ku, AB, ldab, R, C, rowcnd, colcnd, amax, info)
+            import :: ep
+            integer,     intent(in)  :: m, n, kl, ku, ldab
+            complex(ep), intent(in)  :: AB(ldab,*)
+            real(ep),    intent(out) :: R(*), C(*), rowcnd, colcnd, amax
+            integer,     intent(out) :: info
+        end subroutine zgbequb
+
+        subroutine zpoequb(n, A, lda, S, scond, amax, info)
+            import :: ep
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            integer,     intent(out) :: info
+        end subroutine zpoequb
+
+        subroutine zsyequb(uplo, n, A, lda, S, scond, amax, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zsyequb
+
+        subroutine zheequb(uplo, n, A, lda, S, scond, amax, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            real(ep),    intent(out) :: S(*), scond, amax
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zheequb
+
+        ! ── Tridiagonal reduction ────────────────────────────────────
+        subroutine dsytrd(uplo, n, A, lda, D, E, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: D(*), E(*), tau(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrd
+
+        subroutine zhetrd(uplo, n, A, lda, D, E, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrd
+
+        subroutine dsptrd(uplo, n, AP, D, E, tau, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: AP(*)
+            real(ep),  intent(out)   :: D(*), E(*), tau(*)
+            integer,   intent(out)   :: info
+        end subroutine dsptrd
+
+        subroutine zhptrd(uplo, n, AP, D, E, tau, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: AP(*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: tau(*)
+            integer,     intent(out)   :: info
+        end subroutine zhptrd
+
+        subroutine dsbtrd(vect, uplo, n, kd, AB, ldab, D, E, Q, ldq, work, info)
+            import :: ep
+            character, intent(in)    :: vect, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq
+            real(ep),  intent(inout) :: AB(ldab,*), Q(ldq,*)
+            real(ep),  intent(out)   :: D(*), E(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbtrd
+
+        subroutine zhbtrd(vect, uplo, n, kd, AB, ldab, D, E, Q, ldq, work, info)
+            import :: ep
+            character,   intent(in)    :: vect, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldq
+            complex(ep), intent(inout) :: AB(ldab,*), Q(ldq,*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbtrd
+
+        ! ── Orthogonal/unitary Q generation/application for *trd ─────
+        subroutine dorgtr(uplo, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(in)    :: tau(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorgtr
+
+        subroutine zungtr(uplo, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungtr
+
+        subroutine dormtr(side, uplo, trans, m, n, A, lda, tau, C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, uplo, trans
+            integer,   intent(in)    :: m, n, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormtr
+
+        subroutine zunmtr(side, uplo, trans, m, n, A, lda, tau, C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, uplo, trans
+            integer,     intent(in)    :: m, n, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmtr
+
+        subroutine dopgtr(uplo, n, AP, tau, Q, ldq, work, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, ldq
+            real(ep),  intent(in)  :: AP(*), tau(*)
+            real(ep),  intent(out) :: Q(ldq,*), work(*)
+            integer,   intent(out) :: info
+        end subroutine dopgtr
+
+        subroutine zupgtr(uplo, n, AP, tau, Q, ldq, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, ldq
+            complex(ep), intent(in)  :: AP(*), tau(*)
+            complex(ep), intent(out) :: Q(ldq,*), work(*)
+            integer,     intent(out) :: info
+        end subroutine zupgtr
+
+        subroutine dopmtr(side, uplo, trans, m, n, AP, tau, C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: side, uplo, trans
+            integer,   intent(in)    :: m, n, ldc
+            real(ep),  intent(in)    :: AP(*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dopmtr
+
+        subroutine zupmtr(side, uplo, trans, m, n, AP, tau, C, ldc, work, info)
+            import :: ep
+            character,   intent(in)    :: side, uplo, trans
+            integer,     intent(in)    :: m, n, ldc
+            complex(ep), intent(in)    :: AP(*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zupmtr
+
+        ! ── Bidiagonal reduction ─────────────────────────────────────
+        subroutine dgebrd(m, n, A, lda, D, E, tauq, taup, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: D(*), E(*), tauq(*), taup(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgebrd
+
+        subroutine zgebrd(m, n, A, lda, D, E, tauq, taup, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: tauq(*), taup(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgebrd
+
+        subroutine dorgbr(vect, m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: vect
+            integer,   intent(in)    :: m, n, k, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(in)    :: tau(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorgbr
+
+        subroutine zungbr(vect, m, n, k, A, lda, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: vect
+            integer,     intent(in)    :: m, n, k, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungbr
+
+        subroutine dormbr(vect, side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: vect, side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormbr
+
+        subroutine zunmbr(vect, side, trans, m, n, k, A, lda, tau, C, ldc, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: vect, side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmbr
+
+        ! ── Generalized eigenvalue (packed / banded) ─────────────────
+        subroutine dspgv(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, ldz
+            real(ep),  intent(inout) :: AP(*), BP(*)
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dspgv
+
+        subroutine zhpgv(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, ldz
+            complex(ep), intent(inout) :: AP(*), BP(*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhpgv
+
+        subroutine dsbgv(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                         work, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldz
+            real(ep),  intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbgv
+
+        subroutine zhbgv(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                         work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldz
+            complex(ep), intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbgv
+
+        ! ── Generalized eigenvalue D&C variants ──────────────────────
+        subroutine dsygvd(itype, jobz, uplo, n, A, lda, B, ldb, W, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: W(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsygvd
+
+        subroutine zhegvd(itype, jobz, uplo, n, A, lda, B, ldb, W, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, lda, ldb, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhegvd
+
+        subroutine dspgvd(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, lwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AP(*), BP(*)
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dspgvd
+
+        subroutine zhpgvd(itype, jobz, uplo, n, AP, BP, W, Z, ldz, work, lwork, &
+                          rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, ldz, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: AP(*), BP(*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhpgvd
+
+        subroutine dsbgvd(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsbgvd
+
+        subroutine zhbgvd(jobz, uplo, n, ka, kb, AB, ldab, BB, ldbb, W, Z, ldz, &
+                          work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldz, lwork, &
+                                          lrwork, liwork
+            complex(ep), intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),    intent(out)   :: W(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhbgvd
+
+        ! ── Tridiagonal eigenvalue solvers ───────────────────────────
+        subroutine dsterf(n, D, E, info)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(inout) :: D(*), E(*)
+            integer,  intent(out)   :: info
+        end subroutine dsterf
+
+        subroutine dsteqr(compz, n, D, E, Z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: compz
+            integer,   intent(in)    :: n, ldz
+            real(ep),  intent(inout) :: D(*), E(*), Z(ldz,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsteqr
+
+        subroutine zsteqr(compz, n, D, E, Z, ldz, work, info)
+            import :: ep
+            character,   intent(in)    :: compz
+            integer,     intent(in)    :: n, ldz
+            real(ep),    intent(inout) :: D(*), E(*)
+            complex(ep), intent(inout) :: Z(ldz,*)
+            real(ep),    intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsteqr
+
+        subroutine dstedc(compz, n, D, E, Z, ldz, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: compz
+            integer,   intent(in)    :: n, ldz, lwork, liwork
+            real(ep),  intent(inout) :: D(*), E(*), Z(ldz,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dstedc
+
+        subroutine zstedc(compz, n, D, E, Z, ldz, work, lwork, rwork, lrwork, &
+                          iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: compz
+            integer,     intent(in)    :: n, ldz, lwork, lrwork, liwork
+            real(ep),    intent(inout) :: D(*), E(*)
+            complex(ep), intent(inout) :: Z(ldz,*)
+            real(ep),    intent(out)   :: rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zstedc
+
+        subroutine dstebz(range, order, n, vl, vu, il, iu, abstol, D, E, &
+                          m, nsplit, W, iblock, isplit, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: range, order
+            integer,   intent(in)  :: n, il, iu
+            real(ep),  intent(in)  :: vl, vu, abstol, D(*), E(*)
+            integer,   intent(out) :: m, nsplit
+            real(ep),  intent(out) :: W(*), work(*)
+            integer,   intent(out) :: iblock(*), isplit(*), iwork(*), info
+        end subroutine dstebz
+
+        ! ── Bidiagonal SVD ───────────────────────────────────────────
+        subroutine dbdsqr(uplo, n, ncvt, nru, ncc, D, E, VT, ldvt, U, ldu, &
+                          C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, ncvt, nru, ncc, ldvt, ldu, ldc
+            real(ep),  intent(inout) :: D(*), E(*), VT(ldvt,*), U(ldu,*), C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dbdsqr
+
+        subroutine zbdsqr(uplo, n, ncvt, nru, ncc, D, E, VT, ldvt, U, ldu, &
+                          C, ldc, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, ncvt, nru, ncc, ldvt, ldu, ldc
+            real(ep),    intent(inout) :: D(*), E(*)
+            complex(ep), intent(inout) :: VT(ldvt,*), U(ldu,*), C(ldc,*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zbdsqr
+
+        subroutine dbdsdc(uplo, compq, n, D, E, U, ldu, VT, ldvt, Q, IQ, &
+                          work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo, compq
+            integer,   intent(in)    :: n, ldu, ldvt
+            real(ep),  intent(inout) :: D(*), E(*)
+            real(ep),  intent(out)   :: U(ldu,*), VT(ldvt,*), Q(*), work(*)
+            integer,   intent(out)   :: IQ(*), iwork(*), info
+        end subroutine dbdsdc
+
+        ! ── ddisna + balancing/back-transform ────────────────────────
+        subroutine ddisna(job, m, n, D, sep, info)
+            import :: ep
+            character, intent(in)  :: job
+            integer,   intent(in)  :: m, n
+            real(ep),  intent(in)  :: D(*)
+            real(ep),  intent(out) :: sep(*)
+            integer,   intent(out) :: info
+        end subroutine ddisna
+
+        subroutine dgebal(job, n, A, lda, ilo, ihi, scale, info)
+            import :: ep
+            character, intent(in)    :: job
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ilo, ihi
+            real(ep),  intent(out)   :: scale(*)
+            integer,   intent(out)   :: info
+        end subroutine dgebal
+
+        subroutine zgebal(job, n, A, lda, ilo, ihi, scale, info)
+            import :: ep
+            character,   intent(in)    :: job
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ilo, ihi
+            real(ep),    intent(out)   :: scale(*)
+            integer,     intent(out)   :: info
+        end subroutine zgebal
+
+        subroutine dgebak(job, side, n, ilo, ihi, scale, m, V, ldv, info)
+            import :: ep
+            character, intent(in)    :: job, side
+            integer,   intent(in)    :: n, ilo, ihi, m, ldv
+            real(ep),  intent(in)    :: scale(*)
+            real(ep),  intent(inout) :: V(ldv,*)
+            integer,   intent(out)   :: info
+        end subroutine dgebak
+
+        subroutine zgebak(job, side, n, ilo, ihi, scale, m, V, ldv, info)
+            import :: ep
+            character,   intent(in)    :: job, side
+            integer,     intent(in)    :: n, ilo, ihi, m, ldv
+            real(ep),    intent(in)    :: scale(*)
+            complex(ep), intent(inout) :: V(ldv,*)
+            integer,     intent(out)   :: info
+        end subroutine zgebak
+
+        ! ── Generalized balance/back-transform/Hessenberg ────────────
+        subroutine dggbal(job, n, A, lda, B, ldb, ilo, ihi, lscale, rscale, &
+                          work, info)
+            import :: ep
+            character, intent(in)    :: job
+            integer,   intent(in)    :: n, lda, ldb
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ilo, ihi
+            real(ep),  intent(out)   :: lscale(*), rscale(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dggbal
+
+        subroutine zggbal(job, n, A, lda, B, ldb, ilo, ihi, lscale, rscale, &
+                          work, info)
+            import :: ep
+            character,   intent(in)    :: job
+            integer,     intent(in)    :: n, lda, ldb
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ilo, ihi
+            real(ep),    intent(out)   :: lscale(*), rscale(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggbal
+
+        subroutine dggbak(job, side, n, ilo, ihi, lscale, rscale, m, V, ldv, info)
+            import :: ep
+            character, intent(in)    :: job, side
+            integer,   intent(in)    :: n, ilo, ihi, m, ldv
+            real(ep),  intent(in)    :: lscale(*), rscale(*)
+            real(ep),  intent(inout) :: V(ldv,*)
+            integer,   intent(out)   :: info
+        end subroutine dggbak
+
+        subroutine zggbak(job, side, n, ilo, ihi, lscale, rscale, m, V, ldv, info)
+            import :: ep
+            character,   intent(in)    :: job, side
+            integer,     intent(in)    :: n, ilo, ihi, m, ldv
+            real(ep),    intent(in)    :: lscale(*), rscale(*)
+            complex(ep), intent(inout) :: V(ldv,*)
+            integer,     intent(out)   :: info
+        end subroutine zggbak
+
+        subroutine dgghrd(compq, compz, n, ilo, ihi, A, lda, B, ldb, &
+                          Q, ldq, Z, ldz, info)
+            import :: ep
+            character, intent(in)    :: compq, compz
+            integer,   intent(in)    :: n, ilo, ihi, lda, ldb, ldq, ldz
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer,   intent(out)   :: info
+        end subroutine dgghrd
+
+        subroutine zgghrd(compq, compz, n, ilo, ihi, A, lda, B, ldb, &
+                          Q, ldq, Z, ldz, info)
+            import :: ep
+            character,   intent(in)    :: compq, compz
+            integer,     intent(in)    :: n, ilo, ihi, lda, ldb, ldq, ldz
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer,     intent(out)   :: info
+        end subroutine zgghrd
+
+        ! ── Generalized QR / RQ factorizations ───────────────────────
+        subroutine dggqrf(n, m, p, A, lda, taua, B, ldb, taub, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: n, m, p, lda, ldb, lwork
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dggqrf
+
+        subroutine zggqrf(n, m, p, A, lda, taua, B, ldb, taub, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, m, p, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggqrf
+
+        subroutine dggrqf(m, p, n, A, lda, taua, B, ldb, taub, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, p, n, lda, ldb, lwork
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dggrqf
+
+        subroutine zggrqf(m, p, n, A, lda, taua, B, ldb, taub, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, p, n, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: taua(*), taub(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggrqf
+
+        ! ── Sylvester equation ───────────────────────────────────────
+        subroutine dtrsyl(trana, tranb, isgn, m, n, A, lda, B, ldb, C, ldc, &
+                          scale, info)
+            import :: ep
+            character, intent(in)    :: trana, tranb
+            integer,   intent(in)    :: isgn, m, n, lda, ldb, ldc
+            real(ep),  intent(in)    :: A(lda,*), B(ldb,*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: scale
+            integer,   intent(out)   :: info
+        end subroutine dtrsyl
+
+        subroutine ztrsyl(trana, tranb, isgn, m, n, A, lda, B, ldb, C, ldc, &
+                          scale, info)
+            import :: ep
+            character,   intent(in)    :: trana, tranb
+            integer,     intent(in)    :: isgn, m, n, lda, ldb, ldc
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            real(ep),    intent(out)   :: scale
+            integer,     intent(out)   :: info
+        end subroutine ztrsyl
+
+        ! ── Hessenberg Schur factorization ───────────────────────────
+        subroutine dhseqr(job, compz, n, ilo, ihi, H, ldh, WR, WI, Z, ldz, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: job, compz
+            integer,   intent(in)    :: n, ilo, ihi, ldh, ldz, lwork
+            real(ep),  intent(inout) :: H(ldh,*), Z(ldz,*)
+            real(ep),  intent(out)   :: WR(*), WI(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dhseqr
+
+        subroutine zhseqr(job, compz, n, ilo, ihi, H, ldh, W, Z, ldz, &
+                          work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: job, compz
+            integer,     intent(in)    :: n, ilo, ihi, ldh, ldz, lwork
+            complex(ep), intent(inout) :: H(ldh,*), Z(ldz,*)
+            complex(ep), intent(out)   :: W(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhseqr
+
+        ! ── Eigenvectors of (quasi-)triangular Schur form ────────────
+        subroutine dtrevc(side, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                          mm, m, work, info)
+            import :: ep
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm
+            logical,   intent(inout) :: sel(*)
+            real(ep),  intent(in)    :: T(ldt,*)
+            real(ep),  intent(inout) :: VL(ldvl,*), VR(ldvr,*)
+            integer,   intent(out)   :: m
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtrevc
+
+        subroutine ztrevc(side, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                          mm, m, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: side, howmny
+            integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm
+            logical,     intent(in)    :: sel(*)
+            complex(ep), intent(inout) :: T(ldt,*), VL(ldvl,*), VR(ldvr,*)
+            integer,     intent(out)   :: m
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine ztrevc
+
+        ! ── Generalized non-symmetric eigenvalue ─────────────────────
+        subroutine dggev(jobvl, jobvr, n, A, lda, B, ldb, alphar, alphai, beta, &
+                         VL, ldvl, VR, ldvr, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobvl, jobvr
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+            real(ep),  intent(out)   :: VL(ldvl,*), VR(ldvr,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dggev
+
+        subroutine zggev(jobvl, jobvr, n, A, lda, B, ldb, alpha, beta, &
+                         VL, ldvl, VR, ldvr, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvl, jobvr
+            integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: VL(ldvl,*), VR(ldvr,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zggev
+
+        ! ── Modern (LAPACK 3.7+) blocked QR/LQ ───────────────────────
+        subroutine dgeqr(m, n, A, lda, T, tsize, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, tsize, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqr
+
+        subroutine zgeqr(m, n, A, lda, T, tsize, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, tsize, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqr
+
+        subroutine dgelq(m, n, A, lda, T, tsize, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, tsize, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgelq
+
+        subroutine zgelq(m, n, A, lda, T, tsize, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, tsize, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgelq
+
+        subroutine dgemqr(side, trans, m, n, k, A, lda, T, tsize, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, tsize, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), T(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgemqr
+
+        subroutine zgemqr(side, trans, m, n, k, A, lda, T, tsize, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, tsize, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), T(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgemqr
+
+        subroutine dgemlq(side, trans, m, n, k, A, lda, T, tsize, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, tsize, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), T(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgemlq
+
+        subroutine zgemlq(side, trans, m, n, k, A, lda, T, tsize, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, tsize, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), T(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgemlq
+
+        ! ── Recursive blocked QR/LQ with explicit T (LAPACK 3.6+) ────
+        subroutine dgeqrt(m, n, nb, A, lda, T, ldt, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nb, lda, ldt
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqrt
+
+        subroutine zgeqrt(m, n, nb, A, lda, T, ldt, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nb, lda, ldt
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqrt
+
+        subroutine dgelqt(m, n, mb, A, lda, T, ldt, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb, lda, ldt
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgelqt
+
+        subroutine zgelqt(m, n, mb, A, lda, T, ldt, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb, lda, ldt
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgelqt
+
+        subroutine dgemqrt(side, trans, m, n, k, nb, V, ldv, T, ldt, &
+                           C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, nb, ldv, ldt, ldc
+            real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgemqrt
+
+        subroutine zgemqrt(side, trans, m, n, k, nb, V, ldv, T, ldt, &
+                           C, ldc, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, nb, ldv, ldt, ldc
+            complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgemqrt
+
+        subroutine dgemlqt(side, trans, m, n, k, mb, V, ldv, T, ldt, &
+                           C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, mb, ldv, ldt, ldc
+            real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgemlqt
+
+        subroutine zgemlqt(side, trans, m, n, k, mb, V, ldv, T, ldt, &
+                           C, ldc, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, mb, ldv, ldt, ldc
+            complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgemlqt
+
+        ! ── Tall-skinny least squares ────────────────────────────────
+        subroutine dgetsls(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgetsls
+
+        subroutine zgetsls(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgetsls
+
+        ! ── Expert linear solvers (SVX) ──────────────────────────────
+        subroutine dgesvx(fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, &
+                          R, C, B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), R(*), C(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgesvx
+
+        subroutine zgesvx(fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, &
+                          R, C, B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: R(*), C(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvx
+
+        subroutine dposvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, equed, S, &
+                          B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), S(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dposvx
+
+        subroutine zposvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, equed, S, &
+                          B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zposvx
+
+        ! ── Banded/packed positive-definite expert solvers ───────────
+        subroutine dpbsvx(fact, uplo, n, kd, nrhs, AB, ldab, AFB, ldafb, equed, &
+                          S, B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, kd, nrhs, ldab, ldafb, ldb, ldx
+            real(ep),  intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*), S(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dpbsvx
+
+        subroutine zpbsvx(fact, uplo, n, kd, nrhs, AB, ldab, AFB, ldafb, equed, &
+                          S, B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, kd, nrhs, ldab, ldafb, ldb, ldx
+            complex(ep), intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zpbsvx
+
+        subroutine dppsvx(fact, uplo, n, nrhs, AP, AFP, equed, S, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(inout) :: AP(*), AFP(*), B(ldb,*), S(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dppsvx
+
+        subroutine zppsvx(fact, uplo, n, nrhs, AP, AFP, equed, S, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(inout) :: AP(*), AFP(*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zppsvx
+
+        ! ── Banded general / symmetric / Hermitian expert solvers ────
+        subroutine dgbsvx(fact, trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, ipiv, &
+                          equed, R, C, B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx
+            real(ep),  intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*), R(*), C(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgbsvx
+
+        subroutine zgbsvx(fact, trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, ipiv, &
+                          equed, R, C, B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx
+            complex(ep), intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),    intent(inout) :: R(*), C(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbsvx
+
+        subroutine dsysvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, lwork
+            real(ep),  intent(inout) :: AF(ldaf,*)
+            real(ep),  intent(in)    :: A(lda,*), B(ldb,*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsysvx
+
+        subroutine zsysvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, lwork
+            complex(ep), intent(inout) :: AF(ldaf,*)
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zsysvx
+
+        subroutine zhesvx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, B, ldb, &
+                          X, ldx, rcond, ferr, berr, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, lwork
+            complex(ep), intent(inout) :: AF(ldaf,*)
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhesvx
+
+        ! ── Phase L1 — 2-stage symmetric/Hermitian eigensolvers ──────
+        subroutine dsyev_2stage(jobz, uplo, n, A, lda, w, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyev_2stage
+
+        subroutine zheev_2stage(jobz, uplo, n, A, lda, w, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zheev_2stage
+
+        subroutine dsyevd_2stage(jobz, uplo, n, A, lda, w, work, lwork, &
+                                 iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, lda, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyevd_2stage
+
+        subroutine zheevd_2stage(jobz, uplo, n, A, lda, w, work, lwork, &
+                                 rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, lda, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zheevd_2stage
+
+        subroutine dsyevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                 abstol, m, w, z, ldz, isuppz, &
+                                 work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork, liwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+        end subroutine dsyevr_2stage
+
+        subroutine zheevr_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                 abstol, m, w, z, ldz, isuppz, &
+                                 work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, lda, il, iu, ldz, lwork, lrwork, liwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            integer,     intent(out)   :: m, isuppz(*), iwork(*), info
+        end subroutine zheevr_2stage
+
+        subroutine dsyevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                 abstol, m, w, z, ldz, work, lwork, iwork, &
+                                 ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, lda, il, iu, ldz, lwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dsyevx_2stage
+
+        subroutine zheevx_2stage(jobz, range, uplo, n, A, lda, vl, vu, il, iu, &
+                                 abstol, m, w, z, ldz, work, lwork, rwork, &
+                                 iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, lda, il, iu, ldz, lwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zheevx_2stage
+
+        subroutine dsbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbev_2stage
+
+        subroutine zhbev_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldz, lwork
+            complex(ep), intent(inout) :: AB(ldab,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbev_2stage
+
+        subroutine dsbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                 work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldz, lwork, liwork
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsbevd_2stage
+
+        subroutine zhbevd_2stage(jobz, uplo, n, kd, AB, ldab, w, z, ldz, &
+                                 work, lwork, rwork, lrwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldz, lwork, lrwork, liwork
+            complex(ep), intent(inout) :: AB(ldab,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: z(ldz,*), work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zhbevd_2stage
+
+        subroutine dsbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                 vl, vu, il, iu, abstol, m, w, z, ldz, &
+                                 work, lwork, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, kd, ldab, ldq, il, iu, ldz, lwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(out)   :: Q(ldq,*), w(*), z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dsbevx_2stage
+
+        subroutine zhbevx_2stage(jobz, range, uplo, n, kd, AB, ldab, Q, ldq, &
+                                 vl, vu, il, iu, abstol, m, w, z, ldz, &
+                                 work, lwork, rwork, iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, kd, ldab, ldq, il, iu, ldz, lwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: AB(ldab,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: Q(ldq,*), z(ldz,*), work(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhbevx_2stage
+
+        subroutine dsygv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                                work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, uplo
+            integer,   intent(in)    :: itype, n, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: w(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsygv_2stage
+
+        subroutine zhegv_2stage(itype, jobz, uplo, n, A, lda, B, ldb, w, &
+                                work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, uplo
+            integer,     intent(in)    :: itype, n, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhegv_2stage
+
+        ! ── Phase L2 — Hessenberg/Schur expert drivers ───────────────
+        subroutine dgees(jobvs, sort, select, n, A, lda, sdim, wr, wi, &
+                         vs, ldvs, work, lwork, bwork, info)
+            import :: ep
+            character, intent(in)    :: jobvs, sort
+            interface
+                logical function select(re, im)
+                    import :: ep
+                    real(ep), intent(in) :: re, im
+                end function select
+            end interface
+            integer,   intent(in)    :: n, lda, ldvs, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: sdim, info
+            real(ep),  intent(out)   :: wr(*), wi(*), vs(ldvs,*), work(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine dgees
+
+        subroutine zgees(jobvs, sort, select, n, A, lda, sdim, w, &
+                         vs, ldvs, work, lwork, rwork, bwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvs, sort
+            interface
+                logical function select(z)
+                    import :: ep
+                    complex(ep), intent(in) :: z
+                end function select
+            end interface
+            integer,     intent(in)    :: n, lda, ldvs, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: sdim, info
+            complex(ep), intent(out)   :: w(*), vs(ldvs,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            logical,     intent(out)   :: bwork(*)
+        end subroutine zgees
+
+        subroutine dgeesx(jobvs, sort, select, sense, n, A, lda, sdim, &
+                          wr, wi, vs, ldvs, rconde, rcondv, work, lwork, &
+                          iwork, liwork, bwork, info)
+            import :: ep
+            character, intent(in)    :: jobvs, sort, sense
+            interface
+                logical function select(re, im)
+                    import :: ep
+                    real(ep), intent(in) :: re, im
+                end function select
+            end interface
+            integer,   intent(in)    :: n, lda, ldvs, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: sdim, iwork(*), info
+            real(ep),  intent(out)   :: wr(*), wi(*), vs(ldvs,*), work(*)
+            real(ep),  intent(out)   :: rconde, rcondv
+            logical,   intent(out)   :: bwork(*)
+        end subroutine dgeesx
+
+        subroutine zgeesx(jobvs, sort, select, sense, n, A, lda, sdim, &
+                          w, vs, ldvs, rconde, rcondv, work, lwork, &
+                          rwork, bwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvs, sort, sense
+            interface
+                logical function select(z)
+                    import :: ep
+                    complex(ep), intent(in) :: z
+                end function select
+            end interface
+            integer,     intent(in)    :: n, lda, ldvs, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: sdim, info
+            complex(ep), intent(out)   :: w(*), vs(ldvs,*), work(*)
+            real(ep),    intent(out)   :: rconde, rcondv, rwork(*)
+            logical,     intent(out)   :: bwork(*)
+        end subroutine zgeesx
+
+        subroutine dgeevx(balanc, jobvl, jobvr, sense, n, A, lda, &
+                          wr, wi, vl, ldvl, vr, ldvr, ilo, ihi, &
+                          scale, abnrm, rconde, rcondv, work, lwork, &
+                          iwork, info)
+            import :: ep
+            character, intent(in)    :: balanc, jobvl, jobvr, sense
+            integer,   intent(in)    :: n, lda, ldvl, ldvr, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ilo, ihi, iwork(*), info
+            real(ep),  intent(out)   :: wr(*), wi(*), vl(ldvl,*), vr(ldvr,*)
+            real(ep),  intent(out)   :: scale(*), abnrm
+            real(ep),  intent(out)   :: rconde(*), rcondv(*), work(*)
+        end subroutine dgeevx
+
+        subroutine zgeevx(balanc, jobvl, jobvr, sense, n, A, lda, w, &
+                          vl, ldvl, vr, ldvr, ilo, ihi, scale, abnrm, &
+                          rconde, rcondv, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: balanc, jobvl, jobvr, sense
+            integer,     intent(in)    :: n, lda, ldvl, ldvr, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ilo, ihi, info
+            complex(ep), intent(out)   :: w(*), vl(ldvl,*), vr(ldvr,*), work(*)
+            real(ep),    intent(out)   :: scale(*), abnrm
+            real(ep),    intent(out)   :: rconde(*), rcondv(*), rwork(*)
+        end subroutine zgeevx
+
+        subroutine dhsein(side, eigsrc, initv, select, n, H, ldh, &
+                          wr, wi, vl, ldvl, vr, ldvr, mm, m, work, &
+                          ifaill, ifailr, info)
+            import :: ep
+            character, intent(in)    :: side, eigsrc, initv
+            integer,   intent(in)    :: n, ldh, ldvl, ldvr, mm
+            logical,   intent(inout) :: select(*)
+            real(ep),  intent(in)    :: H(ldh,*)
+            real(ep),  intent(inout) :: wr(*)
+            real(ep),  intent(in)    :: wi(*)
+            real(ep),  intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out)   :: m, ifaill(*), ifailr(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dhsein
+
+        subroutine zhsein(side, eigsrc, initv, select, n, H, ldh, &
+                          w, vl, ldvl, vr, ldvr, mm, m, work, rwork, &
+                          ifaill, ifailr, info)
+            import :: ep
+            character,   intent(in)    :: side, eigsrc, initv
+            integer,     intent(in)    :: n, ldh, ldvl, ldvr, mm
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(in)    :: H(ldh,*)
+            complex(ep), intent(inout) :: w(*), vl(ldvl,*), vr(ldvr,*)
+            integer,     intent(out)   :: m, ifaill(*), ifailr(*), info
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+        end subroutine zhsein
+
+        subroutine dtrevc3(side, howmny, select, n, T, ldt, vl, ldvl, &
+                           vr, ldvr, mm, m, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm, lwork
+            logical,   intent(inout) :: select(*)
+            real(ep),  intent(in)    :: T(ldt,*)
+            real(ep),  intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out)   :: m, info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dtrevc3
+
+        subroutine ztrevc3(side, howmny, select, n, T, ldt, vl, ldvl, &
+                           vr, ldvr, mm, m, work, lwork, rwork, lrwork, info)
+            import :: ep
+            character,   intent(in)    :: side, howmny
+            integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm, lwork, lrwork
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(inout) :: T(ldt,*), vl(ldvl,*), vr(ldvr,*)
+            integer,     intent(out)   :: m, info
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+        end subroutine ztrevc3
+
+        subroutine dtrexc(compq, n, T, ldt, Q, ldq, ifst, ilst, work, info)
+            import :: ep
+            character, intent(in)    :: compq
+            integer,   intent(in)    :: n, ldt, ldq
+            integer,   intent(inout) :: ifst, ilst
+            real(ep),  intent(inout) :: T(ldt,*), Q(ldq,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtrexc
+
+        subroutine ztrexc(compq, n, T, ldt, Q, ldq, ifst, ilst, info)
+            import :: ep
+            character,   intent(in)    :: compq
+            integer,     intent(in)    :: n, ldt, ldq, ifst, ilst
+            complex(ep), intent(inout) :: T(ldt,*), Q(ldq,*)
+            integer,     intent(out)   :: info
+        end subroutine ztrexc
+
+        subroutine dtrsen(job, compq, select, n, T, ldt, Q, ldq, &
+                          wr, wi, m, s, sep, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: job, compq
+            integer,   intent(in)    :: n, ldt, ldq, lwork, liwork
+            logical,   intent(in)    :: select(*)
+            real(ep),  intent(inout) :: T(ldt,*), Q(ldq,*)
+            real(ep),  intent(out)   :: wr(*), wi(*), s, sep, work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtrsen
+
+        subroutine ztrsen(job, compq, select, n, T, ldt, Q, ldq, &
+                          w, m, s, sep, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: job, compq
+            integer,     intent(in)    :: n, ldt, ldq, lwork
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(inout) :: T(ldt,*), Q(ldq,*)
+            complex(ep), intent(out)   :: w(*), work(*)
+            real(ep),    intent(out)   :: s, sep
+            integer,     intent(out)   :: m, info
+        end subroutine ztrsen
+
+        ! ── Phase L3 — Generalized non-symmetric expert drivers + QZ ──
+        subroutine dgges(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                         sdim, alphar, alphai, beta, vsl, ldvsl, vsr, ldvsr, &
+                         work, lwork, bwork, info)
+            import :: ep
+            character, intent(in) :: jobvsl, jobvsr, sort
+            interface
+                logical function selctg(re, im, b)
+                    import :: ep
+                    real(ep), intent(in) :: re, im, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, info
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+            real(ep),  intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine dgges
+
+        subroutine zgges(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                         sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, &
+                         work, lwork, rwork, bwork, info)
+            import :: ep
+            character,   intent(in) :: jobvsl, jobvsr, sort
+            interface
+                logical function selctg(a, b)
+                    import :: ep
+                    complex(ep), intent(in) :: a, b
+                end function selctg
+            end interface
+            integer,     intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: sdim, info
+            complex(ep), intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            logical,     intent(out)   :: bwork(*)
+        end subroutine zgges
+
+        subroutine dgges3(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                          sdim, alphar, alphai, beta, vsl, ldvsl, vsr, ldvsr, &
+                          work, lwork, bwork, info)
+            import :: ep
+            character, intent(in) :: jobvsl, jobvsr, sort
+            interface
+                logical function selctg(re, im, b)
+                    import :: ep
+                    real(ep), intent(in) :: re, im, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, info
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+            real(ep),  intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine dgges3
+
+        subroutine zgges3(jobvsl, jobvsr, sort, selctg, n, A, lda, B, ldb, &
+                          sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, &
+                          work, lwork, rwork, bwork, info)
+            import :: ep
+            character,   intent(in) :: jobvsl, jobvsr, sort
+            interface
+                logical function selctg(a, b)
+                    import :: ep
+                    complex(ep), intent(in) :: a, b
+                end function selctg
+            end interface
+            integer,     intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: sdim, info
+            complex(ep), intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            logical,     intent(out)   :: bwork(*)
+        end subroutine zgges3
+
+        subroutine dggesx(jobvsl, jobvsr, sort, selctg, sense, n, A, lda, &
+                          B, ldb, sdim, alphar, alphai, beta, vsl, ldvsl, &
+                          vsr, ldvsr, rconde, rcondv, work, lwork, &
+                          iwork, liwork, bwork, info)
+            import :: ep
+            character, intent(in) :: jobvsl, jobvsr, sort, sense
+            interface
+                logical function selctg(re, im, b)
+                    import :: ep
+                    real(ep), intent(in) :: re, im, b
+                end function selctg
+            end interface
+            integer,   intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork, liwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: sdim, iwork(*), info
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+            real(ep),  intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            real(ep),  intent(out)   :: rconde(2), rcondv(2)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine dggesx
+
+        subroutine zggesx(jobvsl, jobvsr, sort, selctg, sense, n, A, lda, &
+                          B, ldb, sdim, alpha, beta, vsl, ldvsl, vsr, ldvsr, &
+                          rconde, rcondv, work, lwork, rwork, iwork, liwork, &
+                          bwork, info)
+            import :: ep
+            character,   intent(in) :: jobvsl, jobvsr, sort, sense
+            interface
+                logical function selctg(a, b)
+                    import :: ep
+                    complex(ep), intent(in) :: a, b
+                end function selctg
+            end interface
+            integer,     intent(in)    :: n, lda, ldb, ldvsl, ldvsr, lwork, liwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: sdim, iwork(*), info
+            complex(ep), intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: vsl(ldvsl,*), vsr(ldvsr,*), work(*)
+            real(ep),    intent(out)   :: rconde(2), rcondv(2), rwork(*)
+            logical,     intent(out)   :: bwork(*)
+        end subroutine zggesx
+
+        subroutine dggev3(jobvl, jobvr, n, A, lda, B, ldb, alphar, alphai, &
+                          beta, vl, ldvl, vr, ldvr, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobvl, jobvr
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: info
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+            real(ep),  intent(out)   :: vl(ldvl,*), vr(ldvr,*), work(*)
+        end subroutine dggev3
+
+        subroutine zggev3(jobvl, jobvr, n, A, lda, B, ldb, alpha, beta, &
+                          vl, ldvl, vr, ldvr, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: jobvl, jobvr
+            integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: info
+            complex(ep), intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: vl(ldvl,*), vr(ldvr,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+        end subroutine zggev3
+
+        subroutine dggevx(balanc, jobvl, jobvr, sense, n, A, lda, B, ldb, &
+                          alphar, alphai, beta, vl, ldvl, vr, ldvr, &
+                          ilo, ihi, lscale, rscale, abnrm, bbnrm, &
+                          rconde, rcondv, work, lwork, iwork, bwork, info)
+            import :: ep
+            character, intent(in)    :: balanc, jobvl, jobvr, sense
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ilo, ihi, iwork(*), info
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*)
+            real(ep),  intent(out)   :: vl(ldvl,*), vr(ldvr,*)
+            real(ep),  intent(out)   :: lscale(*), rscale(*), abnrm, bbnrm
+            real(ep),  intent(out)   :: rconde(*), rcondv(*), work(*)
+            logical,   intent(out)   :: bwork(*)
+        end subroutine dggevx
+
+        subroutine zggevx(balanc, jobvl, jobvr, sense, n, A, lda, B, ldb, &
+                          alpha, beta, vl, ldvl, vr, ldvr, &
+                          ilo, ihi, lscale, rscale, abnrm, bbnrm, &
+                          rconde, rcondv, work, lwork, rwork, iwork, bwork, info)
+            import :: ep
+            character,   intent(in)    :: balanc, jobvl, jobvr, sense
+            integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ilo, ihi, iwork(*), info
+            complex(ep), intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: vl(ldvl,*), vr(ldvr,*), work(*)
+            real(ep),    intent(out)   :: lscale(*), rscale(*), abnrm, bbnrm
+            real(ep),    intent(out)   :: rconde(*), rcondv(*), rwork(*)
+            logical,     intent(out)   :: bwork(*)
+        end subroutine zggevx
+
+        subroutine dhgeqz(job, compq, compz, n, ilo, ihi, H, ldh, T, ldt, &
+                          alphar, alphai, beta, Q, ldq, Z, ldz, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: job, compq, compz
+            integer,   intent(in)    :: n, ilo, ihi, ldh, ldt, ldq, ldz, lwork
+            real(ep),  intent(inout) :: H(ldh,*), T(ldt,*), Q(ldq,*), Z(ldz,*)
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dhgeqz
+
+        subroutine zhgeqz(job, compq, compz, n, ilo, ihi, H, ldh, T, ldt, &
+                          alpha, beta, Q, ldq, Z, ldz, work, lwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: job, compq, compz
+            integer,     intent(in)    :: n, ilo, ihi, ldh, ldt, ldq, ldz, lwork
+            complex(ep), intent(inout) :: H(ldh,*), T(ldt,*), Q(ldq,*), Z(ldz,*)
+            complex(ep), intent(out)   :: alpha(*), beta(*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhgeqz
+
+        subroutine dtgevc(side, howmny, select, n, S, lds, P, ldp, &
+                          vl, ldvl, vr, ldvr, mm, m, work, info)
+            import :: ep
+            character, intent(in)    :: side, howmny
+            integer,   intent(in)    :: n, lds, ldp, ldvl, ldvr, mm
+            logical,   intent(in)    :: select(*)
+            real(ep),  intent(in)    :: S(lds,*), P(ldp,*)
+            real(ep),  intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,   intent(out)   :: m, info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dtgevc
+
+        subroutine ztgevc(side, howmny, select, n, S, lds, P, ldp, &
+                          vl, ldvl, vr, ldvr, mm, m, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: side, howmny
+            integer,     intent(in)    :: n, lds, ldp, ldvl, ldvr, mm
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(in)    :: S(lds,*), P(ldp,*)
+            complex(ep), intent(inout) :: vl(ldvl,*), vr(ldvr,*)
+            integer,     intent(out)   :: m, info
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+        end subroutine ztgevc
+
+        ! ── Phase L4 — Generalized post-processing + constrained LS ──
+        subroutine dtgexc(wantq, wantz, n, A, lda, B, ldb, Q, ldq, Z, ldz, &
+                          ifst, ilst, work, lwork, info)
+            import :: ep
+            logical,   intent(in)    :: wantq, wantz
+            integer,   intent(in)    :: n, lda, ldb, ldq, ldz, lwork
+            integer,   intent(inout) :: ifst, ilst
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtgexc
+
+        subroutine ztgexc(wantq, wantz, n, A, lda, B, ldb, Q, ldq, Z, ldz, &
+                          ifst, ilst, info)
+            import :: ep
+            logical,     intent(in)    :: wantq, wantz
+            integer,     intent(in)    :: n, lda, ldb, ldq, ldz, ifst, ilst
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            integer,     intent(out)   :: info
+        end subroutine ztgexc
+
+        subroutine dtgsen(ijob, wantq, wantz, select, n, A, lda, B, ldb, &
+                          alphar, alphai, beta, Q, ldq, Z, ldz, m, pl, pr, &
+                          dif, work, lwork, iwork, liwork, info)
+            import :: ep
+            integer,   intent(in)    :: ijob, n, lda, ldb, ldq, ldz, lwork, liwork
+            logical,   intent(in)    :: wantq, wantz, select(*)
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            real(ep),  intent(out)   :: alphar(*), alphai(*), beta(*), pl, pr
+            real(ep),  intent(out)   :: dif(2), work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtgsen
+
+        subroutine ztgsen(ijob, wantq, wantz, select, n, A, lda, B, ldb, &
+                          alpha, beta, Q, ldq, Z, ldz, m, pl, pr, dif, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            integer,     intent(in)    :: ijob, n, lda, ldb, ldq, ldz, lwork, liwork
+            logical,     intent(in)    :: wantq, wantz, select(*)
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), Q(ldq,*), Z(ldz,*)
+            complex(ep), intent(out)   :: alpha(*), beta(*), work(*)
+            real(ep),    intent(out)   :: pl, pr, dif(2)
+            integer,     intent(out)   :: m, iwork(*), info
+        end subroutine ztgsen
+
+        subroutine dtgsna(job, howmny, select, n, A, lda, B, ldb, vl, ldvl, &
+                          vr, ldvr, s, dif, mm, m, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: job, howmny
+            integer,   intent(in)    :: n, lda, ldb, ldvl, ldvr, mm, lwork
+            logical,   intent(in)    :: select(*)
+            real(ep),  intent(in)    :: A(lda,*), B(ldb,*), vl(ldvl,*), vr(ldvr,*)
+            real(ep),  intent(out)   :: s(*), dif(*), work(*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtgsna
+
+        subroutine ztgsna(job, howmny, select, n, A, lda, B, ldb, vl, ldvl, &
+                          vr, ldvr, s, dif, mm, m, work, lwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: job, howmny
+            integer,     intent(in)    :: n, lda, ldb, ldvl, ldvr, mm, lwork
+            logical,     intent(in)    :: select(*)
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*), vl(ldvl,*), vr(ldvr,*)
+            real(ep),    intent(out)   :: s(*), dif(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: m, iwork(*), info
+        end subroutine ztgsna
+
+        subroutine dtgsja(jobu, jobv, jobq, m, p, n, k, l, A, lda, B, ldb, &
+                          tola, tolb, alpha, beta, U, ldu, V, ldv, Q, ldq, &
+                          work, ncycle, info)
+            import :: ep
+            character, intent(in)    :: jobu, jobv, jobq
+            integer,   intent(in)    :: m, p, n, k, l, lda, ldb, ldu, ldv, ldq
+            real(ep),  intent(in)    :: tola, tolb
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(inout) :: U(ldu,*), V(ldv,*), Q(ldq,*)
+            real(ep),  intent(out)   :: alpha(*), beta(*), work(*)
+            integer,   intent(out)   :: ncycle, info
+        end subroutine dtgsja
+
+        subroutine ztgsja(jobu, jobv, jobq, m, p, n, k, l, A, lda, B, ldb, &
+                          tola, tolb, alpha, beta, U, ldu, V, ldv, Q, ldq, &
+                          work, ncycle, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobv, jobq
+            integer,     intent(in)    :: m, p, n, k, l, lda, ldb, ldu, ldv, ldq
+            real(ep),    intent(in)    :: tola, tolb
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(inout) :: U(ldu,*), V(ldv,*), Q(ldq,*)
+            real(ep),    intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: ncycle, info
+        end subroutine ztgsja
+
+        subroutine dtgsyl(trans, ijob, m, n, A, lda, B, ldb, C, ldc, &
+                          D, ldd, E, lde, F, ldf, scale, dif, work, lwork, &
+                          iwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: ijob, m, n, lda, ldb, ldc, ldd, lde, ldf, lwork
+            real(ep),  intent(in)    :: A(lda,*), B(ldb,*), D(ldd,*), E(lde,*)
+            real(ep),  intent(inout) :: C(ldc,*), F(ldf,*)
+            real(ep),  intent(out)   :: scale, dif, work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dtgsyl
+
+        subroutine ztgsyl(trans, ijob, m, n, A, lda, B, ldb, C, ldc, &
+                          D, ldd, E, lde, F, ldf, scale, dif, work, lwork, &
+                          iwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: ijob, m, n, lda, ldb, ldc, ldd, lde, ldf, lwork
+            complex(ep), intent(in)    :: A(lda,*), B(ldb,*), D(ldd,*), E(lde,*)
+            complex(ep), intent(inout) :: C(ldc,*), F(ldf,*)
+            real(ep),    intent(out)   :: scale, dif
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine ztgsyl
+
+        subroutine dggglm(n, m, p, A, lda, B, ldb, d, x, y, work, lwork, info)
+            import :: ep
+            integer,   intent(in)    :: n, m, p, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), d(*)
+            real(ep),  intent(out)   :: x(*), y(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dggglm
+
+        subroutine zggglm(n, m, p, A, lda, B, ldb, d, x, y, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: n, m, p, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), d(*)
+            complex(ep), intent(out)   :: x(*), y(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zggglm
+
+        subroutine dgglse(m, n, p, A, lda, B, ldb, c, d, x, work, lwork, info)
+            import :: ep
+            integer,   intent(in)    :: m, n, p, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
+            real(ep),  intent(out)   :: x(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgglse
+
+        subroutine zgglse(m, n, p, A, lda, B, ldb, c, d, x, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, p, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), c(*), d(*)
+            complex(ep), intent(out)   :: x(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgglse
+
+        subroutine dgelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                          work, lwork, iwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep), intent(in)    :: rcond
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: S(*), work(*)
+            integer,  intent(out)   :: rank, iwork(*), info
+        end subroutine dgelsd
+
+        subroutine zgelsd(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                          work, lwork, rwork, iwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),    intent(in)    :: rcond
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: S(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: rank, iwork(*), info
+        end subroutine zgelsd
+
+        subroutine dgelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                          work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep), intent(in)    :: rcond
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: S(*), work(*)
+            integer,  intent(out)   :: rank, info
+        end subroutine dgelss
+
+        subroutine zgelss(m, n, nrhs, A, lda, B, ldb, S, rcond, rank, &
+                          work, lwork, rwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),    intent(in)    :: rcond
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: S(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: rank, info
+        end subroutine zgelss
+
+        subroutine dgelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, &
+                          work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep), intent(in)    :: rcond
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(inout) :: jpvt(*)
+            integer,  intent(out)   :: rank, info
+        end subroutine dgelsy
+
+        subroutine zgelsy(m, n, nrhs, A, lda, B, ldb, jpvt, rcond, rank, &
+                          work, lwork, rwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),    intent(in)    :: rcond
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(inout) :: jpvt(*)
+            integer,     intent(out)   :: rank, info
+        end subroutine zgelsy
+
+        subroutine dgelst(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans
+            integer,   intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgelst
+
+        subroutine zgelst(trans, m, n, nrhs, A, lda, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans
+            integer,     intent(in)    :: m, n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgelst
+
+        subroutine dgejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                          sva, U, ldu, V, ldv, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+            integer,   intent(in)    :: m, n, lda, ldu, ldv, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: sva(*), U(ldu,*), V(ldv,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgejsv
+
+        subroutine zgejsv(joba, jobu, jobv, jobr, jobt, jobp, m, n, A, lda, &
+                          sva, U, ldu, V, ldv, cwork, lwork, rwork, lrwork, &
+                          iwork, info)
+            import :: ep
+            character,   intent(in)    :: joba, jobu, jobv, jobr, jobt, jobp
+            integer,     intent(in)    :: m, n, lda, ldu, ldv, lwork, lrwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: sva(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), V(ldv,*), cwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zgejsv
+
+        subroutine dgesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: joba, jobu, jobv
+            integer,   intent(in)    :: m, n, lda, mv, ldv, lwork
+            real(ep),  intent(inout) :: A(lda,*), V(ldv,*), work(*)
+            real(ep),  intent(out)   :: sva(*)
+            integer,   intent(out)   :: info
+        end subroutine dgesvj
+
+        subroutine zgesvj(joba, jobu, jobv, m, n, A, lda, sva, mv, V, ldv, &
+                          cwork, lwork, rwork, lrwork, info)
+            import :: ep
+            character,   intent(in)    :: joba, jobu, jobv
+            integer,     intent(in)    :: m, n, lda, mv, ldv, lwork, lrwork
+            complex(ep), intent(inout) :: A(lda,*), V(ldv,*), cwork(*)
+            real(ep),    intent(inout) :: rwork(*)
+            real(ep),    intent(out)   :: sva(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvj
+
+        ! Phase L18 — Auxiliary matrix norm utilities.
+        function dlangb(norm, n, kl, ku, AB, ldab, work) result(r)
+            import :: ep
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, kl, ku, ldab
+            real(ep),  intent(in) :: AB(ldab,*)
+            real(ep),  intent(out) :: work(*)
+            real(ep) :: r
+        end function dlangb
+
+        function zlangb(norm, n, kl, ku, AB, ldab, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n, kl, ku, ldab
+            complex(ep), intent(in) :: AB(ldab,*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlangb
+
+        function dlangt(norm, n, dl, d, du) result(r)
+            import :: ep
+            character, intent(in) :: norm
+            integer,   intent(in) :: n
+            real(ep),  intent(in) :: dl(*), d(*), du(*)
+            real(ep) :: r
+        end function dlangt
+
+        function zlangt(norm, n, dl, d, du) result(r)
+            import :: ep
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n
+            complex(ep), intent(in) :: dl(*), d(*), du(*)
+            real(ep) :: r
+        end function zlangt
+
+        function dlanhs(norm, n, A, lda, work) result(r)
+            import :: ep
+            character, intent(in) :: norm
+            integer,   intent(in) :: n, lda
+            real(ep),  intent(in) :: A(lda,*)
+            real(ep),  intent(out) :: work(*)
+            real(ep) :: r
+        end function dlanhs
+
+        function zlanhs(norm, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlanhs
+
+        function dlansb(norm, uplo, n, k, AB, ldab, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, k, ldab
+            real(ep),  intent(in) :: AB(ldab,*)
+            real(ep),  intent(out) :: work(*)
+            real(ep) :: r
+        end function dlansb
+
+        function zlanhb(norm, uplo, n, k, AB, ldab, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, k, ldab
+            complex(ep), intent(in) :: AB(ldab,*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlanhb
+
+        function dlansp(norm, uplo, n, AP, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n
+            real(ep),  intent(in) :: AP(*)
+            real(ep),  intent(out) :: work(*)
+            real(ep) :: r
+        end function dlansp
+
+        function zlanhp(norm, uplo, n, AP, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n
+            complex(ep), intent(in) :: AP(*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlanhp
+
+        function dlanst(norm, n, d, e) result(r)
+            import :: ep
+            character, intent(in) :: norm
+            integer,   intent(in) :: n
+            real(ep),  intent(in) :: d(*), e(*)
+            real(ep) :: r
+        end function dlanst
+
+        function zlanht(norm, n, d, e) result(r)
+            import :: ep
+            character,   intent(in) :: norm
+            integer,     intent(in) :: n
+            real(ep),    intent(in) :: d(*)
+            complex(ep), intent(in) :: e(*)
+            real(ep) :: r
+        end function zlanht
+
+        function dlansy(norm, uplo, n, A, lda, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, uplo
+            integer,   intent(in) :: n, lda
+            real(ep),  intent(in) :: A(lda,*)
+            real(ep),  intent(out) :: work(*)
+            real(ep) :: r
+        end function dlansy
+
+        function zlansy(norm, uplo, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlansy
+
+        function zlansb(norm, uplo, n, k, AB, ldab, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n, k, ldab
+            complex(ep), intent(in) :: AB(ldab,*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlansb
+
+        function zlansp(norm, uplo, n, AP, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo
+            integer,     intent(in) :: n
+            complex(ep), intent(in) :: AP(*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlansp
+
+        function dlansf(norm, transr, uplo, n, A, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, transr, uplo
+            integer,   intent(in) :: n
+            real(ep),  intent(in) :: A(0:*)
+            real(ep),  intent(out) :: work(0:*)
+            real(ep) :: r
+        end function dlansf
+
+        function dlantb(norm, uplo, diag, n, k, AB, ldab, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: n, k, ldab
+            real(ep),  intent(in) :: AB(ldab,*)
+            real(ep),  intent(out) :: work(*)
+            real(ep) :: r
+        end function dlantb
+
+        function zlantb(norm, uplo, diag, n, k, AB, ldab, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: n, k, ldab
+            complex(ep), intent(in) :: AB(ldab,*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlantb
+
+        function dlantp(norm, uplo, diag, n, AP, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: n
+            real(ep),  intent(in) :: AP(*)
+            real(ep),  intent(out) :: work(*)
+            real(ep) :: r
+        end function dlantp
+
+        function zlantp(norm, uplo, diag, n, AP, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: n
+            complex(ep), intent(in) :: AP(*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlantp
+
+        function dlantr(norm, uplo, diag, m, n, A, lda, work) result(r)
+            import :: ep
+            character, intent(in) :: norm, uplo, diag
+            integer,   intent(in) :: m, n, lda
+            real(ep),  intent(in) :: A(lda,*)
+            real(ep),  intent(out) :: work(*)
+            real(ep) :: r
+        end function dlantr
+
+        function zlantr(norm, uplo, diag, m, n, A, lda, work) result(r)
+            import :: ep
+            character,   intent(in) :: norm, uplo, diag
+            integer,     intent(in) :: m, n, lda
+            complex(ep), intent(in) :: A(lda,*)
+            real(ep),    intent(out) :: work(*)
+            real(ep) :: r
+        end function zlantr
+
+        ! Phase L19 — Permutation/norm helpers.
+        subroutine dlapmr(forwrd, m, n, X, ldx, K)
+            import :: ep
+            logical,  intent(in)    :: forwrd
+            integer,  intent(in)    :: m, n, ldx
+            real(ep), intent(inout) :: X(ldx,*)
+            integer,  intent(inout) :: K(*)
+        end subroutine dlapmr
+
+        subroutine zlapmr(forwrd, m, n, X, ldx, K)
+            import :: ep
+            logical,     intent(in)    :: forwrd
+            integer,     intent(in)    :: m, n, ldx
+            complex(ep), intent(inout) :: X(ldx,*)
+            integer,     intent(inout) :: K(*)
+        end subroutine zlapmr
+
+        subroutine dlapmt(forwrd, m, n, X, ldx, K)
+            import :: ep
+            logical,  intent(in)    :: forwrd
+            integer,  intent(in)    :: m, n, ldx
+            real(ep), intent(inout) :: X(ldx,*)
+            integer,  intent(inout) :: K(*)
+        end subroutine dlapmt
+
+        subroutine zlapmt(forwrd, m, n, X, ldx, K)
+            import :: ep
+            logical,     intent(in)    :: forwrd
+            integer,     intent(in)    :: m, n, ldx
+            complex(ep), intent(inout) :: X(ldx,*)
+            integer,     intent(inout) :: K(*)
+        end subroutine zlapmt
+
+        subroutine dlapll(n, X, incx, Y, incy, ssmin)
+            import :: ep
+            integer,  intent(in)    :: n, incx, incy
+            real(ep), intent(inout) :: X(*), Y(*)
+            real(ep), intent(out)   :: ssmin
+        end subroutine dlapll
+
+        subroutine zlapll(n, X, incx, Y, incy, ssmin)
+            import :: ep
+            integer,     intent(in)    :: n, incx, incy
+            complex(ep), intent(inout) :: X(*), Y(*)
+            real(ep),    intent(out)   :: ssmin
+        end subroutine zlapll
+
+        subroutine dlacn2(n, V, X, isgn, est, kase, isave)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(out)   :: V(*)
+            real(ep), intent(inout) :: X(*), est
+            integer,  intent(out)   :: isgn(*)
+            integer,  intent(inout) :: kase, isave(3)
+        end subroutine dlacn2
+
+        subroutine zlacn2(n, V, X, est, kase, isave)
+            import :: ep
+            integer,     intent(in)    :: n
+            complex(ep), intent(out)   :: V(*)
+            complex(ep), intent(inout) :: X(*)
+            real(ep),    intent(inout) :: est
+            integer,     intent(inout) :: kase, isave(3)
+        end subroutine zlacn2
+
+        subroutine dlacon(n, V, X, isgn, est, kase)
+            import :: ep
+            integer,  intent(in)    :: n
+            real(ep), intent(out)   :: V(*)
+            real(ep), intent(inout) :: X(*), est
+            integer,  intent(out)   :: isgn(*)
+            integer,  intent(inout) :: kase
+        end subroutine dlacon
+
+        subroutine zlacon(n, V, X, est, kase)
+            import :: ep
+            integer,     intent(in)    :: n
+            complex(ep), intent(out)   :: V(*)
+            complex(ep), intent(inout) :: X(*)
+            real(ep),    intent(inout) :: est
+            integer,     intent(inout) :: kase
+        end subroutine zlacon
+
+        subroutine dlartg(f, g, c, s, r)
+            import :: ep
+            real(ep), intent(in)  :: f, g
+            real(ep), intent(out) :: c, s, r
+        end subroutine dlartg
+
+        subroutine zlartg(f, g, c, s, r)
+            import :: ep
+            complex(ep), intent(in)  :: f, g
+            real(ep),    intent(out) :: c
+            complex(ep), intent(out) :: s, r
+        end subroutine zlartg
+
+        subroutine dlartgp(f, g, c, s, r)
+            import :: ep
+            real(ep), intent(in)  :: f, g
+            real(ep), intent(out) :: c, s, r
+        end subroutine dlartgp
+
+        subroutine dlartgs(x, y, sigma, c, s)
+            import :: ep
+            real(ep), intent(in)  :: x, y, sigma
+            real(ep), intent(out) :: c, s
+        end subroutine dlartgs
+
+        ! Phase L20 — Small public scalar utilities.
+        function dlapy2(x, y) result(r)
+            import :: ep
+            real(ep), intent(in) :: x, y
+            real(ep) :: r
+        end function dlapy2
+
+        function dlapy3(x, y, z) result(r)
+            import :: ep
+            real(ep), intent(in) :: x, y, z
+            real(ep) :: r
+        end function dlapy3
+
+        subroutine dladiv(a, b, c, d, p, q)
+            import :: ep
+            real(ep), intent(in)  :: a, b, c, d
+            real(ep), intent(out) :: p, q
+        end subroutine dladiv
+
+        function zladiv(x, y) result(r)
+            import :: ep
+            complex(ep), intent(in) :: x, y
+            complex(ep) :: r
+        end function zladiv
+
+        subroutine dlamrg(n1, n2, A, dtrd1, dtrd2, index)
+            import :: ep
+            integer,  intent(in)  :: n1, n2, dtrd1, dtrd2
+            real(ep), intent(in)  :: A(*)
+            integer,  intent(out) :: index(*)
+        end subroutine dlamrg
+
+        subroutine dlarnv(idist, iseed, n, X)
+            import :: ep
+            integer,  intent(in)    :: idist, n
+            integer,  intent(inout) :: iseed(4)
+            real(ep), intent(out)   :: X(*)
+        end subroutine dlarnv
+
+        subroutine zlarnv(idist, iseed, n, X)
+            import :: ep
+            integer,     intent(in)    :: idist, n
+            integer,     intent(inout) :: iseed(4)
+            complex(ep), intent(out)   :: X(*)
+        end subroutine zlarnv
+
+        ! Phase L21 — Generalized sym/Hermitian glue.
+        subroutine dsbgst(vect, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                          X, ldx, work, info)
+            import :: ep
+            character, intent(in)    :: vect, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldx
+            real(ep),  intent(inout) :: AB(ldab,*)
+            real(ep),  intent(in)    :: BB(ldbb,*)
+            real(ep),  intent(out)   :: X(ldx,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsbgst
+
+        subroutine zhbgst(vect, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                          X, ldx, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: vect, uplo
+            integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldx
+            complex(ep), intent(inout) :: AB(ldab,*)
+            complex(ep), intent(in)    :: BB(ldbb,*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhbgst
+
+        subroutine dspgst(itype, uplo, n, AP, BP, info)
+            import :: ep
+            integer,   intent(in)    :: itype, n
+            character, intent(in)    :: uplo
+            real(ep),  intent(inout) :: AP(*)
+            real(ep),  intent(in)    :: BP(*)
+            integer,   intent(out)   :: info
+        end subroutine dspgst
+
+        subroutine zhpgst(itype, uplo, n, AP, BP, info)
+            import :: ep
+            integer,     intent(in)    :: itype, n
+            character,   intent(in)    :: uplo
+            complex(ep), intent(inout) :: AP(*)
+            complex(ep), intent(in)    :: BP(*)
+            integer,     intent(out)   :: info
+        end subroutine zhpgst
+
+        subroutine dsygst(itype, uplo, n, A, lda, B, ldb, info)
+            import :: ep
+            integer,   intent(in)    :: itype, n, lda, ldb
+            character, intent(in)    :: uplo
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(in)    :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsygst
+
+        subroutine zhegst(itype, uplo, n, A, lda, B, ldb, info)
+            import :: ep
+            integer,     intent(in)    :: itype, n, lda, ldb
+            character,   intent(in)    :: uplo
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhegst
+
+        subroutine dsbgvx(jobz, range, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                          Q, ldq, vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                          work, iwork, ifail, info)
+            import :: ep
+            character, intent(in)    :: jobz, range, uplo
+            integer,   intent(in)    :: n, ka, kb, ldab, ldbb, ldq, il, iu, ldz
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            real(ep),  intent(out)   :: Q(ldq,*), w(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dsbgvx
+
+        subroutine zhbgvx(jobz, range, uplo, n, ka, kb, AB, ldab, BB, ldbb, &
+                          Q, ldq, vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                          work, rwork, iwork, ifail, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range, uplo
+            integer,     intent(in)    :: n, ka, kb, ldab, ldbb, ldq, il, iu, ldz
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: AB(ldab,*), BB(ldbb,*)
+            complex(ep), intent(out)   :: Q(ldq,*), Z(ldz,*), work(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhbgvx
+
+        subroutine dspgvx(itype, jobz, range, uplo, n, AP, BP, vl, vu, il, iu, &
+                          abstol, m, w, Z, ldz, work, iwork, ifail, info)
+            import :: ep
+            integer,   intent(in)    :: itype, n, il, iu, ldz
+            character, intent(in)    :: jobz, range, uplo
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: AP(*), BP(*)
+            real(ep),  intent(out)   :: w(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dspgvx
+
+        subroutine zhpgvx(itype, jobz, range, uplo, n, AP, BP, vl, vu, il, iu, &
+                          abstol, m, w, Z, ldz, work, rwork, iwork, ifail, info)
+            import :: ep
+            integer,     intent(in)    :: itype, n, il, iu, ldz
+            character,   intent(in)    :: jobz, range, uplo
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: AP(*), BP(*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhpgvx
+
+        subroutine dsygvx(itype, jobz, range, uplo, n, A, lda, B, ldb, &
+                          vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                          work, lwork, iwork, ifail, info)
+            import :: ep
+            integer,   intent(in)    :: itype, n, lda, ldb, il, iu, ldz, lwork
+            character, intent(in)    :: jobz, range, uplo
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: w(*), Z(ldz,*), work(*)
+            integer,   intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine dsygvx
+
+        subroutine zhegvx(itype, jobz, range, uplo, n, A, lda, B, ldb, &
+                          vl, vu, il, iu, abstol, m, w, Z, ldz, &
+                          work, lwork, rwork, iwork, ifail, info)
+            import :: ep
+            integer,     intent(in)    :: itype, n, lda, ldb, il, iu, ldz, lwork
+            character,   intent(in)    :: jobz, range, uplo
+            real(ep),    intent(in)    :: vl, vu, abstol
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: w(*), rwork(*)
+            complex(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,     intent(out)   :: m, iwork(*), ifail(*), info
+        end subroutine zhegvx
+
+        ! P12 — RFP / packed / triangular-full storage conversion
+        subroutine dtfttp(transr, uplo, n, ARF, AP, info)
+            import :: ep
+            character, intent(in)  :: transr, uplo
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: ARF(0:*)
+            real(ep),  intent(out) :: AP(0:*)
+            integer,   intent(out) :: info
+        end subroutine dtfttp
+
+        subroutine ztfttp(transr, uplo, n, ARF, AP, info)
+            import :: ep
+            character,   intent(in)  :: transr, uplo
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: ARF(0:*)
+            complex(ep), intent(out) :: AP(0:*)
+            integer,     intent(out) :: info
+        end subroutine ztfttp
+
+        subroutine dtfttr(transr, uplo, n, ARF, A, lda, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(in)    :: ARF(0:*)
+            real(ep),  intent(inout) :: A(0:lda-1, 0:*)
+            integer,   intent(out)   :: info
+        end subroutine dtfttr
+
+        subroutine ztfttr(transr, uplo, n, ARF, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(in)    :: ARF(0:*)
+            complex(ep), intent(inout) :: A(0:lda-1, 0:*)
+            integer,     intent(out)   :: info
+        end subroutine ztfttr
+
+        subroutine dtpttf(transr, uplo, n, AP, ARF, info)
+            import :: ep
+            character, intent(in)  :: transr, uplo
+            integer,   intent(in)  :: n
+            real(ep),  intent(in)  :: AP(0:*)
+            real(ep),  intent(out) :: ARF(0:*)
+            integer,   intent(out) :: info
+        end subroutine dtpttf
+
+        subroutine ztpttf(transr, uplo, n, AP, ARF, info)
+            import :: ep
+            character,   intent(in)  :: transr, uplo
+            integer,     intent(in)  :: n
+            complex(ep), intent(in)  :: AP(0:*)
+            complex(ep), intent(out) :: ARF(0:*)
+            integer,     intent(out) :: info
+        end subroutine ztpttf
+
+        subroutine dtpttr(uplo, n, AP, A, lda, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(in)    :: AP(*)
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: info
+        end subroutine dtpttr
+
+        subroutine ztpttr(uplo, n, AP, A, lda, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(in)    :: AP(*)
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: info
+        end subroutine ztpttr
+
+        subroutine dtrttf(transr, uplo, n, A, lda, ARF, info)
+            import :: ep
+            character, intent(in)  :: transr, uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(0:lda-1, 0:*)
+            real(ep),  intent(out) :: ARF(0:*)
+            integer,   intent(out) :: info
+        end subroutine dtrttf
+
+        subroutine ztrttf(transr, uplo, n, A, lda, ARF, info)
+            import :: ep
+            character,   intent(in)  :: transr, uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(0:lda-1, 0:*)
+            complex(ep), intent(out) :: ARF(0:*)
+            integer,     intent(out) :: info
+        end subroutine ztrttf
+
+        subroutine dtrttp(uplo, n, A, lda, AP, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*)
+            real(ep),  intent(out) :: AP(*)
+            integer,   intent(out) :: info
+        end subroutine dtrttp
+
+        subroutine ztrttp(uplo, n, A, lda, AP, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            complex(ep), intent(out) :: AP(*)
+            integer,     intent(out) :: info
+        end subroutine ztrttp
+
+        ! P-misc — small utilities & unblocked apply/generate Householder
+
+        logical function disnan(din)
+            import :: ep
+            real(ep), intent(in) :: din
+        end function disnan
+
+        subroutine drscl(n, sa, sx, incx)
+            import :: ep
+            integer,  intent(in)    :: n, incx
+            real(ep), intent(in)    :: sa
+            real(ep), intent(inout) :: sx(*)
+        end subroutine drscl
+
+        subroutine zdrscl(n, sa, sx, incx)
+            import :: ep
+            integer,     intent(in)    :: n, incx
+            real(ep),    intent(in)    :: sa
+            complex(ep), intent(inout) :: sx(*)
+        end subroutine zdrscl
+
+        subroutine zrscl(n, a, x, incx)
+            import :: ep
+            integer,     intent(in)    :: n, incx
+            complex(ep), intent(in)    :: a
+            complex(ep), intent(inout) :: x(*)
+        end subroutine zrscl
+
+        subroutine zrot(n, cx, incx, cy, incy, c, s)
+            import :: ep
+            integer,     intent(in)    :: n, incx, incy
+            real(ep),    intent(in)    :: c
+            complex(ep), intent(in)    :: s
+            complex(ep), intent(inout) :: cx(*), cy(*)
+        end subroutine zrot
+
+        subroutine dorg2l(m, n, k, A, lda, tau, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorg2l
+
+        subroutine zung2l(m, n, k, A, lda, tau, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zung2l
+
+        subroutine dorg2r(m, n, k, A, lda, tau, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, k, lda
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: tau(*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorg2r
+
+        subroutine zung2r(m, n, k, A, lda, tau, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, k, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: tau(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zung2r
+
+        subroutine dorm2l(side, trans, m, n, k, A, lda, tau, C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorm2l
+
+        subroutine zunm2l(side, trans, m, n, k, A, lda, tau, C, ldc, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunm2l
+
+        subroutine dorm2r(side, trans, m, n, k, A, lda, tau, C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorm2r
+
+        subroutine zunm2r(side, trans, m, n, k, A, lda, tau, C, ldc, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunm2r
+
+        subroutine dormlq(side, trans, m, n, k, A, lda, tau, C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormlq
+
+        subroutine zunmlq(side, trans, m, n, k, A, lda, tau, C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmlq
+
+        subroutine dormhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, ilo, ihi, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormhr
+
+        subroutine zunmhr(side, trans, m, n, ilo, ihi, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, ilo, ihi, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmhr
+
+        subroutine dtzrzf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dtzrzf
+
+        subroutine ztzrzf(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztzrzf
+
+        subroutine dormrz(side, trans, m, n, k, l, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, lda, ldc, lwork
+            real(ep),  intent(in)    :: A(lda,*), tau(*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dormrz
+
+        subroutine zunmrz(side, trans, m, n, k, l, A, lda, tau, &
+                          C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, l, lda, ldc, lwork
+            complex(ep), intent(in)    :: A(lda,*), tau(*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunmrz
+
+        ! P11 — RFP factor / solve / triangular ops
+        subroutine dpftrf(transr, uplo, n, A, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: A(0:*)
+            integer,   intent(out)   :: info
+        end subroutine dpftrf
+
+        subroutine zpftrf(transr, uplo, n, A, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: A(0:*)
+            integer,     intent(out)   :: info
+        end subroutine zpftrf
+
+        subroutine dpftri(transr, uplo, n, A, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: A(0:*)
+            integer,   intent(out)   :: info
+        end subroutine dpftri
+
+        subroutine zpftri(transr, uplo, n, A, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: A(0:*)
+            integer,     intent(out)   :: info
+        end subroutine zpftri
+
+        subroutine dpftrs(transr, uplo, n, nrhs, A, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo
+            integer,   intent(in)    :: n, nrhs, ldb
+            real(ep),  intent(in)    :: A(0:*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dpftrs
+
+        subroutine zpftrs(transr, uplo, n, nrhs, A, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo
+            integer,     intent(in)    :: n, nrhs, ldb
+            complex(ep), intent(in)    :: A(0:*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zpftrs
+
+        subroutine dpstrf(uplo, n, A, lda, piv, rank, tol, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: piv(*), rank, info
+            real(ep),  intent(in)    :: tol
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dpstrf
+
+        subroutine zpstrf(uplo, n, A, lda, piv, rank, tol, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: piv(*), rank, info
+            real(ep),    intent(in)    :: tol
+            real(ep),    intent(out)   :: work(*)
+        end subroutine zpstrf
+
+        subroutine dpteqr(compz, n, D, E, Z, ldz, work, info)
+            import :: ep
+            character, intent(in)    :: compz
+            integer,   intent(in)    :: n, ldz
+            real(ep),  intent(inout) :: D(*), E(*), Z(ldz,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dpteqr
+
+        subroutine zpteqr(compz, n, D, E, Z, ldz, work, info)
+            import :: ep
+            character,   intent(in)    :: compz
+            integer,     intent(in)    :: n, ldz
+            real(ep),    intent(inout) :: D(*), E(*)
+            complex(ep), intent(inout) :: Z(ldz,*)
+            real(ep),    intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zpteqr
+
+        subroutine dpbstf(uplo, n, kd, AB, ldab, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, ldab
+            real(ep),  intent(inout) :: AB(ldab,*)
+            integer,   intent(out)   :: info
+        end subroutine dpbstf
+
+        subroutine zpbstf(uplo, n, kd, AB, ldab, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, ldab
+            complex(ep), intent(inout) :: AB(ldab,*)
+            integer,     intent(out)   :: info
+        end subroutine zpbstf
+
+        subroutine dsfrk(transr, uplo, trans, n, k, alpha, A, lda, beta, C)
+            import :: ep
+            character, intent(in)    :: transr, uplo, trans
+            integer,   intent(in)    :: n, k, lda
+            real(ep),  intent(in)    :: alpha, beta, A(lda,*)
+            real(ep),  intent(inout) :: C(0:*)
+        end subroutine dsfrk
+
+        subroutine zhfrk(transr, uplo, trans, n, k, alpha, A, lda, beta, C)
+            import :: ep
+            character,   intent(in)    :: transr, uplo, trans
+            integer,     intent(in)    :: n, k, lda
+            real(ep),    intent(in)    :: alpha, beta
+            complex(ep), intent(in)    :: A(lda,*)
+            complex(ep), intent(inout) :: C(0:*)
+        end subroutine zhfrk
+
+        subroutine dtfsm(transr, side, uplo, trans, diag, m, n, alpha, A, B, ldb)
+            import :: ep
+            character, intent(in)    :: transr, side, uplo, trans, diag
+            integer,   intent(in)    :: m, n, ldb
+            real(ep),  intent(in)    :: alpha, A(0:*)
+            real(ep),  intent(inout) :: B(0:ldb-1, 0:*)
+        end subroutine dtfsm
+
+        subroutine ztfsm(transr, side, uplo, trans, diag, m, n, alpha, A, B, ldb)
+            import :: ep
+            character,   intent(in)    :: transr, side, uplo, trans, diag
+            integer,     intent(in)    :: m, n, ldb
+            complex(ep), intent(in)    :: alpha, A(0:*)
+            complex(ep), intent(inout) :: B(0:ldb-1, 0:*)
+        end subroutine ztfsm
+
+        subroutine dtftri(transr, uplo, diag, n, A, info)
+            import :: ep
+            character, intent(in)    :: transr, uplo, diag
+            integer,   intent(in)    :: n
+            real(ep),  intent(inout) :: A(0:*)
+            integer,   intent(out)   :: info
+        end subroutine dtftri
+
+        subroutine ztftri(transr, uplo, diag, n, A, info)
+            import :: ep
+            character,   intent(in)    :: transr, uplo, diag
+            integer,     intent(in)    :: n
+            complex(ep), intent(inout) :: A(0:*)
+            integer,     intent(out)   :: info
+        end subroutine ztftri
+
+        ! P13 — pentagonal QR/LQ
+        subroutine dtpqrt(m, n, l, nb, A, lda, B, ldb, T, ldt, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, l, nb, lda, ldb, ldt
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dtpqrt
+
+        subroutine ztpqrt(m, n, l, nb, A, lda, B, ldb, T, ldt, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, l, nb, lda, ldb, ldt
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztpqrt
+
+        subroutine dtpqrt2(m, n, l, A, lda, B, ldb, T, ldt, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, l, lda, ldb, ldt
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            integer,  intent(out)   :: info
+        end subroutine dtpqrt2
+
+        subroutine ztpqrt2(m, n, l, A, lda, B, ldb, T, ldt, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, l, lda, ldb, ldt
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            integer,     intent(out)   :: info
+        end subroutine ztpqrt2
+
+        subroutine dtpmqrt(side, trans, m, n, k, l, nb, V, ldv, T, ldt, &
+                           A, lda, B, ldb, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, nb, ldv, ldt, lda, ldb
+            real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtpmqrt
+
+        subroutine ztpmqrt(side, trans, m, n, k, l, nb, V, ldv, T, ldt, &
+                           A, lda, B, ldb, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, l, nb, ldv, ldt, lda, ldb
+            complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztpmqrt
+
+        subroutine dtplqt(m, n, l, mb, A, lda, B, ldb, T, ldt, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, l, mb, lda, ldb, ldt
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dtplqt
+
+        subroutine ztplqt(m, n, l, mb, A, lda, B, ldb, T, ldt, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, l, mb, lda, ldb, ldt
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztplqt
+
+        subroutine dtplqt2(m, n, l, A, lda, B, ldb, T, ldt, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, l, lda, ldb, ldt
+            real(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            integer,  intent(out)   :: info
+        end subroutine dtplqt2
+
+        subroutine ztplqt2(m, n, l, A, lda, B, ldb, T, ldt, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, l, lda, ldb, ldt
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), T(ldt,*)
+            integer,     intent(out)   :: info
+        end subroutine ztplqt2
+
+        subroutine dtpmlqt(side, trans, m, n, k, l, mb, V, ldv, T, ldt, &
+                           A, lda, B, ldb, work, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, k, l, mb, ldv, ldt, lda, ldb
+            real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dtpmlqt
+
+        subroutine ztpmlqt(side, trans, m, n, k, l, mb, V, ldv, T, ldt, &
+                           A, lda, B, ldb, work, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, k, l, mb, ldv, ldt, lda, ldb
+            complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine ztpmlqt
+
+        subroutine dtprfb(side, trans, direct, storev, m, n, k, l, &
+                          V, ldv, T, ldt, A, lda, B, ldb, work, ldwork)
+            import :: ep
+            character, intent(in)    :: side, trans, direct, storev
+            integer,   intent(in)    :: m, n, k, l, ldv, ldt, lda, ldb, ldwork
+            real(ep),  intent(in)    :: V(ldv,*), T(ldt,*)
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: work(ldwork,*)
+        end subroutine dtprfb
+
+        subroutine ztprfb(side, trans, direct, storev, m, n, k, l, &
+                          V, ldv, T, ldt, A, lda, B, ldb, work, ldwork)
+            import :: ep
+            character,   intent(in)    :: side, trans, direct, storev
+            integer,     intent(in)    :: m, n, k, l, ldv, ldt, lda, ldb, ldwork
+            complex(ep), intent(in)    :: V(ldv,*), T(ldt,*)
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: work(ldwork,*)
+        end subroutine ztprfb
+
+        ! P14 — TSQR + Householder reconstruction
+        subroutine dgeqr2p(m, n, A, lda, tau, work, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqr2p
+
+        subroutine zgeqr2p(m, n, A, lda, tau, work, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqr2p
+
+        subroutine dgeqrfp(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, lda, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: tau(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgeqrfp
+
+        subroutine zgeqrfp(m, n, A, lda, tau, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgeqrfp
+
+        subroutine dlatsqr(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dlatsqr
+
+        subroutine zlatsqr(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zlatsqr
+
+        subroutine dorgtsqr(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: T(ldt,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgtsqr
+
+        subroutine zungtsqr(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: T(ldt,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungtsqr
+
+        subroutine dorgtsqr_row(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(in)    :: T(ldt,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorgtsqr_row
+
+        subroutine zungtsqr_row(m, n, mb, nb, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb, nb, lda, ldt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: T(ldt,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zungtsqr_row
+
+        subroutine dorhr_col(m, n, nb, A, lda, T, ldt, D, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nb, lda, ldt
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(ldt,*), D(*)
+            integer,  intent(out)   :: info
+        end subroutine dorhr_col
+
+        subroutine zunhr_col(m, n, nb, A, lda, T, ldt, D, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nb, lda, ldt
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(ldt,*), D(*)
+            integer,     intent(out)   :: info
+        end subroutine zunhr_col
+
+        subroutine dgetsqrhrt(m, n, mb1, nb1, nb2, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, mb1, nb1, nb2, lda, ldt, lwork
+            real(ep), intent(inout) :: A(lda,*)
+            real(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dgetsqrhrt
+
+        subroutine zgetsqrhrt(m, n, mb1, nb1, nb2, A, lda, T, ldt, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, mb1, nb1, nb2, lda, ldt, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: T(ldt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgetsqrhrt
+
+        subroutine dgeqp3rk(m, n, nrhs, kmax, abstol, reltol, A, lda, &
+                            K, maxc2nrmk, relmaxc2nrmk, jpiv, tau, &
+                            work, lwork, iwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, n, nrhs, kmax, lda, lwork
+            real(ep), intent(in)    :: abstol, reltol
+            real(ep), intent(inout) :: A(lda,*)
+            integer,  intent(out)   :: K, jpiv(*), iwork(*), info
+            real(ep), intent(out)   :: maxc2nrmk, relmaxc2nrmk, tau(*), work(*)
+        end subroutine dgeqp3rk
+
+        subroutine zgeqp3rk(m, n, nrhs, kmax, abstol, reltol, A, lda, &
+                            K, maxc2nrmk, relmaxc2nrmk, jpiv, tau, &
+                            work, lwork, rwork, iwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, n, nrhs, kmax, lda, lwork
+            real(ep),    intent(in)    :: abstol, reltol
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: K, jpiv(*), iwork(*), info
+            real(ep),    intent(out)   :: maxc2nrmk, relmaxc2nrmk, rwork(*)
+            complex(ep), intent(out)   :: tau(*), work(*)
+        end subroutine zgeqp3rk
+
+        ! P15 — CS decomposition + bdsvdx + bbcsd
+        subroutine dbdsvdx(uplo, jobz, range, n, D, E, vl, vu, il, iu, &
+                           ns, S, Z, ldz, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo, jobz, range
+            integer,   intent(in)  :: n, il, iu, ldz
+            real(ep),  intent(in)  :: D(*), E(*), vl, vu
+            integer,   intent(out) :: ns, iwork(*), info
+            real(ep),  intent(out) :: S(*), Z(ldz,*), work(*)
+        end subroutine dbdsvdx
+
+        subroutine dbbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                          theta, phi, U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                          B11d, B11e, B12d, B12e, B21d, B21e, B22d, B22e, &
+                          work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans
+            integer,   intent(in)    :: m, p, q, ldu1, ldu2, ldv1t, ldv2t, lwork
+            real(ep),  intent(inout) :: theta(*), phi(*)
+            real(ep),  intent(inout) :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+            real(ep),  intent(out)   :: B11d(*), B11e(*), B12d(*), B12e(*)
+            real(ep),  intent(out)   :: B21d(*), B21e(*), B22d(*), B22e(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dbbcsd
+
+        subroutine zbbcsd(jobu1, jobu2, jobv1t, jobv2t, trans, m, p, q, &
+                          theta, phi, U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                          B11d, B11e, B12d, B12e, B21d, B21e, B22d, B22e, &
+                          rwork, lrwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans
+            integer,     intent(in)    :: m, p, q, ldu1, ldu2, ldv1t, ldv2t, lrwork
+            real(ep),    intent(inout) :: theta(*), phi(*)
+            complex(ep), intent(inout) :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+            real(ep),    intent(out)   :: B11d(*), B11e(*), B12d(*), B12e(*)
+            real(ep),    intent(out)   :: B21d(*), B21e(*), B22d(*), B22e(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zbbcsd
+
+        subroutine dorbdb(trans, signs, m, p, q, X11, ldx11, X12, ldx12, &
+                          X21, ldx21, X22, ldx22, theta, phi, &
+                          taup1, taup2, tauq1, tauq2, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: trans, signs
+            integer,   intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22, lwork
+            real(ep),  intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+            real(ep),  intent(out)   :: theta(*), phi(*), taup1(*), taup2(*), tauq1(*), tauq2(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorbdb
+
+        subroutine zunbdb(trans, signs, m, p, q, X11, ldx11, X12, ldx12, &
+                          X21, ldx21, X22, ldx22, theta, phi, &
+                          taup1, taup2, tauq1, tauq2, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: trans, signs
+            integer,     intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22, lwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+            real(ep),    intent(out)   :: theta(*), phi(*)
+            complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), tauq2(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunbdb
+
+        recursive subroutine dorcsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
+                                    m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, &
+                                    X22, ldx22, theta, U1, ldu1, U2, ldu2, &
+                                    V1t, ldv1t, V2t, ldv2t, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans, signs
+            integer,   intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+            integer,   intent(in)    :: ldu1, ldu2, ldv1t, ldv2t, lwork
+            real(ep),  intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+            real(ep),  intent(out)   :: theta(*)
+            real(ep),  intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dorcsd
+
+        recursive subroutine zuncsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
+                                    m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, &
+                                    X22, ldx22, theta, U1, ldu1, U2, ldu2, &
+                                    V1t, ldv1t, V2t, ldv2t, &
+                                    work, lwork, rwork, lrwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans, signs
+            integer,     intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+            integer,     intent(in)    :: ldu1, ldu2, ldv1t, ldv2t, lwork, lrwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+            real(ep),    intent(out)   :: theta(*)
+            complex(ep), intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zuncsd
+
+        subroutine dorcsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11, ldx11, &
+                              X21, ldx21, theta, U1, ldu1, U2, ldu2, V1t, ldv1t, &
+                              work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: jobu1, jobu2, jobv1t
+            integer,   intent(in)    :: m, p, q, ldx11, ldx21, ldu1, ldu2, ldv1t, lwork
+            real(ep),  intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep),  intent(out)   :: theta(*), U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dorcsd2by1
+
+        subroutine zuncsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11, ldx11, &
+                              X21, ldx21, theta, U1, ldu1, U2, ldu2, V1t, ldv1t, &
+                              work, lwork, rwork, lrwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu1, jobu2, jobv1t
+            integer,     intent(in)    :: m, p, q, ldx11, ldx21, ldu1, ldu2, ldv1t, lwork, lrwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep),    intent(out)   :: theta(*)
+            complex(ep), intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zuncsd2by1
+
+        subroutine dggsvd3(jobu, jobv, jobq, m, n, p, k, l, A, lda, B, ldb, &
+                           alpha, beta, U, ldu, V, ldv, Q, ldq, work, lwork, &
+                           iwork, info)
+            import :: ep
+            character, intent(in)    :: jobu, jobv, jobq
+            integer,   intent(in)    :: m, n, p, lda, ldb, ldu, ldv, ldq, lwork
+            integer,   intent(out)   :: k, l
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: alpha(*), beta(*)
+            real(ep),  intent(out)   :: U(ldu,*), V(ldv,*), Q(ldq,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dggsvd3
+
+        subroutine zggsvd3(jobu, jobv, jobq, m, n, p, k, l, A, lda, B, ldb, &
+                           alpha, beta, U, ldu, V, ldv, Q, ldq, work, lwork, &
+                           rwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobv, jobq
+            integer,     intent(in)    :: m, n, p, lda, ldb, ldu, ldv, ldq, lwork
+            integer,     intent(out)   :: k, l
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),    intent(out)   :: alpha(*), beta(*)
+            complex(ep), intent(out)   :: U(ldu,*), V(ldv,*), Q(ldq,*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zggsvd3
+
+        subroutine dggsvp3(jobu, jobv, jobq, m, p, n, A, lda, B, ldb, tola, tolb, &
+                           k, l, U, ldu, V, ldv, Q, ldq, iwork, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: jobu, jobv, jobq
+            integer,   intent(in)    :: m, p, n, lda, ldb, ldu, ldv, ldq, lwork
+            real(ep),  intent(in)    :: tola, tolb
+            integer,   intent(out)   :: k, l
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: U(ldu,*), V(ldv,*), Q(ldq,*), tau(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dggsvp3
+
+        subroutine zggsvp3(jobu, jobv, jobq, m, p, n, A, lda, B, ldb, tola, tolb, &
+                           k, l, U, ldu, V, ldv, Q, ldq, iwork, rwork, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobv, jobq
+            integer,     intent(in)    :: m, p, n, lda, ldb, ldu, ldv, ldq, lwork
+            real(ep),    intent(in)    :: tola, tolb
+            integer,     intent(out)   :: k, l
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: U(ldu,*), V(ldv,*), Q(ldq,*), tau(*), work(*)
+            real(ep),    intent(out)   :: rwork(*)
+            integer,     intent(out)   :: iwork(*), info
+        end subroutine zggsvp3
+
+        subroutine dorbdb1(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                           taup1, taup2, tauq1, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, p, q, ldx11, ldx21, lwork
+            real(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep), intent(out)   :: theta(*), phi(*)
+            real(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorbdb1
+
+        subroutine dorbdb2(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                           taup1, taup2, tauq1, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, p, q, ldx11, ldx21, lwork
+            real(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep), intent(out)   :: theta(*), phi(*)
+            real(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorbdb2
+
+        subroutine dorbdb3(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                           taup1, taup2, tauq1, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, p, q, ldx11, ldx21, lwork
+            real(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep), intent(out)   :: theta(*), phi(*)
+            real(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorbdb3
+
+        subroutine dorbdb4(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                           taup1, taup2, tauq1, phantom, work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m, p, q, ldx11, ldx21, lwork
+            real(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep), intent(out)   :: theta(*), phi(*)
+            real(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), phantom(*), work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorbdb4
+
+        subroutine dorbdb5(m1, m2, n, X1, incx1, X2, incx2, Q1, ldq1, Q2, ldq2, &
+                           work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m1, m2, n, incx1, incx2, ldq1, ldq2, lwork
+            real(ep), intent(inout) :: X1(*), X2(*)
+            real(ep), intent(in)    :: Q1(ldq1,*), Q2(ldq2,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorbdb5
+
+        subroutine dorbdb6(m1, m2, n, X1, incx1, X2, incx2, Q1, ldq1, Q2, ldq2, &
+                           work, lwork, info)
+            import :: ep
+            integer,  intent(in)    :: m1, m2, n, incx1, incx2, ldq1, ldq2, lwork
+            real(ep), intent(inout) :: X1(*), X2(*)
+            real(ep), intent(in)    :: Q1(ldq1,*), Q2(ldq2,*)
+            real(ep), intent(out)   :: work(*)
+            integer,  intent(out)   :: info
+        end subroutine dorbdb6
+
+        subroutine zunbdb1(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                           taup1, taup2, tauq1, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, p, q, ldx11, ldx21, lwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep),    intent(out)   :: theta(*), phi(*)
+            complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunbdb1
+
+        subroutine zunbdb2(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                           taup1, taup2, tauq1, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, p, q, ldx11, ldx21, lwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep),    intent(out)   :: theta(*), phi(*)
+            complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunbdb2
+
+        subroutine zunbdb3(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                           taup1, taup2, tauq1, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, p, q, ldx11, ldx21, lwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep),    intent(out)   :: theta(*), phi(*)
+            complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunbdb3
+
+        subroutine zunbdb4(m, p, q, X11, ldx11, X21, ldx21, theta, phi, &
+                           taup1, taup2, tauq1, phantom, work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m, p, q, ldx11, ldx21, lwork
+            complex(ep), intent(inout) :: X11(ldx11,*), X21(ldx21,*)
+            real(ep),    intent(out)   :: theta(*), phi(*)
+            complex(ep), intent(out)   :: taup1(*), taup2(*), tauq1(*), phantom(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunbdb4
+
+        subroutine zunbdb5(m1, m2, n, X1, incx1, X2, incx2, Q1, ldq1, Q2, ldq2, &
+                           work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m1, m2, n, incx1, incx2, ldq1, ldq2, lwork
+            complex(ep), intent(inout) :: X1(*), X2(*)
+            complex(ep), intent(in)    :: Q1(ldq1,*), Q2(ldq2,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunbdb5
+
+        subroutine zunbdb6(m1, m2, n, X1, incx1, X2, incx2, Q1, ldq1, Q2, ldq2, &
+                           work, lwork, info)
+            import :: ep
+            integer,     intent(in)    :: m1, m2, n, incx1, incx2, ldq1, ldq2, lwork
+            complex(ep), intent(inout) :: X1(*), X2(*)
+            complex(ep), intent(in)    :: Q1(ldq1,*), Q2(ldq2,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunbdb6
+
+        subroutine dorm22(side, trans, m, n, n1, n2, Q, ldq, C, ldc, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: side, trans
+            integer,   intent(in)    :: m, n, n1, n2, ldq, ldc, lwork
+            real(ep),  intent(in)    :: Q(ldq,*)
+            real(ep),  intent(inout) :: C(ldc,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dorm22
+
+        subroutine zunm22(side, trans, m, n, n1, n2, Q, ldq, C, ldc, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: side, trans
+            integer,     intent(in)    :: m, n, n1, n2, ldq, ldc, lwork
+            complex(ep), intent(in)    :: Q(ldq,*)
+            complex(ep), intent(inout) :: C(ldc,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zunm22
+
+        ! P6/P7 — modern SVD + banded bidiag reduction
+        subroutine dgesvdq(joba, jobp, jobr, jobu, jobv, m, n, A, lda, &
+                           S, U, ldu, V, ldv, numrank, iwork, liwork, &
+                           work, lwork, rwork, lrwork, info)
+            import :: ep
+            character, intent(in)    :: joba, jobp, jobr, jobu, jobv
+            integer,   intent(in)    :: m, n, lda, ldu, ldv, liwork, lwork, lrwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: S(*), U(ldu,*), V(ldv,*), work(*), rwork(*)
+            integer,   intent(out)   :: numrank, iwork(*), info
+        end subroutine dgesvdq
+
+        subroutine zgesvdq(joba, jobp, jobr, jobu, jobv, m, n, A, lda, &
+                           S, U, ldu, V, ldv, numrank, iwork, liwork, &
+                           cwork, lcwork, rwork, lrwork, info)
+            import :: ep
+            character,   intent(in)    :: joba, jobp, jobr, jobu, jobv
+            integer,     intent(in)    :: m, n, lda, ldu, ldv, liwork, lcwork, lrwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: S(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), V(ldv,*), cwork(*)
+            integer,     intent(out)   :: numrank, iwork(*), info
+        end subroutine zgesvdq
+
+        subroutine dgesvdx(jobu, jobvt, range, m, n, A, lda, vl, vu, il, iu, &
+                           ns, S, U, ldu, Vt, ldvt, work, lwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: jobu, jobvt, range
+            integer,   intent(in)    :: m, n, il, iu, lda, ldu, ldvt, lwork
+            real(ep),  intent(in)    :: vl, vu
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ns, iwork(*), info
+            real(ep),  intent(out)   :: S(*), U(ldu,*), Vt(ldvt,*), work(*)
+        end subroutine dgesvdx
+
+        subroutine zgesvdx(jobu, jobvt, range, m, n, A, lda, vl, vu, il, iu, &
+                           ns, S, U, ldu, Vt, ldvt, work, lwork, rwork, iwork, info)
+            import :: ep
+            character,   intent(in)    :: jobu, jobvt, range
+            integer,     intent(in)    :: m, n, il, iu, lda, ldu, ldvt, lwork
+            real(ep),    intent(in)    :: vl, vu
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ns, iwork(*), info
+            real(ep),    intent(out)   :: S(*), rwork(*)
+            complex(ep), intent(out)   :: U(ldu,*), Vt(ldvt,*), work(*)
+        end subroutine zgesvdx
+
+        subroutine dgbbrd(vect, m, n, ncc, kl, ku, AB, ldab, D, E, &
+                          Q, ldq, Pt, ldpt, C, ldc, work, info)
+            import :: ep
+            character, intent(in)    :: vect
+            integer,   intent(in)    :: m, n, ncc, kl, ku, ldab, ldq, ldpt, ldc
+            real(ep),  intent(inout) :: AB(ldab,*), C(ldc,*)
+            real(ep),  intent(out)   :: D(*), E(*), Q(ldq,*), Pt(ldpt,*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dgbbrd
+
+        subroutine zgbbrd(vect, m, n, ncc, kl, ku, AB, ldab, D, E, &
+                          Q, ldq, Pt, ldpt, C, ldc, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: vect
+            integer,     intent(in)    :: m, n, ncc, kl, ku, ldab, ldq, ldpt, ldc
+            complex(ep), intent(inout) :: AB(ldab,*), C(ldc,*)
+            real(ep),    intent(out)   :: D(*), E(*), rwork(*)
+            complex(ep), intent(out)   :: Q(ldq,*), Pt(ldpt,*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbbrd
+
+        ! P16 — MRRR / inverse-iteration tridiagonal eigensolvers
+        subroutine dstegr(jobz, range, n, D, E, vl, vu, il, iu, abstol, &
+                          m, W, Z, ldz, isuppz, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range
+            integer,   intent(in)    :: n, il, iu, ldz, lwork, liwork
+            real(ep),  intent(in)    :: vl, vu, abstol
+            real(ep),  intent(inout) :: D(*), E(*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+        end subroutine dstegr
+
+        subroutine zstegr(jobz, range, n, D, E, vl, vu, il, iu, abstol, &
+                          m, W, Z, ldz, isuppz, work, lwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range
+            integer,     intent(in)    :: n, il, iu, ldz, lwork, liwork
+            real(ep),    intent(in)    :: vl, vu, abstol
+            real(ep),    intent(inout) :: D(*), E(*)
+            integer,     intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),    intent(out)   :: W(*), work(*)
+            complex(ep), intent(out)   :: Z(ldz,*)
+        end subroutine zstegr
+
+        subroutine dstemr(jobz, range, n, D, E, vl, vu, il, iu, &
+                          m, W, Z, ldz, nzc, isuppz, tryrac, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobz, range
+            integer,   intent(in)    :: n, il, iu, ldz, nzc, lwork, liwork
+            logical,   intent(inout) :: tryrac
+            real(ep),  intent(in)    :: vl, vu
+            real(ep),  intent(inout) :: D(*), E(*)
+            integer,   intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),  intent(out)   :: W(*), Z(ldz,*), work(*)
+        end subroutine dstemr
+
+        subroutine zstemr(jobz, range, n, D, E, vl, vu, il, iu, &
+                          m, W, Z, ldz, nzc, isuppz, tryrac, &
+                          work, lwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobz, range
+            integer,     intent(in)    :: n, il, iu, ldz, nzc, lwork, liwork
+            logical,     intent(inout) :: tryrac
+            real(ep),    intent(in)    :: vl, vu
+            real(ep),    intent(inout) :: D(*), E(*)
+            integer,     intent(out)   :: m, isuppz(*), iwork(*), info
+            real(ep),    intent(out)   :: W(*), work(*)
+            complex(ep), intent(out)   :: Z(ldz,*)
+        end subroutine zstemr
+
+        subroutine dstein(n, D, E, m, W, iblock, isplit, Z, ldz, work, iwork, ifail, info)
+            import :: ep
+            integer,  intent(in)    :: n, m, ldz
+            real(ep), intent(in)    :: D(*), E(*), W(*)
+            integer,  intent(in)    :: iblock(*), isplit(*)
+            real(ep), intent(out)   :: Z(ldz,*), work(*)
+            integer,  intent(out)   :: iwork(*), ifail(*), info
+        end subroutine dstein
+
+        subroutine zstein(n, D, E, m, W, iblock, isplit, Z, ldz, work, iwork, ifail, info)
+            import :: ep
+            integer,     intent(in)    :: n, m, ldz
+            real(ep),    intent(in)    :: D(*), E(*), W(*)
+            integer,     intent(in)    :: iblock(*), isplit(*)
+            complex(ep), intent(out)   :: Z(ldz,*)
+            real(ep),    intent(out)   :: work(*)
+            integer,     intent(out)   :: iwork(*), ifail(*), info
+        end subroutine zstein
+
+        ! ── Bunch–Kaufman _rook variants ───────────────────────────────
+        subroutine dsytrf_rook(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsytrf_rook
+
+        subroutine dsytf2_rook(uplo, n, A, lda, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsytf2_rook
+
+        subroutine dsytrs_rook(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs_rook
+
+        subroutine dsytri_rook(uplo, n, A, lda, ipiv, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytri_rook
+
+        subroutine dsycon_rook(uplo, n, A, lda, ipiv, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond
+            real(ep),  intent(out) :: work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dsycon_rook
+
+        subroutine dsysv_rook(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsysv_rook
+
+        subroutine zhetrf_rook(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhetrf_rook
+
+        subroutine zhetf2_rook(uplo, n, A, lda, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhetf2_rook
+
+        subroutine zhetrs_rook(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrs_rook
+
+        subroutine zhetri_rook(uplo, n, A, lda, ipiv, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetri_rook
+
+        subroutine zhecon_rook(uplo, n, A, lda, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zhecon_rook
+
+        subroutine zhesv_rook(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhesv_rook
+
+        ! ── Bunch–Kaufman _rk / _3x family ─────────────────────────────
+        subroutine dsytrf_rk(uplo, n, A, lda, e, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: e(*), work(*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsytrf_rk
+
+        subroutine dsytf2_rk(uplo, n, A, lda, e, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: e(*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsytf2_rk
+
+        subroutine dsysv_rk(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            real(ep),  intent(out)   :: e(*), work(*)
+            integer,   intent(out)   :: ipiv(*), info
+        end subroutine dsysv_rk
+
+        subroutine dsytri_3x(uplo, n, A, lda, e, ipiv, work, nb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, nb
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(in)    :: e(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(n+nb+1, nb+3)
+            integer,   intent(out)   :: info
+        end subroutine dsytri_3x
+
+        subroutine dsytri_3(uplo, n, A, lda, e, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(in)    :: e(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytri_3
+
+        subroutine zhetrf_rk(uplo, n, A, lda, e, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: e(*), work(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhetrf_rk
+
+        subroutine zhetf2_rk(uplo, n, A, lda, e, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: e(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhetf2_rk
+
+        subroutine zhesv_rk(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: e(*), work(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zhesv_rk
+
+        subroutine zhetri_3x(uplo, n, A, lda, e, ipiv, work, nb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, nb
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: e(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(n+nb+1, nb+3)
+            integer,     intent(out)   :: info
+        end subroutine zhetri_3x
+
+        subroutine zsytrf_rk(uplo, n, A, lda, e, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: e(*), work(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsytrf_rk
+
+        subroutine zsytf2_rk(uplo, n, A, lda, e, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: e(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsytf2_rk
+
+        subroutine zsysv_rk(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            complex(ep), intent(out)   :: e(*), work(*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsysv_rk
+
+        subroutine zsytri_3x(uplo, n, A, lda, e, ipiv, work, nb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, nb
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: e(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(n+nb+1, nb+3)
+            integer,     intent(out)   :: info
+        end subroutine zsytri_3x
+
+        subroutine zsytri_3(uplo, n, A, lda, e, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(in)    :: e(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsytri_3
+
+        subroutine dsytri2(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytri2
+
+        subroutine zsytri2(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsytri2
+
+        subroutine dsytrs2(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs2
+
+        subroutine zsytrs2(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsytrs2
+
+        subroutine dsytrs_3(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb
+            real(ep),  intent(in)    :: A(lda,*), e(*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs_3
+
+        subroutine zsytrs_3(uplo, n, nrhs, A, lda, e, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*), e(*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zsytrs_3
+
+        subroutine dsycon_3(uplo, n, A, lda, e, ipiv, anorm, rcond, work, iwork, info)
+            import :: ep
+            character, intent(in)  :: uplo
+            integer,   intent(in)  :: n, lda
+            real(ep),  intent(in)  :: A(lda,*), e(*), anorm
+            integer,   intent(in)  :: ipiv(*)
+            real(ep),  intent(out) :: rcond, work(*)
+            integer,   intent(out) :: iwork(*), info
+        end subroutine dsycon_3
+
+        subroutine zsycon_3(uplo, n, A, lda, e, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*), e(*)
+            real(ep),    intent(in)  :: anorm
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zsycon_3
+
+        ! ── Aasen _aa / _aa_2stage family ──────────────────────────────
+        subroutine dsytrf_aa(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsytrf_aa
+
+        subroutine dsytrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(in)    :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs_aa
+
+        subroutine dsysv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*)
+            integer,   intent(out)   :: ipiv(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsysv_aa
+
+        subroutine dsytrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, ltb, lwork
+            real(ep),  intent(inout) :: A(lda,*), TB(*)
+            integer,   intent(out)   :: ipiv(*), ipiv2(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsytrf_aa_2stage
+
+        subroutine dsytrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ltb, ldb
+            real(ep),  intent(in)    :: A(lda,*), TB(*)
+            integer,   intent(in)    :: ipiv(*), ipiv2(*)
+            real(ep),  intent(inout) :: B(ldb,*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrs_aa_2stage
+
+        subroutine dsysv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, nrhs, lda, ltb, ldb, lwork
+            real(ep),  intent(inout) :: A(lda,*), B(ldb,*), TB(*)
+            integer,   intent(out)   :: ipiv(*), ipiv2(*), info
+            real(ep),  intent(out)   :: work(*)
+        end subroutine dsysv_aa_2stage
+
+        subroutine zhetrf_aa(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhetrf_aa
+
+        subroutine zhetrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrs_aa
+
+        subroutine zhesv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhesv_aa
+
+        subroutine zhetrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, ltb, lwork
+            complex(ep), intent(inout) :: A(lda,*), TB(*)
+            integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhetrf_aa_2stage
+
+        subroutine zhetrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ltb, ldb
+            complex(ep), intent(in)    :: A(lda,*), TB(*)
+            integer,     intent(in)    :: ipiv(*), ipiv2(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrs_aa_2stage
+
+        subroutine zhesv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ltb, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), TB(*)
+            integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zhesv_aa_2stage
+
+        subroutine zsytrf_aa(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsytrf_aa
+
+        subroutine zsytrs_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsytrs_aa
+
+        subroutine zsysv_aa(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsysv_aa
+
+        subroutine zsytrf_aa_2stage(uplo, n, A, lda, TB, ltb, ipiv, ipiv2, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, ltb, lwork
+            complex(ep), intent(inout) :: A(lda,*), TB(*)
+            integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsytrf_aa_2stage
+
+        subroutine zsytrs_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ltb, ldb
+            complex(ep), intent(in)    :: A(lda,*), TB(*)
+            integer,     intent(in)    :: ipiv(*), ipiv2(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zsytrs_aa_2stage
+
+        subroutine zsysv_aa_2stage(uplo, n, nrhs, A, lda, TB, ltb, ipiv, ipiv2, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ltb, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*), TB(*)
+            integer,     intent(out)   :: ipiv(*), ipiv2(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsysv_aa_2stage
+
+        ! ── Z-symmetric base + Z-sym _rook + inverse helpers ────────────
+        subroutine zsytrf(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsytrf
+
+        subroutine zsytrs(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zsytrs
+
+        subroutine zsysv(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsysv
+
+        subroutine zsycon(uplo, n, A, lda, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zsycon
+
+        subroutine zsytri(uplo, n, A, lda, ipiv, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsytri
+
+        subroutine zsytrf_rook(uplo, n, A, lda, ipiv, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsytrf_rook
+
+        subroutine zsytf2_rook(uplo, n, A, lda, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(out)   :: ipiv(*), info
+        end subroutine zsytf2_rook
+
+        subroutine zsytrs_rook(uplo, n, nrhs, A, lda, ipiv, B, ldb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb
+            complex(ep), intent(in)    :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: B(ldb,*)
+            integer,     intent(out)   :: info
+        end subroutine zsytrs_rook
+
+        subroutine zsytri_rook(uplo, n, A, lda, ipiv, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zsytri_rook
+
+        subroutine zsycon_rook(uplo, n, A, lda, ipiv, anorm, rcond, work, info)
+            import :: ep
+            character,   intent(in)  :: uplo
+            integer,     intent(in)  :: n, lda
+            complex(ep), intent(in)  :: A(lda,*)
+            integer,     intent(in)  :: ipiv(*)
+            real(ep),    intent(in)  :: anorm
+            real(ep),    intent(out) :: rcond
+            complex(ep), intent(out) :: work(*)
+            integer,     intent(out) :: info
+        end subroutine zsycon_rook
+
+        subroutine zsysv_rook(uplo, n, nrhs, A, lda, ipiv, B, ldb, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, lda, ldb, lwork
+            complex(ep), intent(inout) :: A(lda,*), B(ldb,*)
+            integer,     intent(out)   :: ipiv(*), info
+            complex(ep), intent(out)   :: work(*)
+        end subroutine zsysv_rook
+
+        subroutine dsytri(uplo, n, A, lda, ipiv, work, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytri
+
+        subroutine zhetri(uplo, n, A, lda, ipiv, work, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetri
+
+        subroutine dsytri2x(uplo, n, A, lda, ipiv, work, nb, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, nb
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: work(n+nb+1, nb+3)
+            integer,   intent(out)   :: info
+        end subroutine dsytri2x
+
+        subroutine zhetri2x(uplo, n, A, lda, ipiv, work, nb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, nb
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(n+nb+1, nb+3)
+            integer,     intent(out)   :: info
+        end subroutine zhetri2x
+
+        subroutine zsytri2x(uplo, n, A, lda, ipiv, work, nb, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, nb
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: work(n+nb+1, nb+3)
+            integer,     intent(out)   :: info
+        end subroutine zsytri2x
+
+        ! ── BLAS-style Z-symmetric / Z-packed fillers ───────────────────
+        subroutine zsymv(uplo, n, alpha, A, lda, x, incx, beta, y, incy)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, incx, incy
+            complex(ep), intent(in)    :: alpha, beta, A(lda,*), x(*)
+            complex(ep), intent(inout) :: y(*)
+        end subroutine zsymv
+
+        subroutine zsyr(uplo, n, alpha, x, incx, A, lda)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, incx
+            complex(ep), intent(in)    :: alpha, x(*)
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zsyr
+
+        subroutine zspmv(uplo, n, alpha, AP, x, incx, beta, y, incy)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, incx, incy
+            complex(ep), intent(in)    :: alpha, beta, AP(*), x(*)
+            complex(ep), intent(inout) :: y(*)
+        end subroutine zspmv
+
+        subroutine zspr(uplo, n, alpha, x, incx, AP)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, incx
+            complex(ep), intent(in)    :: alpha, x(*)
+            complex(ep), intent(inout) :: AP(*)
+        end subroutine zspr
+
+        subroutine dsyswapr(uplo, n, A, lda, i1, i2)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, lda, i1, i2
+            real(ep),  intent(inout) :: A(lda,*)
+        end subroutine dsyswapr
+
+        subroutine zheswapr(uplo, n, A, lda, i1, i2)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, i1, i2
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zheswapr
+
+        subroutine zsyswapr(uplo, n, A, lda, i1, i2)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, lda, i1, i2
+            complex(ep), intent(inout) :: A(lda,*)
+        end subroutine zsyswapr
+
+        subroutine dsyconv(uplo, way, n, A, lda, ipiv, e, info)
+            import :: ep
+            character, intent(in)    :: uplo, way
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*)
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(out)   :: e(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyconv
+
+        subroutine dsyconvf(uplo, way, n, A, lda, e, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo, way
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*), e(*)
+            integer,   intent(inout) :: ipiv(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyconvf
+
+        subroutine dsyconvf_rook(uplo, way, n, A, lda, e, ipiv, info)
+            import :: ep
+            character, intent(in)    :: uplo, way
+            integer,   intent(in)    :: n, lda
+            real(ep),  intent(inout) :: A(lda,*), e(*)
+            integer,   intent(in)    :: ipiv(*)
+            integer,   intent(out)   :: info
+        end subroutine dsyconvf_rook
+
+        subroutine zsyconv(uplo, way, n, A, lda, ipiv, e, info)
+            import :: ep
+            character,   intent(in)    :: uplo, way
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(out)   :: e(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyconv
+
+        subroutine zsyconvf(uplo, way, n, A, lda, e, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo, way
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*), e(*)
+            integer,     intent(inout) :: ipiv(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyconvf
+
+        subroutine zsyconvf_rook(uplo, way, n, A, lda, e, ipiv, info)
+            import :: ep
+            character,   intent(in)    :: uplo, way
+            integer,     intent(in)    :: n, lda
+            complex(ep), intent(inout) :: A(lda,*), e(*)
+            integer,     intent(in)    :: ipiv(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyconvf_rook
+
+        subroutine zhprfs(uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), AFP(*), B(ldb,*)
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhprfs
+
+        subroutine zhpsvx(fact, uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), B(ldb,*)
+            complex(ep), intent(inout) :: AFP(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhpsvx
+
+        subroutine zspsvx(fact, uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: AP(*), B(ldb,*)
+            complex(ep), intent(inout) :: AFP(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zspsvx
+
+        subroutine dspsvx(fact, uplo, n, nrhs, AP, AFP, ipiv, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: AP(*), B(ldb,*)
+            real(ep),  intent(inout) :: AFP(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dspsvx
+
+        subroutine dgtsv(n, nrhs, dl, d, du, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb
+            real(ep), intent(inout) :: dl(*), d(*), du(*), B(ldb,*)
+            integer,  intent(out)   :: info
+        end subroutine dgtsv
+
+        subroutine dptsv(n, nrhs, d, e, B, ldb, info)
+            import :: ep
+            integer,  intent(in)    :: n, nrhs, ldb
+            real(ep), intent(inout) :: d(*), e(*), B(ldb,*)
+            integer,  intent(out)   :: info
+        end subroutine dptsv
+
+        ! ── gtsvx / ptsvx / trsna ────────────────────────────────────
+        subroutine dgtsvx(fact, trans, n, nrhs, dl, d, du, dlf, df, duf, du2, ipiv, &
+                          B, ldb, X, ldx, rcond, ferr, berr, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: dl(*), d(*), du(*), B(ldb,*)
+            real(ep),  intent(inout) :: dlf(*), df(*), duf(*), du2(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgtsvx
+
+        subroutine zgtsvx(fact, trans, n, nrhs, dl, d, du, dlf, df, duf, du2, ipiv, &
+                          B, ldb, X, ldx, rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            complex(ep), intent(in)    :: dl(*), d(*), du(*), B(ldb,*)
+            complex(ep), intent(inout) :: dlf(*), df(*), duf(*), du2(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zgtsvx
+
+        subroutine dptsvx(fact, n, nrhs, d, e, df, ef, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, info)
+            import :: ep
+            character, intent(in)    :: fact
+            integer,   intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),  intent(in)    :: d(*), e(*), B(ldb,*)
+            real(ep),  intent(inout) :: df(*), ef(*)
+            real(ep),  intent(inout) :: X(ldx,*)
+            real(ep),  intent(out)   :: rcond, ferr(*), berr(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dptsvx
+
+        subroutine zptsvx(fact, n, nrhs, d, e, df, ef, B, ldb, X, ldx, &
+                          rcond, ferr, berr, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact
+            integer,     intent(in)    :: n, nrhs, ldb, ldx
+            real(ep),    intent(in)    :: d(*)
+            complex(ep), intent(in)    :: e(*), B(ldb,*)
+            real(ep),    intent(inout) :: df(*)
+            complex(ep), intent(inout) :: ef(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(out)   :: rcond, ferr(*), berr(*), rwork(*)
+            complex(ep), intent(out)   :: work(*)
+            integer,     intent(out)   :: info
+        end subroutine zptsvx
+
+        subroutine dtrsna(job, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                          S, SEP, mm, m, work, ldwork, iwork, info)
+            import :: ep
+            character, intent(in)    :: job, howmny
+            logical,   intent(in)    :: sel(*)
+            integer,   intent(in)    :: n, ldt, ldvl, ldvr, mm, ldwork
+            real(ep),  intent(in)    :: T(ldt,*), VL(ldvl,*), VR(ldvr,*)
+            real(ep),  intent(out)   :: S(*), SEP(*), work(ldwork,*)
+            integer,   intent(out)   :: m, iwork(*), info
+        end subroutine dtrsna
+
+        subroutine ztrsna(job, howmny, sel, n, T, ldt, VL, ldvl, VR, ldvr, &
+                          S, SEP, mm, m, work, ldwork, rwork, info)
+            import :: ep
+            character,   intent(in)    :: job, howmny
+            logical,     intent(in)    :: sel(*)
+            integer,     intent(in)    :: n, ldt, ldvl, ldvr, mm, ldwork
+            complex(ep), intent(in)    :: T(ldt,*), VL(ldvl,*), VR(ldvr,*)
+            real(ep),    intent(out)   :: S(*), SEP(*), rwork(*)
+            complex(ep), intent(out)   :: work(ldwork,*)
+            integer,     intent(out)   :: m, info
+        end subroutine ztrsna
+
+        ! ── 2-stage tridiag reductions ──────────────────────────────
+        subroutine dsytrd_2stage(vect, uplo, n, A, lda, D, E, tau, hous2, lhous2, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: vect, uplo
+            integer,   intent(in)    :: n, lda, lhous2, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: D(*), E(*), tau(*), hous2(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrd_2stage
+
+        subroutine zhetrd_2stage(vect, uplo, n, A, lda, D, E, tau, hous2, lhous2, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: vect, uplo
+            integer,     intent(in)    :: n, lda, lhous2, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            real(ep),    intent(out)   :: D(*), E(*)
+            complex(ep), intent(out)   :: tau(*), hous2(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrd_2stage
+
+        subroutine dsytrd_sy2sb(uplo, n, kd, A, lda, AB, ldab, tau, work, lwork, info)
+            import :: ep
+            character, intent(in)    :: uplo
+            integer,   intent(in)    :: n, kd, lda, ldab, lwork
+            real(ep),  intent(inout) :: A(lda,*)
+            real(ep),  intent(out)   :: AB(ldab,*), tau(*), work(*)
+            integer,   intent(out)   :: info
+        end subroutine dsytrd_sy2sb
+
+        subroutine zhetrd_he2hb(uplo, n, kd, A, lda, AB, ldab, tau, work, lwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo
+            integer,     intent(in)    :: n, kd, lda, ldab, lwork
+            complex(ep), intent(inout) :: A(lda,*)
+            complex(ep), intent(out)   :: AB(ldab,*), tau(*), work(*)
+            integer,     intent(out)   :: info
+        end subroutine zhetrd_he2hb
+
+        subroutine dgedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, X, ldx, Y, ldy, &
+                          nrnk, tol, k, reig, imeig, Z, ldz, res, B, ldb,        &
+                          W, ldw, S, lds, work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobs, jobz, jobr, jobf
+            integer,   intent(in)    :: whtsvd, m, n, ldx, ldy, nrnk, ldz, ldb, &
+                                         ldw, lds, lwork, liwork
+            real(ep),  intent(in)    :: tol
+            real(ep),  intent(inout) :: X(ldx,*), Y(ldy,*)
+            integer,   intent(out)   :: k, info
+            real(ep),  intent(out)   :: reig(*), imeig(*), Z(ldz,*), res(*),    &
+                                         B(ldb,*), W(ldw,*), S(lds,*), work(*)
+            integer,   intent(out)   :: iwork(*)
+        end subroutine dgedmd
+
+        subroutine zgedmd(jobs, jobz, jobr, jobf, whtsvd, m, n, X, ldx, Y, ldy, &
+                          nrnk, tol, k, eigs, Z, ldz, res, B, ldb,               &
+                          W, ldw, S, lds, zwork, lzwork, rwork, lrwork,          &
+                          iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobs, jobz, jobr, jobf
+            integer,     intent(in)    :: whtsvd, m, n, ldx, ldy, nrnk, ldz, ldb, &
+                                           ldw, lds, lzwork, lrwork, liwork
+            real(ep),    intent(in)    :: tol
+            complex(ep), intent(inout) :: X(ldx,*), Y(ldy,*)
+            integer,     intent(out)   :: k, info
+            complex(ep), intent(out)   :: eigs(*), Z(ldz,*), B(ldb,*), W(ldw,*), &
+                                           S(lds,*), zwork(*)
+            real(ep),    intent(out)   :: res(*), rwork(*)
+            integer,     intent(out)   :: iwork(*)
+        end subroutine zgedmd
+
+        subroutine dgedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd, m, n,    &
+                            F, ldf, X, ldx, Y, ldy, nrnk, tol, k, reig, imeig,  &
+                            Z, ldz, res, B, ldb, V, ldv, S, lds,                 &
+                            work, lwork, iwork, liwork, info)
+            import :: ep
+            character, intent(in)    :: jobs, jobz, jobr, jobq, jobt, jobf
+            integer,   intent(in)    :: whtsvd, m, n, ldf, ldx, ldy, nrnk, ldz,  &
+                                         ldb, ldv, lds, lwork, liwork
+            real(ep),  intent(in)    :: tol
+            real(ep),  intent(inout) :: F(ldf,*)
+            integer,   intent(out)   :: k, info
+            real(ep),  intent(out)   :: X(ldx,*), Y(ldy,*), Z(ldz,*), B(ldb,*),  &
+                                         V(ldv,*), S(lds,*), reig(*), imeig(*),  &
+                                         res(*), work(*)
+            integer,   intent(out)   :: iwork(*)
+        end subroutine dgedmdq
+
+        subroutine zgedmdq(jobs, jobz, jobr, jobq, jobt, jobf, whtsvd, m, n,    &
+                            F, ldf, X, ldx, Y, ldy, nrnk, tol, k, eigs,          &
+                            Z, ldz, res, B, ldb, V, ldv, S, lds,                 &
+                            zwork, lzwork, work, lwork, iwork, liwork, info)
+            import :: ep
+            character,   intent(in)    :: jobs, jobz, jobr, jobq, jobt, jobf
+            integer,     intent(in)    :: whtsvd, m, n, ldf, ldx, ldy, nrnk,     &
+                                           ldz, ldb, ldv, lds, lzwork, lwork,    &
+                                           liwork
+            real(ep),    intent(in)    :: tol
+            complex(ep), intent(inout) :: F(ldf,*)
+            integer,     intent(out)   :: k, info
+            complex(ep), intent(out)   :: X(ldx,*), Y(ldy,*), Z(ldz,*), B(ldb,*), &
+                                           V(ldv,*), S(lds,*), eigs(*), zwork(*)
+            real(ep),    intent(out)   :: res(*), work(*)
+            integer,     intent(out)   :: iwork(*)
+        end subroutine zgedmdq
+
+        ! ── Phase P17xx — extra-precise iterative-refinement xx family ─
+        !
+        ! These xx-suffix drivers (FACT='E' equilibrate-then-factor and
+        ! refine, or RFSX refine-only) perform residual refinement in
+        ! higher precision than the working precision via an XBLAS
+        ! (head, tail) accumulator pair. They return per-RHS BERR plus
+        ! a 2-D ERR_BNDS_NORM/COMP array of dimension
+        ! (NRHS, N_ERR_BNDS) where N_ERR_BNDS = 3:
+        !   col 1 = TRUST  (1.0 if bound is reliable, 0.0 if not),
+        !   col 2 = NORMWISE/COMPONENTWISE error bound,
+        !   col 3 = reciprocal of the condition number used.
+        ! NPARAMS / PARAMS are tuning knobs; passing NPARAMS=0 takes
+        ! all defaults (refinement on, threshold 10.0, no
+        ! componentwise refinement) and the PARAMS array is not
+        ! referenced.
+
+        subroutine dgesvxx(fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, &
+                           R, C, B, ldb, X, ldx, rcond, rpvgrw, berr,           &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), R(*), C(*), params(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, rpvgrw, berr(*),       &
+                                        err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgesvxx
+
+        subroutine zgesvxx(fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, &
+                           R, C, B, ldb, X, ldx, rcond, rpvgrw, berr,           &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: R(*), C(*), params(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgesvxx
+
+        subroutine dgerfsx(trans, equed, n, nrhs, A, lda, AF, ldaf, ipiv,       &
+                           R, C, B, ldb, X, ldx, rcond, berr, n_err_bnds,       &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans, equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*), R(*), C(*)
+            real(ep),  intent(inout) :: X(ldx,*), params(*)
+            real(ep),  intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*),  &
+                                        err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgerfsx
+
+        subroutine zgerfsx(trans, equed, n, nrhs, A, lda, AF, ldaf, ipiv,       &
+                           R, C, B, ldb, X, ldx, rcond, berr, n_err_bnds,       &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans, equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(in)    :: R(*), C(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgerfsx
+
+        subroutine dgbsvxx(fact, trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb,  &
+                           ipiv, equed, R, C, B, ldb, X, ldx,                    &
+                           rcond, rpvgrw, berr, n_err_bnds, err_bnds_norm,       &
+                           err_bnds_comp, nparams, params, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, trans
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*), R(*), C(*), params(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, rpvgrw, berr(*),       &
+                                        err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgbsvxx
+
+        subroutine zgbsvxx(fact, trans, n, kl, ku, nrhs, AB, ldab, AFB, ldafb,  &
+                           ipiv, equed, R, C, B, ldb, X, ldx,                    &
+                           rcond, rpvgrw, berr, n_err_bnds, err_bnds_norm,       &
+                           err_bnds_comp, nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, trans
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),    intent(inout) :: R(*), C(*), params(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbsvxx
+
+        subroutine dgbrfsx(trans, equed, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, &
+                           ipiv, R, C, B, ldb, X, ldx, rcond, berr,             &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: trans, equed
+            integer,   intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx, n_err_bnds, nparams
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*), R(*), C(*)
+            real(ep),  intent(inout) :: X(ldx,*), params(*)
+            real(ep),  intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                        err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dgbrfsx
+
+        subroutine zgbrfsx(trans, equed, n, kl, ku, nrhs, AB, ldab, AFB, ldafb, &
+                           ipiv, R, C, B, ldb, X, ldx, rcond, berr,             &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: trans, equed
+            integer,     intent(in)    :: n, kl, ku, nrhs, ldab, ldafb, ldb, ldx, n_err_bnds, nparams
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: AB(ldab,*), AFB(ldafb,*), B(ldb,*)
+            real(ep),    intent(in)    :: R(*), C(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zgbrfsx
+
+        subroutine dposvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, equed, S,     &
+                           B, ldb, X, ldx, rcond, rpvgrw, berr, n_err_bnds,     &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), S(*), params(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, rpvgrw, berr(*),       &
+                                        err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dposvxx
+
+        subroutine zposvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, equed, S,     &
+                           B, ldb, X, ldx, rcond, rpvgrw, berr, n_err_bnds,     &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*), params(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zposvxx
+
+        subroutine dporfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, S,           &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo, equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), S(*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*), params(*)
+            real(ep),  intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*),  &
+                                        err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dporfsx
+
+        subroutine zporfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, S,           &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo, equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(in)    :: S(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zporfsx
+
+        subroutine dsysvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, equed,  &
+                           S, B, ldb, X, ldx, rcond, rpvgrw, berr,              &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, iwork, info)
+            import :: ep
+            character, intent(in)    :: fact, uplo
+            character, intent(inout) :: equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            real(ep),  intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*), S(*), params(*)
+            integer,   intent(inout) :: ipiv(*)
+            real(ep),  intent(out)   :: X(ldx,*), rcond, rpvgrw, berr(*),       &
+                                        err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsysvxx
+
+        subroutine zsysvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, equed,  &
+                           S, B, ldb, X, ldx, rcond, rpvgrw, berr,              &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*), params(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zsysvxx
+
+        subroutine dsyrfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, ipiv, S,     &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, iwork, info)
+            import :: ep
+            character, intent(in)    :: uplo, equed
+            integer,   intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,   intent(in)    :: ipiv(*)
+            real(ep),  intent(in)    :: A(lda,*), AF(ldaf,*), S(*), B(ldb,*)
+            real(ep),  intent(inout) :: X(ldx,*), params(*)
+            real(ep),  intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                        err_bnds_comp(nrhs,*), work(*)
+            integer,   intent(out)   :: iwork(*), info
+        end subroutine dsyrfsx
+
+        subroutine zsyrfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, ipiv, S,     &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo, equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(in)    :: S(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zsyrfsx
+
+        subroutine zhesvxx(fact, uplo, n, nrhs, A, lda, AF, ldaf, ipiv, equed,  &
+                           S, B, ldb, X, ldx, rcond, rpvgrw, berr,              &
+                           n_err_bnds, err_bnds_norm, err_bnds_comp,            &
+                           nparams, params, work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: fact, uplo
+            character,   intent(inout) :: equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            complex(ep), intent(inout) :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(inout) :: S(*), params(*)
+            integer,     intent(inout) :: ipiv(*)
+            complex(ep), intent(out)   :: X(ldx,*), work(*)
+            real(ep),    intent(out)   :: rcond, rpvgrw, berr(*),               &
+                                          err_bnds_norm(nrhs,*), err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zhesvxx
+
+        subroutine zherfsx(uplo, equed, n, nrhs, A, lda, AF, ldaf, ipiv, S,     &
+                           B, ldb, X, ldx, rcond, berr, n_err_bnds,             &
+                           err_bnds_norm, err_bnds_comp, nparams, params,       &
+                           work, rwork, info)
+            import :: ep
+            character,   intent(in)    :: uplo, equed
+            integer,     intent(in)    :: n, nrhs, lda, ldaf, ldb, ldx, n_err_bnds, nparams
+            integer,     intent(in)    :: ipiv(*)
+            complex(ep), intent(in)    :: A(lda,*), AF(ldaf,*), B(ldb,*)
+            real(ep),    intent(in)    :: S(*)
+            complex(ep), intent(inout) :: X(ldx,*)
+            real(ep),    intent(inout) :: params(*)
+            complex(ep), intent(out)   :: work(*)
+            real(ep),    intent(out)   :: rcond, berr(*), err_bnds_norm(nrhs,*), &
+                                          err_bnds_comp(nrhs,*), rwork(*)
+            integer,     intent(out)   :: info
+        end subroutine zherfsx
+    end interface
+
+end module ref_quad_lapack

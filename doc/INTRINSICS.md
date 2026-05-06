@@ -5,6 +5,34 @@ return `REAL(16)` or `COMPLEX(16)` values, listed by their **generic
 (type-agnostic) names only**.  Type-specific names such as `QABS`, `CQABS`,
 `DABS`, `CDABS`, etc. are excluded.
 
+This document is a Fortran-language **reference** — it answers "what
+generic intrinsics work on quad types out of the box". For the
+migrator's actual rewrite table — which type-specific names
+(`DABS` → `ABS`, `ZSQRT` → `SQRT`, `DBLE` → `REAL(..., KIND=16)`,
+etc.) get translated and whether each call site needs an explicit
+`KIND=…` argument — see `src/pyengine/intrinsics.py`. The two
+complement each other: this file describes the surface; the engine
+file is the migration rule table.
+
+The same generic-intrinsic surface works for the migrator's other
+two targets — `kind10` (`REAL(KIND=10)` / `COMPLEX(KIND=10)`) and
+`multifloats` (`TYPE(real64x2)` / `TYPE(cmplx64x2)`) — with these
+caveats:
+
+- **kind10**: the table below applies verbatim, replacing
+  `KIND=16`/`R16`/`C16` with `KIND=10`/`R10`/`C10`. gfortran (and
+  ifx for kind16, but not kind10 — see release-notes for compiler
+  caveats) provide the full standard surface natively.
+- **multifloats**: the `multifloats` Fortran module provides
+  user-defined generic-name overloads for `ABS`, `SQRT`, `EXP`,
+  `LOG`, the trigonometric and inverse trig functions, plus
+  comparison and arithmetic operators (see
+  `targets/multifloats.yaml`'s `generic_names` and
+  `operator_generics` lists). The migrator's intrinsic-rewriter
+  emits these in `wrap_constructor` form
+  (`ABS(x)` → `real64x2(ABS(REAL(x)))`); the wrapper module makes
+  the surface transparent to caller code.
+
 Notation:
 
 - `R16` = `REAL(KIND=16)`
@@ -363,3 +391,46 @@ the Fortran standard library and operate on `REAL(16)` when
 
 7. **`RANDOM_NUMBER`** and **`CPU_TIME`** are intrinsic subroutines (not
    functions) whose `INTENT(OUT)` argument can be `REAL(16)`.
+
+---
+
+## Cross-reference: migrator's rewrite table
+
+The migrator maps **type-specific intrinsic names** (which appear in
+upstream Netlib code as `DABS`, `DCONJG`, `DSQRT`, `CDABS`, `IDINT`,
+etc.) to **generic names** (`ABS`, `CONJG`, `SQRT`, …) that work on
+the target precision automatically. The mapping table is data-only,
+in `src/pyengine/intrinsics.py:INTRINSIC_MAP`. As of 2026-04-30 it
+has ~140 entries. Each entry is keyed on the upstream type-specific
+name and stores `(generic_name, needs_kind_arg)`:
+
+```python
+'DABS':   ('ABS',   False),   # DOUBLE  → DOUBLE
+'CABS':   ('ABS',   False),   # COMPLEX → REAL
+'ZABS':   ('ABS',   False),   # DOUBLE COMPLEX → DOUBLE
+'DSQRT':  ('SQRT',  False),
+'DCONJG': ('CONJG', False),
+'DBLE':   ('REAL',  True),    # DBLE(x) → REAL(x, KIND=…)
+'IDINT':  ('INT',   False),
+...
+```
+
+`needs_kind_arg = True` means the migrator inserts a `KIND=…` arg at
+the call site (e.g. `DBLE(x)` → `REAL(x, KIND=16)` for kind16,
+`REAL(x, KIND=10)` for kind10, or just `REAL(x)` wrapped via the
+multifloats module's overload). `False` means the generic intrinsic
+already dispatches correctly on the argument type.
+
+The table is curated against gfortran's intrinsic registry plus a
+handful of GNU/IBM aliases (`CDABS`, `IDFIX`, `DREAL`, …). When a new
+upstream library introduces an intrinsic name not yet in the table,
+the migrator will leave the call unchanged — fix is to add the entry
+(one line) and re-run staging. Test with
+`tests/lapack/TODO.md`-tracked phases or the convergence report.
+
+This file (`INTRINSICS.md`) is a Fortran-language reference; the
+engine table (`intrinsics.py`) is the migration ruleset. Both are
+maintained by hand and may drift if either is edited without
+checking the other — when in doubt, the engine table is authoritative
+for what the migrator *does*; this doc is authoritative for what the
+language *provides*.

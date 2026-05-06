@@ -1,28 +1,28 @@
 name: multifloats
 
 types:
-  real: "TYPE(float64x2)"
-  complex: "TYPE(complex64x2)"
+  real: "TYPE(real64x2)"
+  complex: "TYPE(cmplx64x2)"
 
 literals:
   mode: constructor
   kind_suffix: null
-  real_constructor: float64x2
-  complex_constructor: complex64x2
+  real_constructor: real64x2
+  complex_constructor: cmplx64x2
 
 intrinsics:
   mode: wrap_constructor
 
 prefixes:
-  R: DD
-  C: ZZ
+  R: M
+  C: W
   I: I
   L: L
   S: S
 
 module:
   name: multifloats
-  type_names: [float64x2, complex64x2]
+  type_names: [real64x2, cmplx64x2]
   constant_names:
     - dd_zero
     - dd_one
@@ -152,17 +152,24 @@ la_constants_map:
 la_constants_suffix: _MF
 
 c_interop:
-  # Bridge-provided aliases for ``multifloats::float64x2`` (operator-rich
-  # C++ class) and our own ``{re,im}`` complex struct. Kept distinct
-  # from the upstream C-ABI POD types (``float64x2_t`` / ``complex64x2_t``
-  # in multifloats.h) which are hidden by the bridge via macro redirect.
-  real_type: float64x2_t
-  complex_type: complex128x2_t
-  c_real_type: float64x2_t
+  # Upstream multifloats v0.4.0 C names (no _t suffix; complex POD with
+  # .re/.im members of float64x2). The C++ bridge re-exports these as
+  # operator-rich aliases of multifloats::float64x2 / complex64x2.
+  real_type: float64x2
+  complex_type: complex64x2
+  c_real_type: float64x2
   mpi_real: MPI_FLOAT64X2
-  mpi_complex: MPI_COMPLEX128X2
+  mpi_complex: MPI_COMPLEX64X2
   mpi_sum_real: MPI_DD_SUM
   mpi_sum_complex: MPI_ZZ_SUM
+  # MUMPS issues MPI_Allreduce(..., MPI_FLOAT64X2, MPI_MAX, ...) when
+  # collecting per-rank scaling extrema; stock MPI_MAX is undefined for
+  # the user-defined datatype. The bridge ships AMX/AMN ops; MIN is
+  # listed for symmetry though MUMPS only actually uses MAX today.
+  mpi_max_real: MPI_DD_AMX
+  mpi_max_complex: MPI_ZZ_AMX
+  mpi_min_real: MPI_DD_AMN
+  mpi_min_complex: MPI_ZZ_AMN
   needs_mpi_check: false
   header_mode: include
   header: multifloats_bridge.h

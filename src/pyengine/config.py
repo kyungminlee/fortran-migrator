@@ -46,6 +46,17 @@ class RecipeConfig:
     patches: list[str] = field(default_factory=list)
     depends: list[Path] = field(default_factory=list)  # Dependency recipe paths
     extra_symbol_dirs: list[Path] = field(default_factory=list)  # Extra dirs to scan for symbols
+    # Individual files (outside ``source_dir``) to migrate in the same
+    # pass as ``source_dir``. Each entry is a project-root-relative
+    # path to a single ``.f``/``.f90``/``.F90``/``.c``/``.h`` file.
+    # Used to pull in targeted leaf sources from shared directories
+    # whose other contents belong to a different library — e.g.
+    # LAPACK migrates ``INSTALL/dlamch.f`` and
+    # ``INSTALL/droundup_lwork.f`` without swallowing the timer
+    # variants and test programs that live alongside them; PTZBLAS
+    # pulls in ``TOOLS/zzdotc.f`` and ``TOOLS/zzdotu.f`` without
+    # claiming the rest of ScaLAPACK's TOOLS/.
+    extra_migrate_files: list[Path] = field(default_factory=list)
     # Additional C source directories to *migrate* (not just scan) in
     # the same generic-rename-map pass as ``source_dir``. Used by PBLAS
     # to pull in the PTOOLS/ helper sources alongside the SRC/ entry
@@ -75,6 +86,17 @@ class RecipeConfig:
     # migrator's template_vars (``{REAL_TYPE}``, ``{COMPLEX_TYPE}``,
     # ``{C_REAL_TYPE}``, ``{RP}``, ``{CP}``, ``{RPU}``, ``{CPU}``).
     c_type_aliases: list[dict] = field(default_factory=list)
+    # Pointer-cast aliases applied to copy-original C sources (those
+    # that are precision-independent dispatchers, e.g. PB_Cconjg.c uses
+    # ``((double*)CALPHA)[REAL_PART] = …`` switched on TYPE->type).
+    # Each entry has ``from`` (list of full cast strings like
+    # ``(double*)``) and ``to`` (the replacement, with template
+    # substitution). Distinct from ``c_type_aliases`` because the
+    # broad ``double → REAL_TYPE`` substitution would clobber the
+    # SCPLX/DCPLX dispatch labels in those originals; pointer-cast
+    # rewriting is needed for the kind-correct stride but the bare
+    # ``double``/``float`` keywords must stay.
+    c_pointer_cast_aliases: list[dict] = field(default_factory=list)
     # Insert new content into migrated headers after a literal anchor
     # line. Each entry: ``{'file': <relative path under source_dir>,
     # 'after': <anchor line>, 'insert': <text>}``. Used to define
@@ -117,6 +139,30 @@ class RecipeConfig:
     # ``MUMPS_MEMORY_MOD_EP`` that adds extended-precision reallocators
     # without collapsing the original S/D/C/Z generic interface.
     module_renames: dict[str, str] = field(default_factory=dict)
+    # Recipe-level forced rename entries, appended to the classifier's
+    # rename map after family discovery. Used for precision-prefixed
+    # symbols whose S/C sibling does not exist in the upstream source
+    # (so the prefix classifier cannot pair them — ScaLAPACK's
+    # ``pdlaiectb_/pdlaiectl_`` are the canonical example: the IEEE
+    # big/little-endian Sturm-sequence helpers exist only for double
+    # precision because the bit-shift sign trick they rely on is a
+    # 64-bit-double-only hack). Each entry maps an upstream upper-cased
+    # identifier to a target template that may reference {RP}/{CP}/
+    # {RPU}/{CPU} via target template_vars. Applied to migrated output
+    # (clones + caller bodies) but NOT to copy-original sources, so
+    # the upstream (un-migrated) entry points keep their original
+    # symbol names and link cleanly alongside the renamed clones.
+    extra_renames: dict[str, str] = field(default_factory=dict)
+    # Map of upstream filename → replacement source path (resolved
+    # relative to ``recipe_dir``). When the migrator iterates source
+    # files and encounters a name in this map, it reads from the
+    # override path instead of ``source_dir / name``. The override
+    # file is written in upstream-shape (DOUBLE PRECISION, pd*/dz*
+    # naming, dgemm call sites, etc.) and goes through the normal
+    # migration pipeline — so a single override produces correctly-
+    # renamed/promoted output for every target. Used to carry small
+    # bug fixes for upstream source without touching ``external/``.
+    source_overrides: dict[str, Path] = field(default_factory=dict)
 
 
 def load_recipe(recipe_path: Path,
@@ -198,8 +244,11 @@ def load_recipe(recipe_path: Path,
         patches=data.get('patches', []),
         depends=depends,
         extra_symbol_dirs=extra_symbol_dirs,
+        extra_migrate_files=[project_root / p
+                             for p in (data.get('extra_migrate_files') or [])],
         c_return_types=list(data.get('c_return_types', [])),
         c_type_aliases=list(data.get('c_type_aliases', [])),
+        c_pointer_cast_aliases=list(data.get('c_pointer_cast_aliases', [])),
         header_patches=list(data.get('header_patches', [])),
         overrides=dict(data.get('overrides') or {}),
         recipe_dir=recipe_path.parent,
@@ -211,5 +260,13 @@ def load_recipe(recipe_path: Path,
         module_renames={
             str(k).upper(): str(v).upper()
             for k, v in (data.get('module_renames') or {}).items()
+        },
+        extra_renames={
+            str(k).upper(): str(v)
+            for k, v in (data.get('extra_renames') or {}).items()
+        },
+        source_overrides={
+            str(k): (recipe_path.parent / str(v)).resolve()
+            for k, v in (data.get('source_overrides') or {}).items()
         },
     )
