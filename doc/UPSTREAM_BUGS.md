@@ -109,6 +109,63 @@ doesn't exercise but a real CSD-driver call path does.
 
 ---
 
+## ScaLAPACK 2.2.3: `p{d,z}atrmv_.c` ALPHA hardcoded to one in (UPLO=L, TRANS=T/C)
+
+**Symptom.** `PDATRMV` / `PZATRMV` (the absolute-value triangular
+matrix-vector product `y := |alpha|*|A|*|x| + |beta|*|y|`) returns
+results disagreeing with a serial reference whenever `UPLO='L'` and
+`TRANS='T'` (resp. `TRANS='T'` / `'C'` for the complex variant) are
+combined with a non-unit `ALPHA`. Every other (UPLO, TRANS)
+combination matches. The differential-precision suite catches the
+disagreement at `n=80` (10 block-rows of `MB=8`) with `alpha=0.6`;
+the residual scales as `(1 - alpha) * |L_below^T * x_below|`.
+
+**Root cause.** `pdatrmv_.c:573` and `pzatrmv_.c:577` invoke the
+local off-diagonal contribution via `?agemv_` with the literal `one`
+in the ALPHA slot:
+
+```c
+dagemv_( TRANS, &Amp0, &Anq0, one,
+         Aptr, &Ald, ... );
+```
+
+Every other (UPLO, TRANS) branch in the same routine forwards the
+caller's `ALPHA` (cast to the BLAS char-pointer ABI). The diagonal
+block correctly receives `ALPHA` via `PB_Cptrm`, so the diagonal is
+scaled and the off-diagonal isn't — produces `y_got = y_ref + (1 -
+alpha) * |L_below^T * x_below|`.
+
+**Affected files.**
+
+* `external/scalapack-2.2.3/PBLAS/SRC/pdatrmv_.c` (line 573 — D-half).
+* `external/scalapack-2.2.3/PBLAS/SRC/pzatrmv_.c` (line 577 — Z-half;
+  same bug fires for both `TRANS='T'` and `TRANS='C'`).
+* `external/scalapack-2.2.3/PBLAS/SRC/p{s,c}atrmv_.c` carry the
+  byte-identical bug. Not exercised by us (we don't migrate single
+  precision), so no override is wired for them.
+
+**Fix.** One-token change: pass `((char *) ALPHA)` instead of `one`
+to `?agemv_`. Carried in
+`recipes/pblas/source_overrides/p{d,z}atrmv_.c` and wired via
+`recipes/pblas.yaml`'s `source_overrides:` block. The migrator's
+PBLAS pipeline applies the patched form for every extended-precision
+target.
+
+**Standard-precision archive still buggy.** Same caveat as the LAPACK
+`?orbdb3` entry above: the std `pblas` archive built directly from
+`external/` carries the upstream form. Standard-precision callers
+of `PDATRMV` / `PZATRMV` see the same numerical shortfall.
+
+**Why upstream's tests miss it.** The PBLAS test driver's input
+shapes happen to combine (UPLO='L', TRANS='T') only with `ALPHA=1`
+(or sets that exercise the asymmetry doesn't surface in). Any caller
+exercising the documented contract with `ALPHA != 1` reproduces the
+bug immediately.
+
+**Upstream report.** Not yet filed.
+
+---
+
 ## ScaLAPACK 2.2.3: `p?lanhs.f` NPROW=1 underestimate (1/F/I norms)
 
 **Symptom.** Migrated `pqlanhs` / `pxlanhs` (and the upstream halves
