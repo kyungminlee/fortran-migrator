@@ -35,6 +35,32 @@ include(FortranCompiler)
 # ── Global compiler flags ────────────────────────────────────────────
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
+# Pin C standard to gnu17. The migrated ScaLAPACK C sources retain
+# K&R-style empty parameter lists (``void f();``) which the C migrator
+# treats as legal under ANSI C semantics. C23 (the default on GCC 15
+# and recent Clang/icx) reinterprets ``()`` as ``(void)`` and turns
+# call sites with arguments into hard errors, not warnings — so -w
+# alone does not suppress them. Forcing gnu17 keeps the legacy
+# semantics across GCC, Clang, icx, and flang.
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
+# The migrated C sources also call BLAS routines (e.g. zscal_) without
+# explicit prototypes, relying on K&R implicit-int conventions. GCC 14+
+# and recent Clang promote ``-Wimplicit-function-declaration`` to a
+# hard error by default; downgrade it to a warning so the global -w
+# flag can suppress it. Same story for ``-Wint-conversion`` (also an
+# error by default in GCC 14+).
+include(CheckCCompilerFlag)
+foreach(_flag -Wno-error=implicit-function-declaration
+              -Wno-error=int-conversion
+              -Wno-error=incompatible-pointer-types)
+    string(MAKE_C_IDENTIFIER "HAS_C${_flag}" _var)
+    check_c_compiler_flag(${_flag} ${_var})
+    if(${_var})
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_flag}")
+    endif()
+endforeach()
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -w")
 if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=legacy")
@@ -116,27 +142,35 @@ if(NEEDS_MULTIFLOATS)
             GIT_TAG        ${MULTIFLOATS_GIT_TAG}
         )
         FetchContent_Populate(multifloats_fetch)
-        # Upstream src/CMakeLists.txt uses CMAKE_SOURCE_DIR/include which
-        # only resolves correctly when multifloats is the top-level build.
-        # Patch it to PROJECT_SOURCE_DIR (the multifloats sub-project root)
-        # so the add_subdirectory inclusion below can find float64x2.h.
+        # Upstream src/ and fsrc/ CMakeLists reference paths via
+        # ${CMAKE_SOURCE_DIR} (older multifloats) or ${PROJECT_SOURCE_DIR}/..
+        # (current multifloats). Both forms break when included as a
+        # sub-build: CMAKE_SOURCE_DIR points at our staging dir, and
+        # PROJECT_SOURCE_DIR's value across CMake versions/scopes is
+        # unreliable (CMake 3.31 in particular resolves it to the outer
+        # project at configure_package_config_file time, not to fsrc/).
+        # Substitute both forms with the absolute fetched source path so
+        # the patch is independent of CMake-version scoping rules.
         file(READ "${multifloats_fetch_SOURCE_DIR}/src/CMakeLists.txt" _mf_src_cmake)
         string(REPLACE
             "\${CMAKE_SOURCE_DIR}/include"
+            "${multifloats_fetch_SOURCE_DIR}/include"
+            _mf_src_cmake "${_mf_src_cmake}")
+        string(REPLACE
             "\${PROJECT_SOURCE_DIR}/../include"
+            "${multifloats_fetch_SOURCE_DIR}/include"
             _mf_src_cmake "${_mf_src_cmake}")
         file(WRITE "${multifloats_fetch_SOURCE_DIR}/src/CMakeLists.txt" "${_mf_src_cmake}")
-        # Same symptom in fsrc/CMakeLists.txt: ``${CMAKE_SOURCE_DIR}/cmake/
-        # multifloatsfConfig.cmake.in`` resolves against our staging dir,
-        # not the fetched multifloats source root. Redirect to the
-        # multifloats sub-project root so configure_package_config_file
-        # finds the template where FetchContent put it.
         if(EXISTS "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt")
             file(READ "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt"
                  _mf_fsrc_cmake)
             string(REPLACE
                 "\${CMAKE_SOURCE_DIR}/cmake/"
+                "${multifloats_fetch_SOURCE_DIR}/cmake/"
+                _mf_fsrc_cmake "${_mf_fsrc_cmake}")
+            string(REPLACE
                 "\${PROJECT_SOURCE_DIR}/../cmake/"
+                "${multifloats_fetch_SOURCE_DIR}/cmake/"
                 _mf_fsrc_cmake "${_mf_fsrc_cmake}")
             file(WRITE "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt"
                  "${_mf_fsrc_cmake}")
@@ -1034,7 +1068,9 @@ endif()
 # the parent scope. Always-on with a directory check gives us the
 # single signal "is the staging dir self-contained?" — drop tests/
 # from staging to skip them.
-if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+option(MIGRATOR_BUILD_TESTS
+    "Build the differential-precision test suite (tests/)" ON)
+if(MIGRATOR_BUILD_TESTS AND IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     enable_testing()
     add_subdirectory(tests)
 endif()
