@@ -13,6 +13,19 @@ cmake_minimum_required(VERSION 3.20)
 # Load target configuration (written by the Python migration tool)
 include(${CMAKE_CURRENT_SOURCE_DIR}/target_config.cmake)
 
+# BASELINE_BUILD is true for the un-migrated kind4 / kind8 targets:
+# `migrator stage --target kind4|kind8` writes target_config.cmake
+# with LIB_PREFIX="" so the test framework links the standard archives
+# (blas / lapack / pblas / scalapack) directly. We skip every
+# add_migrated_* call and its post-link wiring under that mode — the
+# bare archive names would otherwise collide with the standard archive
+# of the same name (e.g. ``target_link_libraries(blas PUBLIC blas)``).
+if("${LIB_PREFIX}" STREQUAL "")
+    set(BASELINE_BUILD TRUE)
+else()
+    set(BASELINE_BUILD FALSE)
+endif()
+
 project(${TARGET_NAME}_libraries Fortran C CXX)
 
 # ── Compiler-aware install infrastructure ────────────────────────────
@@ -488,9 +501,11 @@ endfunction()
 add_standard_fortran_library(blas
     ${CMAKE_CURRENT_SOURCE_DIR}/_refblas_src
     EXCLUDE_REGEX "/(dsdot|sdsdot)\\.f9?0?$")
-add_migrated_fortran_library(blas)
-if(TARGET ${LIB_PREFIX}blas AND TARGET blas)
-    target_link_libraries(${LIB_PREFIX}blas PUBLIC blas)
+if(NOT BASELINE_BUILD)
+    add_migrated_fortran_library(blas)
+    if(TARGET ${LIB_PREFIX}blas AND TARGET blas)
+        target_link_libraries(${LIB_PREFIX}blas PUBLIC blas)
+    endif()
 endif()
 
 # 1.5. XBLAS (depends on BLAS).
@@ -510,20 +525,22 @@ endif()
 # *_extended.f routines that *would* call into it are deferred to a
 # follow-up that adds a -DBUILD_XBLAS gate). We can revive a
 # standard archive when that need lands.
-add_migrated_c_library(xblas)
-if(TARGET ${LIB_PREFIX}xblas)
-    # f2c-bridge.h defaults to no Fortran-symbol mangling. gfortran
-    # emits lowercase + trailing underscore (the "Add_" convention),
-    # so define CONFIG_FC_UNDERSCORE to make the bridge produce
-    # ``blas_qgemv_x_`` etc. — matching what Fortran callers expect.
-    target_compile_definitions(${LIB_PREFIX}xblas PRIVATE
-        CONFIG_FC_UNDERSCORE)
-    if(TARGET xblas_common)
-        target_compile_definitions(xblas_common PRIVATE
+if(NOT BASELINE_BUILD)
+    add_migrated_c_library(xblas)
+    if(TARGET ${LIB_PREFIX}xblas)
+        # f2c-bridge.h defaults to no Fortran-symbol mangling. gfortran
+        # emits lowercase + trailing underscore (the "Add_" convention),
+        # so define CONFIG_FC_UNDERSCORE to make the bridge produce
+        # ``blas_qgemv_x_`` etc. — matching what Fortran callers expect.
+        target_compile_definitions(${LIB_PREFIX}xblas PRIVATE
             CONFIG_FC_UNDERSCORE)
-    endif()
-    if(TARGET ${LIB_PREFIX}blas)
-        target_link_libraries(${LIB_PREFIX}xblas PUBLIC ${LIB_PREFIX}blas)
+        if(TARGET xblas_common)
+            target_compile_definitions(xblas_common PRIVATE
+                CONFIG_FC_UNDERSCORE)
+        endif()
+        if(TARGET ${LIB_PREFIX}blas)
+            target_link_libraries(${LIB_PREFIX}xblas PUBLIC ${LIB_PREFIX}blas)
+        endif()
     endif()
 endif()
 
@@ -560,12 +577,14 @@ if(TARGET blacs)
     endif()
     target_sources(blacs PRIVATE $<TARGET_OBJECTS:blacs_c_api>)
 endif()
-add_migrated_c_library(blacs)
-if(TARGET ${LIB_PREFIX}blacs AND NEEDS_MULTIFLOATS AND TARGET multifloats_mpi)
-    target_link_libraries(${LIB_PREFIX}blacs PUBLIC multifloats_mpi)
-endif()
-if(TARGET ${LIB_PREFIX}blacs AND TARGET blacs)
-    target_link_libraries(${LIB_PREFIX}blacs PUBLIC blacs)
+if(NOT BASELINE_BUILD)
+    add_migrated_c_library(blacs)
+    if(TARGET ${LIB_PREFIX}blacs AND NEEDS_MULTIFLOATS AND TARGET multifloats_mpi)
+        target_link_libraries(${LIB_PREFIX}blacs PUBLIC multifloats_mpi)
+    endif()
+    if(TARGET ${LIB_PREFIX}blacs AND TARGET blacs)
+        target_link_libraries(${LIB_PREFIX}blacs PUBLIC blacs)
+    endif()
 endif()
 
 # 3. LAPACK (depends on BLAS).
@@ -586,12 +605,14 @@ add_standard_fortran_library(lapack
 if(TARGET lapack AND TARGET blas)
     target_link_libraries(lapack PUBLIC blas)
 endif()
-add_migrated_fortran_library(lapack)
-if(TARGET ${LIB_PREFIX}lapack AND TARGET ${LIB_PREFIX}blas)
-    target_link_libraries(${LIB_PREFIX}lapack PUBLIC ${LIB_PREFIX}blas)
-endif()
-if(TARGET ${LIB_PREFIX}lapack AND TARGET lapack)
-    target_link_libraries(${LIB_PREFIX}lapack PUBLIC lapack)
+if(NOT BASELINE_BUILD)
+    add_migrated_fortran_library(lapack)
+    if(TARGET ${LIB_PREFIX}lapack AND TARGET ${LIB_PREFIX}blas)
+        target_link_libraries(${LIB_PREFIX}lapack PUBLIC ${LIB_PREFIX}blas)
+    endif()
+    if(TARGET ${LIB_PREFIX}lapack AND TARGET lapack)
+        target_link_libraries(${LIB_PREFIX}lapack PUBLIC lapack)
+    endif()
 endif()
 # The xx-family iterative-refinement helpers (qla_gerfsx_extended,
 # xla_gerfsx_extended, ...) live inside ${LIB_PREFIX}lapack and call
@@ -602,16 +623,18 @@ endif()
 # transitively, so the XBLAS symbols must be resolvable on the same
 # link line. Make the xblas dependency public so every consumer of
 # the migrated lapack archive picks it up automatically.
-if(TARGET ${LIB_PREFIX}lapack AND TARGET ${LIB_PREFIX}xblas)
-    target_link_libraries(${LIB_PREFIX}lapack PUBLIC ${LIB_PREFIX}xblas)
-endif()
-# The migrated lapack_common archive holds the extended-precision-only
-# helpers (la_constants_ep, la_xisnan_ep) which ``USE`` the standard
-# la_constants / la_xisnan modules supplied by the std ``lapack``
-# archive. The link is needed so gfortran resolves ``la_xisnan.mod``
-# during compilation, not just at final link time.
-if(TARGET lapack_common AND TARGET lapack)
-    target_link_libraries(lapack_common PUBLIC lapack)
+if(NOT BASELINE_BUILD)
+    if(TARGET ${LIB_PREFIX}lapack AND TARGET ${LIB_PREFIX}xblas)
+        target_link_libraries(${LIB_PREFIX}lapack PUBLIC ${LIB_PREFIX}xblas)
+    endif()
+    # The migrated lapack_common archive holds the extended-precision-only
+    # helpers (la_constants_ep, la_xisnan_ep) which ``USE`` the standard
+    # la_constants / la_xisnan modules supplied by the std ``lapack``
+    # archive. The link is needed so gfortran resolves ``la_xisnan.mod``
+    # during compilation, not just at final link time.
+    if(TARGET lapack_common AND TARGET lapack)
+        target_link_libraries(lapack_common PUBLIC lapack)
+    endif()
 endif()
 
 # 4. PTZBLAS (depends on BLAS).
@@ -622,12 +645,14 @@ endif()
 # upstream layering.
 add_standard_fortran_library(ptzblas
     ${CMAKE_CURRENT_SOURCE_DIR}/_ptzblas_src)
-add_migrated_fortran_library(ptzblas)
-if(TARGET ${LIB_PREFIX}ptzblas AND TARGET ${LIB_PREFIX}blas)
-    target_link_libraries(${LIB_PREFIX}ptzblas PUBLIC ${LIB_PREFIX}blas)
-endif()
-if(TARGET ${LIB_PREFIX}ptzblas AND TARGET ptzblas)
-    target_link_libraries(${LIB_PREFIX}ptzblas PUBLIC ptzblas)
+if(NOT BASELINE_BUILD)
+    add_migrated_fortran_library(ptzblas)
+    if(TARGET ${LIB_PREFIX}ptzblas AND TARGET ${LIB_PREFIX}blas)
+        target_link_libraries(${LIB_PREFIX}ptzblas PUBLIC ${LIB_PREFIX}blas)
+    endif()
+    if(TARGET ${LIB_PREFIX}ptzblas AND TARGET ptzblas)
+        target_link_libraries(${LIB_PREFIX}ptzblas PUBLIC ptzblas)
+    endif()
 endif()
 
 # 5. PBBLAS (depends on BLAS, BLACS).
@@ -636,16 +661,18 @@ endif()
 # no extra dependencies beyond BLAS+BLACS at link time.
 add_standard_fortran_library(pbblas
     ${CMAKE_CURRENT_SOURCE_DIR}/_pbblas_src)
-add_migrated_fortran_library(pbblas)
-if(TARGET ${LIB_PREFIX}pbblas)
-    foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs)
-        if(TARGET ${_dep})
-            target_link_libraries(${LIB_PREFIX}pbblas PUBLIC ${_dep})
-        endif()
-    endforeach()
-endif()
-if(TARGET ${LIB_PREFIX}pbblas AND TARGET pbblas)
-    target_link_libraries(${LIB_PREFIX}pbblas PUBLIC pbblas)
+if(NOT BASELINE_BUILD)
+    add_migrated_fortran_library(pbblas)
+    if(TARGET ${LIB_PREFIX}pbblas)
+        foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs)
+            if(TARGET ${_dep})
+                target_link_libraries(${LIB_PREFIX}pbblas PUBLIC ${_dep})
+            endif()
+        endforeach()
+    endif()
+    if(TARGET ${LIB_PREFIX}pbblas AND TARGET pbblas)
+        target_link_libraries(${LIB_PREFIX}pbblas PUBLIC pbblas)
+    endif()
 endif()
 
 # 6. PBLAS (depends on BLAS, BLACS, PTZBLAS, PBBLAS; C library).
@@ -675,17 +702,19 @@ if(TARGET pblas)
         # pilaenv.f is fixed-form Fortran; CMake auto-detects from .f.
     endif()
 endif()
-add_migrated_c_library(pblas)
-if(TARGET ${LIB_PREFIX}pblas)
-    foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs
-                 ${LIB_PREFIX}ptzblas ${LIB_PREFIX}pbblas)
-        if(TARGET ${_dep})
-            target_link_libraries(${LIB_PREFIX}pblas PUBLIC ${_dep})
-        endif()
-    endforeach()
-endif()
-if(TARGET ${LIB_PREFIX}pblas AND TARGET pblas)
-    target_link_libraries(${LIB_PREFIX}pblas PUBLIC pblas)
+if(NOT BASELINE_BUILD)
+    add_migrated_c_library(pblas)
+    if(TARGET ${LIB_PREFIX}pblas)
+        foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs
+                     ${LIB_PREFIX}ptzblas ${LIB_PREFIX}pbblas)
+            if(TARGET ${_dep})
+                target_link_libraries(${LIB_PREFIX}pblas PUBLIC ${_dep})
+            endif()
+        endforeach()
+    endif()
+    if(TARGET ${LIB_PREFIX}pblas AND TARGET pblas)
+        target_link_libraries(${LIB_PREFIX}pblas PUBLIC pblas)
+    endif()
 endif()
 
 # 7. ScaLAPACK (depends on LAPACK, BLACS, PBLAS).
@@ -710,16 +739,18 @@ if(TARGET scalapack)
         target_sources(scalapack PRIVATE ${_scalapack_tools})
     endif()
 endif()
-add_migrated_fortran_library(scalapack)
-if(TARGET ${LIB_PREFIX}scalapack)
-    foreach(_dep ${LIB_PREFIX}lapack ${LIB_PREFIX}blacs ${LIB_PREFIX}pblas)
-        if(TARGET ${_dep})
-            target_link_libraries(${LIB_PREFIX}scalapack PUBLIC ${_dep})
-        endif()
-    endforeach()
-endif()
-if(TARGET ${LIB_PREFIX}scalapack AND TARGET scalapack)
-    target_link_libraries(${LIB_PREFIX}scalapack PUBLIC scalapack)
+if(NOT BASELINE_BUILD)
+    add_migrated_fortran_library(scalapack)
+    if(TARGET ${LIB_PREFIX}scalapack)
+        foreach(_dep ${LIB_PREFIX}lapack ${LIB_PREFIX}blacs ${LIB_PREFIX}pblas)
+            if(TARGET ${_dep})
+                target_link_libraries(${LIB_PREFIX}scalapack PUBLIC ${_dep})
+            endif()
+        endforeach()
+    endif()
+    if(TARGET ${LIB_PREFIX}scalapack AND TARGET scalapack)
+        target_link_libraries(${LIB_PREFIX}scalapack PUBLIC scalapack)
+    endif()
 endif()
 
 # 8. ScaLAPACK C (depends on LAPACK, BLACS, PBLAS, ScaLAPACK).
@@ -746,32 +777,34 @@ if(TARGET scalapack_c)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_redist_src>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_scalapack_tools_src>)
 endif()
-add_migrated_c_library(scalapack_c)
-if(TARGET ${LIB_PREFIX}scalapack_c)
-    # REDIST/SRC sources select their Fortran-call entry-point naming
-    # convention (trailing underscore vs UpCase vs no-change) at compile
-    # time via ``Add_`` / ``UpCase`` / ``NoChange``. Upstream's
-    # SLmake.inc.example sets ``-DAdd_`` to get the lowercase + trailing
-    # underscore convention that gfortran emits, so we match.
-    target_compile_definitions(${LIB_PREFIX}scalapack_c PRIVATE Add_)
-    if(TARGET scalapack_c_common)
-        target_compile_definitions(scalapack_c_common PRIVATE Add_)
-    endif()
-    foreach(_dep ${LIB_PREFIX}lapack ${LIB_PREFIX}blacs ${LIB_PREFIX}pblas ${LIB_PREFIX}scalapack)
-        if(TARGET ${_dep})
-            target_link_libraries(${LIB_PREFIX}scalapack_c PUBLIC ${_dep})
+if(NOT BASELINE_BUILD)
+    add_migrated_c_library(scalapack_c)
+    if(TARGET ${LIB_PREFIX}scalapack_c)
+        # REDIST/SRC sources select their Fortran-call entry-point naming
+        # convention (trailing underscore vs UpCase vs no-change) at compile
+        # time via ``Add_`` / ``UpCase`` / ``NoChange``. Upstream's
+        # SLmake.inc.example sets ``-DAdd_`` to get the lowercase + trailing
+        # underscore convention that gfortran emits, so we match.
+        target_compile_definitions(${LIB_PREFIX}scalapack_c PRIVATE Add_)
+        if(TARGET scalapack_c_common)
+            target_compile_definitions(scalapack_c_common PRIVATE Add_)
         endif()
-    endforeach()
-    if(TARGET scalapack_c)
-        target_link_libraries(${LIB_PREFIX}scalapack_c PUBLIC scalapack_c)
-    endif()
-    # Reverse dep: ScaLAPACK's Fortran routines call qlamov_/xlamov_
-    # (and the redistribution entry points pqgemr2d_/pxgemr2d_) which
-    # live in ${LIB_PREFIX}scalapack_c. Downstream test link cycles
-    # then need only to name ${LIB_PREFIX}scalapack to pick both up.
-    if(TARGET ${LIB_PREFIX}scalapack)
-        target_link_libraries(${LIB_PREFIX}scalapack PUBLIC
-            ${LIB_PREFIX}scalapack_c)
+        foreach(_dep ${LIB_PREFIX}lapack ${LIB_PREFIX}blacs ${LIB_PREFIX}pblas ${LIB_PREFIX}scalapack)
+            if(TARGET ${_dep})
+                target_link_libraries(${LIB_PREFIX}scalapack_c PUBLIC ${_dep})
+            endif()
+        endforeach()
+        if(TARGET scalapack_c)
+            target_link_libraries(${LIB_PREFIX}scalapack_c PUBLIC scalapack_c)
+        endif()
+        # Reverse dep: ScaLAPACK's Fortran routines call qlamov_/xlamov_
+        # (and the redistribution entry points pqgemr2d_/pxgemr2d_) which
+        # live in ${LIB_PREFIX}scalapack_c. Downstream test link cycles
+        # then need only to name ${LIB_PREFIX}scalapack to pick both up.
+        if(TARGET ${LIB_PREFIX}scalapack)
+            target_link_libraries(${LIB_PREFIX}scalapack PUBLIC
+                ${LIB_PREFIX}scalapack_c)
+        endif()
     endif()
 endif()
 
@@ -792,29 +825,31 @@ endif()
 # ``id%COMM = MPI_COMM_WORLD`` and let MUMPS handle communication
 # internally; the link dependency must propagate so executables resolve
 # the MPI runtime.
-add_migrated_fortran_library(mumps)
-if(TARGET ${LIB_PREFIX}mumps)
-    foreach(_dep ${LIB_PREFIX}scalapack ${LIB_PREFIX}lapack ${LIB_PREFIX}blas)
-        if(TARGET ${_dep})
-            target_link_libraries(${LIB_PREFIX}mumps PUBLIC ${_dep})
+if(NOT BASELINE_BUILD)
+    add_migrated_fortran_library(mumps)
+    if(TARGET ${LIB_PREFIX}mumps)
+        foreach(_dep ${LIB_PREFIX}scalapack ${LIB_PREFIX}lapack ${LIB_PREFIX}blas)
+            if(TARGET ${_dep})
+                target_link_libraries(${LIB_PREFIX}mumps PUBLIC ${_dep})
+            endif()
+        endforeach()
+        if(MPI_Fortran_FOUND)
+            # PRIVATE so consumers can substitute libmpiseq at link time
+            # without dragging libmpifort.so along the PUBLIC dep chain.
+            target_link_libraries(${LIB_PREFIX}mumps PRIVATE MPI::MPI_Fortran)
         endif()
-    endforeach()
-    if(MPI_Fortran_FOUND)
-        # PRIVATE so consumers can substitute libmpiseq at link time
-        # without dragging libmpifort.so along the PUBLIC dep chain.
-        target_link_libraries(${LIB_PREFIX}mumps PRIVATE MPI::MPI_Fortran)
+        # Multifloats: the migrator rewrites MPI_DOUBLE_PRECISION →
+        # MPI_FLOAT64X2 (and reduction op tokens) in MUMPS Fortran sources,
+        # then injects ``USE multifloats_mpi_f`` so those names resolve.
+        # Link the module library so the .mod is on the include path and
+        # the C++ side that actually defines the handles is pulled in.
+        if(NEEDS_MULTIFLOATS AND TARGET multifloats_mpi_f)
+            target_link_libraries(${LIB_PREFIX}mumps PUBLIC multifloats_mpi_f)
+        endif()
     endif()
-    # Multifloats: the migrator rewrites MPI_DOUBLE_PRECISION →
-    # MPI_FLOAT64X2 (and reduction op tokens) in MUMPS Fortran sources,
-    # then injects ``USE multifloats_mpi_f`` so those names resolve.
-    # Link the module library so the .mod is on the include path and
-    # the C++ side that actually defines the handles is pulled in.
-    if(NEEDS_MULTIFLOATS AND TARGET multifloats_mpi_f)
-        target_link_libraries(${LIB_PREFIX}mumps PUBLIC multifloats_mpi_f)
+    if(TARGET mumps_common AND MPI_Fortran_FOUND)
+        target_link_libraries(mumps_common PRIVATE MPI::MPI_Fortran)
     endif()
-endif()
-if(TARGET mumps_common AND MPI_Fortran_FOUND)
-    target_link_libraries(mumps_common PRIVATE MPI::MPI_Fortran)
 endif()
 
 # 10. libmpiseq — sequential MPI stub from MUMPS 5.8.2 upstream.

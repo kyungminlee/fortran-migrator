@@ -1,0 +1,48 @@
+# kind4 — un-migrated single-precision baseline.
+#
+# Not a real migration target: S/C are the standard single-precision
+# entry points already in the upstream BLAS/LAPACK source tree, not
+# something the migrator produces. This file exists so `migrator stage
+# --target kind4` resolves a TargetMode; the staging command short-
+# circuits to the baseline path (no per-library migration; staging
+# only copies upstream sources, tests/, and writes target_config.cmake
+# with LIB_PREFIX="" so tests/<lib>/CMakeLists.txt links the standard
+# archive directly).
+
+name: kind4
+
+types:
+  real: "REAL(KIND=4)"
+  complex: "COMPLEX(KIND=4)"
+
+literals:
+  mode: kind_suffix
+  kind_suffix: 4
+  real_constructor: null
+  complex_constructor: null
+
+intrinsics:
+  mode: add_kind
+
+prefixes:
+  R: S
+  C: C
+  I: I
+  L: L
+  S: S
+
+module: null
+known_constants: {}
+la_constants_map: {}
+la_constants_suffix: ""
+
+c_interop:
+  real_type: float
+  complex_type: complex
+  c_real_type: float
+  mpi_real: MPI_REAL
+  mpi_complex: MPI_COMPLEX
+  mpi_sum_real: MPI_SUM
+  mpi_sum_complex: MPI_SUM
+  needs_mpi_check: false
+  header_mode: typedef
