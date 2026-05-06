@@ -12,6 +12,12 @@ symbols:
 depends:
   - blas.yaml
   - blacs.yaml
+  # PBBLAS' pb*tran / pb*trnv / pb*trsrt / pb*trget / pb*trst1 call
+  # NUMROC / ICEIL / ILCM. These are precision-independent integer
+  # helpers that live in ScaLAPACK's TOOLS/ tree but are hosted in
+  # their own tiny library so PBBLAS' downstreams (e.g. tests/pbblas)
+  # don't have to drag in libqscalapack to resolve them.
+  - scalapack_tools.yaml
 
 # PBBLAS files also reference PTZBLAS routines (DAGEMV, etc.)
 extra_symbol_dirs:

@@ -2,6 +2,23 @@
 
 Resolved items, reverse-chronological. Open work lives in `TODO.md`.
 
+## 2026-05-06 — `scalapack_tools` recipe
+
+NUMROC / ICEIL / ILCM are now produced by the new
+`recipes/scalapack_tools.yaml` (a tiny migrator output that carries
+just those three precision-independent integer helpers from
+`external/scalapack-2.2.3/TOOLS/`). Both `${LIB_PREFIX}pbblas` and
+`${LIB_PREFIX}scalapack` PUBLIC-link `${LIB_PREFIX}scalapack_tools`,
+so downstream test executables that link either parent archive pick
+the symbols up via the normal dependency graph — no test-side shim,
+no duplicate-symbol risk when an executable links both.
+
+Replaces the hand-rolled `common/scalapack_tools.f90` shim (deleted
+in this commit). The shim's documented `IDENOM == 0 → 0` /
+`A==0 ∨ B==0 → 0` guards in ICEIL / ILCM no longer apply: PBBLAS
+never exercises those input ranges, and the new library uses the
+upstream-verbatim sources.
+
 ## 2026-05-02 — `pbdtrnv` / `pbztrnv` covered
 
 `test_pbdtrnv.f90` / `test_pbztrnv.f90` (baseline XDIST='C', NZ=0,

@@ -7,9 +7,10 @@ symbols:
   method: scan_source
 
 depends:
-  - lapack.yaml   # transitively includes BLAS
-  - blacs.yaml    # BLACS comm routines (SGEBR2D/DGEBR2D, etc.)
-  - pblas.yaml    # ScaLAPACK routines call PBLAS entry points directly
+  - lapack.yaml         # transitively includes BLAS
+  - blacs.yaml          # BLACS comm routines (SGEBR2D/DGEBR2D, etc.)
+  - pblas.yaml          # ScaLAPACK routines call PBLAS entry points directly
+  - scalapack_tools.yaml  # NUMROC / ICEIL / ILCM (shared with PBBLAS)
 
 # Additional source dirs to scan for symbols (not migrated, just for renaming)
 # Scans both Fortran and C files, plus subdirectories.
@@ -57,16 +58,16 @@ extra_migrate_files:
   - external/scalapack-2.2.3/TOOLS/dscasum.f
   - external/scalapack-2.2.3/TOOLS/dscnrm2.f
   - external/scalapack-2.2.3/TOOLS/dsnrm2.f
-  - external/scalapack-2.2.3/TOOLS/iceil.f
+  # NUMROC / ICEIL / ILCM are migrated by recipes/scalapack_tools.yaml
+  # (see depends above) so PBBLAS can reach them at link time without
+  # depending on libqscalapack.
   - external/scalapack-2.2.3/TOOLS/ilacpy.f
-  - external/scalapack-2.2.3/TOOLS/ilcm.f
   - external/scalapack-2.2.3/TOOLS/indxg2l.f
   - external/scalapack-2.2.3/TOOLS/indxg2p.f
   - external/scalapack-2.2.3/TOOLS/indxl2g.f
   - external/scalapack-2.2.3/TOOLS/infog1l.f
   - external/scalapack-2.2.3/TOOLS/infog2l.f
   - external/scalapack-2.2.3/TOOLS/npreroc.f
-  - external/scalapack-2.2.3/TOOLS/numroc.f
   - external/scalapack-2.2.3/TOOLS/pcchekpad.f
   - external/scalapack-2.2.3/TOOLS/pccol2row.f
   - external/scalapack-2.2.3/TOOLS/pcelget.f

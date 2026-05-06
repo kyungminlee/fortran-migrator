@@ -831,6 +831,9 @@ LIBRARY_ORDER = [
     ('blacs',       'blacs.yaml'),
     ('lapack',      'lapack.yaml'),
     ('ptzblas',     'ptzblas.yaml'),
+    # NUMROC / ICEIL / ILCM. Hoisted out of scalapack so that pbblas
+    # downstreams (which don't link libqscalapack) can still reach them.
+    ('scalapack_tools', 'scalapack_tools.yaml'),
     ('pbblas',      'pbblas.yaml'),
     ('pblas',       'pblas.yaml'),
     ('scalapack',   'scalapack.yaml'),

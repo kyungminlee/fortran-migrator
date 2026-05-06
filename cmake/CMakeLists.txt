@@ -689,7 +689,28 @@ if(NOT BASELINE_BUILD)
     endif()
 endif()
 
-# 5. PBBLAS (depends on BLAS, BLACS).
+# 4b. ScaLAPACK tools (NUMROC / ICEIL / ILCM).
+#
+# Three precision-independent integer helpers carved out of ScaLAPACK's
+# TOOLS/ tree into their own tiny library. PBBLAS' pb*tran / pb*trnv /
+# pb*trsrt / pb*trget / pb*trst1 reference NUMROC / ICEIL / ILCM, but
+# tests/pbblas links only ${LIB_PREFIX}pbblas / blacs / blas — no
+# scalapack — so the symbols had to come from somewhere reachable
+# without dragging in the full ScaLAPACK archive.
+#
+# No standard counterpart archive: the baseline ``scalapack`` archive
+# already absorbs TOOLS/*.f directly (see section 7), and tests/pbblas
+# self-skips on baseline (HAVE_REAL16 is required). The migrated
+# library carries the symbols for both ``${LIB_PREFIX}pbblas`` and
+# ``${LIB_PREFIX}scalapack`` (which both PUBLIC-link it below), with
+# the canonical un-prefixed Fortran ABI names (numroc_, iceil_, ilcm_)
+# since the symbols are precision-independent and pass the migrator
+# pipeline unrenamed.
+if(NOT BASELINE_BUILD)
+    add_migrated_fortran_library(scalapack_tools)
+endif()
+
+# 5. PBBLAS (depends on BLAS, BLACS, scalapack_tools).
 #
 # Standard archive ``pbblas`` is built from PBLAS/PBBLAS/. Pure Fortran;
 # no extra dependencies beyond BLAS+BLACS at link time.
@@ -698,7 +719,7 @@ add_standard_fortran_library(pbblas
 if(NOT BASELINE_BUILD)
     add_migrated_fortran_library(pbblas)
     if(TARGET ${LIB_PREFIX}pbblas)
-        foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs)
+        foreach(_dep ${LIB_PREFIX}blas ${LIB_PREFIX}blacs ${LIB_PREFIX}scalapack_tools)
             if(TARGET ${_dep})
                 target_link_libraries(${LIB_PREFIX}pbblas PUBLIC ${_dep})
             endif()
@@ -776,7 +797,8 @@ endif()
 if(NOT BASELINE_BUILD)
     add_migrated_fortran_library(scalapack)
     if(TARGET ${LIB_PREFIX}scalapack)
-        foreach(_dep ${LIB_PREFIX}lapack ${LIB_PREFIX}blacs ${LIB_PREFIX}pblas)
+        foreach(_dep ${LIB_PREFIX}lapack ${LIB_PREFIX}blacs ${LIB_PREFIX}pblas
+                     ${LIB_PREFIX}scalapack_tools)
             if(TARGET ${_dep})
                 target_link_libraries(${LIB_PREFIX}scalapack PUBLIC ${_dep})
             endif()
