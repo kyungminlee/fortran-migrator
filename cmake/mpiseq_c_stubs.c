@@ -1,16 +1,19 @@
 /*
  * C-side MPI stubs that supplement upstream's libmpiseq for fully serial
- * (no mpiexec, no real MPI runtime) test executables.
+ * (no mpiexec, no real MPI runtime) builds — folded into the in-tree
+ * ``mpiseq`` target when USE_LIBMPISEQ is on (cmake/CMakeLists.txt).
  *
  * Upstream's `external/MUMPS_5.8.2/libseq/mpic.c` only stubs four
  * routines: `MPI_Init`, `MPI_Comm_rank`, `MPI_Comm_size`,
  * `MPI_Comm_f2c`. The migrated standard archives in this build
  * (`libblacs.a`, `libqblacs.a`, `libpblas.a`, `libqpblas.a`) are C code
  * that calls many more — `MPI_Send`, `MPI_Recv`, `MPI_Isend`,
- * `MPI_Type_match_size`, `MPI_Comm_split`, etc. Linking those archives
+ * `MPI_Type_match_size`, `MPI_Comm_split`, etc. Plus the multifloats
+ * C++ datatype-registration code calls `MPI_Type_create_struct` /
+ * `MPI_Type_contiguous` / `MPI_Op_create`. Linking those archives
  * against libmpiseq alone leaves the C-MPI calls unresolved. This file
  * provides single-process implementations of every additional symbol
- * the BLACS / PBLAS C side references.
+ * the BLACS / PBLAS / multifloats C side references.
  *
  * All stubs assume rank=0, size=1, and either no-op (for collectives,
  * since there's nothing to coordinate with) or print a "should not be
@@ -192,6 +195,10 @@ int LIBSEQ_CALL MPI_Testall(int count, MPI_Request *reqs, int *flag, MPI_Status 
 
 /* ── Datatype handles — opaque integers for libmpiseq's purposes ─────── */
 
+int LIBSEQ_CALL MPI_Type_contiguous(int count, MPI_Datatype old, MPI_Datatype *new_)
+{
+    (void) count; (void) old; *new_ = 0; return 0;
+}
 int LIBSEQ_CALL MPI_Type_vector(int c, int bl, int st, MPI_Datatype old, MPI_Datatype *new_)
 {
     (void) c; (void) bl; (void) st; (void) old; *new_ = 0; return 0;

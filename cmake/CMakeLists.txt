@@ -69,7 +69,6 @@ if(HAVE_REAL16)
     add_compile_definitions(HAVE_REAL16)
 endif()
 
-# ── MPI (needed by BLACS, PBLAS, ScaLAPACK C) ───────────────────────
 find_package(MPI COMPONENTS C CXX Fortran QUIET)
 
 # ── Multifloats (conditional) ────────────────────────────────────────
@@ -153,7 +152,14 @@ if(NEEDS_MULTIFLOATS)
         add_library(multifloats_mpi STATIC "${MF_HELPERS_DIR}/multifloats_mpi.cpp")
         target_include_directories(multifloats_mpi PUBLIC
             $<BUILD_INTERFACE:${MF_HELPERS_DIR}>)
-        target_link_libraries(multifloats_mpi PUBLIC MPI::MPI_CXX multifloats)
+        # MPI::MPI_CXX is PRIVATE so consumers (mblacs, mlapack PUBLIC
+        # chain, mumps test exes) aren't forced to link libmpicxx.so.
+        # Each consumer that wants the real-MPI runtime adds MPI::* on
+        # its own — keeps the libmpiseq link path (which substitutes
+        # mpiseq for ALL of MPI/BLACS/PBLAS/scalapack) clean.
+        target_link_libraries(multifloats_mpi
+            PRIVATE MPI::MPI_CXX
+            PUBLIC  multifloats)
         target_compile_features(multifloats_mpi PRIVATE cxx_std_17)
     elseif(EXISTS "${MF_HELPERS_DIR}/multifloats_bridge.h")
         # No MPI — still provide the bridge header via an interface target
@@ -794,7 +800,9 @@ if(TARGET ${LIB_PREFIX}mumps)
         endif()
     endforeach()
     if(MPI_Fortran_FOUND)
-        target_link_libraries(${LIB_PREFIX}mumps PUBLIC MPI::MPI_Fortran)
+        # PRIVATE so consumers can substitute libmpiseq at link time
+        # without dragging libmpifort.so along the PUBLIC dep chain.
+        target_link_libraries(${LIB_PREFIX}mumps PRIVATE MPI::MPI_Fortran)
     endif()
     # Multifloats: the migrator rewrites MPI_DOUBLE_PRECISION →
     # MPI_FLOAT64X2 (and reduction op tokens) in MUMPS Fortran sources,
@@ -806,7 +814,7 @@ if(TARGET ${LIB_PREFIX}mumps)
     endif()
 endif()
 if(TARGET mumps_common AND MPI_Fortran_FOUND)
-    target_link_libraries(mumps_common PUBLIC MPI::MPI_Fortran)
+    target_link_libraries(mumps_common PRIVATE MPI::MPI_Fortran)
 endif()
 
 # 10. libmpiseq — sequential MPI stub from MUMPS 5.8.2 upstream.
@@ -850,6 +858,13 @@ if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src)
             ${CMAKE_CURRENT_SOURCE_DIR}/mpiseq_mw_stubs.f90)
         target_link_libraries(mpiseq PUBLIC $<BUILD_INTERFACE:multifloatsf>)
     endif()
+    # Supplementary C-side stubs (MPI_Send / MPI_Type_* / MPI_Comm_split
+    # / MPI_Op_create / etc.) covering the C-MPI surface that BLACS /
+    # PBLAS / multifloats_mpi reach for. Always folded in so a
+    # downstream consumer can link this libmpiseq.a against the
+    # archives in place of real MPI without further plumbing.
+    target_sources(mpiseq PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/mpiseq_c_stubs.c)
     target_include_directories(mpiseq PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/_mpiseq_src>
     )

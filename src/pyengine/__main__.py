@@ -933,7 +933,10 @@ set(STAGED_LIBRARIES {staged_list})
     # tree without having to re-discover Intel MPI's wrapper paths.
     cmake_dir = proj_root / 'cmake'
     for cmake_file in ['CMakeLists.txt', 'FortranCompiler.cmake',
-                       'CMakePresets.json', 'mpiseq_qx_stubs.f']:
+                       'CMakePresets.json',
+                       'mpiseq_qx_stubs.f',
+                       'mpiseq_mw_stubs.f90',
+                       'mpiseq_c_stubs.c']:
         src = cmake_dir / cmake_file
         if src.exists():
             shutil.copy2(src, staging_dir / cmake_file)

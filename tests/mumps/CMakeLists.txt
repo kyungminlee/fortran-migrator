@@ -192,7 +192,7 @@ target_compile_definitions(mumps_c_bridge PRIVATE Add_
 # that NEED the precision-shadow types.
 target_compile_options(mumps_c_bridge PRIVATE
     -include mumps_c_types.h)
-target_link_libraries(mumps_c_bridge PUBLIC MPI::MPI_C)
+target_link_libraries(mumps_c_bridge PRIVATE MPI::MPI_C)
 
 # ── Common helper modules ────────────────────────────────────────────
 add_library(mumps_test_common STATIC
@@ -283,55 +283,208 @@ if(TARGET ${LIB_PREFIX}xblas)
     list(APPEND _mumps_link_group_archives ${LIB_PREFIX}xblas)
 endif()
 
+# libmpiseq is a complete drop-in for MPI + BLACS + PBLAS + ScaLAPACK
+# (single-rank only). The ``_seq`` link variant therefore replaces ALL
+# of those real archives with mpiseq alone — keeping mumps + lapack +
+# blas + the test harness. No BLACS/scalapack/pblas archives in the
+# link, so no symbol collisions with libmpiseq's bundled stubs.
+set(_mumps_link_group_archives_seq
+    mumps_test_target
+    mumps_c_bridge
+    ${LIB_PREFIX}mumps
+    ${LIB_PREFIX}lapack
+    ${LIB_PREFIX}blas
+)
+if(TARGET ${LIB_PREFIX}xblas)
+    list(APPEND _mumps_link_group_archives_seq ${LIB_PREFIX}xblas)
+endif()
+
+# Link-variant registry. Every Fortran/C test source is built twice:
+#
+#   * ``""``   suffix — links against real MPI (``MPI::MPI_Fortran`` /
+#               ``MPI::MPI_C``); test runs under ``mpiexec -n 1``.
+#   * ``_seq`` suffix — links against the in-tree ``mpiseq`` archive
+#               instead; test runs as a plain binary (no mpiexec).
+#
+# Both variants pull from the SAME compiled archives — only the MPI
+# layer differs. Single-rank numerics should be bit-equivalent across
+# the two; the ``_seq`` set exercises the libmpiseq path that
+# downstream consumers use when they want a no-MPI executable.
+if(TARGET mpiseq)
+    set(_mumps_test_variants ""  "_seq")
+else()
+    set(_mumps_test_variants "")
+endif()
+
+function(_mumps_apply_link_variant tgt variant want_c)
+    if(variant STREQUAL "_seq")
+        # mpiseq.a covers both Fortran and C MPI surfaces. Already
+        # bundles libmpiseq's own mpi.f / mpic.c plus our supplementary
+        # mpiseq_qx_stubs.f / mpiseq_mw_stubs.f90 / mpiseq_c_stubs.c.
+        target_link_libraries(${tgt} PRIVATE mpiseq)
+        # Test sources still ``use mpi`` / ``#include "mpi.h"`` and
+        # reference ``MPI_COMM_WORLD`` / ``MPI_INIT`` etc. that need
+        # the real MPI module + headers at COMPILE time. Keep the
+        # include path from MPI::MPI_Fortran (and MPI::MPI_C if needed)
+        # but DO NOT pull MPI::* into linking — libmpiseq supplies the
+        # symbols.
+        target_include_directories(${tgt} PRIVATE
+            $<TARGET_PROPERTY:MPI::MPI_Fortran,INTERFACE_INCLUDE_DIRECTORIES>)
+        if(want_c)
+            target_include_directories(${tgt} PRIVATE
+                $<TARGET_PROPERTY:MPI::MPI_C,INTERFACE_INCLUDE_DIRECTORIES>)
+        endif()
+    else()
+        target_link_libraries(${tgt} PRIVATE MPI::MPI_Fortran)
+        if(want_c)
+            target_link_libraries(${tgt} PRIVATE MPI::MPI_C)
+        endif()
+    endif()
+endfunction()
+
+function(_mumps_register_test_variant tgt variant)
+    if(variant STREQUAL "_seq")
+        # libmpiseq path — plain binary, no mpiexec wrapper.
+        add_test(NAME mumps_${tgt}
+                 COMMAND $<TARGET_FILE:${tgt}>
+                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
+        set_tests_properties(mumps_${tgt} PROPERTIES RUN_SERIAL TRUE)
+    else()
+        _mumps_register_test(${tgt})
+    endif()
+endfunction()
+
+function(_mumps_attach_link_group tgt variant want_c)
+    if(variant STREQUAL "_seq")
+        # ``_seq`` variant: libmpiseq stands in for ALL of MPI + BLACS +
+        # PBLAS + ScaLAPACK, so the link list is mumps + lapack + blas
+        # + multifloats + the test harness. cmake's $<LINK_GROUP:> can't
+        # be used because the migrated archives have PUBLIC chains to
+        # scalapack / blacs / pblas / pbblas / ptzblas (which we're
+        # deliberately replacing with libmpiseq) — naming a subset
+        # triggers cmake's cycle detector. Likewise, plain
+        # target_link_libraries on these would drag the PUBLIC chain
+        # back in (and Intel MPI along the multifloats_mpi PRIVATE chain
+        # — STATIC libs propagate PRIVATE deps to consumers). Bypass
+        # cmake's link graph entirely: list every required archive
+        # inside a single ``--start-group`` block via $<TARGET_FILE:>,
+        # add an explicit add_dependencies so cmake builds them, and
+        # pull include directories manually from the targets that
+        # carry .mod / header search paths.
+        set(_archives
+            mumps_test_target          # test harness — needs to scan
+            mumps_c_bridge             #   alongside mmumps
+            ${LIB_PREFIX}mumps
+            mumps_common               # mumps_abort_ etc. (std)
+            ${LIB_PREFIX}lapack
+            ${LIB_PREFIX}blas
+            mumps_test_common
+            target_conv
+            mpiseq                     # MPI / BLACS / scalapack stubs
+        )
+        if(TARGET ${LIB_PREFIX}xblas)
+            list(APPEND _archives ${LIB_PREFIX}xblas)
+        endif()
+        if(NEEDS_MULTIFLOATS)
+            # multifloats_mpi (C++ MPI bridge) included as a raw
+            # archive — its calls to MPI_Type_create_struct /
+            # MPI_Op_create / etc. resolve against libmpiseq's
+            # mpiseq_c_stubs.c. The registration runs but produces
+            # zeroed handles. Single-rank in-place reductions
+            # short-circuit before MUMPS_COPY sees the handle, so
+            # this is harmless for MUMPS calls that use MPI_IN_PLACE;
+            # non-in-place multifloats reductions would STOP in
+            # libseq's MUMPS_COPY (datatype unknown) — that's a real
+            # limitation of the libmpiseq path on multifloats and
+            # surfaces at runtime if hit.
+            list(APPEND _archives
+                multifloats_mpi_f multifloats_mpi
+                la_constants_mf la_xisnan_mf
+                multifloatsf multifloats)
+        endif()
+        add_dependencies(${tgt} ${_archives})
+        # target_link_libraries (vs. target_link_options) places these
+        # AFTER the .o files in the link line — required so ld can
+        # resolve test_*.o symbols against the group.
+        target_link_libraries(${tgt} PRIVATE "-Wl,--start-group")
+        foreach(_arc IN LISTS _archives)
+            target_link_libraries(${tgt} PRIVATE $<TARGET_FILE:${_arc}>)
+        endforeach()
+        target_link_libraries(${tgt} PRIVATE "-Wl,--end-group")
+        # mumps_test_target / mumps_c_bridge / mumps_test_common /
+        # multifloats_mpi_f / target_conv / mpiseq ship .mod files and
+        # bridge headers we need at compile time. Pull their public
+        # include dirs manually since we're not using
+        # target_link_libraries for them.
+        foreach(_arc IN LISTS _archives)
+            target_include_directories(${tgt} PRIVATE
+                $<TARGET_PROPERTY:${_arc},INTERFACE_INCLUDE_DIRECTORIES>)
+        endforeach()
+        # reflapack_quad / refblas_quad are reference archives the
+        # solve helpers reach for. They're optional (built only when
+        # tests/lapack and tests/blas are configured).
+        if(TARGET reflapack_quad)
+            target_link_libraries(${tgt} PRIVATE reflapack_quad)
+        endif()
+    else()
+        set(_archives ${_mumps_link_group_archives})
+        target_link_libraries(${tgt} PRIVATE
+            "$<LINK_GROUP:RESCAN,${_archives}>"
+        )
+    endif()
+endfunction()
+
 function(add_mumps_fortran_test test_src)
     get_filename_component(name ${test_src} NAME_WE)
-    add_executable(${name} ${test_src})
-    target_link_libraries(${name} PRIVATE
-        "$<LINK_GROUP:RESCAN,${_mumps_link_group_archives}>"
-        MPI::MPI_Fortran
-    )
-    # Use the native objects in the LTO-fat archives (built with
-    # -flto=auto -ffat-lto-objects upstream). Cross-archive LTO
-    # partitioning produces spurious "undefined reference to
-    # xmumps_mtransi_" / "pxtrsm_" etc. when linking via the LTO
-    # plugin, even though those symbols ARE in the archives. Native
-    # link sidesteps this.
-    target_link_options(${name} PRIVATE -fno-lto)
-    _mumps_register_test(${name})
+    foreach(variant IN LISTS _mumps_test_variants)
+        set(tgt ${name}${variant})
+        add_executable(${tgt} ${test_src})
+        _mumps_attach_link_group(${tgt} "${variant}" FALSE)
+        _mumps_apply_link_variant(${tgt} "${variant}" FALSE)
+        # Use the native objects in the LTO-fat archives (built with
+        # -flto=auto -ffat-lto-objects upstream). Cross-archive LTO
+        # partitioning produces spurious "undefined reference to
+        # xmumps_mtransi_" / "pxtrsm_" etc. when linking via the LTO
+        # plugin, even though those symbols ARE in the archives. Native
+        # link sidesteps this.
+        target_link_options(${tgt} PRIVATE -fno-lto)
+        _mumps_register_test_variant(${tgt} "${variant}")
+    endforeach()
 endfunction()
 
 function(add_mumps_c_test test_src)
     get_filename_component(name ${test_src} NAME_WE)
-    add_executable(${name} ${test_src})
-    # Same Fortran-linker / no-LTO setup as the Fortran tests — the
-    # bridge archive contains gfortran-LTO bitcode pulled in via
-    # libqmumps's LTO partitioning, and ``cc`` doesn't have the
-    # gfortran LTO plugin loaded.
-    set_target_properties(${name} PROPERTIES LINKER_LANGUAGE Fortran)
-    target_link_libraries(${name} PRIVATE
-        "$<LINK_GROUP:RESCAN,${_mumps_link_group_archives}>"
-        MPI::MPI_Fortran
-        MPI::MPI_C
-    )
-    target_link_options(${name} PRIVATE -fno-lto)
-    target_include_directories(${name} PRIVATE
-        ${_BRIDGE_INC_TARGET} ${_BRIDGE_INC_SHARED} ${_MUMPS_C_INC}
-    )
-    # Wire the same ``TARGET_*`` macros mumps_c_bridge uses so each
-    # test source can ``#include TARGET_REAL_HEADER`` and dispatch to
-    # the per-target bridge entry points without hard-coding kind16.
     string(TOUPPER "${TARGET_NAME}" _ttn_upper)
-    target_compile_definitions(${name} PRIVATE
-        "TARGET_REAL_HEADER=\"${LIB_PREFIX}mumps_c.h\""
-        "TARGET_COMPLEX_HEADER=\"${LIB_PREFIX_COMPLEX}mumps_c.h\""
-        TARGET_REAL_MUMPS_C=${LIB_PREFIX}mumps_c
-        TARGET_COMPLEX_MUMPS_C=${LIB_PREFIX_COMPLEX}mumps_c
-        TARGET_REAL_STRUC_C=${PFX}MUMPS_STRUC_C
-        TARGET_COMPLEX_STRUC_C=${PFX_C}MUMPS_STRUC_C
-        "TEST_TARGET_NAME=\"${TARGET_NAME}\""
-        "TEST_TARGET_${_ttn_upper}"
-    )
-    _mumps_register_test(${name})
+    foreach(variant IN LISTS _mumps_test_variants)
+        set(tgt ${name}${variant})
+        add_executable(${tgt} ${test_src})
+        # Same Fortran-linker / no-LTO setup as the Fortran tests — the
+        # bridge archive contains gfortran-LTO bitcode pulled in via
+        # libqmumps's LTO partitioning, and ``cc`` doesn't have the
+        # gfortran LTO plugin loaded.
+        set_target_properties(${tgt} PROPERTIES LINKER_LANGUAGE Fortran)
+        _mumps_attach_link_group(${tgt} "${variant}" TRUE)
+        _mumps_apply_link_variant(${tgt} "${variant}" TRUE)
+        target_link_options(${tgt} PRIVATE -fno-lto)
+        target_include_directories(${tgt} PRIVATE
+            ${_BRIDGE_INC_TARGET} ${_BRIDGE_INC_SHARED} ${_MUMPS_C_INC}
+        )
+        # Wire the same ``TARGET_*`` macros mumps_c_bridge uses so each
+        # test source can ``#include TARGET_REAL_HEADER`` and dispatch
+        # to the per-target bridge entry points without hard-coding
+        # kind16.
+        target_compile_definitions(${tgt} PRIVATE
+            "TARGET_REAL_HEADER=\"${LIB_PREFIX}mumps_c.h\""
+            "TARGET_COMPLEX_HEADER=\"${LIB_PREFIX_COMPLEX}mumps_c.h\""
+            TARGET_REAL_MUMPS_C=${LIB_PREFIX}mumps_c
+            TARGET_COMPLEX_MUMPS_C=${LIB_PREFIX_COMPLEX}mumps_c
+            TARGET_REAL_STRUC_C=${PFX}MUMPS_STRUC_C
+            TARGET_COMPLEX_STRUC_C=${PFX_C}MUMPS_STRUC_C
+            "TEST_TARGET_NAME=\"${TARGET_NAME}\""
+            "TEST_TARGET_${_ttn_upper}"
+        )
+        _mumps_register_test_variant(${tgt} "${variant}")
+    endforeach()
 endfunction()
 
 file(GLOB _ftests CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fortran/test_*.f90)

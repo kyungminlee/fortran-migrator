@@ -62,9 +62,12 @@ tests/mumps/
 ├── fortran/              — test_*mumps_*.f90 drivers
 └── c/
     ├── include/          — quad-precision header overrides for the bridge
-    ├── mpiseq_c_stubs.c  — supplementary C-MPI stubs (B3)
     └── test_*mumps_c_*.c — C drivers
 ```
+
+Supplementary libmpiseq C-side stubs live alongside the Fortran ones at
+`cmake/mpiseq_c_stubs.c` (folded into the `mpiseq` target when
+`USE_LIBMPISEQ=ON` — see the `linux-libmpiseq` preset).
 
 ## Coverage plan
 
