@@ -185,6 +185,15 @@ def _patch_libseq_mpi_f(path: Path) -> None:
         '      CALL MUMPS_COPY_REAL10( SENDBUF, RECVBUF, CNT, SS, RS )\n'
         '      ELSE IF ( DATATYPE .EQ. MPI_C_LONG_DOUBLE_COMPLEX ) THEN\n'
         '      CALL MUMPS_COPY_COMPLEX20( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        # multifloats: cmake/mpiseq_c_stubs.c encodes derived-type
+        # sentinels as 0x10000000 | total_bytes. float64x2 → 16-byte
+        # element (sentinel 268435472); complex64x2 → 32-byte
+        # (268435488). MPI_Type_c2f / MPI_Op_c2f in Intel mpi.h are
+        # passthrough casts, so the Fortran handle is the same value.
+        '      ELSE IF ( DATATYPE .EQ. 268435472 ) THEN\n'
+        '      CALL MUMPS_COPY_FLOAT64X2( SENDBUF, RECVBUF, CNT, SS, RS )\n'
+        '      ELSE IF ( DATATYPE .EQ. 268435488 ) THEN\n'
+        '      CALL MUMPS_COPY_COMPLEX64X2( SENDBUF, RECVBUF, CNT, SS, RS )\n'
     )
     if 'MPI_REAL16' not in src and fallthrough in src:
         src = src.replace(fallthrough, extra_dispatch + fallthrough, 1)
@@ -230,6 +239,26 @@ def _patch_libseq_mpi_f(path: Path) -> None:
       END DO
       RETURN
       END SUBROUTINE MUMPS_COPY_COMPLEX20
+      SUBROUTINE MUMPS_COPY_FLOAT64X2( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      REAL(KIND=8) S(2*N),R(2*N)
+      INTEGER I
+      DO I = 1, 2*N
+        R(I+2*RS) = S(I+2*SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_FLOAT64X2
+      SUBROUTINE MUMPS_COPY_COMPLEX64X2( S, R, N, SS, RS )
+      IMPLICIT NONE
+      INTEGER N, SS, RS
+      REAL(KIND=8) S(4*N),R(4*N)
+      INTEGER I
+      DO I = 1, 4*N
+        R(I+4*RS) = S(I+4*SS)
+      END DO
+      RETURN
+      END SUBROUTINE MUMPS_COPY_COMPLEX64X2
 """
     if 'SUBROUTINE MUMPS_COPY_REAL16' not in src:
         src = src.rstrip() + '\n' + extra_helpers

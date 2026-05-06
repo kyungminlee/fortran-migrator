@@ -27,35 +27,37 @@ a final valid-input pass that reaches MIC_OK and factors via JOB=6.
 returns the documented `INFOG(1) = -16` / `-6` codes, drop the wrapper
 and let the tests check `INFOG(1)` directly.
 
-## libmpiseq linkage — kind16/kind10 land, multifloats blocked
+## libmpiseq linkage — landed on all three targets
 
-Each test source under `tests/mumps/{fortran,c}/` is now built twice
-— once linked against real MPI (`mpiexec -n 1`), once linked against
-the in-tree `mpiseq` archive (plain binary, suffix `_seq`). libmpiseq
-is now Intel-MPI ABI compatible: cmake/CMakeLists.txt overlays the
-configured MPI's `mpi.h` / `mpif.h` onto `_mpiseq_src/`, libseq's own
-bundled `mpic.c` is replaced by `cmake/mpiseq_c_stubs.c` (compiled
-against Intel's signatures), and `pyengine stage` patches libseq's
-`mpi.f` to extend `MUMPS_COPY` with `MPI_REAL16` / `MPI_COMPLEX32`
-(kind16) and `MPI_LONG_DOUBLE` / `MPI_C_LONG_DOUBLE_COMPLEX` (kind10
-maps the 80-bit extended types to MPI's long-double tokens).
+Each test source under `tests/mumps/{fortran,c}/` is built twice — once
+linked against real MPI (`mpiexec -n 1`), once linked against the
+in-tree `mpiseq` archive (plain binary, suffix `_seq`). libmpiseq is
+Intel-MPI ABI compatible: cmake/CMakeLists.txt overlays the configured
+MPI's `mpi.h` / `mpif.h` onto `_mpiseq_src/`, libseq's bundled `mpic.c`
+is replaced by `cmake/mpiseq_c_stubs.c` (compiled against Intel's
+signatures), and `pyengine stage` patches libseq's `mpi.f` to extend
+`MUMPS_COPY` with the precision-specific datatype cases:
 
-**kind16 + kind10**: 26/26 `_seq` ctests pass on each; per-test JSON
+- `MPI_REAL16` / `MPI_COMPLEX32` (kind16)
+- `MPI_LONG_DOUBLE` / `MPI_C_LONG_DOUBLE_COMPLEX` (kind10 — 80-bit
+  extended types map to MPI's long-double tokens, no `MPI_REAL10`
+  exists in standard MPI)
+- `268435472` / `268435488` (multifloats — sentinel handles for
+  `MPI_FLOAT64X2` / `MPI_COMPLEX64X2`, see below)
+
+**Multifloats sentinel scheme**: `multifloats_mpi.cpp` registers its
+custom datatypes via `MPI_Type_contiguous(count, MPI_DOUBLE, &out)`. The
+libmpiseq C stub for `MPI_Type_contiguous` encodes the total byte size
+in low bits with a high tag (`0x10000000 | nbytes`), so float64x2 → 16
+bytes → handle `0x10000010`, complex64x2 → 32 bytes → handle
+`0x10000020`. `MPI_Type_c2f` is a passthrough cast in Intel mpi.h, so
+the Fortran handle is the same value, and `MUMPS_COPY` dispatches on
+those constants to a generic byte-block copy helper. `MPI_Op_create`
+returns distinct non-null sentinels above `MPI_OP_NULL` (0x18000000);
+the user-op callback never fires under single-rank ALLREDUCE. The
+0x10000000 / 0x18000000 ranges are well clear of Intel's 0x4c00****
+datatype constants.
+
+**Status (all three targets)**: 26/26 `_seq` ctests pass; per-test JSON
 precision reports are bit-identical to the impi-linked runs (verified
-via `md5sum`).
-
-**multifloats**: `_seq` binaries STOP at runtime with
-`MPI_ALLREDUCE, DATATYPE = 201326592` (Intel's `MPI_DATATYPE_NULL`).
-Root cause: the C++ `multifloats_mpi.cpp` registers `MPI_FLOAT64X2`
-/ `MPI_DD_SUM` / etc. via `MPI_Type_create_struct` /
-`MPI_Op_create`, which our libmpiseq stubs return as `MPI_DATATYPE_NULL`
-since they're inert. The runtime handle ends up null, and libseq's
-extended `MUMPS_COPY` doesn't recognize null. Fix path: replace the
-stubs with a libmpiseq-mode variant that returns specific sentinel
-handle values, and extend `MUMPS_COPY`'s dispatch to recognize those
-sentinels with the multifloats element sizes (16-byte real, 32-byte
-complex). Out of scope for this iteration.
-
-**Reopen condition** (multifloats specifically): an environment that
-can't run real MPI needs the multifloats sparse solver, OR a follow-up
-adds the multifloats-mode datatype-registration stubs.
+via `diff -q`).

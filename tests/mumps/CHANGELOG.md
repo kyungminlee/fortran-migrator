@@ -2,6 +2,43 @@
 
 Resolved items, reverse-chronological. Open work lives in `TODO.md`.
 
+## 2026-05-05 — libmpiseq linkage extended to multifloats
+
+Multifloats `_seq` tests now pass 26/26, with bit-identical JSON
+precision reports vs the impi-linked runs (matches the kind16/kind10
+result already on develop). The blocker — `multifloats_mpi.cpp`
+registering its custom datatypes via `MPI_Type_create_struct` /
+`MPI_Op_create`, which the previous libmpiseq stubs returned as
+`MPI_DATATYPE_NULL` / `MPI_OP_NULL` — is closed by giving libmpiseq's
+derived-type stubs an Intel-disjoint sentinel ABI:
+
+- `cmake/mpiseq_c_stubs.c`: `MPI_Type_contiguous` / `MPI_Type_vector` /
+  `MPI_Type_indexed` / `MPI_Type_create_struct` now compute the total
+  byte-size from the input arguments (via a small `mpiseq_base_type_bytes`
+  switch on Intel's named-type constants) and return
+  `0x10000000 | nbytes` as the new handle. The 0x10000000 tag is below
+  `MPI_OP_NULL` (0x18000000) and well clear of Intel's 0x4c00****
+  datatype range, so the sentinel is unambiguous on either side of the
+  Fortran/C bridge. `MPI_Op_create` returns
+  `0x18000000 + counter` — distinct non-null handles above
+  `MPI_OP_NULL`, since the user-op callback never fires under
+  single-rank ALLREDUCE (it collapses to memcpy in `MUMPS_COPY`).
+- `src/pyengine/__main__.py` (`_patch_libseq_mpi_f`): adds explicit
+  `MUMPS_COPY` dispatch cases for the two multifloats sentinels
+  (`268435472` → 16-byte real64x2 elements via `MUMPS_COPY_FLOAT64X2`;
+  `268435488` → 32-byte complex64x2 elements via
+  `MUMPS_COPY_COMPLEX64X2`). The new helpers are byte-equivalent block
+  copies through `REAL(KIND=8)` arrays of the right multiplicity.
+
+`MPI_Type_c2f` and `MPI_Op_c2f` are passthrough casts in Intel mpi.h
+(`#define MPI_Type_c2f(d) (MPI_Fint)(d)`), so the Fortran handle that
+multifloats stores in `mf_mpi_float64x2_f` etc. is the same sentinel
+the Fortran-side `MUMPS_COPY` checks against.
+
+Verified: kind16 / kind10 / multifloats all 26/26 on both impi and
+`_seq` variants; `diff -q` over per-test JSON reports yields zero
+differences on every stage.
+
 ## 2026-05-05 — End-to-end libmpiseq linkage on kind16 + kind10
 
 Each `tests/mumps/{fortran,c}/test_*.{f90,c}` source now produces a
