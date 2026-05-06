@@ -91,10 +91,21 @@ nm --defined-only "$ar" 2>/dev/null \
     | awk 'NF >= 3 {
             sec = $2; name = $3;
             if (sec != "T" && sec != "W") next;
-            if (name !~ /^[a-z_][a-z0-9_]*_$/) next;
-            sub(/_$/, "", name);
-            if (name ~ /_quad$/) next;
-            print name;
+            # Match Fortran-mangled symbols (<name>_ -> append _quad_)
+            # and gfortran module-procedure symbols (__<mod>_MOD_<proc>
+            # -> append _quad). Module procs do not carry the trailing-
+            # underscore convention, but still need renaming so quad-
+            # promoted module bodies (la_xisnan, la_constants) do not
+            # collide with the std archive native versions of the same
+            # modules at link time.
+            if (name ~ /^[a-z_][a-z0-9_]*_$/) {
+                bare = name; sub(/_$/, "", bare);
+                if (bare ~ /_quad$/) next;
+                print name " " bare "_quad_";
+            } else if (name ~ /^__[a-z_][a-z0-9_]*_MOD_[a-z_][a-z0-9_]*$/) {
+                if (name ~ /_quad$/) next;
+                print name " " name "_quad";
+            }
         }' \
     | sort -u > "$snapshot"
 
@@ -109,7 +120,11 @@ syms=$(mktemp)
 exclset=$(mktemp)
 trap 'rm -f "$syms" "$exclset" "$siblings_file" "$excludes_file"' EXIT
 
-# Collect exclude names from -x archives (their T/W defs).
+# Snapshot lines are now `<orig_symbol> <new_symbol>` pairs covering
+# both Fortran-mangled (`<name>_` -> `<name>_quad_`) and gfortran
+# module-procedure (`__<mod>_MOD_<proc>` -> `__<mod>_MOD_<proc>_quad`)
+# patterns. Collect exclude *original* names and filter them out of
+# the rename pairs.
 {
     while IFS= read -r ex; do
         if [ -f "$ex" ]; then
@@ -117,17 +132,37 @@ trap 'rm -f "$syms" "$exclset" "$siblings_file" "$excludes_file"' EXIT
                 | awk 'NF >= 3 {
                         sec = $2; name = $3;
                         if (sec != "T" && sec != "W") next;
-                        if (name !~ /^[a-z_][a-z0-9_]*_$/) next;
-                        sub(/_$/, "", name);
-                        print name;
+                        if (name ~ /^[a-z_][a-z0-9_]*_$/) {
+                            print name;
+                        } else if (name ~ /^__[a-z_][a-z0-9_]*_MOD_[a-z_][a-z0-9_]*$/) {
+                            print name;
+                        }
                     }'
         fi
     done < "$excludes_file"
 } | sort -u > "$exclset"
 
+# Helper: read a sibling archive's symbols on the fly and emit the
+# same `<orig> <new>` pair lines as $snapshot did for this archive.
+nm_pairs_of() {
+    nm --defined-only "$1" 2>/dev/null \
+        | awk 'NF >= 3 {
+                sec = $2; name = $3;
+                if (sec != "T" && sec != "W") next;
+                if (name ~ /^[a-z_][a-z0-9_]*_$/) {
+                    bare = name; sub(/_$/, "", bare);
+                    if (bare ~ /_quad$/) next;
+                    print name " " bare "_quad_";
+                } else if (name ~ /^__[a-z_][a-z0-9_]*_MOD_[a-z_][a-z0-9_]*$/) {
+                    if (name ~ /_quad$/) next;
+                    print name " " name "_quad";
+                }
+            }'
+}
+
 # Build the rename set: this archive's snapshot + sibling snapshots
 # (read from sibling .quad-symbols if present, else nm-extracted),
-# minus any name in the exclude set.
+# minus pairs whose original name is in the exclude set.
 {
     cat "$snapshot"
     while IFS= read -r sib; do
@@ -135,19 +170,17 @@ trap 'rm -f "$syms" "$exclset" "$siblings_file" "$excludes_file"' EXIT
         if [ -f "$sib_snapshot" ]; then
             cat "$sib_snapshot"
         elif [ -f "$sib" ]; then
-            nm --defined-only "$sib" 2>/dev/null \
-                | awk 'NF >= 3 {
-                        sec = $2; name = $3;
-                        if (sec != "T" && sec != "W") next;
-                        if (name !~ /^[a-z_][a-z0-9_]*_$/) next;
-                        sub(/_$/, "", name);
-                        if (name ~ /_quad$/) next;
-                        print name;
-                    }'
+            nm_pairs_of "$sib"
         fi
     done < "$siblings_file"
-} | sort -u | comm -23 - "$exclset" \
-    | awk '{print $1 "_ " $1 "_quad_"}' > "$syms"
+} | sort -u \
+    | awk -v exclfile="$exclset" '
+        BEGIN {
+            while ((getline line < exclfile) > 0) excl[line] = 1;
+        }
+        $1 in excl { next }
+        { print $1, $2 }
+    ' > "$syms"
 
 if [ ! -s "$syms" ]; then
     echo "$0: no Fortran-mangled symbols found in $ar" >&2
