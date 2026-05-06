@@ -85,35 +85,19 @@ jobs:
       fail-fast: false
       matrix:
         target: [kind16, kind10, multifloats]
+        # v0.2.0 release matrix: gfortran-only. ifx and flang surface
+        # several pre-existing migrator and per-MPI ABI issues
+        # (mpiseq KIND-typing on ifx, mpich+oneAPI 2025 mpi.h shadowing,
+        # flang's lack of -ffat-lto-objects, mumps mpif.h scan failure
+        # on flang, etc.) that need targeted fixes before they can be
+        # promoted to release artifacts. Tracked as a follow-up.
         compiler:
           - { name: gfortran-12,  fc: gfortran-12,   cc: gcc-12,    cxx: g++-12,      pkg: gcc-12 g++-12 gfortran-12 }
           - { name: gfortran-15,  fc: gfortran-15,   cc: gcc-15,    cxx: g++-15,      pkg: gcc-15 g++-15 gfortran-15 }
-          - { name: ifx-2024,     fc: ifx,            cc: icx,       cxx: icpx,        pkg: "",  oneapi: "2024.2" }
-          - { name: ifx-2025,     fc: ifx,            cc: icx,       cxx: icpx,        pkg: "",  oneapi: "2025.1" }
-          - { name: flang-20,     fc: flang-new-20,   cc: clang-20,  cxx: clang++-20,  pkg: "" }
         mpi:
           - { name: openmpi,  pkg: libopenmpi-dev }
           - { name: mpich,    pkg: libmpich-dev }
           - { name: intelmpi }
-        exclude:
-          # ifx on Linux/x86-64 does not implement REAL(KIND=10)
-          # (80-bit x87 extended), so the kind10 target cannot be
-          # built with Intel's compiler.
-          - target: kind10
-            compiler: { name: ifx-2024 }
-          - target: kind10
-            compiler: { name: ifx-2025 }
-          # LLVM Flang 20 has no REAL(KIND=16) (IEEE binary128) support
-          # yet, so it cannot build the kind16 target. It *does*
-          # support REAL(KIND=10), so kind10 and multifloats are OK.
-          - target: kind16
-            compiler: { name: flang-20 }
-          # Intel oneAPI 2025.1's setvars.sh shadows mpich's include
-          # path so blacs C sources fail to find <mpi.h>. Exclude this
-          # combo until find_package(MPI) wiring is hardened.
-          - target: kind16
-            compiler: { name: ifx-2025 }
-            mpi: { name: mpich }
 
     steps:
       - uses: actions/checkout@v4
@@ -239,9 +223,11 @@ jobs:
   # ── Smoke ctest (one combo) ──────────────────────────────────────
   # Build and run the differential-precision test suite for a single
   # representative combination so the release workflow has at least
-  # one correctness signal. We pick kind10 + gfortran-15 + openmpi
-  # because kind10 currently has a 100% ctest pass rate (728/728 as
-  # of 2026-04-30) — any regression there is a clear red flag.
+  # one correctness signal. We pick kind10 + gfortran-15 + intelmpi
+  # because kind10 has a 100% ctest pass rate and Intel MPI is the
+  # canonical MPI for the migrated stack — the libmpiseq path was
+  # written against Intel MPI's handle ABI, so OpenMPI/MPICH-linked
+  # _seq tests fail to resolve ompi_mpi_byte etc. at link time.
   # Other targets are not run here because:
   #   - kind16 has 2 known failures pending the P22 reference-side
   #     override (commit 36f6f24); they pass on a fresh stage but
@@ -270,14 +256,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-15 g++-15 gfortran-15
 
-      - name: Install OpenMPI
-        run: sudo apt-get install -y libopenmpi-dev
+      - name: Install Intel MPI
+        run: |
+          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get install -y intel-oneapi-mpi-devel
 
       - name: Install fypp (required by tests/)
         run: pipx install fypp
 
       - name: Configure
         run: |
+          source /opt/intel/oneapi/setvars.sh
+          export I_MPI_F90=gfortran-15
+          export I_MPI_CC=gcc-15
+          export I_MPI_CXX=g++-15
           cmake -S staging -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_Fortran_COMPILER=gfortran-15 \
@@ -286,16 +282,20 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
       - name: Build (libraries + tests)
-        run: cmake --build build -j$(nproc)
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          cmake --build build -j$(nproc)
 
       - name: Run ctest
-        run: ctest --test-dir build -j$(nproc) --output-on-failure
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          ctest --test-dir build -j$(nproc) --output-on-failure
 
       - name: Upload ctest log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ctest-kind10-gfortran-15-openmpi-LastTest
+          name: ctest-kind10-gfortran-15-intelmpi-LastTest
           path: |
             build/Testing/Temporary/LastTest.log
             build/Testing/Temporary/LastTestsFailed.log
@@ -341,9 +341,11 @@ jobs:
             |----------|-----|
             | GCC/gfortran 12 | `gfortran-12` |
             | GCC/gfortran 15 | `gfortran-15` |
-            | Intel oneAPI 2024 (ifx) | `ifx-2024` |
-            | Intel oneAPI 2025 (ifx) | `ifx-2025` |
-            | LLVM Flang 20 | `flang-20` (kind10 and multifloats only) |
+
+            Intel oneAPI (ifx) and LLVM Flang are not yet covered by
+            the release matrix — pre-existing migrator and per-MPI
+            ABI work is needed before they can be promoted. Track the
+            follow-up at the repo issues page.
 
             ### MPI Implementations
             MPI-dependent libraries (BLACS, PBLAS, PBBLAS, ScaLAPACK, ScaLAPACK_C)
