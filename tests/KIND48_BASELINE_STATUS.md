@@ -20,7 +20,7 @@ Smoke results on the kind8 BLAS + LAPACK suite (725 tests):
 | Suite  | Pass | Fail | Notes |
 |--------|-----:|-----:|-------|
 | BLAS   |   75 |    0 | Every Level 1/2/3 routine reports ~16-digit agreement against the quad reference (the IEEE binary64 floor — exactly the expected sanity-check shape). |
-| LAPACK |  583 |   67 | Most failures are SIGSEGVs in CSD / 2-stage / DMD drivers (dorbdb1-4, dorcsd2by1, dgedmd, dgges, zheevr_2stage, …). A handful are real corner-case precision miss-matches (disnan on signaling-NaN inputs). |
+| LAPACK |  719 |    6 | After the symbol-rename pass was extended to gfortran module-procedure symbols (`__<mod>_MOD_<proc>`), the entire CSD / 2-stage / DMD SIGSEGV cluster cleared. The 6 residual failures are precision corner cases (5) plus one specific `zunbdb3` heap-corruption that traces to the kind8 `target_lapack` wrapper rather than the rename machinery. |
 
 `kind16` regression check stays clean — `test_dasum`, `test_dgemm`,
 `test_dsyevr`, and `test_dgbsvxx` all pass after the rename and
@@ -82,45 +82,33 @@ exclude-list changes.
 
 ## Known residual issues
 
-### LAPACK SIGSEGV cluster (kind8)
+### LAPACK SIGSEGV cluster (kind8) — RESOLVED
 
-`gdb` traces the crash for `test_dorbdb1` to:
-```
-__la_xisnan_MOD_disnan ()
-dlassq_ ()
-dorbdb5_ ()
-dorbdb1_ ()
-__target_lapack_MOD_target_dorbdb1 ()
-```
+The earlier cluster of CSD / 2-stage / DMD SIGSEGVs (dorbdb1-4,
+dorcsd2by1, dgedmd, dgges, zheevr_2stage, …) traced to module-proc
+symbol collisions: la_xisnan.F90 and la_constants.f90 are compiled
+into both std lapack (native) and reflapack_quad (quad-promoted),
+producing identical `__la_xisnan_MOD_disnan` / `__la_constants_MOD_dp`
+symbols with mismatched ABIs. Whichever .o ld picked first determined
+the receiver's argument width, breaking the other path's callers.
 
-`__la_xisnan_MOD_disnan` is the `la_xisnan` Fortran module's
-generic-interface dispatcher for the disnan/sisnan overloads. Both
-std lapack AND reflapack_quad compile `la_xisnan.F90`; std lapack at
-native, reflapack_quad with `-freal-8-real-16`. The two .o files
-produce module-procedure symbols with the same name
-(`__la_xisnan_MOD_disnan`), and ld picks one. If reflapack_quad's
-quad-promoted version wins (likely — it's earlier in the link order),
-std lapack's native `dlassq_` calls into it expecting native ABI →
-SIGSEGV at the receiver.
+`scripts/refquad_rename_archive.sh` was extended to match
+`__<mod>_MOD_<proc>` alongside the trailing-underscore Fortran-mangled
+pattern. After the rename:
+- std lapack continues to expose `__la_xisnan_MOD_disnan` (native) for
+  its own native callers (`dlassq_`, `dorbdb5_`, …).
+- reflapack_quad exposes `__la_xisnan_MOD_disnan_quad` (quad) for its
+  own quad-promoted callers.
+- Both paths resolve consistently; the cluster is gone.
 
-Same shape for the other SIGSEGV clusters (dorcsd2by1, dgedmd, dgges,
-zheevr_2stage, …): they all use routines that `use la_xisnan` or
-`use la_constants` from std lapack but get resolved against
-reflapack_quad's quad-compiled module proc.
+### Single remaining SIGSEGV — kind8 zunbdb3
 
-Fixes worth trying next:
-
-- **Exclude `la_xisnan.F90` and `la_constants.f90` from
-  reflapack_quad.** Std lapack already provides them at native; the
-  quad-promoted versions are only needed by routines compiled with
-  the same promotion (which are only in reflapack_quad). The
-  intra-archive references inside reflapack_quad should still
-  resolve from std lapack since both archives are on the link line.
-- Or **rename the la_xisnan / la_constants module-procedure symbols
-  in reflapack_quad** alongside the Fortran-mangled ones. The
-  rename script today looks for `[a-z_][a-z0-9_]*_$` (Fortran
-  trailing-underscore mangling); module procs use the
-  `__module_MOD_proc` shape and aren't picked up.
+`gdb` traces zunbdb3's segfault into glibc's `arena_for_chunk` via
+`__libc_free`, called directly from
+`__target_lapack_MOD_target_zunbdb3` — a heap corruption inside the
+kind8 wrapper itself, not the reference path. Likely an off-by-one
+in the wrapper's workspace allocation for the (M-Q)×(P-Q) sub-block
+case. Worth a focused look but unrelated to the rename machinery.
 
 ### Real precision corner cases
 
