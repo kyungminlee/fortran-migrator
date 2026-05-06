@@ -570,6 +570,22 @@ don't need to ship into migrated builds the way an algorithm fix does.
 the query, so the early-write fits comfortably. A caller that follows
 the documented two-pass contract trips the heap corruption.
 
+**Caveat — alternative interpretation.** `pdsyevx.f:247` documents
+`WORK` as `dimension max(3, LWORK)`, and `pzheevx.f:282` says the
+same about `RWORK`. Read strictly, the contract requires *every*
+caller (LQUERY included) to provide at least 3 elements — the
+ABSTOL/VL/VU broadcast then sits inside the documented buffer and
+isn't an OOB write at all. Under that reading the wrapper-side
+`work_t(3)` / `rwork_t(3)` allocation is plain contract compliance,
+not a fix. The reason this entry stays in the catalogue: standard
+LAPACK / ScaLAPACK LQUERY convention everywhere else is "WORK(1) is
+the only element touched on the query," so a caller naturally
+assuming that convention (as our wrappers initially did) gets bitten.
+Whether the routines should be tightened to honour the universal
+LQUERY convention or the doc clarified to flag the deviation is a
+project-policy call; either way the surprise is real and the
+wrapper-side allocation is the load-bearing fix.
+
 **Upstream report.** Not yet filed.
 
 ---
