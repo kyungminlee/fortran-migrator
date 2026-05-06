@@ -32,6 +32,22 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
+# The migrated C sources also call BLAS routines (e.g. zscal_) without
+# explicit prototypes, relying on K&R implicit-int conventions. GCC 14+
+# and recent Clang promote ``-Wimplicit-function-declaration`` to a
+# hard error by default; downgrade it to a warning so the global -w
+# flag can suppress it. Same story for ``-Wint-conversion`` (also an
+# error by default in GCC 14+).
+include(CheckCCompilerFlag)
+foreach(_flag -Wno-error=implicit-function-declaration
+              -Wno-error=int-conversion
+              -Wno-error=incompatible-pointer-types)
+    string(MAKE_C_IDENTIFIER "HAS_C${_flag}" _var)
+    check_c_compiler_flag(${_flag} ${_var})
+    if(${_var})
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_flag}")
+    endif()
+endforeach()
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -w")
 if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -std=legacy")
