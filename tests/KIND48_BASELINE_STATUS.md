@@ -20,7 +20,7 @@ Smoke results on the kind8 BLAS + LAPACK suite (725 tests):
 | Suite  | Pass | Fail | Notes |
 |--------|-----:|-----:|-------|
 | BLAS   |   75 |    0 | Every Level 1/2/3 routine reports ~16-digit agreement against the quad reference (the IEEE binary64 floor — exactly the expected sanity-check shape). |
-| LAPACK |  719 |    6 | After the symbol-rename pass was extended to gfortran module-procedure symbols (`__<mod>_MOD_<proc>`), the entire CSD / 2-stage / DMD SIGSEGV cluster cleared. The 6 residual failures are precision corner cases (5) plus one specific `zunbdb3` heap-corruption that traces to the kind8 `target_lapack` wrapper rather than the rename machinery. |
+| LAPACK |  720 |    5 | After the symbol-rename pass was extended to gfortran module-procedure symbols (`__<mod>_MOD_<proc>`) AND `refquad_alias.py` was taught to recognize typed function declarations (`logical function disnan(...)`), the SIGSEGV cluster and the `disnan` ABI mismatch cleared. The 5 residual failures split into 2 traceable to a missing baseline application of `recipes/lapack/source_overrides/{d,z}orbdb3.f` (parked in `tests/lapack/TODO.md`) and 3 genuine precision findings. |
 
 `kind16` regression check stays clean — `test_dasum`, `test_dgemm`,
 `test_dsyevr`, and `test_dgbsvxx` all pass after the rename and
@@ -101,61 +101,75 @@ pattern. After the rename:
   own quad-promoted callers.
 - Both paths resolve consistently; the cluster is gone.
 
-### Six remaining failures — categorized
+### Residual failures — categorized
+
+`disnan` resolved (2026-05-06): `refquad_alias.py`'s `SIG_START_RE`
+was untyped-function-only (`\s+(function|subroutine)\s+`), so the
+typed declaration `logical function disnan(din)` was skipped during
+the alias rewrite — `disnan` was never renamed to `disnan_quad`, no
+module-procedure wrapper was emitted, and `use ref_quad_lapack, only:
+disnan` resolved to std lapack's native `disnan_` (real-8 ABI) called
+with a quad-precision argument. Cases 5 and 7 happened to expose the
+ABI mismatch as wrong booleans; the original "NaN-payload artifact"
+explanation was incorrect. Fix: extended the regex to accept an
+optional return-type prefix and taught `render_wrapper` to preserve
+the typed-function form (no `result()` clause, return via assignment
+to the function name). Regenerated `tests/lapack/common/ref_quad_lapack.f90`.
+
+`zunbdb3` and `dorbdb3` re-categorized (2026-05-06): both trace to
+the same upstream LAPACK 3.12.1 typo in `{d,z}orbdb3.f` —
+`{D,Z}ROT(..., X21(I,I), LDX11, ...)` should pass `LDX21` as the
+`INCY` for `X21`. When `LDX11 /= LDX21` the rotation strides past
+`X21`'s buffer and corrupts the next heap chunk. The fix exists in
+`recipes/lapack/source_overrides/{d,z}orbdb3.f` and is applied for
+every migrated target, but the kind4 / kind8 baseline path skips
+migration and stages upstream `_reflapack_src/` verbatim. With the
+override overlaid, both `dorbdb3` and `zunbdb3` pass cleanly.
+Parked under `tests/lapack/TODO.md` until the baseline column is
+promoted to the published precision matrix.
 
 | # | Test | Class | Severity |
 |---|------|-------|----------|
-| 1 | `lapack_test_zunbdb3` | wrapper-side heap corruption | bug to fix |
-| 2 | `lapack_test_dorbdb3` | precision genuinely insufficient | finding |
-| 3 | `lapack_test_dorcsd`  | precision genuinely insufficient | finding |
-| 4 | `lapack_test_dgedmdq` | precision insufficient on residual-refinement path | finding |
-| 5 | `lapack_test_zgedmdq` | precision insufficient on residual-refinement path | finding |
-| 6 | `lapack_test_disnan`  | NaN-payload artifact of the cast q2t_r | test-fixture quirk |
+| 1 | `lapack_test_zunbdb3` | upstream LAPACK orbdb3 typo (heap overrun) | parked — migrator/staging gap |
+| 2 | `lapack_test_dorbdb3` | upstream LAPACK orbdb3 typo (silent corruption presents as wrong digits) | parked — migrator/staging gap |
+| 3 | `lapack_test_dorcsd`  | precision genuinely insufficient (orthogonal-completion ambiguity at this shape) | finding |
+| 4 | `lapack_test_dgedmdq` | precision insufficient on `JOBR=R` residual-refinement path | finding |
+| 5 | `lapack_test_zgedmdq` | precision insufficient on `JOBR=R` residual-refinement path | finding |
 
-#### 1 — `zunbdb3` (kind8 wrapper heap corruption)
-
-```
-SIGSEGV in arena_for_chunk → __libc_free
-  __target_lapack_MOD_target_zunbdb3
-  MAIN__
-```
-
-The crash is inside the kind8 `target_zunbdb3` wrapper's `free` path,
-NOT inside the reference path or `zunbdb3_` itself. `dorbdb3` (the
-real-precision sibling) doesn't crash — it produces wrong numbers but
-returns control cleanly.
-
-Likely root cause: the wrapper's workspace allocation for the
-`(M-Q) × (P-Q)` sub-block case has an off-by-one or wrong bound in
-the complex (Z) variant. Look at `target_zunbdb3` in
-`tests/lapack/common/target_lapack_body.fypp` — compare against the
-real (D) wrapper for any asymmetric handling of the `taup1` / `taup2`
-/ `tauq1` workspace dimensions.
-
-This is the only mechanical bug in the residual set; the other five
-are precision findings.
-
-#### 2 — `dorbdb3` (real CSD bidiagonalization, last sub-block)
+#### 1, 2 — `zunbdb3` / `dorbdb3` (upstream LAPACK orbdb3 typo)
 
 ```
+zunbdb3:  SIGSEGV in arena_for_chunk → __libc_free
+            __target_lapack_MOD_target_zunbdb3 (auto-deallocate)
 dorbdb3 [m=12]  max_rel_err = 4.86E-02   digits = 1.31  FAIL
 dorbdb3 [m=16]  max_rel_err = 1.03E-01   digits = 0.99  FAIL
 ```
 
-Routine: real CS bidiagonalization `[X11; X21]` where
-`M-Q ≤ M-P, P ≤ Q, M-P ≤ Q`. Reaches the regime where the active
-sub-block sees singular values clustered at or below the kind8
-precision floor; double-precision Givens rotations cannot resolve
-them faithfully, while the quad reference can. The `~1` digit
-agreement means the result is qualitatively different — the
-test correctly flags that kind8 isn't accurate enough for these
-problem shapes.
+Same root cause for both. Upstream `{d,z}orbdb3.f` has a typo in the
+`I .GT. 1` branch's `{D,Z}ROT` call: passes `LDX11` as `INCY` for
+`X21`, where `INCY` must be `LDX21`. When `LDX11 /= LDX21` (always
+true in the orbdb3 regime since `M-P < P`), the rotation strides past
+`X21`'s allocated extent and writes into whatever heap chunk follows.
 
-Worth promoting in any production use of these CSD primitives:
-> **Don't run `dorbdb3` on shapes with near-degenerate sub-blocks at
-> double precision — use kind10 or higher.**
+Heap-layout chance decides the manifestation:
+- `zunbdb3` happens to corrupt the chunk metadata of an array freed
+  during the wrapper's auto-deallocate, surfacing as SIGSEGV in
+  `__libc_free`.
+- `dorbdb3` corrupts data words of an adjacent buffer (typically
+  `theta` or `phi` slack tail), and the test sees `theta_g` / `phi_g`
+  with stomped values, producing the `~1` digit agreement.
 
-The kind4 column (when run) will show this even more dramatically.
+The migrator already carries the one-character fix in
+`recipes/lapack/source_overrides/{d,z}orbdb3.f` (see
+`recipes/lapack.yaml`'s `source_overrides` block) and applies it for
+every migrated target. The kind4 / kind8 baseline path skips
+migration and stages upstream `_reflapack_src/` verbatim, so the std
+`lapack` archive linked under test still has the typo. Confirmed
+both failures clear when the override is overlaid into
+`_reflapack_src/`.
+
+Parked in `tests/lapack/TODO.md`. Until promoted, suppress these two
+from the published baseline column.
 
 #### 3 — `dorcsd` (full real CSD assembly)
 
@@ -165,18 +179,16 @@ dorcsd [m=16]  max_rel_err = 8.70E+1 digits = -1.94  FAIL
 ```
 
 `dorcsd` is the user-facing CSD driver that calls `dorbdb*` underneath
-and then assembles the orthogonal factors. Same root cause as
-`dorbdb3` but the error compounds across the assembly: the negative
-digit counts mean the kind8 result and the quad reference are not the
-same orthogonal subspace at all for these problem shapes — they've
-picked different canonical representatives among the equivalent
-orthogonal completions.
+and then assembles the orthogonal factors. Independent of the
+`dorbdb3` typo: re-tested with `recipes/lapack/source_overrides/`
+overlaid into the baseline `_reflapack_src/` and `dorcsd` still
+fails with the same negative digit counts. The kind8 result and the
+quad reference end up picking different canonical representatives
+among the equivalent orthogonal completions for these problem shapes.
 
-This is the strongest signal in the table that **CSD at double
-precision is unreliable for general shapes**. It also constrains how
-the kind4/kind8 columns should be presented — for routines like
-`dorcsd` the cell should probably show `(unstable)` rather than a
-raw digit count.
+Strongest signal in the table that **CSD at double precision is
+unreliable for general shapes**. For routines like `dorcsd` the
+cell should probably show `(unstable)` rather than a raw digit count.
 
 #### 4, 5 — `dgedmdq` / `zgedmdq` (residual-refined DMD)
 
@@ -203,51 +215,19 @@ For the kind4/kind8 columns this should probably be reported per
 parameter combination rather than as a single cell; users picking a
 double-precision DMD should know `JOBR=R` carries this caveat.
 
-#### 6 — `disnan` (test-fixture artifact)
-
-```
-disnan [case=5]  max_rel_err = 1.0   digits = -0.00  FAIL
-disnan [case=7]  max_rel_err = 1.0   digits = -0.00  FAIL
-```
-
-Cases 5 and 7 feed signaling-NaN bit patterns into `disnan`. The
-test's input pipeline is `gen_data_quad → q2t_r → disnan` — so the
-NaN is constructed at quad precision, then cast to real(8) via
-intrinsic `real(x, 8)`, then passed to native `disnan`. The cast
-collapses the quad-precision payload into a canonical real(8) NaN
-(IEEE 754 doesn't preserve NaN payload across precision conversions
-in a portable way; gfortran's `real(x, 8)` returns the canonical
-quiet NaN).
-
-The reference path doesn't go through that cast — it calls quad
-`disnan` directly on the original quad value, which still distinguishes
-signaling vs quiet. So one path returns `.true.` (sees a NaN of any
-kind) and the other returns `.false.` (the canonicalized quad-source
-value isn't recognized as NaN under the specific bit pattern).
-
-This is a property of the test data + cast pipeline, not a bug in
-either implementation. Either:
-- skip cases 5 and 7 in the kind4/kind8 column (most honest), or
-- pass the original quad NaN through both paths without the cast
-  intermediate (changes the test semantics).
-
-Same shape would surface in `sisnan` for kind4. Since
-`disnan` / `sisnan` return `LOGICAL`, no actual precision is being
-measured — these are categorical-output routines that don't fit the
-"digits of agreement" framing cleanly.
-
 ### Recommended treatment in `tests/RESULT.md`
 
 When the kind4 / kind8 columns are turned on for the public report:
 
-- `dorbdb3`, `dorcsd` — show the digit count honestly. The negative
-  values are the headline finding.
+- `zunbdb3`, `dorbdb3` — suppress until the staging path overlays
+  `recipes/lapack/source_overrides/` on top of `_reflapack_src/`.
+  See `tests/lapack/TODO.md`.
+- `dorcsd` — show the digit count honestly. The negative values
+  are the headline finding (CSD orthogonal-completion ambiguity at
+  double precision).
 - `dgedmdq`, `zgedmdq` — consider reporting per-`JOBR` or annotating
   the cell with `(JOBR=R: 2.4)`; the aggregate worst-case is
   unrepresentative.
-- `disnan` — use `n/a` (categorical output, not a precision measure).
-- `zunbdb3` — show after the wrapper bug is fixed; for now suppress
-  via the same xx/rfsx-style filter used for XBLAS-dependent tests.
 
 ### Other framework coverage (PBLAS / ScaLAPACK)
 
