@@ -295,7 +295,6 @@ fortran-migrator/
 │   ├── RECIPES.md       # Recipe YAML schema
 │   ├── PROCEDURES.md    # Generated routine cross-reference
 │   ├── INTRINSICS.md    # Generic-intrinsic table (manual reference)
-│   ├── DIVERGENCE.md    # End-to-end migration audit
 │   ├── UPSTREAM_BUGS.md # Tracked upstream bugs
 │   ├── DEVELOPER.md     # Developer onboarding
 │   ├── NOTE.md          # Misc design notes

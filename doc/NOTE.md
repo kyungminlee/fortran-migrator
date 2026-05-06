@@ -1,8 +1,8 @@
 # Notes — KIND=16 Divergence Analysis
 
 This document provides a detailed technical analysis of convergence divergences
-for the `kind16` target. For the authoritative summary covering all targets
-(kind16 and multifloats), see `doc/DIVERGENCE.md`.
+for the `kind16` target. For a current cross-target summary, run
+`python -m migrator diverge <recipe>`.
 
 ---
 

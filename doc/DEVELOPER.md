@@ -6,7 +6,6 @@
 *   [Migration Recipes](RECIPES.md) — How to write library recipes.
 *   [Architecture](ARCHITECTURE.md) — Technical overview and component details.
 *   [Intrinsics Reference](INTRINSICS.md) — Fortran generic intrinsics for KIND=16.
-*   [Divergence Report](DIVERGENCE.md) — end-to-end migration/convergence results.
 *   [KIND=16 Divergence Notes](NOTE.md) — per-routine analysis for the kind16 target.
 
 ## Project Goal
@@ -326,7 +325,7 @@ syntactic rule is papering over a semantic asymmetry between the sources
 (e.g. `DOUBLE PRECISION` meaning "working precision" in a `d*` file but
 "timing / MPI interface" in an `s*` file — the same token, two intents).
 
-Divergence counts are tracked in `doc/DIVERGENCE.md`.
+Run `python -m migrator diverge <recipe>` for current per-target divergence counts.
 
 ### 3b. Divergence Patterns by Target
 

@@ -1,4 +1,7 @@
-# Divergence Report
+# Divergence Report (archived snapshot)
+
+> Snapshot from 2026-04-12. For current numbers, run
+> `python -m migrator diverge <recipe>`.
 
 End-to-end migration and convergence check for all libraries,
 run on 2026-04-12 from `src/migrator` with YAML-based targets.
