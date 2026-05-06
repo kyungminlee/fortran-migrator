@@ -27,14 +27,26 @@ if(NOT TARGET refblas_quad)
     return()
 endif()
 
-if(NOT TARGET ${LIB_PREFIX}pblas)
-    message(STATUS "tests/pblas: skipping — ${LIB_PREFIX}pblas not built")
-    return()
-endif()
-
-if(NOT TARGET ${LIB_PREFIX}blacs)
-    message(STATUS "tests/pblas: skipping — ${LIB_PREFIX}blacs not built")
-    return()
+if(BASELINE_BUILD)
+    # kind4/kind8: link standard Netlib pblas/blacs archives. Skip the
+    # migrated-target presence checks since LIB_PREFIX is empty.
+    if(NOT TARGET pblas)
+        message(STATUS "tests/pblas: skipping — pblas std archive not built")
+        return()
+    endif()
+    if(NOT TARGET blacs)
+        message(STATUS "tests/pblas: skipping — blacs std archive not built")
+        return()
+    endif()
+else()
+    if(NOT TARGET ${LIB_PREFIX}pblas)
+        message(STATUS "tests/pblas: skipping — ${LIB_PREFIX}pblas not built")
+        return()
+    endif()
+    if(NOT TARGET ${LIB_PREFIX}blacs)
+        message(STATUS "tests/pblas: skipping — ${LIB_PREFIX}blacs not built")
+        return()
+    endif()
 endif()
 
 # ── Dedicated module directory ──────────────────────────────────────
@@ -60,11 +72,19 @@ set_target_properties(pblas_test_common PROPERTIES
 target_include_directories(pblas_test_common PUBLIC
     $<BUILD_INTERFACE:${_pb_moddir}>
 )
-target_link_libraries(pblas_test_common PUBLIC
-    refblas_quad
-    ${LIB_PREFIX}blacs
-    MPI::MPI_Fortran
-)
+if(BASELINE_BUILD)
+    target_link_libraries(pblas_test_common PUBLIC
+        refblas_quad
+        blacs
+        MPI::MPI_Fortran
+    )
+else()
+    target_link_libraries(pblas_test_common PUBLIC
+        refblas_quad
+        ${LIB_PREFIX}blacs
+        MPI::MPI_Fortran
+    )
+endif()
 
 # ── Per-target wrapper module ───────────────────────────────────────
 set(_wrapper_dir ${CMAKE_CURRENT_SOURCE_DIR}/target_${TARGET_NAME})
@@ -85,11 +105,19 @@ set_target_properties(pblas_test_target PROPERTIES
 target_include_directories(pblas_test_target PUBLIC
     $<BUILD_INTERFACE:${_pb_moddir}>
 )
-target_link_libraries(pblas_test_target PUBLIC
-    pblas_test_common
-    target_conv
-    ${LIB_PREFIX}pblas
-)
+if(BASELINE_BUILD)
+    target_link_libraries(pblas_test_target PUBLIC
+        pblas_test_common
+        target_conv
+        pblas
+    )
+else()
+    target_link_libraries(pblas_test_target PUBLIC
+        pblas_test_common
+        target_conv
+        ${LIB_PREFIX}pblas
+    )
+endif()
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(pblas_test_target PUBLIC multifloatsf)
 endif()
@@ -125,10 +153,17 @@ function(add_pblas_precision_test test_src)
     # --start-group/--end-group — transitive deps end up outside the
     # group. We therefore enumerate every archive that participates in
     # the BLACS↔PBLAS↔PTZBLAS dependency cycle.
-    set(_pblas_cycle
-        pblas_test_target pblas_test_common
-        ${LIB_PREFIX}pblas ${LIB_PREFIX}ptzblas ${LIB_PREFIX}pbblas
-        ${LIB_PREFIX}blacs ${LIB_PREFIX}blas refblas_quad)
+    if(BASELINE_BUILD)
+        set(_pblas_cycle
+            pblas_test_target pblas_test_common
+            pblas ptzblas pbblas
+            blacs blas refblas_quad)
+    else()
+        set(_pblas_cycle
+            pblas_test_target pblas_test_common
+            ${LIB_PREFIX}pblas ${LIB_PREFIX}ptzblas ${LIB_PREFIX}pbblas
+            ${LIB_PREFIX}blacs ${LIB_PREFIX}blas refblas_quad)
+    endif()
     # pblas_common / blacs_common / ptzblas_common hold the common
     # (precision-independent) halves split out by _install_library_pair;
     # they are referenced inside the cycle too.

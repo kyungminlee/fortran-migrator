@@ -83,12 +83,24 @@ set_target_properties(lapack_test_target PROPERTIES
 target_include_directories(lapack_test_target PUBLIC
     $<BUILD_INTERFACE:${_lp_moddir}>
 )
-target_link_libraries(lapack_test_target PUBLIC
-    lapack_test_common
-    target_conv
-    ${LIB_PREFIX}lapack
-    ${LIB_PREFIX}blas
-)
+if(BASELINE_BUILD)
+    # kind4/kind8: link the standard Netlib lapack/blas archives. There
+    # is no ${LIB_PREFIX}lapack target — LIB_PREFIX is empty under
+    # baseline staging, so the migrated archives never get built.
+    target_link_libraries(lapack_test_target PUBLIC
+        lapack_test_common
+        target_conv
+        lapack
+        blas
+    )
+else()
+    target_link_libraries(lapack_test_target PUBLIC
+        lapack_test_common
+        target_conv
+        ${LIB_PREFIX}lapack
+        ${LIB_PREFIX}blas
+    )
+endif()
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(lapack_test_target PUBLIC multifloatsf)
 endif()

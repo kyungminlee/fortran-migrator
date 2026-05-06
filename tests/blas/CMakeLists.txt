@@ -53,11 +53,23 @@ add_fypp_source(_blas_wrapper_src
 )
 add_library(blas_test_target STATIC ${_blas_wrapper_src})
 fortran_module_layout(blas_test_target)
-target_link_libraries(blas_test_target PUBLIC
-    blas_test_common
-    target_conv
-    ${LIB_PREFIX}blas
-)
+# Baseline (kind4/kind8): link the standard Netlib archive directly
+# (s/c or d/z entry points), since there is no migrated archive to
+# point at. Migrated targets (kind10/kind16/multifloats) link
+# ${LIB_PREFIX}blas as before.
+if(BASELINE_BUILD)
+    target_link_libraries(blas_test_target PUBLIC
+        blas_test_common
+        target_conv
+        blas
+    )
+else()
+    target_link_libraries(blas_test_target PUBLIC
+        blas_test_common
+        target_conv
+        ${LIB_PREFIX}blas
+    )
+endif()
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(blas_test_target PUBLIC multifloatsf)
 endif()

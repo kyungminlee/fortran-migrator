@@ -1004,9 +1004,11 @@ function(_install_library_pair lib_name)
     endif()
 endfunction()
 
-foreach(_lib ${STAGED_LIBRARIES})
-    _install_library_pair(${_lib})
-endforeach()
+if(NOT BASELINE_BUILD)
+    foreach(_lib ${STAGED_LIBRARIES})
+        _install_library_pair(${_lib})
+    endforeach()
+endif()
 
 if(NEEDS_MULTIFLOATS)
     # multifloats defines its own install rules; only install local helpers

@@ -32,10 +32,23 @@ endfunction()
 # Per-target conversion library shared by every framework's test wrappers.
 add_subdirectory(common)
 
-foreach(_lib ${STAGED_LIBRARIES})
-    set(_libdir ${CMAKE_CURRENT_SOURCE_DIR}/${_lib})
-    if(TARGET ${LIB_PREFIX}${_lib}
-            AND EXISTS ${_libdir}/CMakeLists.txt)
-        add_subdirectory(${_lib})
-    endif()
-endforeach()
+if(BASELINE_BUILD)
+    # Baseline (kind4/kind8): no migrated archives exist; STAGED_LIBRARIES
+    # is empty by design. Iterate the on-disk test framework dirs and
+    # descend into each whose corresponding std archive built. blas/lapack
+    # always; pblas/scalapack only when MPI was found.
+    foreach(_lib blas lapack pblas scalapack)
+        set(_libdir ${CMAKE_CURRENT_SOURCE_DIR}/${_lib})
+        if(TARGET ${_lib} AND EXISTS ${_libdir}/CMakeLists.txt)
+            add_subdirectory(${_lib})
+        endif()
+    endforeach()
+else()
+    foreach(_lib ${STAGED_LIBRARIES})
+        set(_libdir ${CMAKE_CURRENT_SOURCE_DIR}/${_lib})
+        if(TARGET ${LIB_PREFIX}${_lib}
+                AND EXISTS ${_libdir}/CMakeLists.txt)
+            add_subdirectory(${_lib})
+        endif()
+    endforeach()
+endif()

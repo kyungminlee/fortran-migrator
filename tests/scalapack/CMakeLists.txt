@@ -33,24 +33,22 @@ if(NOT TARGET reflapack_quad)
     return()
 endif()
 
-if(NOT TARGET ${LIB_PREFIX}scalapack)
-    message(STATUS "tests/scalapack: skipping — ${LIB_PREFIX}scalapack not built")
-    return()
-endif()
-
-if(NOT TARGET ${LIB_PREFIX}pblas)
-    message(STATUS "tests/scalapack: skipping — ${LIB_PREFIX}pblas not built")
-    return()
-endif()
-
-if(NOT TARGET ${LIB_PREFIX}blacs)
-    message(STATUS "tests/scalapack: skipping — ${LIB_PREFIX}blacs not built")
-    return()
-endif()
-
-if(NOT TARGET ${LIB_PREFIX}lapack)
-    message(STATUS "tests/scalapack: skipping — ${LIB_PREFIX}lapack not built")
-    return()
+if(BASELINE_BUILD)
+    # kind4/kind8: standard archives are the libraries under test.
+    foreach(_lib scalapack pblas blacs lapack)
+        if(NOT TARGET ${_lib})
+            message(STATUS "tests/scalapack: skipping — ${_lib} std archive not built")
+            return()
+        endif()
+    endforeach()
+else()
+    foreach(_lib ${LIB_PREFIX}scalapack ${LIB_PREFIX}pblas
+                 ${LIB_PREFIX}blacs ${LIB_PREFIX}lapack)
+        if(NOT TARGET ${_lib})
+            message(STATUS "tests/scalapack: skipping — ${_lib} not built")
+            return()
+        endif()
+    endforeach()
 endif()
 
 # ── Dedicated module directory ──────────────────────────────────────
@@ -80,12 +78,21 @@ set_target_properties(scalapack_test_common PROPERTIES
 target_include_directories(scalapack_test_common PUBLIC
     $<BUILD_INTERFACE:${_sp_moddir}>
 )
-target_link_libraries(scalapack_test_common PUBLIC
-    refblas_quad
-    reflapack_quad
-    ${LIB_PREFIX}blacs
-    MPI::MPI_Fortran
-)
+if(BASELINE_BUILD)
+    target_link_libraries(scalapack_test_common PUBLIC
+        refblas_quad
+        reflapack_quad
+        blacs
+        MPI::MPI_Fortran
+    )
+else()
+    target_link_libraries(scalapack_test_common PUBLIC
+        refblas_quad
+        reflapack_quad
+        ${LIB_PREFIX}blacs
+        MPI::MPI_Fortran
+    )
+endif()
 
 # ── Per-target wrapper module ───────────────────────────────────────
 set(_wrapper_dir ${CMAKE_CURRENT_SOURCE_DIR}/target_${TARGET_NAME})
@@ -106,19 +113,35 @@ set_target_properties(scalapack_test_target PROPERTIES
 target_include_directories(scalapack_test_target PUBLIC
     $<BUILD_INTERFACE:${_sp_moddir}>
 )
-target_link_libraries(scalapack_test_target PUBLIC
-    scalapack_test_common
-    target_conv
-    ${LIB_PREFIX}scalapack
-    ${LIB_PREFIX}pblas
-    ${LIB_PREFIX}lapack
-    ${LIB_PREFIX}blas
-)
-foreach(_dep ${LIB_PREFIX}ptzblas ${LIB_PREFIX}pbblas)
-    if(TARGET ${_dep})
-        target_link_libraries(scalapack_test_target PUBLIC ${_dep})
-    endif()
-endforeach()
+if(BASELINE_BUILD)
+    target_link_libraries(scalapack_test_target PUBLIC
+        scalapack_test_common
+        target_conv
+        scalapack
+        pblas
+        lapack
+        blas
+    )
+    foreach(_dep ptzblas pbblas)
+        if(TARGET ${_dep})
+            target_link_libraries(scalapack_test_target PUBLIC ${_dep})
+        endif()
+    endforeach()
+else()
+    target_link_libraries(scalapack_test_target PUBLIC
+        scalapack_test_common
+        target_conv
+        ${LIB_PREFIX}scalapack
+        ${LIB_PREFIX}pblas
+        ${LIB_PREFIX}lapack
+        ${LIB_PREFIX}blas
+    )
+    foreach(_dep ${LIB_PREFIX}ptzblas ${LIB_PREFIX}pbblas)
+        if(TARGET ${_dep})
+            target_link_libraries(scalapack_test_target PUBLIC ${_dep})
+        endif()
+    endforeach()
+endif()
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(scalapack_test_target PUBLIC multifloatsf)
 endif()
@@ -138,26 +161,37 @@ function(add_scalapack_precision_test test_src)
     # ScaLAPACK ↔ LAPACK ↔ PBLAS ↔ PTZBLAS ↔ BLACS ↔ BLAS form a
     # cyclic archive graph. Wrap the whole cycle in LINK_GROUP(RESCAN)
     # so ld re-scans member archives until all cross-references resolve.
-    set(_sp_cycle
-        scalapack_test_target scalapack_test_common
-        ${LIB_PREFIX}scalapack ${LIB_PREFIX}pblas
-        ${LIB_PREFIX}ptzblas  ${LIB_PREFIX}pbblas
-        ${LIB_PREFIX}lapack   ${LIB_PREFIX}blas
-        ${LIB_PREFIX}blacs
-        reflapack_quad refblas_quad)
-    # scalapack_c carries the dlamov-family wrappers (qlamov_, xlamov_)
-    # and the REDIST entry points (pqgemr2d_, pxgemr2d_) that
-    # ${LIB_PREFIX}scalapack's Fortran routines call.
-    if(TARGET ${LIB_PREFIX}scalapack_c)
-        list(APPEND _sp_cycle ${LIB_PREFIX}scalapack_c)
-    endif()
-    # qxblas is a PUBLIC dep of qlapack (cmake/CMakeLists.txt:600) for
-    # the iterative-refinement extra-precision routines. It pulls qblas,
-    # which is already in the cycle — must include qxblas explicitly so
-    # the LINK_GROUP closes; otherwise CMake reports a strongly-connected
-    # component cycle (group ↔ qxblas).
-    if(TARGET ${LIB_PREFIX}xblas)
-        list(APPEND _sp_cycle ${LIB_PREFIX}xblas)
+    if(BASELINE_BUILD)
+        set(_sp_cycle
+            scalapack_test_target scalapack_test_common
+            scalapack pblas ptzblas pbblas
+            lapack blas blacs
+            reflapack_quad refblas_quad)
+        if(TARGET scalapack_c)
+            list(APPEND _sp_cycle scalapack_c)
+        endif()
+    else()
+        set(_sp_cycle
+            scalapack_test_target scalapack_test_common
+            ${LIB_PREFIX}scalapack ${LIB_PREFIX}pblas
+            ${LIB_PREFIX}ptzblas  ${LIB_PREFIX}pbblas
+            ${LIB_PREFIX}lapack   ${LIB_PREFIX}blas
+            ${LIB_PREFIX}blacs
+            reflapack_quad refblas_quad)
+        # scalapack_c carries the dlamov-family wrappers (qlamov_, xlamov_)
+        # and the REDIST entry points (pqgemr2d_, pxgemr2d_) that
+        # ${LIB_PREFIX}scalapack's Fortran routines call.
+        if(TARGET ${LIB_PREFIX}scalapack_c)
+            list(APPEND _sp_cycle ${LIB_PREFIX}scalapack_c)
+        endif()
+        # qxblas is a PUBLIC dep of qlapack (cmake/CMakeLists.txt:600) for
+        # the iterative-refinement extra-precision routines. It pulls qblas,
+        # which is already in the cycle — must include qxblas explicitly so
+        # the LINK_GROUP closes; otherwise CMake reports a strongly-connected
+        # component cycle (group ↔ qxblas).
+        if(TARGET ${LIB_PREFIX}xblas)
+            list(APPEND _sp_cycle ${LIB_PREFIX}xblas)
+        endif()
     endif()
     foreach(_common blas_common blacs_common ptzblas_common pblas_common lapack_common scalapack_common scalapack_c_common)
         if(TARGET ${_common})
