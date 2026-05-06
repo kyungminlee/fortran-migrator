@@ -6,7 +6,7 @@ It parses existing fixed- and free-form Fortran source code to safely convert `R
 
 ## Key Features
 * **Automated Type Conversion:** Upgrades standard precision types to extended precisions (`KIND=10`, `KIND=16`) or multiword floating-point (`float64x2` via the multifloats target).
-* **Smart Renaming:** Automatically updates function prefixes (e.g., converting `dgemm` to `qgemm` for KIND=16, or `ddgemm` for multifloats).
+* **Smart Renaming:** Automatically updates function prefixes (e.g., converting `dgemm` to `qgemm` for KIND=16, or `mgemm` for multifloats).
 * **Format Agnostic:** Supports both fixed-form and free-form Fortran source code.
 * **C Migration:** Template-based cloning for C libraries (BLACS, PBLAS) with mechanical type substitution.
 * **Convergence Testing:** Dual-origin verification confirms migration correctness by comparing S-half and D-half migrated output.
