@@ -78,25 +78,28 @@ find_file(REFQUAD_RENAME_SCRIPT refquad_rename_archive.sh
         ${PROJECT_SOURCE_DIR}/scripts
         ${PROJECT_SOURCE_DIR}/../scripts
     NO_DEFAULT_PATH)
-# Whitelist of routines to rename. Pulls from every ref_quad_*.f90
-# sidecar so cross-calls (e.g. reflapack_quad's dgesv → dgemm) stay
-# consistent. The script intersects with `nm` output, so listing names
-# that don't exist in this archive is harmless.
-file(GLOB _refquad_whitelists CONFIGURE_DEPENDS
-    ${CMAKE_SOURCE_DIR}/tests/blas/common/ref_quad_blas.quad_renames.txt
-    ${CMAKE_SOURCE_DIR}/tests/lapack/common/ref_quad_lapack.quad_renames.txt
-    ${CMAKE_SOURCE_DIR}/tests/pblas/common/ref_quad_blas.quad_renames.txt
-    ${CMAKE_SOURCE_DIR}/tests/scalapack/common/ref_quad_blas.quad_renames.txt
-    ${CMAKE_SOURCE_DIR}/tests/scalapack/common/ref_quad_lapack.quad_renames.txt)
-if(REFQUAD_RENAME_SCRIPT AND _refquad_whitelists)
+if(REFQUAD_RENAME_SCRIPT)
+    # Common-archive excludes: their T/W defs are migrated-side
+    # helpers (la_constants_ep, iparam2stage_ patched, mumps_abort_,
+    # …). reflapack_quad references some of them; we must NOT rename
+    # those references because the migrated link cycle expects them
+    # under their original names.
+    set(_refquad_excludes)
+    foreach(_c blas_common lapack_common scalapack_common scalapack_c_common
+               pblas_common pbblas_common ptzblas_common blacs_common
+               mumps_common xblas_common)
+        if(TARGET ${_c})
+            list(APPEND _refquad_excludes -x $<TARGET_FILE:${_c}>)
+        endif()
+    endforeach()
     add_custom_command(TARGET refblas_quad POST_BUILD
         COMMAND sh ${REFQUAD_RENAME_SCRIPT}
                 $<TARGET_FILE:refblas_quad>
-                ${_refquad_whitelists}
-        COMMENT "refblas_quad: rename whitelisted symbols -> *_quad_"
+                ${_refquad_excludes}
+        COMMENT "refblas_quad: rename Fortran exports -> *_quad_"
         VERBATIM)
 else()
-    message(WARNING "refblas_quad: rename script or whitelists not found; "
+    message(WARNING "refblas_quad: rename script not found; "
                     "kind4/kind8 baseline tests will see symbol collisions")
 endif()
 # .f90 files are free-form by extension; the rest are fixed-form.

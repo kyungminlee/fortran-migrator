@@ -339,27 +339,9 @@ def main() -> int:
         print(f'{src} already has a `contains` section — already '
               f'transformed; refusing to re-apply', file=sys.stderr)
         return 1
-    pre, block, post = split_module(text)
-    routines = parse_routines(block)
     out = transform(text)
     dst.write_text(out)
-
-    # Sidecar: list of routine names that got *_quad-suffixed in this
-    # rewrite. The CMake post-build step on the matching reference
-    # archive (refblas_quad / reflapack_quad) reads this list and only
-    # renames those symbols — leaving precision-independent helpers
-    # (lsame_, xerbla_, ilaenv_, etc.) un-renamed so the migrated test
-    # cycles, which don't include the standard archive in the link
-    # group, can still resolve those calls.
-    # Sidecar lives next to the rewritten file, named after the input
-    # source's basename (so rewriting ref_quad_blas.f90 → tmp.new still
-    # produces ref_quad_blas.quad_renames.txt). Strips the .f / .f90
-    # suffix from src.
-    src_stem = src.with_suffix('').name if src.suffix.lower() in ('.f90', '.f') else src.name
-    sidecar = dst.parent / f'{src_stem}.quad_renames.txt'
-    sidecar.write_text('\n'.join(r['name'] for r in routines) + '\n')
-    print(f'wrote {dst} ({len(out.splitlines())} lines), '
-          f'sidecar {sidecar.name} ({len(routines)} names)')
+    print(f'wrote {dst} ({len(out.splitlines())} lines)')
     return 0
 
 

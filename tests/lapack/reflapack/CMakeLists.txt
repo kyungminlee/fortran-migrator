@@ -109,21 +109,31 @@ find_file(REFQUAD_RENAME_SCRIPT refquad_rename_archive.sh
         ${PROJECT_SOURCE_DIR}/scripts
         ${PROJECT_SOURCE_DIR}/../scripts
     NO_DEFAULT_PATH)
-file(GLOB _refquad_whitelists CONFIGURE_DEPENDS
-    ${CMAKE_SOURCE_DIR}/tests/blas/common/ref_quad_blas.quad_renames.txt
-    ${CMAKE_SOURCE_DIR}/tests/lapack/common/ref_quad_lapack.quad_renames.txt
-    ${CMAKE_SOURCE_DIR}/tests/pblas/common/ref_quad_blas.quad_renames.txt
-    ${CMAKE_SOURCE_DIR}/tests/scalapack/common/ref_quad_blas.quad_renames.txt
-    ${CMAKE_SOURCE_DIR}/tests/scalapack/common/ref_quad_lapack.quad_renames.txt)
-if(REFQUAD_RENAME_SCRIPT AND _refquad_whitelists)
+if(REFQUAD_RENAME_SCRIPT)
+    # Pass refblas_quad as a sibling (its defs feed the rename set, so
+    # reflapack_quad's U refs to dnrm2_ etc. get renamed in lockstep).
+    # `-x` excludes flag the migrated `*_common` archives: their T/W
+    # defs (la_constants_ep, iparam2stage_ patched, mumps_abort_, …)
+    # are referenced by reflapack_quad and must stay un-renamed so the
+    # migrated link cycle resolves them under their original names.
+    set(_refquad_excludes)
+    foreach(_c blas_common lapack_common scalapack_common scalapack_c_common
+               pblas_common pbblas_common ptzblas_common blacs_common
+               mumps_common xblas_common)
+        if(TARGET ${_c})
+            list(APPEND _refquad_excludes -x $<TARGET_FILE:${_c}>)
+        endif()
+    endforeach()
     add_custom_command(TARGET reflapack_quad POST_BUILD
         COMMAND sh ${REFQUAD_RENAME_SCRIPT}
                 $<TARGET_FILE:reflapack_quad>
-                ${_refquad_whitelists}
-        COMMENT "reflapack_quad: rename whitelisted symbols -> *_quad_"
+                $<TARGET_FILE:refblas_quad>
+                ${_refquad_excludes}
+        COMMENT "reflapack_quad: rename Fortran symbols -> *_quad_"
         VERBATIM)
+    add_dependencies(reflapack_quad refblas_quad)
 else()
-    message(WARNING "reflapack_quad: rename script or whitelists not found; "
+    message(WARNING "reflapack_quad: rename script not found; "
                     "kind4/kind8 baseline tests will see symbol collisions")
 endif()
 # LAPACK internally calls BLAS. Link the quad-promoted refblas_quad so
@@ -154,3 +164,26 @@ target_link_libraries(reflapack_quad PUBLIC refblas_quad)
 # the upstream LAPACK call sites.
 target_sources(reflapack_quad PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/refxblas_quad_bridge.f90)
+
+# kind4 / kind8 baseline: std lapack's iterative-refinement helpers
+# (dla_*_extended.f, zla_*_extended.f) reference XBLAS entry points
+# (blas_dgemv_x_, blas_dgbmv_x_, …). Those .o files get pulled into
+# the test executable transitively via target_lapack's public
+# wrappers (target_dgerfsx, target_dgesvxx, …) — the wrappers' xx /
+# rfsx tests are filtered out of the baseline ctest set, but the
+# wrappers themselves still live in the same target_lapack.f90.o.
+# Provide aborting stubs in a separate archive so link succeeds; the
+# stubs are unreachable at runtime under the baseline test mix.
+if(BASELINE_BUILD)
+    add_library(xblas_baseline_stubs STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/xblas_baseline_stubs.c)
+    # --whole-archive forces ld to extract every stub .o regardless of
+    # current undefined-symbol demand. Without it, ld scans the stub
+    # archive before std lapack pulls in dla_*_extended.f.o (which
+    # references blas_*_x_), so the stubs never get extracted and the
+    # references stay unresolved. Plain PUBLIC propagation then falls
+    # short — once ld passes the stubs in the link line it doesn't
+    # re-scan them when std lapack later demands their symbols.
+    target_link_libraries(reflapack_quad PUBLIC
+        -Wl,--whole-archive xblas_baseline_stubs -Wl,--no-whole-archive)
+endif()

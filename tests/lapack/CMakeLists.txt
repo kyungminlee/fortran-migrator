@@ -122,6 +122,15 @@ endfunction()
 foreach(_group linear_solve factorization eigenvalue svd auxiliary)
     file(GLOB _tests CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/${_group}/test_*.f90)
+    if(BASELINE_BUILD)
+        # XBLAS-dependent iterative-refinement tests (xx-suffix and
+        # rfsx-suffix routines: dgbsvxx, dgerfsx, zporfsx, …) need a
+        # native-precision XBLAS archive that this build doesn't ship.
+        # The migrated path links qxblas + a quad bridge in
+        # reflapack_quad; for kind4/kind8 there is neither, so the
+        # corresponding tests would fail to link. Skip them.
+        list(FILTER _tests EXCLUDE REGEX "/test_[a-z]+(rfsx|svxx)\\.f90$")
+    endif()
     foreach(_t ${_tests})
         add_lapack_precision_test(${_t})
     endforeach()

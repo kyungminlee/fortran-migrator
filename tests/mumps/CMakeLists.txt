@@ -389,6 +389,16 @@ function(_mumps_attach_link_group tgt variant want_c)
                 list(APPEND _archives ${_std})
             endif()
         endforeach()
+        # Std blas / lapack supply precision-independent helpers (lsame_,
+        # ilaenv_, xerbla_, ieeeck_, dlamch_, …) that the migrated
+        # archives call. They used to resolve from refblas_quad /
+        # reflapack_quad before those archives' exports were renamed
+        # *_quad_; now they need a non-renamed source on the link line.
+        foreach(_std blas lapack)
+            if(TARGET ${_std})
+                list(APPEND _archives ${_std})
+            endif()
+        endforeach()
         if(TARGET ${LIB_PREFIX}xblas)
             list(APPEND _archives ${LIB_PREFIX}xblas)
         endif()

@@ -154,10 +154,13 @@ function(add_pblas_precision_test test_src)
     # group. We therefore enumerate every archive that participates in
     # the BLACS↔PBLAS↔PTZBLAS dependency cycle.
     if(BASELINE_BUILD)
+        # `scalapack` carries TOOLS routines (zzdotc_, zzdotu_, …) that
+        # PTZBLAS forwards calls into; PBLAS tests need it on the link
+        # line even though they don't otherwise touch ScaLAPACK.
         set(_pblas_cycle
             pblas_test_target pblas_test_common
             pblas ptzblas pbblas
-            blacs blas refblas_quad)
+            blacs blas scalapack refblas_quad)
     else()
         set(_pblas_cycle
             pblas_test_target pblas_test_common
