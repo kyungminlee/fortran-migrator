@@ -1,5 +1,7 @@
 # Upstream bugs in vendored Netlib sources
 
+*Last catalogued: 2026-05-06*
+
 This document catalogues bugs found in the vendored upstream sources
 (`external/lapack-3.12.1/`, `external/scalapack-2.2.3/`, etc.) that
 the migrator works around without editing `external/`. Each entry

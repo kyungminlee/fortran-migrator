@@ -1,5 +1,11 @@
 # kind4 / kind8 baseline columns — status
 
+*Status as of 2026-05-06.* The plumbing is in place and produces sane numbers,
+but the baseline column is **not yet promoted** into the published precision
+matrix — residual upstream issues (catalogued under "Recommended treatment"
+below) keep it parked until the parked items are addressed or explicitly
+accepted.
+
 ## Current state
 
 The plumbing is fully wired and the kind4 / kind8 baseline target
