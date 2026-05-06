@@ -103,27 +103,35 @@ if(NEEDS_MULTIFLOATS)
             GIT_TAG        ${MULTIFLOATS_GIT_TAG}
         )
         FetchContent_Populate(multifloats_fetch)
-        # Upstream src/CMakeLists.txt uses CMAKE_SOURCE_DIR/include which
-        # only resolves correctly when multifloats is the top-level build.
-        # Patch it to PROJECT_SOURCE_DIR (the multifloats sub-project root)
-        # so the add_subdirectory inclusion below can find float64x2.h.
+        # Upstream src/ and fsrc/ CMakeLists reference paths via
+        # ${CMAKE_SOURCE_DIR} (older multifloats) or ${PROJECT_SOURCE_DIR}/..
+        # (current multifloats). Both forms break when included as a
+        # sub-build: CMAKE_SOURCE_DIR points at our staging dir, and
+        # PROJECT_SOURCE_DIR's value across CMake versions/scopes is
+        # unreliable (CMake 3.31 in particular resolves it to the outer
+        # project at configure_package_config_file time, not to fsrc/).
+        # Substitute both forms with the absolute fetched source path so
+        # the patch is independent of CMake-version scoping rules.
         file(READ "${multifloats_fetch_SOURCE_DIR}/src/CMakeLists.txt" _mf_src_cmake)
         string(REPLACE
             "\${CMAKE_SOURCE_DIR}/include"
+            "${multifloats_fetch_SOURCE_DIR}/include"
+            _mf_src_cmake "${_mf_src_cmake}")
+        string(REPLACE
             "\${PROJECT_SOURCE_DIR}/../include"
+            "${multifloats_fetch_SOURCE_DIR}/include"
             _mf_src_cmake "${_mf_src_cmake}")
         file(WRITE "${multifloats_fetch_SOURCE_DIR}/src/CMakeLists.txt" "${_mf_src_cmake}")
-        # Same symptom in fsrc/CMakeLists.txt: ``${CMAKE_SOURCE_DIR}/cmake/
-        # multifloatsfConfig.cmake.in`` resolves against our staging dir,
-        # not the fetched multifloats source root. Redirect to the
-        # multifloats sub-project root so configure_package_config_file
-        # finds the template where FetchContent put it.
         if(EXISTS "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt")
             file(READ "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt"
                  _mf_fsrc_cmake)
             string(REPLACE
                 "\${CMAKE_SOURCE_DIR}/cmake/"
+                "${multifloats_fetch_SOURCE_DIR}/cmake/"
+                _mf_fsrc_cmake "${_mf_fsrc_cmake}")
+            string(REPLACE
                 "\${PROJECT_SOURCE_DIR}/../cmake/"
+                "${multifloats_fetch_SOURCE_DIR}/cmake/"
                 _mf_fsrc_cmake "${_mf_fsrc_cmake}")
             file(WRITE "${multifloats_fetch_SOURCE_DIR}/fsrc/CMakeLists.txt"
                  "${_mf_fsrc_cmake}")
@@ -997,7 +1005,9 @@ endif()
 # the parent scope. Always-on with a directory check gives us the
 # single signal "is the staging dir self-contained?" — drop tests/
 # from staging to skip them.
-if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+option(MIGRATOR_BUILD_TESTS
+    "Build the differential-precision test suite (tests/)" ON)
+if(MIGRATOR_BUILD_TESTS AND IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     enable_testing()
     add_subdirectory(tests)
 endif()

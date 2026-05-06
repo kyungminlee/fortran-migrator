@@ -108,6 +108,12 @@ jobs:
           # support REAL(KIND=10), so kind10 and multifloats are OK.
           - target: kind16
             compiler: { name: flang-20 }
+          # Intel oneAPI 2025.1's setvars.sh shadows mpich's include
+          # path so blacs C sources fail to find <mpi.h>. Exclude this
+          # combo until find_package(MPI) wiring is hardened.
+          - target: kind16
+            compiler: { name: ifx-2025 }
+            mpi: { name: mpich }
 
     steps:
       - uses: actions/checkout@v4
@@ -175,7 +181,7 @@ jobs:
 
       - name: Install fypp (needed by multifloats)
         if: matrix.target == 'multifloats'
-        run: pip install fypp
+        run: pipx install fypp
 
       - name: Configure
         run: |
@@ -194,6 +200,7 @@ jobs:
             -DCMAKE_Fortran_COMPILER=${{ matrix.compiler.fc }} \
             -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }} \
+            -DMIGRATOR_BUILD_TESTS=OFF \
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
       - name: Build
