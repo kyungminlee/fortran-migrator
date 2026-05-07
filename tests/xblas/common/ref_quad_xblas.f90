@@ -50,161 +50,161 @@ module ref_quad_xblas
 
     ! ── refblas_quad declarations ───────────────────────────────────
     interface
-        subroutine dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
+        subroutine dgemv_quad(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
             import :: ep
             character, intent(in) :: trans
             integer,   intent(in) :: m, n, lda, incx, incy
             real(ep),  intent(in) :: alpha, beta, a(lda,*), x(*)
             real(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine zgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
+        subroutine zgemv_quad(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
             import :: ep
             character,    intent(in) :: trans
             integer,      intent(in) :: m, n, lda, incx, incy
             complex(ep),  intent(in) :: alpha, beta, a(lda,*), x(*)
             complex(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine dgbmv(trans, m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
+        subroutine dgbmv_quad(trans, m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
             import :: ep
             character, intent(in) :: trans
             integer,   intent(in) :: m, n, kl, ku, lda, incx, incy
             real(ep),  intent(in) :: alpha, beta, a(lda,*), x(*)
             real(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine zgbmv(trans, m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
+        subroutine zgbmv_quad(trans, m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
             import :: ep
             character,    intent(in) :: trans
             integer,      intent(in) :: m, n, kl, ku, lda, incx, incy
             complex(ep),  intent(in) :: alpha, beta, a(lda,*), x(*)
             complex(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine dsymv(uplo, n, alpha, a, lda, x, incx, beta, y, incy)
+        subroutine dsymv_quad(uplo, n, alpha, a, lda, x, incx, beta, y, incy)
             import :: ep
             character, intent(in) :: uplo
             integer,   intent(in) :: n, lda, incx, incy
             real(ep),  intent(in) :: alpha, beta, a(lda,*), x(*)
             real(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine zhemv(uplo, n, alpha, a, lda, x, incx, beta, y, incy)
+        subroutine zhemv_quad(uplo, n, alpha, a, lda, x, incx, beta, y, incy)
             import :: ep
             character,    intent(in) :: uplo
             integer,      intent(in) :: n, lda, incx, incy
             complex(ep),  intent(in) :: alpha, beta, a(lda,*), x(*)
             complex(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine dsbmv(uplo, n, k, alpha, a, lda, x, incx, beta, y, incy)
+        subroutine dsbmv_quad(uplo, n, k, alpha, a, lda, x, incx, beta, y, incy)
             import :: ep
             character, intent(in) :: uplo
             integer,   intent(in) :: n, k, lda, incx, incy
             real(ep),  intent(in) :: alpha, beta, a(lda,*), x(*)
             real(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine zhbmv(uplo, n, k, alpha, a, lda, x, incx, beta, y, incy)
+        subroutine zhbmv_quad(uplo, n, k, alpha, a, lda, x, incx, beta, y, incy)
             import :: ep
             character,    intent(in) :: uplo
             integer,      intent(in) :: n, k, lda, incx, incy
             complex(ep),  intent(in) :: alpha, beta, a(lda,*), x(*)
             complex(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine dspmv(uplo, n, alpha, ap, x, incx, beta, y, incy)
+        subroutine dspmv_quad(uplo, n, alpha, ap, x, incx, beta, y, incy)
             import :: ep
             character, intent(in) :: uplo
             integer,   intent(in) :: n, incx, incy
             real(ep),  intent(in) :: alpha, beta, ap(*), x(*)
             real(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine zhpmv(uplo, n, alpha, ap, x, incx, beta, y, incy)
+        subroutine zhpmv_quad(uplo, n, alpha, ap, x, incx, beta, y, incy)
             import :: ep
             character,    intent(in) :: uplo
             integer,      intent(in) :: n, incx, incy
             complex(ep),  intent(in) :: alpha, beta, ap(*), x(*)
             complex(ep),  intent(inout) :: y(*)
         end subroutine
-        subroutine dtrmv(uplo, trans, diag, n, a, lda, x, incx)
+        subroutine dtrmv_quad(uplo, trans, diag, n, a, lda, x, incx)
             import :: ep
             character, intent(in) :: uplo, trans, diag
             integer,   intent(in) :: n, lda, incx
             real(ep),  intent(in) :: a(lda,*)
             real(ep),  intent(inout) :: x(*)
         end subroutine
-        subroutine ztrmv(uplo, trans, diag, n, a, lda, x, incx)
+        subroutine ztrmv_quad(uplo, trans, diag, n, a, lda, x, incx)
             import :: ep
             character,    intent(in) :: uplo, trans, diag
             integer,      intent(in) :: n, lda, incx
             complex(ep),  intent(in) :: a(lda,*)
             complex(ep),  intent(inout) :: x(*)
         end subroutine
-        subroutine dtpmv(uplo, trans, diag, n, ap, x, incx)
+        subroutine dtpmv_quad(uplo, trans, diag, n, ap, x, incx)
             import :: ep
             character, intent(in) :: uplo, trans, diag
             integer,   intent(in) :: n, incx
             real(ep),  intent(in) :: ap(*)
             real(ep),  intent(inout) :: x(*)
         end subroutine
-        subroutine ztpmv(uplo, trans, diag, n, ap, x, incx)
+        subroutine ztpmv_quad(uplo, trans, diag, n, ap, x, incx)
             import :: ep
             character,    intent(in) :: uplo, trans, diag
             integer,      intent(in) :: n, incx
             complex(ep),  intent(in) :: ap(*)
             complex(ep),  intent(inout) :: x(*)
         end subroutine
-        subroutine dtbsv(uplo, trans, diag, n, k, a, lda, x, incx)
+        subroutine dtbsv_quad(uplo, trans, diag, n, k, a, lda, x, incx)
             import :: ep
             character, intent(in) :: uplo, trans, diag
             integer,   intent(in) :: n, k, lda, incx
             real(ep),  intent(in) :: a(lda,*)
             real(ep),  intent(inout) :: x(*)
         end subroutine
-        subroutine ztbsv(uplo, trans, diag, n, k, a, lda, x, incx)
+        subroutine ztbsv_quad(uplo, trans, diag, n, k, a, lda, x, incx)
             import :: ep
             character,    intent(in) :: uplo, trans, diag
             integer,      intent(in) :: n, k, lda, incx
             complex(ep),  intent(in) :: a(lda,*)
             complex(ep),  intent(inout) :: x(*)
         end subroutine
-        subroutine dtrsv(uplo, trans, diag, n, a, lda, x, incx)
+        subroutine dtrsv_quad(uplo, trans, diag, n, a, lda, x, incx)
             import :: ep
             character, intent(in) :: uplo, trans, diag
             integer,   intent(in) :: n, lda, incx
             real(ep),  intent(in) :: a(lda,*)
             real(ep),  intent(inout) :: x(*)
         end subroutine
-        subroutine ztrsv(uplo, trans, diag, n, a, lda, x, incx)
+        subroutine ztrsv_quad(uplo, trans, diag, n, a, lda, x, incx)
             import :: ep
             character,    intent(in) :: uplo, trans, diag
             integer,      intent(in) :: n, lda, incx
             complex(ep),  intent(in) :: a(lda,*)
             complex(ep),  intent(inout) :: x(*)
         end subroutine
-        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+        subroutine dgemm_quad(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
             import :: ep
             character, intent(in) :: transa, transb
             integer,   intent(in) :: m, n, k, lda, ldb, ldc
             real(ep),  intent(in) :: alpha, beta, a(lda,*), b(ldb,*)
             real(ep),  intent(inout) :: c(ldc,*)
         end subroutine
-        subroutine zgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+        subroutine zgemm_quad(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
             import :: ep
             character,    intent(in) :: transa, transb
             integer,      intent(in) :: m, n, k, lda, ldb, ldc
             complex(ep),  intent(in) :: alpha, beta, a(lda,*), b(ldb,*)
             complex(ep),  intent(inout) :: c(ldc,*)
         end subroutine
-        subroutine dsymm(side, uplo, m, n, alpha, a, lda, b, ldb, beta, c, ldc)
+        subroutine dsymm_quad(side, uplo, m, n, alpha, a, lda, b, ldb, beta, c, ldc)
             import :: ep
             character, intent(in) :: side, uplo
             integer,   intent(in) :: m, n, lda, ldb, ldc
             real(ep),  intent(in) :: alpha, beta, a(lda,*), b(ldb,*)
             real(ep),  intent(inout) :: c(ldc,*)
         end subroutine
-        subroutine zsymm(side, uplo, m, n, alpha, a, lda, b, ldb, beta, c, ldc)
+        subroutine zsymm_quad(side, uplo, m, n, alpha, a, lda, b, ldb, beta, c, ldc)
             import :: ep
             character,    intent(in) :: side, uplo
             integer,      intent(in) :: m, n, lda, ldb, ldc
             complex(ep),  intent(in) :: alpha, beta, a(lda,*), b(ldb,*)
             complex(ep),  intent(inout) :: c(ldc,*)
         end subroutine
-        subroutine zhemm(side, uplo, m, n, alpha, a, lda, b, ldb, beta, c, ldc)
+        subroutine zhemm_quad(side, uplo, m, n, alpha, a, lda, b, ldb, beta, c, ldc)
             import :: ep
             character,    intent(in) :: side, uplo
             integer,      intent(in) :: m, n, lda, ldb, ldc
@@ -387,14 +387,14 @@ contains
         integer,  intent(in)    :: trans, m, n, lda, incx, incy
         real(ep), intent(in)    :: alpha, beta, a(lda,*), x(*)
         real(ep), intent(inout) :: y(*)
-        call dgemv(trans_char(trans), m, n, alpha, a, lda, x, incx, beta, y, incy)
+        call dgemv_quad(trans_char(trans), m, n, alpha, a, lda, x, incx, beta, y, incy)
     end subroutine
 
     subroutine ref_blas_zgemv_x(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
         integer,     intent(in)    :: trans, m, n, lda, incx, incy
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), x(*)
         complex(ep), intent(inout) :: y(*)
-        call zgemv(trans_char(trans), m, n, alpha, a, lda, x, incx, beta, y, incy)
+        call zgemv_quad(trans_char(trans), m, n, alpha, a, lda, x, incx, beta, y, incy)
     end subroutine
 
     subroutine ref_blas_dgemv2_x(trans, m, n, alpha, a, lda, head_x, tail_x, &
@@ -405,8 +405,8 @@ contains
         ! y := alpha*A*head_x + (1*y + beta*y_init - 1*y) ... easier:
         ! y := alpha*A*(head + tail) + beta*y
         ! Run dgemv twice: y := alpha*A*head + beta*y, then y := alpha*A*tail + 1*y.
-        call dgemv(trans_char(trans), m, n, alpha, a, lda, head_x, incx, beta, y, incy)
-        call dgemv(trans_char(trans), m, n, alpha, a, lda, tail_x, incx, 1.0_ep, y, incy)
+        call dgemv_quad(trans_char(trans), m, n, alpha, a, lda, head_x, incx, beta, y, incy)
+        call dgemv_quad(trans_char(trans), m, n, alpha, a, lda, tail_x, incx, 1.0_ep, y, incy)
     end subroutine
 
     subroutine ref_blas_zgemv2_x(trans, m, n, alpha, a, lda, head_x, tail_x, &
@@ -414,8 +414,8 @@ contains
         integer,     intent(in)    :: trans, m, n, lda, incx, incy
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), head_x(*), tail_x(*)
         complex(ep), intent(inout) :: y(*)
-        call zgemv(trans_char(trans), m, n, alpha, a, lda, head_x, incx, beta, y, incy)
-        call zgemv(trans_char(trans), m, n, alpha, a, lda, tail_x, incx, &
+        call zgemv_quad(trans_char(trans), m, n, alpha, a, lda, head_x, incx, beta, y, incy)
+        call zgemv_quad(trans_char(trans), m, n, alpha, a, lda, tail_x, incx, &
                    (1.0_ep, 0.0_ep), y, incy)
     end subroutine
 
@@ -427,14 +427,14 @@ contains
         integer,  intent(in)    :: trans, m, n, kl, ku, lda, incx, incy
         real(ep), intent(in)    :: alpha, beta, a(lda,*), x(*)
         real(ep), intent(inout) :: y(*)
-        call dgbmv(trans_char(trans), m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
+        call dgbmv_quad(trans_char(trans), m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
     end subroutine
 
     subroutine ref_blas_zgbmv_x(trans, m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
         integer,     intent(in)    :: trans, m, n, kl, ku, lda, incx, incy
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), x(*)
         complex(ep), intent(inout) :: y(*)
-        call zgbmv(trans_char(trans), m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
+        call zgbmv_quad(trans_char(trans), m, n, kl, ku, alpha, a, lda, x, incx, beta, y, incy)
     end subroutine
 
     subroutine ref_blas_dgbmv2_x(trans, m, n, kl, ku, alpha, a, lda, head_x, tail_x, &
@@ -442,8 +442,8 @@ contains
         integer,  intent(in)    :: trans, m, n, kl, ku, lda, incx, incy
         real(ep), intent(in)    :: alpha, beta, a(lda,*), head_x(*), tail_x(*)
         real(ep), intent(inout) :: y(*)
-        call dgbmv(trans_char(trans), m, n, kl, ku, alpha, a, lda, head_x, incx, beta, y, incy)
-        call dgbmv(trans_char(trans), m, n, kl, ku, alpha, a, lda, tail_x, incx, 1.0_ep, y, incy)
+        call dgbmv_quad(trans_char(trans), m, n, kl, ku, alpha, a, lda, head_x, incx, beta, y, incy)
+        call dgbmv_quad(trans_char(trans), m, n, kl, ku, alpha, a, lda, tail_x, incx, 1.0_ep, y, incy)
     end subroutine
 
     subroutine ref_blas_zgbmv2_x(trans, m, n, kl, ku, alpha, a, lda, head_x, tail_x, &
@@ -451,8 +451,8 @@ contains
         integer,     intent(in)    :: trans, m, n, kl, ku, lda, incx, incy
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), head_x(*), tail_x(*)
         complex(ep), intent(inout) :: y(*)
-        call zgbmv(trans_char(trans), m, n, kl, ku, alpha, a, lda, head_x, incx, beta, y, incy)
-        call zgbmv(trans_char(trans), m, n, kl, ku, alpha, a, lda, tail_x, incx, &
+        call zgbmv_quad(trans_char(trans), m, n, kl, ku, alpha, a, lda, head_x, incx, beta, y, incy)
+        call zgbmv_quad(trans_char(trans), m, n, kl, ku, alpha, a, lda, tail_x, incx, &
                    (1.0_ep, 0.0_ep), y, incy)
     end subroutine
 
@@ -464,7 +464,7 @@ contains
         integer,  intent(in)    :: uplo, n, lda, incx, incy
         real(ep), intent(in)    :: alpha, beta, a(lda,*), x(*)
         real(ep), intent(inout) :: y(*)
-        call dsymv(uplo_char(uplo), n, alpha, a, lda, x, incx, beta, y, incy)
+        call dsymv_quad(uplo_char(uplo), n, alpha, a, lda, x, incx, beta, y, incy)
     end subroutine
 
     ! Complex symmetric matvec — no BLAS analogue (BLAS has only Hermitian).
@@ -501,8 +501,8 @@ contains
         integer,  intent(in)    :: uplo, n, lda, incx, incy
         real(ep), intent(in)    :: alpha, beta, a(lda,*), x_head(*), x_tail(*)
         real(ep), intent(inout) :: y(*)
-        call dsymv(uplo_char(uplo), n, alpha, a, lda, x_head, incx, beta, y, incy)
-        call dsymv(uplo_char(uplo), n, alpha, a, lda, x_tail, incx, 1.0_ep, y, incy)
+        call dsymv_quad(uplo_char(uplo), n, alpha, a, lda, x_head, incx, beta, y, incy)
+        call dsymv_quad(uplo_char(uplo), n, alpha, a, lda, x_tail, incx, 1.0_ep, y, incy)
     end subroutine
 
     pure subroutine ref_blas_zsymv2_x(uplo, n, alpha, a, lda, x_head, x_tail, incx, &
@@ -537,7 +537,7 @@ contains
         integer,  intent(in)    :: uplo, n, k, lda, incx, incy
         real(ep), intent(in)    :: alpha, beta, a(lda,*), x(*)
         real(ep), intent(inout) :: y(*)
-        call dsbmv(uplo_char(uplo), n, k, alpha, a, lda, x, incx, beta, y, incy)
+        call dsbmv_quad(uplo_char(uplo), n, k, alpha, a, lda, x, incx, beta, y, incy)
     end subroutine
 
     ! Complex symmetric banded — hand-code (no zsbmv in BLAS).
@@ -584,7 +584,7 @@ contains
         integer,  intent(in)    :: uplo, n, incx, incy
         real(ep), intent(in)    :: alpha, beta, ap(*), x(*)
         real(ep), intent(inout) :: y(*)
-        call dspmv(uplo_char(uplo), n, alpha, ap, x, incx, beta, y, incy)
+        call dspmv_quad(uplo_char(uplo), n, alpha, ap, x, incx, beta, y, incy)
     end subroutine
 
     pure subroutine ref_blas_zspmv_x(uplo, n, alpha, ap, x, incx, beta, y, incy)
@@ -632,7 +632,7 @@ contains
         integer,     intent(in)    :: uplo, n, lda, incx, incy
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), x(*)
         complex(ep), intent(inout) :: y(*)
-        call zhemv(uplo_char(uplo), n, alpha, a, lda, x, incx, beta, y, incy)
+        call zhemv_quad(uplo_char(uplo), n, alpha, a, lda, x, incx, beta, y, incy)
     end subroutine
 
     subroutine ref_blas_zhemv2_x(uplo, n, alpha, a, lda, x_head, x_tail, incx, &
@@ -640,8 +640,8 @@ contains
         integer,     intent(in)    :: uplo, n, lda, incx, incy
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), x_head(*), x_tail(*)
         complex(ep), intent(inout) :: y(*)
-        call zhemv(uplo_char(uplo), n, alpha, a, lda, x_head, incx, beta, y, incy)
-        call zhemv(uplo_char(uplo), n, alpha, a, lda, x_tail, incx, &
+        call zhemv_quad(uplo_char(uplo), n, alpha, a, lda, x_head, incx, beta, y, incy)
+        call zhemv_quad(uplo_char(uplo), n, alpha, a, lda, x_tail, incx, &
                    (1.0_ep, 0.0_ep), y, incy)
     end subroutine
 
@@ -649,14 +649,14 @@ contains
         integer,     intent(in)    :: uplo, n, k, lda, incx, incy
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), x(*)
         complex(ep), intent(inout) :: y(*)
-        call zhbmv(uplo_char(uplo), n, k, alpha, a, lda, x, incx, beta, y, incy)
+        call zhbmv_quad(uplo_char(uplo), n, k, alpha, a, lda, x, incx, beta, y, incy)
     end subroutine
 
     subroutine ref_blas_zhpmv_x(uplo, n, alpha, ap, x, incx, beta, y, incy)
         integer,     intent(in)    :: uplo, n, incx, incy
         complex(ep), intent(in)    :: alpha, beta, ap(*), x(*)
         complex(ep), intent(inout) :: y(*)
-        call zhpmv(uplo_char(uplo), n, alpha, ap, x, incx, beta, y, incy)
+        call zhpmv_quad(uplo_char(uplo), n, alpha, ap, x, incx, beta, y, incy)
     end subroutine
 
     ! ════════════════════════════════════════════════════════════════
@@ -668,17 +668,17 @@ contains
         real(ep), intent(in)    :: alpha, beta, a(lda,*), b(ldb,*), x(*)
         real(ep), intent(inout) :: y(*)
         ! y := alpha*A*x   (with beta=0 init)
-        call dgemv('N', m, n, alpha, a, lda, x, incx, 0.0_ep, y, incy)
+        call dgemv_quad('N', m, n, alpha, a, lda, x, incx, 0.0_ep, y, incy)
         ! y := beta*B*x + y
-        call dgemv('N', m, n, beta, b, ldb, x, incx, 1.0_ep, y, incy)
+        call dgemv_quad('N', m, n, beta, b, ldb, x, incx, 1.0_ep, y, incy)
     end subroutine
 
     subroutine ref_blas_zge_sum_mv_x(m, n, alpha, a, lda, x, incx, beta, b, ldb, y, incy)
         integer,     intent(in)    :: m, n, lda, ldb, incx, incy
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), b(ldb,*), x(*)
         complex(ep), intent(inout) :: y(*)
-        call zgemv('N', m, n, alpha, a, lda, x, incx, (0.0_ep, 0.0_ep), y, incy)
-        call zgemv('N', m, n, beta,  b, ldb, x, incx, (1.0_ep, 0.0_ep), y, incy)
+        call zgemv_quad('N', m, n, alpha, a, lda, x, incx, (0.0_ep, 0.0_ep), y, incy)
+        call zgemv_quad('N', m, n, beta,  b, ldb, x, incx, (1.0_ep, 0.0_ep), y, incy)
     end subroutine
 
     ! ════════════════════════════════════════════════════════════════
@@ -694,7 +694,7 @@ contains
         real(ep), intent(inout) :: x(*)
         integer :: lenx, i, ix
         lenx = 1 + (n - 1) * abs(incx)
-        call dtrmv(uplo_char(uplo), trans_char(trans), diag_char(diag), &
+        call dtrmv_quad(uplo_char(uplo), trans_char(trans), diag_char(diag), &
                    n, t, ldt, x, incx)
         ix = ix_start(n, incx)
         do i = 1, n
@@ -708,7 +708,7 @@ contains
         complex(ep), intent(in)    :: alpha, t(ldt,*)
         complex(ep), intent(inout) :: x(*)
         integer :: i, ix
-        call ztrmv(uplo_char(uplo), trans_char(trans), diag_char(diag), &
+        call ztrmv_quad(uplo_char(uplo), trans_char(trans), diag_char(diag), &
                    n, t, ldt, x, incx)
         ix = ix_start(n, incx)
         do i = 1, n
@@ -722,7 +722,7 @@ contains
         real(ep), intent(in)    :: alpha, tp(*)
         real(ep), intent(inout) :: x(*)
         integer :: i, ix
-        call dtpmv(uplo_char(uplo), trans_char(trans), diag_char(diag), &
+        call dtpmv_quad(uplo_char(uplo), trans_char(trans), diag_char(diag), &
                    n, tp, x, incx)
         ix = ix_start(n, incx)
         do i = 1, n
@@ -736,7 +736,7 @@ contains
         complex(ep), intent(in)    :: alpha, tp(*)
         complex(ep), intent(inout) :: x(*)
         integer :: i, ix
-        call ztpmv(uplo_char(uplo), trans_char(trans), diag_char(diag), &
+        call ztpmv_quad(uplo_char(uplo), trans_char(trans), diag_char(diag), &
                    n, tp, x, incx)
         ix = ix_start(n, incx)
         do i = 1, n
@@ -757,7 +757,7 @@ contains
             x(ix) = alpha * x(ix)
             ix = ix + incx
         end do
-        call dtbsv(uplo_char(uplo), trans_char(trans), diag_char(diag), &
+        call dtbsv_quad(uplo_char(uplo), trans_char(trans), diag_char(diag), &
                    n, k, t, ldt, x, incx)
     end subroutine
 
@@ -771,7 +771,7 @@ contains
             x(ix) = alpha * x(ix)
             ix = ix + incx
         end do
-        call ztbsv(uplo_char(uplo), trans_char(trans), diag_char(diag), &
+        call ztbsv_quad(uplo_char(uplo), trans_char(trans), diag_char(diag), &
                    n, k, t, ldt, x, incx)
     end subroutine
 
@@ -785,7 +785,7 @@ contains
             x(ix) = alpha * x(ix)
             ix = ix + incx
         end do
-        call dtrsv(uplo_char(uplo), trans_char(trans), diag_char(diag), &
+        call dtrsv_quad(uplo_char(uplo), trans_char(trans), diag_char(diag), &
                    n, t, ldt, x, incx)
     end subroutine
 
@@ -799,7 +799,7 @@ contains
             x(ix) = alpha * x(ix)
             ix = ix + incx
         end do
-        call ztrsv(uplo_char(uplo), trans_char(trans), diag_char(diag), &
+        call ztrsv_quad(uplo_char(uplo), trans_char(trans), diag_char(diag), &
                    n, t, ldt, x, incx)
     end subroutine
 
@@ -812,7 +812,7 @@ contains
         integer,  intent(in)    :: transa, transb, m, n, k, lda, ldb, ldc
         real(ep), intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
         real(ep), intent(inout) :: c(ldc,*)
-        call dgemm(trans_char(transa), trans_char(transb), m, n, k, &
+        call dgemm_quad(trans_char(transa), trans_char(transb), m, n, k, &
                    alpha, a, lda, b, ldb, beta, c, ldc)
     end subroutine
 
@@ -821,7 +821,7 @@ contains
         integer,     intent(in)    :: transa, transb, m, n, k, lda, ldb, ldc
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
         complex(ep), intent(inout) :: c(ldc,*)
-        call zgemm(trans_char(transa), trans_char(transb), m, n, k, &
+        call zgemm_quad(trans_char(transa), trans_char(transb), m, n, k, &
                    alpha, a, lda, b, ldb, beta, c, ldc)
     end subroutine
 
@@ -829,7 +829,7 @@ contains
         integer,  intent(in)    :: side, uplo, m, n, lda, ldb, ldc
         real(ep), intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
         real(ep), intent(inout) :: c(ldc,*)
-        call dsymm(side_char(side), uplo_char(uplo), m, n, &
+        call dsymm_quad(side_char(side), uplo_char(uplo), m, n, &
                    alpha, a, lda, b, ldb, beta, c, ldc)
     end subroutine
 
@@ -837,7 +837,7 @@ contains
         integer,     intent(in)    :: side, uplo, m, n, lda, ldb, ldc
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
         complex(ep), intent(inout) :: c(ldc,*)
-        call zsymm(side_char(side), uplo_char(uplo), m, n, &
+        call zsymm_quad(side_char(side), uplo_char(uplo), m, n, &
                    alpha, a, lda, b, ldb, beta, c, ldc)
     end subroutine
 
@@ -845,7 +845,7 @@ contains
         integer,     intent(in)    :: side, uplo, m, n, lda, ldb, ldc
         complex(ep), intent(in)    :: alpha, beta, a(lda,*), b(ldb,*)
         complex(ep), intent(inout) :: c(ldc,*)
-        call zhemm(side_char(side), uplo_char(uplo), m, n, &
+        call zhemm_quad(side_char(side), uplo_char(uplo), m, n, &
                    alpha, a, lda, b, ldb, beta, c, ldc)
     end subroutine
 
