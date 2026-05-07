@@ -38,14 +38,14 @@ REAL_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_0-9])double([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     (r'(^|[^a-zA-Z_0-9])double([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
-    (r'MPI_DOUBLE', '{MPI_REAL}'),
+    (r'\bMPI_DOUBLE\b', '{MPI_REAL}'),
     # Reduction op. For KIND targets {MPI_SUM_REAL} expands to 'MPI_SUM'
     # so the rule is a textual no-op. For multifloats it expands to
     # 'MPI_DD_SUM', the user-defined op registered by libmfc.
     (r'\bMPI_SUM\b', '{MPI_SUM_REAL}'),
     # Function name prefixes (allow uppercase after prefix for BI_dMPI_* etc.)
-    (r'Cd([a-z])', r'C{RP}\1'),
-    (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
+    (r'(?<![A-Za-z0-9_])Cd([a-z])', r'C{RP}\1'),
+    (r'(?<![A-Za-z0-9_])BI_d([a-zA-Z])', r'BI_{RP}\1'),
 ]
 
 COMPLEX_CLONE_SUBS = [
@@ -58,15 +58,15 @@ COMPLEX_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_0-9])double([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     (r'(^|[^a-zA-Z_0-9])double([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types (order matters: DOUBLE_COMPLEX before DOUBLE)
-    (r'MPI_DOUBLE_COMPLEX', '{MPI_COMPLEX}'),
-    (r'MPI_DOUBLE', '{MPI_REAL}'),
+    (r'\bMPI_DOUBLE_COMPLEX\b', '{MPI_COMPLEX}'),
+    (r'\bMPI_DOUBLE\b', '{MPI_REAL}'),
     (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'{MPI_COMPLEX}\1'),
     # Reduction op (see REAL_CLONE_SUBS). Complex files use the zz op.
     (r'\bMPI_SUM\b', '{MPI_SUM_COMPLEX}'),
     # Function name prefixes (allow uppercase after prefix for BI_zMPI_* etc.)
-    (r'Cz([a-z])', r'C{CP}\1'),
-    (r'BI_z([a-zA-Z])', r'BI_{CP}\1'),
-    (r'BI_d([a-zA-Z])', r'BI_{RP}\1'),
+    (r'(?<![A-Za-z0-9_])Cz([a-z])', r'C{CP}\1'),
+    (r'(?<![A-Za-z0-9_])BI_z([a-zA-Z])', r'BI_{CP}\1'),
+    (r'(?<![A-Za-z0-9_])BI_d([a-zA-Z])', r'BI_{RP}\1'),
 ]
 
 # Convergence-only sub rule sets: mirror of REAL_CLONE_SUBS/COMPLEX_CLONE_SUBS
@@ -79,12 +79,12 @@ SINGLE_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_0-9])float([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     (r'(^|[^a-zA-Z_0-9])float([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types
-    (r'MPI_FLOAT', '{MPI_REAL}'),
+    (r'\bMPI_FLOAT\b', '{MPI_REAL}'),
     # Reduction op (see REAL_CLONE_SUBS)
     (r'\bMPI_SUM\b', '{MPI_SUM_REAL}'),
     # Function name prefixes
-    (r'Cs([a-z])', r'C{RP}\1'),
-    (r'BI_s([a-zA-Z])', r'BI_{RP}\1'),
+    (r'(?<![A-Za-z0-9_])Cs([a-z])', r'C{RP}\1'),
+    (r'(?<![A-Za-z0-9_])BI_s([a-zA-Z])', r'BI_{RP}\1'),
 ]
 
 CSINGLE_CLONE_SUBS = [
@@ -97,15 +97,15 @@ CSINGLE_CLONE_SUBS = [
     (r'(^|[^a-zA-Z_0-9])float([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     (r'(^|[^a-zA-Z_0-9])float([^a-zA-Z_0-9]|$)', r'\1{REAL_TYPE}\2'),
     # MPI types (order matters: FLOAT_COMPLEX before FLOAT, MPI_COMPLEX gated)
-    (r'MPI_FLOAT_COMPLEX', '{MPI_COMPLEX}'),
-    (r'MPI_FLOAT', '{MPI_REAL}'),
+    (r'\bMPI_FLOAT_COMPLEX\b', '{MPI_COMPLEX}'),
+    (r'\bMPI_FLOAT\b', '{MPI_REAL}'),
     (r'MPI_COMPLEX([^a-zA-Z_0-9])', r'{MPI_COMPLEX}\1'),
     # Reduction op (see REAL_CLONE_SUBS). Complex files use the zz op.
     (r'\bMPI_SUM\b', '{MPI_SUM_COMPLEX}'),
     # Function name prefixes
-    (r'Cc([a-z])', r'C{CP}\1'),
-    (r'BI_c([a-zA-Z])', r'BI_{CP}\1'),
-    (r'BI_s([a-zA-Z])', r'BI_{RP}\1'),
+    (r'(?<![A-Za-z0-9_])Cc([a-z])', r'C{CP}\1'),
+    (r'(?<![A-Za-z0-9_])BI_c([a-zA-Z])', r'BI_{CP}\1'),
+    (r'(?<![A-Za-z0-9_])BI_s([a-zA-Z])', r'BI_{RP}\1'),
 ]
 
 
