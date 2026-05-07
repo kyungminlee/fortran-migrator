@@ -894,7 +894,7 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
             continue
         members.sort(key=lambda p: (
             0 if p.stem.upper() in config.prefer_source
-            else (1 if p.stem[0].upper() in ('D', 'Z') else 2),
+            else (1 if p.stem and p.stem[0].upper() in ('D', 'Z') else 2),
             p.name,
         ))
         canonical = members[0]
@@ -1006,7 +1006,7 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
             continue
         members.sort(key=lambda p: (
             0 if p.stem.upper() in config.prefer_source
-            else (1 if p.stem[0].upper() in ('D', 'Z') else 2),
+            else (1 if p.stem and p.stem[0].upper() in ('D', 'Z') else 2),
             p.name,
         ))
         canonical = members[0]
