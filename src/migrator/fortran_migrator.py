@@ -2028,7 +2028,7 @@ _DECL_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 _IDENT_RE = re.compile(r"\b([A-Za-z_]\w*)\b")
-_STRING_RE = re.compile(r"'[^']*'|\"[^\"]*\"")
+_STRING_RE = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"")
 
 
 def _strip_strings_and_comments(line: str) -> str:
