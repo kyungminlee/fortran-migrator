@@ -5,6 +5,7 @@ migration parameters. The engine reads a recipe and performs the
 appropriate migration.
 """
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -12,6 +13,23 @@ try:
     import yaml
 except ImportError:
     yaml = None  # type: ignore[assignment]
+
+
+# Top-level keys recognized by load_recipe(). Unknown keys are warned on
+# load so that a typo (``copy-files`` vs ``copy_files``) doesn't silently
+# default to empty and produce a partially-migrated tree.
+_KNOWN_RECIPE_KEYS: frozenset[str] = frozenset({
+    'library', 'language', 'source_dir', 'extensions',
+    'symbols', 'prefix',
+    'skip_files', 'copy_files', 'prefer_source',
+    'local_renames', 'module_renames', 'extra_renames',
+    'copy_all_originals', 'patches',
+    'depends', 'extra_symbol_dirs',
+    'extra_migrate_files', 'extra_c_dirs', 'extra_fortran_dirs',
+    'keep_kind_manifest',
+    'c_return_types', 'c_type_aliases', 'c_pointer_cast_aliases',
+    'header_patches', 'overrides', 'source_overrides',
+})
 
 
 @dataclass
@@ -186,6 +204,26 @@ def load_recipe(recipe_path: Path,
 
     with open(recipe_path) as f:
         data = yaml.safe_load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError(
+            f'{recipe_path}: top-level YAML must be a mapping, '
+            f'got {type(data).__name__}'
+        )
+
+    for required in ('library', 'language', 'source_dir'):
+        if required not in data:
+            raise KeyError(
+                f'{recipe_path}: missing required recipe key {required!r}'
+            )
+
+    unknown = sorted(set(data) - _KNOWN_RECIPE_KEYS)
+    if unknown:
+        print(
+            f'  warning: {recipe_path.name}: unknown recipe key(s) '
+            f'{unknown!r}; ignored. (Known keys: {sorted(_KNOWN_RECIPE_KEYS)})',
+            file=sys.stderr,
+        )
 
     source_dir = project_root / data['source_dir']
 
