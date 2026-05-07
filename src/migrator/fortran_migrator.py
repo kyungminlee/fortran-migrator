@@ -1111,17 +1111,21 @@ def replace_known_constants(
     # We must respect string literals when locating the '!'.
     code_end = len(line)
     in_str, qch = False, ''
-    for i, ch in enumerate(line):
+    i = 0
+    while i < len(line):
+        ch = line[i]
         if in_str:
             if ch == qch:
                 if i + 1 < len(line) and line[i + 1] == qch:
-                    continue  # doubled escape
+                    i += 2  # doubled-quote escape stays inside the string
+                    continue
                 in_str = False
         elif ch in ("'", '"'):
             in_str, qch = True, ch
         elif ch == '!':
             code_end = i
             break
+        i += 1
     code, tail = line[:code_end], line[code_end:]
 
     # Mask out string literal interiors in code segment.
