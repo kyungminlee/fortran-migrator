@@ -960,7 +960,11 @@ def replace_routine_names(line: str, rename_map: dict[str, str]) -> str:
     def case_replace(m):
         matched = m.group(0)
         new = upper_map[matched.upper()]
-        return new.upper() if matched.isupper() else (new.lower() if matched.islower() else new.upper())
+        if matched.isupper():
+            return new.upper()
+        if matched.islower():
+            return new.lower()
+        return new.capitalize()
 
     return pattern.sub(case_replace, line)
 
