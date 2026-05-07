@@ -45,8 +45,10 @@ def _strip_fortran_comments(text: str, ext: str) -> str:
     ignore commentary that differs between S/D or C/Z source halves.
 
     Fixed-form (.f/.for): a line is a full comment when column 1 is
-    C, c, *, !, d, or D. Inline ! comments are stripped unless inside
-    a string literal.
+    C, c, *, or !. Inline ! comments are stripped unless inside a
+    string literal. (D/d-lines are conditionally-compiled debug code,
+    not comments — both halves contain or omit them symmetrically, so
+    leave them in place.)
 
     Free-form (.f90/.F90/.f95): a line is a full comment when the
     first non-blank char is !. Inline ! comments are stripped the
@@ -931,7 +933,10 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
                         mininterval=1.0, miniters=10):
             p = futures[fut]
             try:
-                _, migrated = fut.result()
+                res = fut.result()
+                if res is None:
+                    continue
+                _, migrated = res
                 texts[p] = migrated
             except Exception as exc:
                 print(f'  warning: migration crashed on {p.name}: '
@@ -1045,7 +1050,10 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
                         mininterval=1.0, miniters=10):
             p = futures[fut]
             try:
-                _, migrated = fut.result()
+                res = fut.result()
+                if res is None:
+                    continue
+                _, migrated = res
                 texts[p] = migrated
             except Exception as exc:
                 print(f'  warning: re-migration crashed on {p.name}: '
