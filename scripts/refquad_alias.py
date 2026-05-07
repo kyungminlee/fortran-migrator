@@ -46,6 +46,8 @@ SIG_START_RE = re.compile(
              double\s+precision|double\s+complex)
           (?:\s*\([^)]*\))?
           \s+)?
+        (?P<attr_prefix>
+          (?:(?:recursive|pure|impure|elemental)\s+)+)?
         (?P<kind>function|subroutine)
         \s+(?P<name>[a-zA-Z_][a-zA-Z_0-9]*)
         \s*\(""", re.VERBOSE)
