@@ -64,12 +64,16 @@ def cmd_diverge(args):
     )
     total = len(report)
     # Optional filtering on diff content.
-    if args.grep:
-        pat = re.compile(args.grep, re.IGNORECASE)
-        report = [r for r in report if any(pat.search(l) for l in r['diff'])]
-    if args.exclude:
-        pat = re.compile(args.exclude, re.IGNORECASE)
-        report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+    try:
+        if args.grep:
+            pat = re.compile(args.grep, re.IGNORECASE)
+            report = [r for r in report if any(pat.search(l) for l in r['diff'])]
+        if args.exclude:
+            pat = re.compile(args.exclude, re.IGNORECASE)
+            report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+    except re.error as exc:
+        print(f'error: invalid regex: {exc}', file=sys.stderr)
+        return 2
 
     for entry in report:
         header = (f'### {entry["other"]} vs {entry["canonical"]}'
@@ -87,6 +91,7 @@ def cmd_diverge(args):
         print(f'{shown} shown / {total} divergent pairs')
     else:
         print(f'{total} divergent pairs')
+    return 1 if total else 0
 
 
 def cmd_converge(args):
@@ -102,12 +107,16 @@ def cmd_converge(args):
         parser_cmd=parser_cmd,
     )
     total = len(report)
-    if args.grep:
-        pat = re.compile(args.grep, re.IGNORECASE)
-        report = [r for r in report if any(pat.search(l) for l in r['diff'])]
-    if args.exclude:
-        pat = re.compile(args.exclude, re.IGNORECASE)
-        report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+    try:
+        if args.grep:
+            pat = re.compile(args.grep, re.IGNORECASE)
+            report = [r for r in report if any(pat.search(l) for l in r['diff'])]
+        if args.exclude:
+            pat = re.compile(args.exclude, re.IGNORECASE)
+            report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+    except re.error as exc:
+        print(f'error: invalid regex: {exc}', file=sys.stderr)
+        return 2
 
     for entry in report:
         if entry['status'] == 'missing':
@@ -817,17 +826,19 @@ def cmd_run(args):
         args.full = False
     if not hasattr(args, 'max_width'):
         args.max_width = 200
-    cmd_converge(args)
+    rc_converge = cmd_converge(args) or 0
 
     print()
     print('=' * 60)
     print('  Step 3: Verify')
     print('=' * 60)
     args.output_dir = output_dir
+    rc_verify = 0
     try:
         cmd_verify(args)
     except SystemExit as e:
         if e.code:
+            rc_verify = int(e.code) if isinstance(e.code, int) else 1
             print('Verify failed, continuing...')
 
     print()
@@ -835,7 +846,9 @@ def cmd_run(args):
     print('  Step 4: Build (CMake)')
     print('=' * 60)
     args.output_dir = output_dir
-    cmd_build(args)
+    rc_build = cmd_build(args) or 0
+
+    return rc_build or rc_verify or rc_converge
 
 
 # Topologically sorted library build order for the unified CMake project.
