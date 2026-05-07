@@ -134,6 +134,8 @@ def cmd_converge(args):
               f'({diverged} diverged, {missing} missing on disk)')
     else:
         print(f'{diverged} diverged, {missing} missing on disk')
+    # Non-zero exit when there are real problems so CI gates on this.
+    return 1 if (diverged or missing) else 0
 
 
 def _is_fixed_form_comment(line: str) -> bool:
@@ -730,29 +732,42 @@ def cmd_build(args):
     if config.language != 'c' and args.fc:
         configure_args.append(f'-DCMAKE_Fortran_COMPILER={args.fc}')
 
+    build_dir.mkdir(parents=True, exist_ok=True)
+    configure_log = build_dir / 'configure.log'
+    build_log = build_dir / 'build.log'
+
     print(f'\nConfiguring...')
-    r = subprocess.run(configure_args, capture_output=True, text=True)
+    with configure_log.open('w') as logf:
+        r = subprocess.run(configure_args, stdout=logf,
+                           stderr=subprocess.STDOUT, text=True)
     if r.returncode != 0:
-        print(r.stderr, file=sys.stderr)
+        # Tail the log to stderr so the user sees the actual cause.
+        log_text = configure_log.read_text(errors='replace')
+        tail = log_text.splitlines()[-50:]
+        print('\n'.join(tail), file=sys.stderr)
+        print(f'\nConfigure failed; full log: {configure_log}', file=sys.stderr)
         sys.exit(1)
 
     # Build (parallel)
     jobs = os.cpu_count() or 4
     print(f'Building ({jobs} parallel jobs)...')
-    r = subprocess.run(
-        [cmake_cmd, '--build', str(build_dir), '-j', str(jobs)],
-        capture_output=True, text=True,
-    )
+    with build_log.open('w') as logf:
+        r = subprocess.run(
+            [cmake_cmd, '--build', str(build_dir), '-j', str(jobs)],
+            stdout=logf, stderr=subprocess.STDOUT, text=True,
+        )
     if r.returncode != 0:
-        # Show failures
-        for line in r.stderr.splitlines():
-            if 'error' in line.lower() or 'Error' in line:
-                print(f'  {line}')
-        # Count pass/fail from build output
-        lines = r.stdout.splitlines() + r.stderr.splitlines()
-        errors = [l for l in lines if 'Error:' in l]
-        print(f'\nBuild failed with {len(errors)} error(s)')
-        print(f'Full log: {build_dir}/')
+        log_text = build_log.read_text(errors='replace')
+        lines = log_text.splitlines()
+        # Surface lines mentioning errors plus the last 50 lines for context.
+        err_lines = [l for l in lines
+                     if ': error' in l.lower() or 'Error:' in l]
+        for l in err_lines[:30]:
+            print(f'  {l}')
+        print('\n--- last 50 lines of build.log ---', file=sys.stderr)
+        print('\n'.join(lines[-50:]), file=sys.stderr)
+        print(f'\nBuild failed ({len(err_lines)} error line(s) detected); '
+              f'full log: {build_log}', file=sys.stderr)
         sys.exit(1)
 
     # Report results
@@ -1424,7 +1439,9 @@ def main():
     p.set_defaults(func=cmd_stage)
 
     args = parser.parse_args()
-    args.func(args)
+    rc = args.func(args)
+    if isinstance(rc, int) and rc != 0:
+        sys.exit(rc)
 
 
 if __name__ == '__main__':
