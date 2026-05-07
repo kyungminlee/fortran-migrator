@@ -135,21 +135,6 @@ _DECL_START_RE = re.compile(
 )
 
 
-def _warn_on_fp_equivalence(source: str, target_mode: TargetMode) -> None:
-    """No-op kept for call-site compatibility.
-
-    Earlier versions emitted a warning for EQUIVALENCE statements
-    involving floating-point variables, because Fortran prohibits
-    EQUIVALENCE on non-SEQUENCE derived types and ``TYPE(float64x2)``
-    used to be a non-SEQUENCE type. The mock multifloats module now
-    declares both float64x2 and complex128x2 with the SEQUENCE
-    attribute (see github.com/kyungminlee/multifloats), so LAPACK
-    sources such as DLALN2 that EQUIVALENCE 2x2 work arrays compile
-    without manual fixups. The diagnostic is no longer needed.
-    """
-    return
-
-
 def fix_misdeclared_statement_functions(source: str) -> str:
     """Correct the declared type of statement functions whose body is
     a real-valued expression.
@@ -2212,10 +2197,6 @@ def specialize_use_module(source: str, target_mode: TargetMode, fixed_form: bool
     return ''.join(out)
 
 
-# Keep old name as alias for backward compatibility
-specialize_use_multifloats = specialize_use_module
-
-
 def _wrap_use_clause(indent: str, body: str, fixed_form: bool) -> str:
     """Wrap a long ``USE multifloats, only: a, b, c, ...`` statement so
     each emitted line fits within Fortran source line limits.
@@ -2876,8 +2857,6 @@ def _segment_fixed_form_statements(
 
 
 def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
-    if not target_mode.is_kind_based:
-        _warn_on_fp_equivalence(source, target_mode)
     complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
     real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source = fix_misdeclared_statement_functions(source)
@@ -2941,7 +2920,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
                         '!    integer, parameter :: wp = kind(1.d0)', source)
 
     source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_multifloats(source, target_mode, fixed_form=True)
+    source = specialize_use_module(source, target_mode, fixed_form=True)
     return source
 
 
@@ -3071,8 +3050,6 @@ def _la_constants_rename_map(target_mode: TargetMode) -> dict[str, str]:
 
 
 def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
-    if not target_mode.is_kind_based:
-        _warn_on_fp_equivalence(source, target_mode)
     complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
     real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source = rewrite_la_constants_use(source, target_mode)
@@ -3178,7 +3155,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
                         '!    integer, parameter :: wp =', source)
 
     source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_multifloats(source, target_mode, fixed_form=False)
+    source = specialize_use_module(source, target_mode, fixed_form=False)
     return source
 
 
@@ -3682,7 +3659,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
                         '!    integer, parameter :: wp = kind(1.d0)', source)
 
     source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_multifloats(source, target_mode, fixed_form=True)
+    source = specialize_use_module(source, target_mode, fixed_form=True)
     return source
 
 
@@ -3743,5 +3720,5 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
                         '!    integer, parameter :: wp =', source)
 
     source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_multifloats(source, target_mode, fixed_form=False)
+    source = specialize_use_module(source, target_mode, fixed_form=False)
     return source
