@@ -283,9 +283,11 @@ INTRINSIC_DECL_MAP: dict[str, str] = {
     'DCOS':   'COS',
     'CCOS':   'COS',
     'ZCOS':   'COS',
+    'CDCOS':  'COS',
     'DSIN':   'SIN',
     'CSIN':   'SIN',
     'ZSIN':   'SIN',
+    'CDSIN':  'SIN',
     'DTAN':   'TAN',
     # Hyperbolic
     'DCOSH':  'COSH',
@@ -307,6 +309,7 @@ INTRINSIC_DECL_MAP: dict[str, str] = {
     'DEXP':   'EXP',
     'CEXP':   'EXP',
     'ZEXP':   'EXP',
+    'CDEXP':  'EXP',
     # GAMMA / LOG_GAMMA
     'DGAMMA': 'GAMMA',
     'ALGAMA': 'LOG_GAMMA',
@@ -319,6 +322,7 @@ INTRINSIC_DECL_MAP: dict[str, str] = {
     'DLOG':   'LOG',
     'CLOG':   'LOG',
     'ZLOG':   'LOG',
+    'CDLOG':  'LOG',
     'ALOG10': 'LOG10',
     'DLOG10': 'LOG10',
     # MAX / MIN
@@ -342,6 +346,7 @@ INTRINSIC_DECL_MAP: dict[str, str] = {
     'DSQRT':  'SQRT',
     'CSQRT':  'SQRT',
     'ZSQRT':  'SQRT',
+    'CDSQRT': 'SQRT',
     # Type conversion
     'DBLE':   'REAL',
     'SNGL':   'REAL',

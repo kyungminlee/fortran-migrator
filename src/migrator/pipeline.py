@@ -7,13 +7,19 @@ Usage:
 
 import os
 import re
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from .config import RecipeConfig, load_recipe
 from .symbol_scanner import scan_symbols
 from .prefix_classifier import classify_symbols, build_rename_map
-from .fortran_migrator import migrate_file, migrate_file_to_string, target_filename
+from .fortran_migrator import (
+    _find_inline_bang,
+    migrate_file,
+    migrate_file_to_string,
+    target_filename,
+)
 from .c_migrator import migrate_c_directory, migrate_c_file_to_string, _build_sub_vars, _expand_template
 from .target_mode import TargetMode
 
@@ -44,8 +50,10 @@ def _strip_fortran_comments(text: str, ext: str) -> str:
     ignore commentary that differs between S/D or C/Z source halves.
 
     Fixed-form (.f/.for): a line is a full comment when column 1 is
-    C, c, *, !, d, or D. Inline ! comments are stripped unless inside
-    a string literal.
+    C, c, *, or !. Inline ! comments are stripped unless inside a
+    string literal. (D/d-lines are conditionally-compiled debug code,
+    not comments — both halves contain or omit them symmetrically, so
+    leave them in place.)
 
     Free-form (.f90/.F90/.f95): a line is a full comment when the
     first non-blank char is !. Inline ! comments are stripped the
@@ -101,15 +109,7 @@ def _strip_fortran_comments(text: str, ext: str) -> str:
 
 
 def _strip_inline_bang(line: str) -> str:
-    in_s = in_d = False
-    for i, ch in enumerate(line):
-        if ch == "'" and not in_d:
-            in_s = not in_s
-        elif ch == '"' and not in_s:
-            in_d = not in_d
-        elif ch == '!' and not in_s and not in_d:
-            return line[:i]
-    return line
+    return line[:_find_inline_bang(line)]
 
 
 def _strip_real_cmplx_casts(text: str) -> str:
@@ -748,7 +748,12 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
                         desc='  Migrating', unit='file',
                         mininterval=1.0, miniters=10):
             p = futures[fut]
-            results[p] = fut.result()
+            try:
+                results[p] = fut.result()
+            except Exception as exc:
+                print(f'  warning: migration crashed on {p.name}: '
+                      f'{type(exc).__name__}: {exc}', file=sys.stderr)
+                results[p] = None
 
     # Reduce in deterministic D/Z-first order.
     for src_path in to_migrate:
@@ -888,7 +893,7 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
             continue
         members.sort(key=lambda p: (
             0 if p.stem.upper() in config.prefer_source
-            else (1 if p.stem[0].upper() in ('D', 'Z') else 2),
+            else (1 if p.stem and p.stem[0].upper() in ('D', 'Z') else 2),
             p.name,
         ))
         canonical = members[0]
@@ -910,10 +915,14 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
                         mininterval=1.0, miniters=10):
             p = futures[fut]
             try:
-                _, migrated = fut.result()
+                res = fut.result()
+                if res is None:
+                    continue
+                _, migrated = res
                 texts[p] = migrated
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f'  warning: migration crashed on {p.name}: '
+                      f'{type(exc).__name__}: {exc}', file=sys.stderr)
 
     report: list[dict] = []
     for canonical, other in pairs:
@@ -999,7 +1008,7 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
             continue
         members.sort(key=lambda p: (
             0 if p.stem.upper() in config.prefer_source
-            else (1 if p.stem[0].upper() in ('D', 'Z') else 2),
+            else (1 if p.stem and p.stem[0].upper() in ('D', 'Z') else 2),
             p.name,
         ))
         canonical = members[0]
@@ -1023,10 +1032,14 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
                         mininterval=1.0, miniters=10):
             p = futures[fut]
             try:
-                _, migrated = fut.result()
+                res = fut.result()
+                if res is None:
+                    continue
+                _, migrated = res
                 texts[p] = migrated
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f'  warning: re-migration crashed on {p.name}: '
+                      f'{type(exc).__name__}: {exc}', file=sys.stderr)
 
     report: list[dict] = []
     for canonical, other in pairs:
@@ -1130,7 +1143,9 @@ def run_c_convergence_report(recipe_path: Path, output_dir: Path,
                 classification=classification,
                 c_type_aliases=config.c_type_aliases,
             )
-        except Exception:
+        except Exception as exc:
+            print(f'  warning: C re-migration crashed on {p.name}: '
+                  f'{type(exc).__name__}: {exc}', file=sys.stderr)
             continue
         if res is None:
             continue

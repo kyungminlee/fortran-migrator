@@ -36,6 +36,29 @@ cmake -S /tmp/stage-q -B /tmp/stage-q/build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/stage-q/build -j8
 ```
 
+### MPI: use the `linux-impi` preset
+
+The canonical MPI for builds and tests is Intel oneAPI MPI. `cmake/CMakePresets.json`
+ships two presets:
+
+| preset             | when to use                                                          |
+|--------------------|----------------------------------------------------------------------|
+| `linux-impi`       | default — points CMake at `/opt/intel/oneapi/mpi/latest` wrappers    |
+| `linux-system-mpi` | CI / machines without Intel MPI; uses whatever `find_package(MPI)` finds (OpenMPI, MPICH) |
+
+The staging tree includes the preset file, so:
+
+```bash
+cmake -S /tmp/stage-q --preset linux-impi
+cmake --build /tmp/stage-q/build -j8
+ctest  --preset linux-impi --test-dir /tmp/stage-q/build
+```
+
+`linux-system-mpi` works for compiling the libraries themselves, but the
+`*_seq` test executables (which link `libmpiseq` while including a system
+`mpi.h`) and BLACS/PBLAS p2p tests are only verified against Intel MPI;
+OpenMPI/MPICH may hang or fail to link.
+
 Resulting archives: `libqblas-<tag>.a`, `libqlapack-<tag>.a`,
 `libqscalapack-<tag>.a`, etc.
 
@@ -106,7 +129,7 @@ for the sidecar conventions.
 | LAPACK 3.12.1          | vendored under `external/lapack-3.12.1/`    |
 | MUMPS 5.8.2            | vendored under `external/MUMPS_5.8.2/`      |
 | ScaLAPACK 2.2.3        | vendored under `external/scalapack-2.2.3/`  |
-| Intel MPI headers      | vendored under `external/impi-headers/` (compile-time; any system MPI works at runtime) |
+| Intel MPI headers      | vendored under `external/impi-headers/` (compile-time only — link/run against Intel oneAPI MPI via the `linux-impi` preset; other MPIs are best-effort) |
 | multifloats            | fetched at CMake time from GitHub (`FetchContent`) |
 | `multifloats-mpi`      | `external/multifloats-mpi/` — MPI bridge (datatype + reduction ops) |
 

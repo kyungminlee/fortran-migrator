@@ -506,7 +506,7 @@ for t in kind10 kind16 multifloats; do
     rm -rf /tmp/stg-$t
     PYTHONPATH=src python -m migrator stage /tmp/stg-$t \
         --target $t \
-        --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack scalapack_c mumps
+        --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack_tools scalapack scalapack_c mumps
     cmake -S /tmp/stg-$t -B /tmp/stg-$t/build --preset=linux-impi
     cmake --build /tmp/stg-$t/build -j8
     ( cd /tmp/stg-$t && ctest --preset=linux-impi --output-on-failure )
@@ -535,7 +535,7 @@ under instrumentation:
 rm -rf /tmp/stg-mf-asan && \
 PYTHONPATH=src python -m migrator stage /tmp/stg-mf-asan \
     --target multifloats \
-    --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack scalapack_c mumps
+    --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack_tools scalapack scalapack_c mumps
 cmake -S /tmp/stg-mf-asan -B /tmp/stg-mf-asan/build \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DMULTIFLOATS_USE_LTO=OFF \
@@ -553,7 +553,7 @@ ASAN_OPTIONS="detect_leaks=0:abort_on_error=0" \
 rm -rf /tmp/stg-k16-asan && \
 PYTHONPATH=src python -m migrator stage /tmp/stg-k16-asan \
     --target kind16 \
-    --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack scalapack_c mumps
+    --libraries blas xblas blacs lapack ptzblas pbblas pblas scalapack_tools scalapack scalapack_c mumps
 cmake -S /tmp/stg-k16-asan -B /tmp/stg-k16-asan/build \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \

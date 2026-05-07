@@ -135,21 +135,6 @@ _DECL_START_RE = re.compile(
 )
 
 
-def _warn_on_fp_equivalence(source: str, target_mode: TargetMode) -> None:
-    """No-op kept for call-site compatibility.
-
-    Earlier versions emitted a warning for EQUIVALENCE statements
-    involving floating-point variables, because Fortran prohibits
-    EQUIVALENCE on non-SEQUENCE derived types and ``TYPE(float64x2)``
-    used to be a non-SEQUENCE type. The mock multifloats module now
-    declares both float64x2 and complex128x2 with the SEQUENCE
-    attribute (see github.com/kyungminlee/multifloats), so LAPACK
-    sources such as DLALN2 that EQUIVALENCE 2x2 work arrays compile
-    without manual fixups. The diagnostic is no longer needed.
-    """
-    return
-
-
 def fix_misdeclared_statement_functions(source: str) -> str:
     """Correct the declared type of statement functions whose body is
     a real-valued expression.
@@ -960,7 +945,11 @@ def replace_routine_names(line: str, rename_map: dict[str, str]) -> str:
     def case_replace(m):
         matched = m.group(0)
         new = upper_map[matched.upper()]
-        return new.upper() if matched.isupper() else (new.lower() if matched.islower() else new.upper())
+        if matched.isupper():
+            return new.upper()
+        if matched.islower():
+            return new.lower()
+        return new.capitalize()
 
     return pattern.sub(case_replace, line)
 
@@ -1111,17 +1100,21 @@ def replace_known_constants(
     # We must respect string literals when locating the '!'.
     code_end = len(line)
     in_str, qch = False, ''
-    for i, ch in enumerate(line):
+    i = 0
+    while i < len(line):
+        ch = line[i]
         if in_str:
             if ch == qch:
                 if i + 1 < len(line) and line[i + 1] == qch:
-                    continue  # doubled escape
+                    i += 2  # doubled-quote escape stays inside the string
+                    continue
                 in_str = False
         elif ch in ("'", '"'):
             in_str, qch = True, ch
         elif ch == '!':
             code_end = i
             break
+        i += 1
     code, tail = line[:code_end], line[code_end:]
 
     # Mask out string literal interiors in code segment.
@@ -2035,7 +2028,7 @@ _DECL_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 _IDENT_RE = re.compile(r"\b([A-Za-z_]\w*)\b")
-_STRING_RE = re.compile(r"'[^']*'|\"[^\"]*\"")
+_STRING_RE = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"")
 
 
 def _strip_strings_and_comments(line: str) -> str:
@@ -2202,10 +2195,6 @@ def specialize_use_module(source: str, target_mode: TargetMode, fixed_form: bool
             wrapped = _wrap_use_clause(indent, body, fixed_form)
             out[k] = wrapped
     return ''.join(out)
-
-
-# Keep old name as alias for backward compatibility
-specialize_use_multifloats = specialize_use_module
 
 
 def _wrap_use_clause(indent: str, body: str, fixed_form: bool) -> str:
@@ -2631,6 +2620,48 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
 def is_comment_line(line: str) -> bool:
     return bool(line) and line[0] in ('C', 'c', '*', '!')
 
+def _iter_outside_strings(text: str):
+    """Yield ``(i, ch)`` for each character in ``text`` that is NOT
+    inside a Fortran string literal. Recognizes both ``'`` and ``"``
+    delimiters and the Fortran doubled-quote escape (``''`` inside a
+    ``'``-string, ``""`` inside a ``"``-string).
+
+    Canonical primitive shared by every scanner that needs to find
+    inline ``!`` comments, count parens, or build a string-mask while
+    respecting quoted-literal boundaries.
+    """
+    n = len(text)
+    in_string = False
+    quote = ''
+    i = 0
+    while i < n:
+        ch = text[i]
+        if in_string:
+            if ch == quote:
+                if i + 1 < n and text[i + 1] == quote:
+                    # Doubled-quote escape — both chars stay in-string.
+                    i += 2
+                    continue
+                in_string = False
+        else:
+            if ch in ("'", '"'):
+                in_string = True
+                quote = ch
+            else:
+                yield i, ch
+        i += 1
+
+
+def _find_inline_bang(text: str) -> int:
+    """Return the index of the first inline ``!`` comment marker in
+    ``text``, or ``len(text)`` if none. Quote-aware (doubled-quote
+    escape included)."""
+    for i, ch in _iter_outside_strings(text):
+        if ch == '!':
+            return i
+    return len(text)
+
+
 def _count_open_parens(line: str) -> int:
     """Net paren delta for ``line`` ignoring quoted strings and inline
     fixed-form ``!`` / ``C`` / ``*`` comments. Used to track when a
@@ -2640,21 +2671,14 @@ def _count_open_parens(line: str) -> int:
         return 0
     if line[0] in ('C', 'c', '*'):
         return 0
-    body = line
-    in_s = in_d = False
     depth = 0
-    for ch in body:
-        if ch == "'" and not in_d:
-            in_s = not in_s
-        elif ch == '"' and not in_s:
-            in_d = not in_d
-        elif ch == '!' and not in_s and not in_d:
+    for _, ch in _iter_outside_strings(line):
+        if ch == '!':
             break
-        elif not in_s and not in_d:
-            if ch == '(':
-                depth += 1
-            elif ch == ')':
-                depth -= 1
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
     return depth
 
 
@@ -2670,21 +2694,14 @@ def is_continuation_line(line: str) -> bool:
     return len(line) > 5 and line[0:5] == '     ' and line[5] not in (' ', '0', '')
 
 def _build_split_mask(body: str) -> list[bool]:
-    mask = [True] * len(body)
-    in_string, quote_char, i = False, '', 0
-    while i < len(body):
-        ch = body[i]
-        if in_string:
-            mask[i] = False
-            if ch == quote_char:
-                if i + 1 < len(body) and body[i + 1] == quote_char:
-                    mask[i + 1] = False
-                    i += 2
-                    continue
-                in_string = False
-        elif ch in ("'", '"'):
-            in_string, quote_char, mask[i] = True, ch, False
-        i += 1
+    """Boolean mask over ``body`` — True at positions safe to split a
+    fixed-form line at (i.e. not inside a string literal). The opening
+    quote of a literal is itself marked unsafe, matching legacy
+    behavior so the splitter never lands a continuation marker
+    immediately before a string."""
+    mask = [False] * len(body)
+    for i, _ in _iter_outside_strings(body):
+        mask[i] = True
     return mask
 
 def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
@@ -2702,17 +2719,12 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
     # the whole line intact — fixed-form Fortran ignores columns past
     # 72, and we must NOT split across the comment (the text after
     # ``!`` would otherwise land on a continuation line as code).
-    # Scan for the first ``!`` outside a string literal.
-    in_s = in_d = False
-    for i, ch in enumerate(line):
-        if ch == "'" and not in_d:
-            in_s = not in_s
-        elif ch == '"' and not in_s:
-            in_d = not in_d
-        elif ch == '!' and not in_s and not in_d:
-            if i < 72:
-                return line
-            break
+    # Scan for the first ``!`` outside a string literal. If it sits
+    # within col 72 we must keep the line intact — splitting it would
+    # land the comment text on a continuation chunk.
+    bang = _find_inline_bang(line)
+    if bang < len(line) and bang < 72:
+        return line
     prefix, body = line[:6] if len(line) >= 6 else line.ljust(6), line[6:]
     safe = _build_split_mask(body)
     chunks = []
@@ -2750,14 +2762,9 @@ def _strip_inline_comment(text: str) -> str:
     Single-physical-line statements with ``s == joined`` go through the
     no-transform path and keep their comments verbatim from ``lines``.
     """
-    in_s = in_d = False
-    for i, ch in enumerate(text):
-        if ch == "'" and not in_d:
-            in_s = not in_s
-        elif ch == '"' and not in_s:
-            in_d = not in_d
-        elif ch == '!' and not in_s and not in_d:
-            return text[:i].rstrip()
+    bang = _find_inline_bang(text)
+    if bang < len(text):
+        return text[:bang].rstrip()
     return text
 
 
@@ -2838,8 +2845,6 @@ def _segment_fixed_form_statements(
 
 
 def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
-    if not target_mode.is_kind_based:
-        _warn_on_fp_equivalence(source, target_mode)
     complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
     real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source = fix_misdeclared_statement_functions(source)
@@ -2903,7 +2908,7 @@ def migrate_fixed_form(source: str, rename_map: dict[str, str], target_mode: Tar
                         '!    integer, parameter :: wp = kind(1.d0)', source)
 
     source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_multifloats(source, target_mode, fixed_form=True)
+    source = specialize_use_module(source, target_mode, fixed_form=True)
     return source
 
 
@@ -3033,8 +3038,6 @@ def _la_constants_rename_map(target_mode: TargetMode) -> dict[str, str]:
 
 
 def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: TargetMode) -> str:
-    if not target_mode.is_kind_based:
-        _warn_on_fp_equivalence(source, target_mode)
     complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
     real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
     source = rewrite_la_constants_use(source, target_mode)
@@ -3140,7 +3143,7 @@ def migrate_free_form(source: str, rename_map: dict[str, str], target_mode: Targ
                         '!    integer, parameter :: wp =', source)
 
     source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_multifloats(source, target_mode, fixed_form=False)
+    source = specialize_use_module(source, target_mode, fixed_form=False)
     return source
 
 
@@ -3644,7 +3647,7 @@ def _migrate_fixed_form_flang(source: str, rename_map: dict[str, str], target_mo
                         '!    integer, parameter :: wp = kind(1.d0)', source)
 
     source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_multifloats(source, target_mode, fixed_form=True)
+    source = specialize_use_module(source, target_mode, fixed_form=True)
     return source
 
 
@@ -3705,5 +3708,5 @@ def _migrate_free_form_flang(source: str, rename_map: dict[str, str], target_mod
                         '!    integer, parameter :: wp =', source)
 
     source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_multifloats(source, target_mode, fixed_form=False)
+    source = specialize_use_module(source, target_mode, fixed_form=False)
     return source

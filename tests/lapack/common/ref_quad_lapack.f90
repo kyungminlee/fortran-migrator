@@ -5180,7 +5180,7 @@ module ref_quad_lapack
             integer,     intent(out)   :: info
         end subroutine zunbdb_quad
 
-        recursive subroutine dorcsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
+        recursive subroutine dorcsd_quad(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
                                     m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, &
                                     X22, ldx22, theta, U1, ldu1, U2, ldu2, &
                                     V1t, ldv1t, V2t, ldv2t, work, lwork, iwork, info)
@@ -5193,9 +5193,9 @@ module ref_quad_lapack
             real(ep),  intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
             real(ep),  intent(out)   :: work(*)
             integer,   intent(out)   :: iwork(*), info
-        end subroutine dorcsd
+        end subroutine dorcsd_quad
 
-        recursive subroutine zuncsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
+        recursive subroutine zuncsd_quad(jobu1, jobu2, jobv1t, jobv2t, trans, signs, &
                                     m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, &
                                     X22, ldx22, theta, U1, ldu1, U2, ldu2, &
                                     V1t, ldv1t, V2t, ldv2t, &
@@ -5210,7 +5210,7 @@ module ref_quad_lapack
             complex(ep), intent(out)   :: work(*)
             real(ep),    intent(out)   :: rwork(*)
             integer,     intent(out)   :: iwork(*), info
-        end subroutine zuncsd
+        end subroutine zuncsd_quad
 
         subroutine dorcsd2by1_quad(jobu1, jobu2, jobv1t, m, p, q, X11, ldx11, &
                               X21, ldx21, theta, U1, ldu1, U2, ldu2, V1t, ldv1t, &
@@ -11992,6 +11992,43 @@ contains
         call zunbdb_quad(trans, signs, m, p, q, X11, ldx11, X12, ldx12, X21, ldx21, X22, ldx22, &
                          theta, phi, taup1, taup2, tauq1, tauq2, work, lwork, info)
     end subroutine zunbdb
+
+    recursive subroutine dorcsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, m, p, q, &
+                                X11, ldx11, X12, ldx12, X21, ldx21, X22, ldx22, theta, &
+                                U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                                work, lwork, iwork, info)
+        character, intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans, signs
+        integer,   intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+        integer,   intent(in)    :: ldu1, ldu2, ldv1t, ldv2t, lwork
+        real(ep),  intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+        real(ep),  intent(out)   :: theta(*)
+        real(ep),  intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+        real(ep),  intent(out)   :: work(*)
+        integer,   intent(out)   :: iwork(*), info
+        call dorcsd_quad(jobu1, jobu2, jobv1t, jobv2t, trans, signs, m, p, q, &
+                         X11, ldx11, X12, ldx12, X21, ldx21, X22, ldx22, theta, &
+                         U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                         work, lwork, iwork, info)
+    end subroutine dorcsd
+
+    recursive subroutine zuncsd(jobu1, jobu2, jobv1t, jobv2t, trans, signs, m, p, q, &
+                                X11, ldx11, X12, ldx12, X21, ldx21, X22, ldx22, theta, &
+                                U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                                work, lwork, rwork, lrwork, iwork, info)
+        character,   intent(in)    :: jobu1, jobu2, jobv1t, jobv2t, trans, signs
+        integer,     intent(in)    :: m, p, q, ldx11, ldx12, ldx21, ldx22
+        integer,     intent(in)    :: ldu1, ldu2, ldv1t, ldv2t, lwork, lrwork
+        complex(ep), intent(inout) :: X11(ldx11,*), X12(ldx12,*), X21(ldx21,*), X22(ldx22,*)
+        real(ep),    intent(out)   :: theta(*)
+        complex(ep), intent(out)   :: U1(ldu1,*), U2(ldu2,*), V1t(ldv1t,*), V2t(ldv2t,*)
+        complex(ep), intent(out)   :: work(*)
+        real(ep),    intent(out)   :: rwork(*)
+        integer,     intent(out)   :: iwork(*), info
+        call zuncsd_quad(jobu1, jobu2, jobv1t, jobv2t, trans, signs, m, p, q, &
+                         X11, ldx11, X12, ldx12, X21, ldx21, X22, ldx22, theta, &
+                         U1, ldu1, U2, ldu2, V1t, ldv1t, V2t, ldv2t, &
+                         work, lwork, rwork, lrwork, iwork, info)
+    end subroutine zuncsd
 
     subroutine dorcsd2by1(jobu1, jobu2, jobv1t, m, p, q, X11, ldx11, X21, ldx21, theta, U1, ldu1, U2, &
                           ldu2, V1t, ldv1t, work, lwork, iwork, info)

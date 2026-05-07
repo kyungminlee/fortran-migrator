@@ -1,5 +1,7 @@
 # Upstream bugs in vendored Netlib sources
 
+*Last catalogued: 2026-05-06*
+
 This document catalogues bugs found in the vendored upstream sources
 (`external/lapack-3.12.1/`, `external/scalapack-2.2.3/`, etc.) that
 the migrator works around without editing `external/`. Each entry
@@ -969,3 +971,138 @@ case that surfaced the bug upstream is not in our test matrix
 sites of each file. Same `N`-vs-`L` pattern as the `P?LARZB`
 PBxTRAN fix landed earlier (commit `75714cb` upstream). Wired via
 the same `source_overrides` entries.
+
+---
+
+## ScaLAPACK 2.2.3: `pzungql.f` / `pzunml2.f` post-loop `PB_TOPGET` should be `PB_TOPSET`
+
+**Symptom.** `PZUNGQL` / `PZUNML2` (the Z-half QL-form orthogonal-
+generator and apply routines) leak modified BLACS broadcast topology
+state on return: a caller that observes `'Broadcast', 'Rowwise'` /
+`'Broadcast', 'Columnwise'` after the call sees the algorithm's
+internal `'I-ring'` / `' '` settings instead of the caller's original
+topology. Subsequent BLACS operations from that context inherit the
+wrong topology until the caller manually re-sets it. The C-half
+(`PCUNGQL` / `PCUNML2`) does the correct restore.
+
+**Root cause.** Save/restore copy-paste error. The standard
+ScaLAPACK pattern is `PB_TOPGET` at entry to save, `PB_TOPSET` to
+install algorithm-specific settings, then `PB_TOPSET` at exit to
+restore the saved values. In `pzungql.f`:
+
+```fortran
+*  L247-248 — save original
+      CALL PB_TOPGET( ICTXT, 'Broadcast', 'Rowwise', ROWBTOP )
+      CALL PB_TOPGET( ICTXT, 'Broadcast', 'Columnwise', COLBTOP )
+*  L249-250 — install algorithm's needs
+      CALL PB_TOPSET( ICTXT, 'Broadcast', 'Rowwise', 'I-ring' )
+      CALL PB_TOPSET( ICTXT, 'Broadcast', 'Columnwise', ' ' )
+      ...
+*  L292-293 — should be PB_TOPSET to restore
+      CALL PB_TOPGET( ICTXT, 'Broadcast', 'Rowwise', ROWBTOP )
+      CALL PB_TOPGET( ICTXT, 'Broadcast', 'Columnwise', COLBTOP )
+```
+
+The exit-side calls re-read into the same locals (no-op) instead of
+writing the saved values back. `pzunml2.f` carries the same pattern
+on lines 394-395.
+
+**Affected files.**
+- `external/scalapack-2.2.3/SRC/pzungql.f` (lines 292-293).
+- `external/scalapack-2.2.3/SRC/pzunml2.f` (lines 394-395).
+- `external/scalapack-2.2.3/SRC/pcungql.f` — *not* affected (uses
+  `PB_TOPSET` correctly).
+- `external/scalapack-2.2.3/SRC/pcunml2.f` — *not* affected.
+
+The S/D halves (`psorgql.f` / `psormql.f` / `pdorgql.f` /
+`pdormql.f`) — checking is left to a follow-up; the immediate
+migrator concern is the Z half because that's what the differential
+suite exercises.
+
+**Fix in-tree.** No `source_overrides` body — the C-half is already
+correct. Recipe pins the C-half as canonical via
+`prefer_source: PCUNGQL / PCUNML2` so the convergence picker takes
+the C body and the migrator generates correct `Q`/`X`/`E`/`Y` clones
+with `PB_TOPSET` at the restore site. Standard-precision archive
+built from unmodified `external/` still has the bug.
+
+**Why upstream's tests miss it.** The leak is silent on tests that
+don't observe BLACS topology between calls — most ScaLAPACK test
+drivers run a single algorithm per context and tear the grid down,
+so the state-leak never surfaces as a test-detectable behavior.
+Reproducing requires calling `PZUNGQL` (or `PZUNML2`), then
+inspecting `PB_TOPGET` results, then calling another routine that
+relies on default broadcast topology — a usage pattern the upstream
+test cycle doesn't exercise.
+
+**Upstream report.** Not yet filed.
+
+---
+
+## MUMPS 5.8.2: bad-input cases SIGSEGV instead of returning `INFOG(1) < 0`
+
+**Symptom.** The MUMPS user guide documents that input-validation
+failures populate `id%INFOG(1)` with a negative error code (e.g.
+`-16` for an invalid `N`, `-6` for IRN/JCN out of range) and return
+control to the caller. In practice, MUMPS 5.8.2 SIGSEGVs on every
+invalid-input case the differential-precision suite tried, before
+any diagnostic is written. Concretely:
+
+- `id%N = -1` (or `id%N = 0`) at JOB=1 — SIGSEGV inside analysis,
+  no `INFOG(1)` set.
+- `id%NNZ = -1` (negative count) — SIGSEGV during pattern setup.
+- `id%IRN(1) = N + 5` (out-of-range row index, high) — SIGSEGV
+  inside the input-reformatting path.
+- `id%IRN(1) = 0` (out-of-range row index, low — zero is invalid
+  under 1-based indexing) — same crash signature.
+- `id%JCN(1) = N + 3` / `id%JCN(1) = 0` — symmetric to IRN.
+- `id%NNZ` mismatched against the actual `IRN/JCN/A` sizes
+  (e.g. `NNZ = 0` with non-empty arrays, or `NNZ` larger than
+  what the arrays hold) — SIGSEGV during reformatting.
+
+The crashes are unconditional: the analysis / pattern-setup code
+doesn't bounds-check the user's IRN/JCN/N/NNZ before indexing into
+internal work arrays sized from those same values, so a wrong value
+either dereferences past the end of a fresh allocation or hits an
+arena boundary.
+
+**Root cause (inferred — not from upstream).** `*MUMPS_ANA_DRIVER`
+and the IRN/JCN reformatters trust the assembled-format inputs the
+user sets in the `id` struct. There is a `MUMPS_ANA_F_CHECK` (and
+similar) helper internally, but it isn't invoked early enough — by
+the time it would run, the analysis code has already indexed past
+end-of-buffer using N or IRN values it never validated. So the
+manual's promised `INFOG(1) < 0` return is a documented-but-unwired
+contract: the validation pass exists in name but doesn't gate the
+indexing it's supposed to protect.
+
+**Affected files.** Symptom is observed at the `?MUMPS` driver
+entry point; the actual crashing site varies per case (analysis
+driver, IRN/JCN reformatter, pattern-set work-array sizing). All
+under `external/MUMPS_5.8.2/src/`. Not narrowed to a specific
+file because the workaround sidesteps the issue at the caller
+rather than patching MUMPS internals.
+
+**Workaround (in-tree, not an override).** Per
+`tests/mumps/TODO.md` D1, the differential-precision wrapper at
+`tests/mumps/common/target_mumps_body.fypp` exports
+`check_dmumps_input` / `check_zmumps_input` that mirror the
+documented validation contract before any `?MUMPS` call. They
+return integer codes (`MIC_BAD_N`, `MIC_BAD_NNZ`, `MIC_BAD_IRN`,
+`MIC_BAD_JCN`, `MIC_SIZE_MISMATCH`, `MIC_OK`). Tests at
+`tests/mumps/fortran/test_{d,z}mumps_errors.f90` exercise each
+class plus a final valid-input pass that reaches `MIC_OK` and
+factors via `JOB=6` to confirm the wrapper isn't over-rejecting.
+This is a *test-side* contract simulator — it lets us assert the
+documented behavior without crashing the test harness, but does
+not modify MUMPS itself. A real caller still has to pre-validate
+their inputs externally to avoid the SIGSEGV.
+
+**Why upstream's tests miss it.** MUMPS's own test drivers
+(`*examples/`) feed valid matrices only. The validation contract
+documented in the user guide is asserted by the prose, not by any
+shipped test that passes a deliberately bad `id` struct and
+checks `INFOG(1)`. So the gap between "documented" and "wired" is
+invisible to the upstream test cycle.
+
+**Upstream report.** Not yet filed.

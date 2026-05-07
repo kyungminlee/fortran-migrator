@@ -64,12 +64,16 @@ def cmd_diverge(args):
     )
     total = len(report)
     # Optional filtering on diff content.
-    if args.grep:
-        pat = re.compile(args.grep, re.IGNORECASE)
-        report = [r for r in report if any(pat.search(l) for l in r['diff'])]
-    if args.exclude:
-        pat = re.compile(args.exclude, re.IGNORECASE)
-        report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+    try:
+        if args.grep:
+            pat = re.compile(args.grep, re.IGNORECASE)
+            report = [r for r in report if any(pat.search(l) for l in r['diff'])]
+        if args.exclude:
+            pat = re.compile(args.exclude, re.IGNORECASE)
+            report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+    except re.error as exc:
+        print(f'error: invalid regex: {exc}', file=sys.stderr)
+        return 2
 
     for entry in report:
         header = (f'### {entry["other"]} vs {entry["canonical"]}'
@@ -87,6 +91,7 @@ def cmd_diverge(args):
         print(f'{shown} shown / {total} divergent pairs')
     else:
         print(f'{total} divergent pairs')
+    return 1 if total else 0
 
 
 def cmd_converge(args):
@@ -102,12 +107,16 @@ def cmd_converge(args):
         parser_cmd=parser_cmd,
     )
     total = len(report)
-    if args.grep:
-        pat = re.compile(args.grep, re.IGNORECASE)
-        report = [r for r in report if any(pat.search(l) for l in r['diff'])]
-    if args.exclude:
-        pat = re.compile(args.exclude, re.IGNORECASE)
-        report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+    try:
+        if args.grep:
+            pat = re.compile(args.grep, re.IGNORECASE)
+            report = [r for r in report if any(pat.search(l) for l in r['diff'])]
+        if args.exclude:
+            pat = re.compile(args.exclude, re.IGNORECASE)
+            report = [r for r in report if not any(pat.search(l) for l in r['diff'])]
+    except re.error as exc:
+        print(f'error: invalid regex: {exc}', file=sys.stderr)
+        return 2
 
     for entry in report:
         if entry['status'] == 'missing':
@@ -134,6 +143,8 @@ def cmd_converge(args):
               f'({diverged} diverged, {missing} missing on disk)')
     else:
         print(f'{diverged} diverged, {missing} missing on disk')
+    # Non-zero exit when there are real problems so CI gates on this.
+    return 1 if (diverged or missing) else 0
 
 
 def _is_fixed_form_comment(line: str) -> bool:
@@ -730,29 +741,42 @@ def cmd_build(args):
     if config.language != 'c' and args.fc:
         configure_args.append(f'-DCMAKE_Fortran_COMPILER={args.fc}')
 
+    build_dir.mkdir(parents=True, exist_ok=True)
+    configure_log = build_dir / 'configure.log'
+    build_log = build_dir / 'build.log'
+
     print(f'\nConfiguring...')
-    r = subprocess.run(configure_args, capture_output=True, text=True)
+    with configure_log.open('w') as logf:
+        r = subprocess.run(configure_args, stdout=logf,
+                           stderr=subprocess.STDOUT, text=True)
     if r.returncode != 0:
-        print(r.stderr, file=sys.stderr)
+        # Tail the log to stderr so the user sees the actual cause.
+        log_text = configure_log.read_text(errors='replace')
+        tail = log_text.splitlines()[-50:]
+        print('\n'.join(tail), file=sys.stderr)
+        print(f'\nConfigure failed; full log: {configure_log}', file=sys.stderr)
         sys.exit(1)
 
     # Build (parallel)
     jobs = os.cpu_count() or 4
     print(f'Building ({jobs} parallel jobs)...')
-    r = subprocess.run(
-        [cmake_cmd, '--build', str(build_dir), '-j', str(jobs)],
-        capture_output=True, text=True,
-    )
+    with build_log.open('w') as logf:
+        r = subprocess.run(
+            [cmake_cmd, '--build', str(build_dir), '-j', str(jobs)],
+            stdout=logf, stderr=subprocess.STDOUT, text=True,
+        )
     if r.returncode != 0:
-        # Show failures
-        for line in r.stderr.splitlines():
-            if 'error' in line.lower() or 'Error' in line:
-                print(f'  {line}')
-        # Count pass/fail from build output
-        lines = r.stdout.splitlines() + r.stderr.splitlines()
-        errors = [l for l in lines if 'Error:' in l]
-        print(f'\nBuild failed with {len(errors)} error(s)')
-        print(f'Full log: {build_dir}/')
+        log_text = build_log.read_text(errors='replace')
+        lines = log_text.splitlines()
+        # Surface lines mentioning errors plus the last 50 lines for context.
+        err_lines = [l for l in lines
+                     if ': error' in l.lower() or 'Error:' in l]
+        for l in err_lines[:30]:
+            print(f'  {l}')
+        print('\n--- last 50 lines of build.log ---', file=sys.stderr)
+        print('\n'.join(lines[-50:]), file=sys.stderr)
+        print(f'\nBuild failed ({len(err_lines)} error line(s) detected); '
+              f'full log: {build_log}', file=sys.stderr)
         sys.exit(1)
 
     # Report results
@@ -802,17 +826,19 @@ def cmd_run(args):
         args.full = False
     if not hasattr(args, 'max_width'):
         args.max_width = 200
-    cmd_converge(args)
+    rc_converge = cmd_converge(args) or 0
 
     print()
     print('=' * 60)
     print('  Step 3: Verify')
     print('=' * 60)
     args.output_dir = output_dir
+    rc_verify = 0
     try:
         cmd_verify(args)
     except SystemExit as e:
         if e.code:
+            rc_verify = int(e.code) if isinstance(e.code, int) else 1
             print('Verify failed, continuing...')
 
     print()
@@ -820,7 +846,9 @@ def cmd_run(args):
     print('  Step 4: Build (CMake)')
     print('=' * 60)
     args.output_dir = output_dir
-    cmd_build(args)
+    rc_build = cmd_build(args) or 0
+
+    return rc_build or rc_verify or rc_converge
 
 
 # Topologically sorted library build order for the unified CMake project.
@@ -1424,7 +1452,9 @@ def main():
     p.set_defaults(func=cmd_stage)
 
     args = parser.parse_args()
-    args.func(args)
+    rc = args.func(args)
+    if isinstance(rc, int) and rc != 0:
+        sys.exit(rc)
 
 
 if __name__ == '__main__':
