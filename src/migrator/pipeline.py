@@ -103,13 +103,28 @@ def _strip_fortran_comments(text: str, ext: str) -> str:
 
 def _strip_inline_bang(line: str) -> str:
     in_s = in_d = False
-    for i, ch in enumerate(line):
-        if ch == "'" and not in_d:
-            in_s = not in_s
-        elif ch == '"' and not in_s:
-            in_d = not in_d
-        elif ch == '!' and not in_s and not in_d:
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if in_s:
+            if ch == "'":
+                if i + 1 < len(line) and line[i + 1] == "'":
+                    i += 2
+                    continue
+                in_s = False
+        elif in_d:
+            if ch == '"':
+                if i + 1 < len(line) and line[i + 1] == '"':
+                    i += 2
+                    continue
+                in_d = False
+        elif ch == "'":
+            in_s = True
+        elif ch == '"':
+            in_d = True
+        elif ch == '!':
             return line[:i]
+        i += 1
     return line
 
 

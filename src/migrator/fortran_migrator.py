@@ -2708,15 +2708,30 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
     # ``!`` would otherwise land on a continuation line as code).
     # Scan for the first ``!`` outside a string literal.
     in_s = in_d = False
-    for i, ch in enumerate(line):
-        if ch == "'" and not in_d:
-            in_s = not in_s
-        elif ch == '"' and not in_s:
-            in_d = not in_d
-        elif ch == '!' and not in_s and not in_d:
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if in_s:
+            if ch == "'":
+                if i + 1 < len(line) and line[i + 1] == "'":
+                    i += 2
+                    continue
+                in_s = False
+        elif in_d:
+            if ch == '"':
+                if i + 1 < len(line) and line[i + 1] == '"':
+                    i += 2
+                    continue
+                in_d = False
+        elif ch == "'":
+            in_s = True
+        elif ch == '"':
+            in_d = True
+        elif ch == '!':
             if i < 72:
                 return line
             break
+        i += 1
     prefix, body = line[:6] if len(line) >= 6 else line.ljust(6), line[6:]
     safe = _build_split_mask(body)
     chunks = []
@@ -2755,13 +2770,28 @@ def _strip_inline_comment(text: str) -> str:
     no-transform path and keep their comments verbatim from ``lines``.
     """
     in_s = in_d = False
-    for i, ch in enumerate(text):
-        if ch == "'" and not in_d:
-            in_s = not in_s
-        elif ch == '"' and not in_s:
-            in_d = not in_d
-        elif ch == '!' and not in_s and not in_d:
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if in_s:
+            if ch == "'":
+                if i + 1 < len(text) and text[i + 1] == "'":
+                    i += 2
+                    continue
+                in_s = False
+        elif in_d:
+            if ch == '"':
+                if i + 1 < len(text) and text[i + 1] == '"':
+                    i += 2
+                    continue
+                in_d = False
+        elif ch == "'":
+            in_s = True
+        elif ch == '"':
+            in_d = True
+        elif ch == '!':
             return text[:i].rstrip()
+        i += 1
     return text
 
 
