@@ -228,7 +228,7 @@ def load_recipe(recipe_path: Path,
     source_dir = project_root / data['source_dir']
 
     library_path = None
-    symbols_cfg = data.get('symbols', {})
+    symbols_cfg = data.get('symbols') or {}
     if symbols_cfg.get('library_path'):
         library_path = project_root / symbols_cfg['library_path']
 
@@ -273,7 +273,7 @@ def load_recipe(recipe_path: Path,
         extensions=[e.lower() for e in data.get('extensions', ['.f', '.f90'])],
         symbols_method=symbols_cfg.get('method', 'scan_source'),
         library_path=library_path,
-        prefix_style=data.get('prefix', {}).get('style', 'direct'),
+        prefix_style=(data.get('prefix') or {}).get('style', 'direct'),
         skip_files=skip,
         copy_files=copy,
         prefer_source=prefer,
