@@ -749,7 +749,12 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
                         desc='  Migrating', unit='file',
                         mininterval=1.0, miniters=10):
             p = futures[fut]
-            results[p] = fut.result()
+            try:
+                results[p] = fut.result()
+            except Exception as exc:
+                print(f'  warning: migration crashed on {p.name}: '
+                      f'{type(exc).__name__}: {exc}', file=sys.stderr)
+                results[p] = None
 
     # Reduce in deterministic D/Z-first order.
     for src_path in to_migrate:
