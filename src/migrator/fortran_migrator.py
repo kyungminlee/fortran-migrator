@@ -2620,6 +2620,48 @@ def insert_use_multifloats(source: str, target_mode: TargetMode,
 def is_comment_line(line: str) -> bool:
     return bool(line) and line[0] in ('C', 'c', '*', '!')
 
+def _iter_outside_strings(text: str):
+    """Yield ``(i, ch)`` for each character in ``text`` that is NOT
+    inside a Fortran string literal. Recognizes both ``'`` and ``"``
+    delimiters and the Fortran doubled-quote escape (``''`` inside a
+    ``'``-string, ``""`` inside a ``"``-string).
+
+    Canonical primitive shared by every scanner that needs to find
+    inline ``!`` comments, count parens, or build a string-mask while
+    respecting quoted-literal boundaries.
+    """
+    n = len(text)
+    in_string = False
+    quote = ''
+    i = 0
+    while i < n:
+        ch = text[i]
+        if in_string:
+            if ch == quote:
+                if i + 1 < n and text[i + 1] == quote:
+                    # Doubled-quote escape — both chars stay in-string.
+                    i += 2
+                    continue
+                in_string = False
+        else:
+            if ch in ("'", '"'):
+                in_string = True
+                quote = ch
+            else:
+                yield i, ch
+        i += 1
+
+
+def _find_inline_bang(text: str) -> int:
+    """Return the index of the first inline ``!`` comment marker in
+    ``text``, or ``len(text)`` if none. Quote-aware (doubled-quote
+    escape included)."""
+    for i, ch in _iter_outside_strings(text):
+        if ch == '!':
+            return i
+    return len(text)
+
+
 def _count_open_parens(line: str) -> int:
     """Net paren delta for ``line`` ignoring quoted strings and inline
     fixed-form ``!`` / ``C`` / ``*`` comments. Used to track when a
@@ -2629,21 +2671,14 @@ def _count_open_parens(line: str) -> int:
         return 0
     if line[0] in ('C', 'c', '*'):
         return 0
-    body = line
-    in_s = in_d = False
     depth = 0
-    for ch in body:
-        if ch == "'" and not in_d:
-            in_s = not in_s
-        elif ch == '"' and not in_s:
-            in_d = not in_d
-        elif ch == '!' and not in_s and not in_d:
+    for _, ch in _iter_outside_strings(line):
+        if ch == '!':
             break
-        elif not in_s and not in_d:
-            if ch == '(':
-                depth += 1
-            elif ch == ')':
-                depth -= 1
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
     return depth
 
 
@@ -2659,21 +2694,14 @@ def is_continuation_line(line: str) -> bool:
     return len(line) > 5 and line[0:5] == '     ' and line[5] not in (' ', '0', '')
 
 def _build_split_mask(body: str) -> list[bool]:
-    mask = [True] * len(body)
-    in_string, quote_char, i = False, '', 0
-    while i < len(body):
-        ch = body[i]
-        if in_string:
-            mask[i] = False
-            if ch == quote_char:
-                if i + 1 < len(body) and body[i + 1] == quote_char:
-                    mask[i + 1] = False
-                    i += 2
-                    continue
-                in_string = False
-        elif ch in ("'", '"'):
-            in_string, quote_char, mask[i] = True, ch, False
-        i += 1
+    """Boolean mask over ``body`` — True at positions safe to split a
+    fixed-form line at (i.e. not inside a string literal). The opening
+    quote of a literal is itself marked unsafe, matching legacy
+    behavior so the splitter never lands a continuation marker
+    immediately before a string."""
+    mask = [False] * len(body)
+    for i, _ in _iter_outside_strings(body):
+        mask[i] = True
     return mask
 
 def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
@@ -2691,32 +2719,12 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
     # the whole line intact — fixed-form Fortran ignores columns past
     # 72, and we must NOT split across the comment (the text after
     # ``!`` would otherwise land on a continuation line as code).
-    # Scan for the first ``!`` outside a string literal.
-    in_s = in_d = False
-    i = 0
-    while i < len(line):
-        ch = line[i]
-        if in_s:
-            if ch == "'":
-                if i + 1 < len(line) and line[i + 1] == "'":
-                    i += 2
-                    continue
-                in_s = False
-        elif in_d:
-            if ch == '"':
-                if i + 1 < len(line) and line[i + 1] == '"':
-                    i += 2
-                    continue
-                in_d = False
-        elif ch == "'":
-            in_s = True
-        elif ch == '"':
-            in_d = True
-        elif ch == '!':
-            if i < 72:
-                return line
-            break
-        i += 1
+    # Scan for the first ``!`` outside a string literal. If it sits
+    # within col 72 we must keep the line intact — splitting it would
+    # land the comment text on a continuation chunk.
+    bang = _find_inline_bang(line)
+    if bang < len(line) and bang < 72:
+        return line
     prefix, body = line[:6] if len(line) >= 6 else line.ljust(6), line[6:]
     safe = _build_split_mask(body)
     chunks = []
@@ -2754,29 +2762,9 @@ def _strip_inline_comment(text: str) -> str:
     Single-physical-line statements with ``s == joined`` go through the
     no-transform path and keep their comments verbatim from ``lines``.
     """
-    in_s = in_d = False
-    i = 0
-    while i < len(text):
-        ch = text[i]
-        if in_s:
-            if ch == "'":
-                if i + 1 < len(text) and text[i + 1] == "'":
-                    i += 2
-                    continue
-                in_s = False
-        elif in_d:
-            if ch == '"':
-                if i + 1 < len(text) and text[i + 1] == '"':
-                    i += 2
-                    continue
-                in_d = False
-        elif ch == "'":
-            in_s = True
-        elif ch == '"':
-            in_d = True
-        elif ch == '!':
-            return text[:i].rstrip()
-        i += 1
+    bang = _find_inline_bang(text)
+    if bang < len(text):
+        return text[:bang].rstrip()
     return text
 
 

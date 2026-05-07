@@ -14,7 +14,12 @@ from pathlib import Path
 from .config import RecipeConfig, load_recipe
 from .symbol_scanner import scan_symbols
 from .prefix_classifier import classify_symbols, build_rename_map
-from .fortran_migrator import migrate_file, migrate_file_to_string, target_filename
+from .fortran_migrator import (
+    _find_inline_bang,
+    migrate_file,
+    migrate_file_to_string,
+    target_filename,
+)
 from .c_migrator import migrate_c_directory, migrate_c_file_to_string, _build_sub_vars, _expand_template
 from .target_mode import TargetMode
 
@@ -104,30 +109,7 @@ def _strip_fortran_comments(text: str, ext: str) -> str:
 
 
 def _strip_inline_bang(line: str) -> str:
-    in_s = in_d = False
-    i = 0
-    while i < len(line):
-        ch = line[i]
-        if in_s:
-            if ch == "'":
-                if i + 1 < len(line) and line[i + 1] == "'":
-                    i += 2
-                    continue
-                in_s = False
-        elif in_d:
-            if ch == '"':
-                if i + 1 < len(line) and line[i + 1] == '"':
-                    i += 2
-                    continue
-                in_d = False
-        elif ch == "'":
-            in_s = True
-        elif ch == '"':
-            in_d = True
-        elif ch == '!':
-            return line[:i]
-        i += 1
-    return line
+    return line[:_find_inline_bang(line)]
 
 
 def _strip_real_cmplx_casts(text: str) -> str:

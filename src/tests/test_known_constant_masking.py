@@ -50,6 +50,19 @@ def test_inline_comment_after_clean_string_still_truncates():
     assert '! ZERO is the additive identity' in out
 
 
+def test_double_quoted_doubled_quote_inside_string_keeps_inline_bang_protected():
+    """Same masker invariant as the ``''`` test, but using Fortran's
+    other string delimiter — ``"`` — and its doubled-quote escape
+    ``""``. The fix in commit 43c6b7c6 covered this path but no test
+    exercised it."""
+    target = _mf()
+    line = '      X = "foo"" !ZERO" // ZERO'
+    out = replace_known_constants(line, target)
+    assert '//' in out
+    assert out.rstrip().endswith('DD_ZERO')
+    assert '"foo"" !ZERO"' in out
+
+
 def test_kind_based_target_is_a_no_op():
     """Sanity: the function gates on ``is_kind_based`` and returns the
     line unchanged for kind10/kind16."""
