@@ -7,6 +7,7 @@ Usage:
 
 import os
 import re
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -912,8 +913,9 @@ def run_divergence_report(recipe_path: Path, target_mode=None,
             try:
                 _, migrated = fut.result()
                 texts[p] = migrated
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f'  warning: migration crashed on {p.name}: '
+                      f'{type(exc).__name__}: {exc}', file=sys.stderr)
 
     report: list[dict] = []
     for canonical, other in pairs:
@@ -1025,8 +1027,9 @@ def run_convergence_report(recipe_path: Path, output_dir: Path,
             try:
                 _, migrated = fut.result()
                 texts[p] = migrated
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f'  warning: re-migration crashed on {p.name}: '
+                      f'{type(exc).__name__}: {exc}', file=sys.stderr)
 
     report: list[dict] = []
     for canonical, other in pairs:
@@ -1130,7 +1133,9 @@ def run_c_convergence_report(recipe_path: Path, output_dir: Path,
                 classification=classification,
                 c_type_aliases=config.c_type_aliases,
             )
-        except Exception:
+        except Exception as exc:
+            print(f'  warning: C re-migration crashed on {p.name}: '
+                  f'{type(exc).__name__}: {exc}', file=sys.stderr)
             continue
         if res is None:
             continue
