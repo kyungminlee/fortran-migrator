@@ -4,6 +4,17 @@ Release notes live on the [GitHub releases page](https://github.com/kyungminlee/
 this file summarizes each tagged version. The current version is in
 [VERSION](VERSION).
 
+## v0.19.0
+
+- Documentation converged on the scheme shared with epblas-parallel and
+  multifloats: `doc/build.sh` is the canonical build entry, and the
+  furo/MyST Sphinx site now covers both the user and developer guides.
+- Rendered HTML is published to GitHub Pages
+  (https://kyungminlee.github.io/eplinalg/) instead of shipping as a
+  release asset: the `eplinalg-vX.Y.Z-docs-html.tar.gz` asset and the
+  HTML in the combined archive are gone. Markdown documentation still
+  ships in every install tree under `share/doc/eplinalg/`.
+
 ## v0.18.0
 
 - User documentation ships with the binary release: the Sphinx HTML
