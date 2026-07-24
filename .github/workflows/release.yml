@@ -113,8 +113,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          # doc/ is needed by the "Add documentation" step below; root
+          # files (README.md, LICENSE, CHANGELOG.md) are always included
+          # by cone-mode sparse checkout.
           sparse-checkout: |
             cmake/
+            doc/
 
       - name: Download staged sources
         uses: actions/download-artifact@v7
