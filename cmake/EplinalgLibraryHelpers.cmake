@@ -138,9 +138,14 @@ function(add_standard_c_library name src_dir)
     if(_std_COMPILE_DEFINITIONS)
         target_compile_definitions(${name} PRIVATE ${_std_COMPILE_DEFINITIONS})
     endif()
+    # PRIVATE is enough to reach the consumer: a STATIC archive carries
+    # none of its dependencies, so CMake records its PRIVATE link items
+    # in INTERFACE_LINK_LIBRARIES wrapped in $<LINK_ONLY:…> — the link
+    # dependency propagates, the C-only compile flags do not. Adding an
+    # explicit INTERFACE $<LINK_ONLY:MPI::MPI_C> on top only duplicates
+    # the entry in the exported interface.
     if(MPI_C_FOUND)
         target_link_libraries(${name} PRIVATE MPI::MPI_C)
-        target_link_libraries(${name} INTERFACE $<LINK_ONLY:MPI::MPI_C>)
     endif()
 endfunction()
 
@@ -254,13 +259,14 @@ function(add_migrated_c_library lib_name)
         add_library(${_common_target} STATIC ${_common})
         target_include_directories(${_common_target} PUBLIC $<BUILD_INTERFACE:${_dir}/src>)
         if(MPI_C_FOUND)
-            # Link MPI privately (needed for compiling the C sources) and
-            # propagate it via INTERFACE link-only, so downstream Fortran
-            # targets inherit the link dependency without MPI's C-only
-            # compile flags (e.g. mpich's ``-ffat-lto-objects`` is rejected
-            # by flang-new-20).
+            # PRIVATE covers both needs. It gives the C sources the MPI
+            # include path to compile against, and because this is a
+            # STATIC archive CMake also records it as $<LINK_ONLY:…> in
+            # INTERFACE_LINK_LIBRARIES, so downstream Fortran targets
+            # inherit the link dependency without MPI's C-only compile
+            # flags (e.g. mpich's ``-ffat-lto-objects``, which
+            # flang-new-20 rejects). No explicit INTERFACE line needed.
             target_link_libraries(${_common_target} PRIVATE MPI::MPI_C)
-            target_link_libraries(${_common_target} INTERFACE $<LINK_ONLY:MPI::MPI_C>)
         endif()
     endif()
 
@@ -270,8 +276,8 @@ function(add_migrated_c_library lib_name)
         target_link_libraries(${_precision_target} PUBLIC ${_common_target})
     endif()
     if(MPI_C_FOUND)
+        # PRIVATE alone; see the note on ${_common_target} above.
         target_link_libraries(${_precision_target} PRIVATE MPI::MPI_C)
-        target_link_libraries(${_precision_target} INTERFACE $<LINK_ONLY:MPI::MPI_C>)
     endif()
 
     # Dual-interface compile: files listed in

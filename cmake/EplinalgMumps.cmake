@@ -163,6 +163,19 @@ macro(_eplinalg_mumps_metis)
             if(NOT MSVC)
                 target_compile_options(metis PRIVATE -w -fno-strict-aliasing)
             endif()
+            # METIS's coarsening and refinement heuristics call log/pow/
+            # sqrt (`nm -u libmetis_mumps.a` lists log, pow, powf, sqrt),
+            # so libm belongs in the PUBLIC interface of the installed
+            # eplinalg::metis. In-tree nothing noticed: every link so far
+            # ran through the gfortran driver, and libgfortran.so itself
+            # carries NEEDED libm.so.6. A C consumer of the installed
+            # package links no Fortran runtime and fails outright with
+            # `undefined reference to sqrt`. This is the one archive in
+            # the stack where the missing declaration is a live failure
+            # rather than latent, precisely because it is pure C.
+            if(UNIX)
+                target_link_libraries(metis PUBLIC m)
+            endif()
             set(MUMPS_HAVE_METIS TRUE)
             message(STATUS "MUMPS: METIS ordering enabled (ICNTL(7)=5)")
         endif()
@@ -278,6 +291,12 @@ macro(_eplinalg_mumps_scotch)
             target_compile_options(esmumps PRIVATE
                 "SHELL:-include ${_mumps_scotch_inc}/scotch_rename_mumps.h")
             target_link_libraries(esmumps PUBLIC scotch)
+            # Scotch's graph mapping calls fmod; same reasoning as the
+            # metis libm declaration above. esmumps needs no separate
+            # entry — it PUBLIC-links scotch and inherits it.
+            if(UNIX)
+                target_link_libraries(scotch PUBLIC m)
+            endif()
 
             # Scotch is warning-noisy; quiet it rather than drown the log.
             # It also leans on a "based array" idiom (`tab = ptr - baseval`,
@@ -757,10 +776,12 @@ macro(_eplinalg_mumps_c_bridge)
                 "SHELL:$<$<COMPILE_LANGUAGE:C>:-include ${_mumps_scotch_inc}/scotch_rename_pt_mumps.h>")
             target_link_libraries(mumps_common PUBLIC ptscotch)
         endif()
+        # PRIVATE only: a STATIC archive exports its PRIVATE link items
+        # as $<LINK_ONLY:…>, so the consumer inherits the MPI link
+        # without the C compile flags. An explicit INTERFACE line here
+        # would just duplicate the entry.
         if(MPI_C_FOUND)
             target_link_libraries(mumps_common PRIVATE MPI::MPI_C)
-            target_link_libraries(mumps_common INTERFACE
-                $<LINK_ONLY:MPI::MPI_C>)
         endif()
 
         # ── Fold the migrated C bridge INTO the Fortran archive ─────
@@ -786,9 +807,8 @@ macro(_eplinalg_mumps_c_bridge)
                 $<BUILD_INTERFACE:${_mumps_c_src}>
                 $<INSTALL_INTERFACE:include/mumps>)
         if(MPI_C_FOUND)
+            # PRIVATE alone; see the note on mumps_common above.
             target_link_libraries(${LIB_PAIR_PREFIX}mumps PRIVATE MPI::MPI_C)
-            target_link_libraries(${LIB_PAIR_PREFIX}mumps INTERFACE
-                $<LINK_ONLY:MPI::MPI_C>)
         endif()
 
         # Umbrella INTERFACE target. The qxmumps archive (Fortran solvers

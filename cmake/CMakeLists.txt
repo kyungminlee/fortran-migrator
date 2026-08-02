@@ -717,12 +717,12 @@ if(TARGET scalapack)
         endif()
         target_sources(scalapack PRIVATE $<TARGET_OBJECTS:scalapack_c_std_obj>)
     endif()
-    # scalapack carries C objects that call MPI; propagate the link
-    # privately for its own objects and interface-only for downstream
-    # Fortran.
+    # scalapack carries C objects that call MPI. PRIVATE serves both
+    # sides: it compiles those objects, and on a STATIC archive CMake
+    # exports it as $<LINK_ONLY:…>, so downstream Fortran inherits the
+    # link without MPI's C-only compile flags.
     if(MPI_C_FOUND)
         target_link_libraries(scalapack PRIVATE MPI::MPI_C)
-        target_link_libraries(scalapack INTERFACE $<LINK_ONLY:MPI::MPI_C>)
     endif()
 endif()
 if(NOT BASELINE_BUILD AND TARGET ${LIB_PAIR_PREFIX}scalapack)
@@ -793,8 +793,6 @@ if(NOT BASELINE_BUILD AND TARGET ${LIB_PAIR_PREFIX}scalapack)
             PUBLIC $<BUILD_INTERFACE:${_scalapack_c_dir}/src>)
         if(MPI_C_FOUND)
             target_link_libraries(${LIB_PAIR_PREFIX}scalapack PRIVATE MPI::MPI_C)
-            target_link_libraries(${LIB_PAIR_PREFIX}scalapack
-                INTERFACE $<LINK_ONLY:MPI::MPI_C>)
         endif()
         if(C_AS_CXX)
             if(TARGET multifloats)
