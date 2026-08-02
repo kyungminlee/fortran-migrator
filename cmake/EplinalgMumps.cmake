@@ -776,10 +776,12 @@ macro(_eplinalg_mumps_c_bridge)
                 "SHELL:$<$<COMPILE_LANGUAGE:C>:-include ${_mumps_scotch_inc}/scotch_rename_pt_mumps.h>")
             target_link_libraries(mumps_common PUBLIC ptscotch)
         endif()
+        # PRIVATE only: a STATIC archive exports its PRIVATE link items
+        # as $<LINK_ONLY:…>, so the consumer inherits the MPI link
+        # without the C compile flags. An explicit INTERFACE line here
+        # would just duplicate the entry.
         if(MPI_C_FOUND)
             target_link_libraries(mumps_common PRIVATE MPI::MPI_C)
-            target_link_libraries(mumps_common INTERFACE
-                $<LINK_ONLY:MPI::MPI_C>)
         endif()
 
         # ── Fold the migrated C bridge INTO the Fortran archive ─────
@@ -805,9 +807,8 @@ macro(_eplinalg_mumps_c_bridge)
                 $<BUILD_INTERFACE:${_mumps_c_src}>
                 $<INSTALL_INTERFACE:include/mumps>)
         if(MPI_C_FOUND)
+            # PRIVATE alone; see the note on mumps_common above.
             target_link_libraries(${LIB_PAIR_PREFIX}mumps PRIVATE MPI::MPI_C)
-            target_link_libraries(${LIB_PAIR_PREFIX}mumps INTERFACE
-                $<LINK_ONLY:MPI::MPI_C>)
         endif()
 
         # Umbrella INTERFACE target. The qxmumps archive (Fortran solvers

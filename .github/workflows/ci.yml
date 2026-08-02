@@ -143,3 +143,16 @@ jobs:
             -DCMAKE_PREFIX_PATH=${{ github.workspace }}/prefix
           cmake --build build-consume-c
           ./build-consume-c/consume_c
+
+      # The escape hatch: a C-only project reaching a Fortran package by
+      # naming the ABI tag. Note no -lgfortran anywhere — the package
+      # carries the producer's Fortran runtime for exactly this case.
+      - name: Consume a Fortran package from C via EPLINALG_FORTRAN_TAG
+        run: |
+          cmake -S test/consume/c-fortran-tag -B build-consume-c-tag \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-15 \
+            -DEPLINALG_FORTRAN_TAG=gfortran-15 \
+            -DCMAKE_PREFIX_PATH=${{ github.workspace }}/prefix
+          cmake --build build-consume-c-tag
+          ./build-consume-c-tag/consume_c_fortran_tag
