@@ -4,6 +4,30 @@ Release notes live on the [GitHub releases page](https://github.com/kyungminlee/
 this file summarizes each tagged version. The current version is in
 [VERSION](VERSION).
 
+## v0.20.0
+
+- Installed packages are consumable from single-language projects. The
+  generated Config no longer requests `find_package(MPI COMPONENTS C)`
+  unconditionally — it asks only for components whose language the
+  consuming `project()` enabled, and falls back to reading the MPI flavor
+  out of `mpi.h` when no compiled probe can run. A Fortran-only consumer
+  could not previously find any MPI-bound package at all.
+- Archives that contain Fortran objects now carry the Fortran runtime on
+  their exported interface for consumers that have no Fortran driver. A
+  C or C++ project resolving the ABI tag with `-DEPLINALG_FORTRAN_TAG`
+  links without naming `-lgfortran` itself.
+- The pure-C ordering archives (`metis`, `scotch`) export `m` in their
+  link interface, and `eplinalgOrdering` is produced by the shared
+  package generator rather than a hand-written Config, gaining the
+  `find_dependency` hook it previously lacked.
+- Both failure paths in the generated Config set a `_NOT_FOUND_MESSAGE`
+  naming the consumer's enabled languages and the `-DEPLINALG_MPI_TAG` /
+  `-DEPLINALG_FORTRAN_TAG` escape hatches, instead of failing opaquely.
+- CI gains an install-and-consume guard: three throwaway projects,
+  each enabling exactly one language, configured against an installed
+  prefix and linking through imported targets. See
+  `test/consume/README.md`.
+
 ## v0.19.0
 
 - Documentation converged on the scheme shared with epblas-parallel and
