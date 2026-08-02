@@ -110,7 +110,36 @@ jobs:
             -DCMAKE_Fortran_COMPILER=gfortran-15 \
             -DCMAKE_C_COMPILER=gcc-15 \
             -DCMAKE_CXX_COMPILER=g++-15 \
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/prefix \
             -DMIGRATOR_BUILD_TESTS=OFF
 
       - name: Build
         run: cmake --build build -j$(nproc)
+
+      # ── Installed-package consumer guard ─────────────────────────
+      # Building is not the same as being consumable. The in-tree
+      # build compiles everything under one project() that enables
+      # Fortran, C and C++ together and links through the gfortran
+      # driver, so it cannot see a defect that only bites a consumer
+      # missing one of those languages — which is what every defect
+      # in the install/export path has been. See test/consume/README.md.
+      - name: Install
+        run: cmake --install build
+
+      - name: Consume from a Fortran-only project
+        run: |
+          cmake -S test/consume/fortran -B build-consume-fortran \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_Fortran_COMPILER=gfortran-15 \
+            -DCMAKE_PREFIX_PATH=${{ github.workspace }}/prefix
+          cmake --build build-consume-fortran
+          ./build-consume-fortran/consume_fortran
+
+      - name: Consume from a C-only project
+        run: |
+          cmake -S test/consume/c -B build-consume-c \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-15 \
+            -DCMAKE_PREFIX_PATH=${{ github.workspace }}/prefix
+          cmake --build build-consume-c
+          ./build-consume-c/consume_c
