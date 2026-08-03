@@ -38,14 +38,6 @@ _GENERIC_CONV_RE: dict[str, re.Pattern] = {
     for _name in ('REAL', 'CMPLX')
 }
 
-# ``replace_generic_conversions``' add_kind skip test. Deliberately NOT
-# :func:`_has_top_level_kind`: this one is depth-blind, so
-# ``REAL(f(x, KIND=1))`` is skipped here and rewritten there. The two
-# functions have always disagreed on this predicate and the migrated
-# corpus is pinned to both spellings, so they stay two tests — see the
-# note on :func:`_generic_conversion_decider`.
-_KIND_KEYWORD_RE = re.compile(r'\bKIND\s*=', re.IGNORECASE)
-
 
 # Precompiled once per process — INTRINSIC_MAP keys are static so the
 # per-name patterns never vary. ``replace_intrinsic_calls`` is on the
@@ -208,7 +200,19 @@ def _intrinsic_call_decider(
 ):
     """Decider for one ``INTRINSIC_MAP`` entry whose ``needs_kind`` flag
     is set — a call whose argument list has to be inspected, not just
-    renamed."""
+    renamed.
+
+    Unlike :func:`_generic_conversion_decider` this has no
+    argument-count guard, and deliberately so: that decider only adds a
+    kind, so backing off a full argument list is free, while this one
+    also *renames*. Skipping ``DBLE(a, b, wp)`` would leave ``DBLE`` in
+    a kind16 build — silently double precision, where appending the
+    kind at least fails to compile. Handling it properly means a third
+    behavior (drop the positional kind, as the ``wrap_constructor`` arm
+    already does), and no such call exists in the corpus, so neither is
+    implemented. ``test_intrinsic_rewriter_has_no_argument_count_guard``
+    pins the current answer as a tripwire.
+    """
     def decide(inner: str) -> str | None:
         if _is_ambiguous_type_spec(old_name, inner):
             return None
@@ -273,21 +277,24 @@ def _generic_conversion_decider(name: str, target_mode: TargetMode,
     """Decider for a generic ``REAL(`` / ``CMPLX(`` call in expression
     context.
 
-    Two things make this *not* a spelling of
-    :func:`_intrinsic_call_decider`, and both are load-bearing:
+    What makes this *not* a spelling of :func:`_intrinsic_call_decider`:
+    a call already carrying its full argument count is left alone
+    (``REAL`` takes 1, ``CMPLX`` 2), since the kind argument would be a
+    third and ``REAL(x, KIND=wp)`` is already migrated. The intrinsic
+    rewriter deliberately has no such guard — see
+    :func:`_intrinsic_call_decider`.
 
-    * the ``add_kind`` skip test is :data:`_KIND_KEYWORD_RE`, which is
-      depth-blind, where the other uses :func:`_has_top_level_kind`.
-      ``REAL(f(x, KIND=1))`` is therefore skipped here and rewritten
-      there. Collapsing the two changes migrated output, so they stay
-      two predicates.
-    * a call already carrying its full argument count is left alone
-      (``REAL`` takes 1, ``CMPLX`` 2): the kind argument would be a
-      third, and ``REAL(x, KIND=wp)`` is already migrated.
-
-    There is no ``_is_ambiguous_type_spec`` guard: the pattern's
+    There is no ``_is_ambiguous_type_spec`` guard either: the pattern's
     lookbehind already restricts the match to expression context, where
     a type specification cannot appear.
+
+    The ``KIND=`` skip test *was* a second, depth-blind predicate
+    (a plain ``\\bKIND\\s*=`` search) until it was unified onto
+    :func:`_has_top_level_kind`. The two disagreed on
+    ``REAL(f(x, KIND=1))``, where the nested ``KIND=`` belongs to ``f``
+    and not to the ``REAL`` being rewritten: the depth-blind test
+    skipped a call that should be migrated. Staged output is unchanged
+    across all five targets — no such call exists in the corpus.
     """
     max_args = 1 if name == 'REAL' else 2
 
@@ -295,7 +302,7 @@ def _generic_conversion_decider(name: str, target_mode: TargetMode,
         if target_mode.intrinsic_mode != 'add_kind':
             return _wrap_constructor_call(name, name, inner, target_mode,
                                           None, complex_names)
-        if _KIND_KEYWORD_RE.search(inner):
+        if _has_top_level_kind(inner):
             return None
         # ``keep_trailing`` makes the piece count a faithful top-level
         # comma count for a trailing comma too ("x," -> 1, not 0).

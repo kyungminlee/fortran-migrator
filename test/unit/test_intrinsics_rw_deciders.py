@@ -3,20 +3,19 @@
 ``replace_intrinsic_calls`` and ``replace_generic_conversions`` share one
 scan/splice loop (``_rewrite_paren_calls``) and differ only in the
 decider each hands it. The point of these tests is to pin those
-differences, because they are the reason the two functions cannot simply
-be merged:
+differences:
 
-* the ``add_kind`` ``KIND=`` skip test is depth-tracking in one and
-  depth-blind in the other, so ``REAL(f(x, KIND=1))`` is rewritten by
-  one and skipped by the other;
 * only the generic rewriter refuses a call that already has its full
   argument count;
 * only the intrinsic rewriter has the ambiguous-type-spec guard, and
   only it falls back to a bare rename when the closing paren is off the
   line.
 
-Collapsing either KIND= predicate into the other changes migrated
-output; these are the cases that would flag it.
+The ``KIND=`` skip test used to be a third difference — depth-tracking
+in one decider, depth-blind in the other, disagreeing on
+``REAL(f(x, KIND=1))``. They are now one predicate
+(``_has_top_level_kind``); ``test_nested_kind_is_not_a_skip_for_either``
+is what keeps them one.
 """
 
 from migrator.fortran.intrinsics_rw import (
@@ -30,19 +29,18 @@ MULTIFLOATS = load_target('multifloats')
 K = KIND16.kind_suffix
 
 
-# --- the divergent KIND= predicates ---------------------------------
+# --- the shared KIND= predicate -------------------------------------
 
-def test_nested_kind_blocks_the_generic_rewriter():
-    """Depth-blind: a ``KIND=`` anywhere inside the parens skips."""
-    line = '      X = REAL(F(Y, KIND=1))'
-    assert replace_generic_conversions(line, KIND16) == line
-
-
-def test_nested_kind_does_not_block_the_intrinsic_rewriter():
-    """Depth-tracking: only a *top-level* ``KIND=`` skips, so the same
-    argument text gets the opposite verdict here."""
-    out = replace_intrinsic_calls('      X = DBLE(F(Y, KIND=1))', KIND16)
-    assert out == f'      X = REAL(F(Y, KIND=1), KIND={K})'
+def test_nested_kind_is_not_a_skip_for_either():
+    """Only a *top-level* ``KIND=`` skips. The nested one belongs to
+    ``F``, not to the call being rewritten, so both deciders migrate.
+    The generic rewriter used to skip this — that was the divergence."""
+    assert replace_generic_conversions('      X = REAL(F(Y, KIND=1))',
+                                       KIND16) == \
+        f'      X = REAL(F(Y, KIND=1), KIND={K})'
+    assert replace_intrinsic_calls('      X = DBLE(F(Y, KIND=1))',
+                                   KIND16) == \
+        f'      X = REAL(F(Y, KIND=1), KIND={K})'
 
 
 def test_top_level_kind_blocks_both():
