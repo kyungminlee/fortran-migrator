@@ -18,6 +18,33 @@ from .target_mode import load_target
 # EXCLUDE_REGEX) hardcodes the same universe — keep them in sync.
 LA_SUFFIXES = ('_ey', '_qx', '_mw')
 
+# Target used when ``--target`` is absent. Both the argparse default and
+# the two ``getattr(args, 'target', None) or ...`` fallbacks (here and in
+# ``staging.cmd_stage``, which must name the target before it can build a
+# TargetMode) read it from here.
+DEFAULT_TARGET = 'kind16'
+
+
+def dedupe_by_inode(paths) -> list[Path]:
+    """Sorted, de-duplicated view of ``paths``, keyed by ``(st_dev, st_ino)``.
+
+    Identity is the inode rather than the name because on a
+    case-insensitive filesystem ``*.f`` and ``*.F`` glob the same
+    physical file, and a recipe's ``extra_migrate_files`` can name a
+    source its ``source_dir`` glob already found. Paths that cannot be
+    ``stat``-ed fall back to their string spelling, so a broken symlink
+    is kept once rather than dropped.
+    """
+    seen: dict[tuple, Path] = {}
+    for f in paths:
+        try:
+            st = f.stat()
+            key = (st.st_dev, st.st_ino)
+        except OSError:
+            key = ('missing', str(f))
+        seen.setdefault(key, f)
+    return sorted(seen.values())
+
 
 def la_helper_pairs(target_mode) -> tuple[set[str], set[str]]:
     """Return ``(own, foreign)`` LA_CONSTANTS / LA_XISNAN stem sets.
@@ -53,10 +80,19 @@ def migrator_project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
+def target_name(args) -> str:
+    """Target name from CLI arguments, defaulted.
+
+    Separate from :func:`get_target_mode` because ``cmd_stage`` must
+    compare the name against ``BASELINE_TARGETS`` before it knows
+    whether a :class:`TargetMode` is wanted at all.
+    """
+    return getattr(args, 'target', None) or DEFAULT_TARGET
+
+
 def get_target_mode(args):
     """Construct TargetMode based on CLI arguments."""
-    target_str = getattr(args, 'target', None) or 'kind16'
-    return load_target(target_str)
+    return load_target(target_name(args))
 
 
 def parser_args(args):

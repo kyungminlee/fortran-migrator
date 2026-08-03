@@ -10,7 +10,8 @@ import sys
 from pathlib import Path
 
 from .cli_common import (
-    get_target_mode, la_helper_pairs, migrator_project_root, parser_args,
+    dedupe_by_inode, get_target_mode, la_helper_pairs, migrator_project_root,
+    parser_args, target_name,
 )
 from .libseq_patch import patch_libseq_mpi_f
 from .pipeline import classify_recipe_symbols, run_migration
@@ -159,6 +160,16 @@ def _assert_shared_struct_abi(staging_dir: Path) -> None:
             '(see _PBTYP_C_BINDING_FIELDS).\n\n' + '\n'.join(violations))
 
 
+# Migrated-source glob patterns, per recipe language. A C recipe's
+# staged tree also carries Fortran: ``copy_files`` plants
+# precision-independent helpers (PBLAS/SRC/pilaenv.f) that CMake compiles
+# into the same archive. A Fortran recipe never emits ``.c``.
+_FORTRAN_SOURCE_GLOBS = ('*.f', '*.F', '*.f90', '*.F90')
+_SOURCE_GLOBS: dict[str, tuple[str, ...]] = {
+    'c': ('*.c', *_FORTRAN_SOURCE_GLOBS),
+}
+
+
 def _collect_source_files(src_dir: Path, language: str) -> list[Path]:
     """Discover migrated source files in ``src_dir`` for the given language.
 
@@ -166,20 +177,8 @@ def _collect_source_files(src_dir: Path, language: str) -> list[Path]:
     Dedupe uses ``(st_dev, st_ino)`` so case-insensitive filesystems (where
     ``*.f`` and ``*.F`` glob the same physical file) do not double-stage.
     """
-    if language == 'c':
-        patterns = ('*.c', '*.f', '*.F', '*.f90', '*.F90')
-    else:
-        patterns = ('*.f', '*.F', '*.f90', '*.F90')
-    seen: dict[tuple, Path] = {}
-    for pat in patterns:
-        for f in src_dir.glob(pat):
-            try:
-                st = f.stat()
-                key = (st.st_dev, st.st_ino)
-            except OSError:
-                key = ('missing', str(f))
-            seen.setdefault(key, f)
-    return sorted(seen.values())
+    patterns = _SOURCE_GLOBS.get(language, _FORTRAN_SOURCE_GLOBS)
+    return dedupe_by_inode(f for pat in patterns for f in src_dir.glob(pat))
 
 
 # Topologically sorted library build order for the unified CMake project.
@@ -352,15 +351,25 @@ def _copy_rename_script(proj_root: Path, staging_dir: Path) -> None:
         shutil.copy2(scripts_src, scripts_dst / scripts_src.name)
 
 
+def _replace_tree(src: Path, dst: Path, ignore=None) -> bool:
+    """Copy the directory ``src`` onto ``dst``, replacing it wholesale.
+
+    Returns False (having done nothing) when ``src`` is not a directory:
+    every staging source is optional — a missing upstream tree means the
+    build falls back to a system library or simply omits the component.
+    """
+    if not src.is_dir():
+        return False
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst, ignore=ignore)
+    return True
+
+
 def _copy_tests(proj_root: Path, staging_dir: Path) -> None:
     """Copy tests/ subtree so the unified CMakeLists.txt can pick it up
     via add_subdirectory(tests) when BUILD_TESTING=ON."""
-    tests_src = proj_root / 'test' / 'integration'
-    if tests_src.is_dir():
-        tests_dst = staging_dir / 'tests'
-        if tests_dst.exists():
-            shutil.rmtree(tests_dst)
-        shutil.copytree(tests_src, tests_dst)
+    _replace_tree(proj_root / 'test' / 'integration', staging_dir / 'tests')
 
 
 def _copy_runtime_mpiseq(proj_root: Path, staging_dir: Path) -> None:
@@ -368,12 +377,295 @@ def _copy_runtime_mpiseq(proj_root: Path, staging_dir: Path) -> None:
     sources) into the staged tree, so the parent build's
     add_subdirectory(runtime/mpiseq) resolves. The upstream libseq
     sources it compiles land separately in _mpiseq_src/."""
-    mpiseq_local = proj_root / 'src' / 'mpiseq'
-    if mpiseq_local.is_dir():
-        mpiseq_dst = staging_dir / 'runtime' / 'mpiseq'
-        if mpiseq_dst.exists():
-            shutil.rmtree(mpiseq_dst)
-        shutil.copytree(mpiseq_local, mpiseq_dst)
+    _replace_tree(proj_root / 'src' / 'mpiseq', staging_dir / 'runtime' / 'mpiseq')
+
+
+def _select_libraries(requested) -> list[tuple[str, str]]:
+    """The ``(name, recipe_file)`` pairs to stage, in :data:`LIBRARY_ORDER`.
+
+    ``requested`` is the ``--libraries`` filter; empty means all of them.
+    An unknown name is a hard error rather than a silent no-op — it is
+    almost always a typo, and staging would otherwise look successful
+    while producing nothing.
+    """
+    if not requested:
+        return list(LIBRARY_ORDER)
+    lib_set = set(requested)
+    valid = {n for n, _ in LIBRARY_ORDER}
+    unknown = lib_set - valid
+    if unknown:
+        sys.exit(
+            f'error: unknown library name(s) in --libraries: '
+            f'{sorted(unknown)}. Valid: {sorted(valid)}'
+        )
+    return [(n, r) for n, r in LIBRARY_ORDER if n in lib_set]
+
+
+def _route_manifest_sources(files: list[Path], config, target_mode,
+                            classification) -> tuple[list[str], list[str]]:
+    """Split staged sources into the common and precision archives.
+
+    Returns ``(common, precision)`` as ``src/<name>`` strings, in the
+    order ``files`` came in. Sources belonging to another target's
+    LA_CONSTANTS / LA_XISNAN pair are dropped entirely.
+    """
+    independent = classification.independent
+
+    # Files that the precision-rename map RENAMES are precision-
+    # specific by construction — they were given a precision prefix
+    # (e.g. ``disnan.f`` → ``qisnan.f``, family ``#RISNAN``, d→q).
+    # Their renamed stem can COINCIDE with a name the classifier
+    # marked ``independent``: the split ``la_xisnan_ey.F90`` /
+    # ``la_xisnan_qx.F90`` modules define procedures ``EISNAN`` /
+    # ``QISNAN`` / ``ELAISNAN`` / ``QLAISNAN``, which land in
+    # ``independent`` because Q/E/X/Y are not S/D/C/Z.
+    # Without this guard the migrated plain-F77 isnan externals
+    # (``qisnan_``/``eisnan_`` — whose bodies differ per target) get
+    # mis-filed into the shared ``lapack_common`` archive and then
+    # collide across targets in a combined release tree (same
+    # filename, different content). A rename target is never a
+    # legitimate common member, so route it to PRECISION regardless
+    # of the polluted independent set.
+    rename_targets = {
+        t.upper()
+        for t in classification.build_rename_map(target_mode).values()
+    }
+
+    # Per-target LA_CONSTANTS / LA_XISNAN precision helpers. Each
+    # extended target owns exactly one prefix-pair module —
+    #   kind10 → *_ey   kind16 → *_qx   multifloats → *_mw
+    # (suffix taken from the target's ``la_constants_suffix``). All
+    # three pairs sit in the shared LAPACK SRC dir; only the
+    # target's own pair belongs in this staging tree — the other
+    # targets' pairs are excluded, so e.g. the *_ey/*_qx SRC files
+    # stay out of a multifloats build.
+    la_own, la_foreign = la_helper_pairs(target_mode)
+
+    common_files, precision_files = [], []
+    for f in files:
+        if f.stem in la_foreign:
+            continue
+        rel = f'src/{f.name}'
+        stem = f.stem.upper()
+        # ``force_common`` is the explicit recipe override that pins a
+        # stem to the family-independent ``_common`` archive no matter
+        # what the symbol scanner decided. It takes priority over every
+        # other route (including the PRECISION defaults below) so a
+        # recipe author can rescue files the scanner mis-assigned to a
+        # non-target family — e.g. the integer BLACS entry points and
+        # the type-agnostic driver, which are family-independent (one
+        # copy serves e/y, q/x, m/w) and must not leak into the
+        # prefixed ``eyblacs`` archive. See ``codegen/recipes/blacs.yaml``.
+        # Match with OR without the trailing Fortran-underscore so a
+        # recipe can list the logical name (``igamx2d``) exactly as
+        # ``skip_files`` does (the C migrator strips it — see
+        # c_migrator.py), keeping the two levers' conventions aligned.
+        stem_nodeco = stem[:-1] if stem.endswith('_') else stem
+        if stem in config.force_common or stem_nodeco in config.force_common:
+            common_files.append(rel)
+        # The target's own LA_CONSTANTS/LA_XISNAN pair is single-
+        # precision (only this target's E/Y or Q/X block), so it is
+        # precision-specific: route it to PRECISION so it lands in
+        # the prefixed archive (libelapack / libqlapack), never the
+        # shared lapack_common. A precision-rename target (e.g. the
+        # migrated qisnan.f, whose renamed stem may collide with an
+        # ``independent`` module-procedure name) is likewise
+        # precision-specific by construction — see ``rename_targets``.
+        elif f.stem in la_own or stem in rename_targets:
+            precision_files.append(rel)
+        # Any ``copy_files`` entry that survives to this branch is
+        # precision-independent (staged verbatim, no prefix rename,
+        # shareable across targets): the target-specific verbatim
+        # copies — LAPACK's LA_CONSTANTS/LA_XISNAN pairs — were
+        # already routed by the ``la_own``/``la_foreign`` checks
+        # above. The symbol scanner may never have visited these —
+        # e.g. a Fortran ``copy_files`` entry in a C recipe — so
+        # they won't appear in ``independent``. Treat them as
+        # common explicitly. (``cmd_build`` in __main__.py lacks
+        # the LA_* special-casing and therefore routes copy_files
+        # to PRECISION instead — see the comment there.)
+        elif stem in independent or stem in config.copy_files:
+            common_files.append(rel)
+        else:
+            precision_files.append(rel)
+    return common_files, precision_files
+
+
+def _detect_dual_entry_sources(files: list[Path], config) -> list[str]:
+    """C sources that gate their entry-point signature on the
+    ``INTFACE == C_CALL`` macro (upstream BLACS pattern).
+
+    Each such file exposes a Fortran-callable symbol (e.g.
+    ``blacs_gridinfo_``) in the default build and a C-callable symbol
+    (``Cblacs_gridinfo``) when compiled with ``-DCallFromC``. The CMake
+    helper compiles these sources twice so the final static library
+    ships both entry points. Detection is a cheap regex scan of the
+    staged source; any library that does not use the pattern emits an
+    empty list.
+    """
+    if config.language != 'c':
+        return []
+    dual_files = []
+    for f in files:
+        if f.suffix.lower() != '.c':
+            continue
+        try:
+            text = f.read_text(errors='replace')
+        except OSError:
+            continue
+        if _DUAL_ENTRY_C_RE.search(text):
+            dual_files.append(f'src/{f.name}')
+    return dual_files
+
+
+def _write_manifest(lib_dir: Path, lib_name: str, language: str,
+                    common_files: list[str], precision_files: list[str],
+                    dual_files: list[str]) -> None:
+    """Write a library's ``manifest.cmake`` — the source lists the staged
+    tree's ``add_migrated_*`` helpers read."""
+    common_list = '\n    '.join(common_files) if common_files else ''
+    precision_list = '\n    '.join(precision_files) if precision_files else ''
+    dual_list = '\n    '.join(dual_files) if dual_files else ''
+    manifest = f"""\
+set({lib_name}_COMMON_SOURCES
+    {common_list}
+)
+
+set({lib_name}_PRECISION_SOURCES
+    {precision_list}
+)
+
+set({lib_name}_DUAL_INTERFACE_SOURCES
+    {dual_list}
+)
+
+set({lib_name}_LANGUAGE {language})
+"""
+    (lib_dir / 'manifest.cmake').write_text(manifest)
+
+
+def _stage_one_library(lib_name: str, recipe_path: Path, lib_dir: Path,
+                       target_mode, proj_root: Path,
+                       parser: str | None, parser_cmd: str | None) -> bool:
+    """Migrate one library into ``lib_dir`` and write its manifest.
+
+    Returns whether the library went through the ep_ symbol-privatization
+    pass, which the caller needs for ``PRIVATIZED_LIBRARIES``.
+    """
+    src_dir = lib_dir / 'src'
+    src_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f'\n{"=" * 60}')
+    print(f'  Migrating: {lib_name}')
+    print(f'{"=" * 60}')
+
+    run_migration(
+        recipe_path=recipe_path,
+        output_dir=src_dir,
+        target_mode=target_mode,
+        dry_run=False,
+        project_root=proj_root,
+        parser=parser,
+        parser_cmd=parser_cmd,
+    )
+
+    config = prepare_recipe(recipe_path, proj_root)
+    classification = classify_recipe_symbols(config)
+
+    # Pick up precision-independent Fortran helpers staged via
+    # ``copy_files`` (e.g. PBLAS/SRC/pilaenv.f) when the recipe is C —
+    # CMake's ``add_library(… STATIC …)`` handles mixed C + Fortran
+    # sources because both languages are enabled at the top
+    # project(). Copy-files are precision-independent by contract,
+    # so they land in COMMON_SOURCES.
+    files = _collect_source_files(src_dir, config.language)
+
+    common_files, precision_files = _route_manifest_sources(
+        files, config, target_mode, classification)
+    dual_files = _detect_dual_entry_sources(files, config)
+
+    _write_manifest(lib_dir, lib_name, config.language,
+                    common_files, precision_files, dual_files)
+    print(f'  Manifest: {len(common_files)} common, '
+          f'{len(precision_files)} precision files')
+    return bool(config.privatize_symbols)
+
+
+def _prior_library_list(staging_dir: Path, var_name: str) -> list[str]:
+    """Entries of ``var_name`` in an existing ``target_config.cmake``
+    whose library directory is still present in the staging tree."""
+    prior: list[str] = []
+    prior_config = staging_dir / 'target_config.cmake'
+    if prior_config.exists():
+        m = re.search(
+            r'^\s*set\s*\(\s*' + var_name + r'\s+([^)]*)\)',
+            prior_config.read_text(),
+            re.MULTILINE,
+        )
+        if m:
+            for tok in m.group(1).replace(';', ' ').split():
+                tok = tok.strip().strip('"')
+                if tok and (staging_dir / tok).is_dir():
+                    prior.append(tok)
+    return prior
+
+
+def _merge_staged_lists(staging_dir: Path, staged: list[str],
+                        privatized: list[str]) -> tuple[str, str]:
+    """The ``STAGED_LIBRARIES`` / ``PRIVATIZED_LIBRARIES`` values to write.
+
+    Re-staging with a subset of --libraries must not shrink the unified
+    build's library list, so both lists union this run's result with
+    whatever a prior ``target_config.cmake`` recorded and is still on
+    disk. A prior *privatized* entry survives only if its library was NOT
+    restaged this run — a restage recomputes the flag from the recipe.
+    """
+    def merged(prior: list[str], fresh: list[str]) -> str:
+        out: list[str] = []
+        for n in prior + fresh:
+            if n not in out:
+                out.append(n)
+        return ';'.join(out)
+
+    staged_list = merged(_prior_library_list(staging_dir, 'STAGED_LIBRARIES'),
+                         staged)
+    privatized_list = merged(
+        [n for n in _prior_library_list(staging_dir, 'PRIVATIZED_LIBRARIES')
+         if n not in staged],
+        privatized)
+    return staged_list, privatized_list
+
+
+def _stage_reference_sources(proj_root: Path, staging_dir: Path) -> None:
+    """Stage the vendored Netlib BLAS and LAPACK sources the differential
+    precision tests build their references from.
+
+    ``_refblas_src`` feeds refblas_quad (compiled with gfortran's
+    -freal-8-real-16 to promote KIND=8 entities to KIND=16 in-place);
+    tests fall back to system -lblas if it is absent. ``_reflapack_src``
+    does the same for tests/lapack/reflapack/, giving a KIND=16 reference
+    to compare the migrated qxlapack/eylapack/mwlapack against. LAPACK
+    additionally needs {s,d}lamch.f / {s,d}roundup_lwork.f, which its SRC
+    routines call but which live in INSTALL/ — copy them in alongside so
+    a single glob compiles the full reference. Both the single- and
+    double-precision variants are needed: the genuine standard ``lapack``
+    archive carries every arithmetic (the genuine single-precision
+    solvers smumps/cmumps call slamch_ / sroundup_lwork_, the double ones
+    dlamch_ / droundup_lwork_). These verbatim upstream files are
+    unpromoted here — only the migrated LAPACK archive elides
+    roundup_lwork via _strip_roundup_lwork; the standard one keeps it.
+    """
+    netlib = proj_root / 'extern' / 'lapack-3.12.1'
+    _replace_tree(netlib / 'BLAS' / 'SRC', staging_dir / '_refblas_src')
+
+    reflapack_dst = staging_dir / '_reflapack_src'
+    if _replace_tree(netlib / 'SRC', reflapack_dst):
+        install_src = netlib / 'INSTALL'
+        for fname in ('slamch.f', 'dlamch.f',
+                      'sroundup_lwork.f', 'droundup_lwork.f'):
+            src = install_src / fname
+            if src.is_file():
+                shutil.copy2(src, reflapack_dst / fname)
 
 
 def cmd_stage(args):
@@ -388,7 +680,7 @@ def cmd_stage(args):
     staging tree with upstream sources, tests/, and a target_config.cmake
     that points the test framework at the standard archive (LIB_PREFIX="").
     """
-    target_str = getattr(args, 'target', None) or 'kind16'
+    target_str = target_name(args)
     if target_str in BASELINE_TARGETS:
         return _stage_baseline(args, target_str)
 
@@ -398,19 +690,7 @@ def cmd_stage(args):
     proj_root = args.project_root or migrator_project_root()
     recipes_dir = proj_root / 'codegen' / 'recipes'
 
-    # Determine which libraries to stage
-    if args.libraries:
-        lib_set = set(args.libraries)
-        valid = {n for n, _ in LIBRARY_ORDER}
-        unknown = lib_set - valid
-        if unknown:
-            sys.exit(
-                f'error: unknown library name(s) in --libraries: '
-                f'{sorted(unknown)}. Valid: {sorted(valid)}'
-            )
-        libraries = [(n, r) for n, r in LIBRARY_ORDER if n in lib_set]
-    else:
-        libraries = list(LIBRARY_ORDER)
+    libraries = _select_libraries(args.libraries)
 
     # The real / complex family letters (e/y, q/x, m/w). Stamped into
     # target_config.cmake as LIB_PREFIX / LIB_PREFIX_COMPLEX (symbol
@@ -428,161 +708,11 @@ def cmd_stage(args):
             print(f'Warning: recipe {recipe_path} not found, skipping {lib_name}')
             continue
 
-        lib_dir = staging_dir / lib_name
-        src_dir = lib_dir / 'src'
-        src_dir.mkdir(parents=True, exist_ok=True)
-
-        print(f'\n{"=" * 60}')
-        print(f'  Migrating: {lib_name}')
-        print(f'{"=" * 60}')
-
-        # Run migration
-        run_migration(
-            recipe_path=recipe_path,
-            output_dir=src_dir,
-            target_mode=target_mode,
-            dry_run=False,
-            project_root=proj_root,
-            parser=parser,
-            parser_cmd=parser_cmd,
-        )
-
-        # Classify files into common vs precision-specific
-        config = prepare_recipe(recipe_path, proj_root)
-        classification = classify_recipe_symbols(config)
-        independent = classification.independent
-
-        # Files that the precision-rename map RENAMES are precision-
-        # specific by construction — they were given a precision prefix
-        # (e.g. ``disnan.f`` → ``qisnan.f``, family ``#RISNAN``, d→q).
-        # Their renamed stem can COINCIDE with a name the classifier
-        # marked ``independent``: the split ``la_xisnan_ey.F90`` /
-        # ``la_xisnan_qx.F90`` modules define procedures ``EISNAN`` /
-        # ``QISNAN`` / ``ELAISNAN`` / ``QLAISNAN``, which land in
-        # ``independent`` because Q/E/X/Y are not S/D/C/Z.
-        # Without this guard the migrated plain-F77 isnan externals
-        # (``qisnan_``/``eisnan_`` — whose bodies differ per target) get
-        # mis-filed into the shared ``lapack_common`` archive and then
-        # collide across targets in a combined release tree (same
-        # filename, different content). A rename target is never a
-        # legitimate common member, so route it to PRECISION regardless
-        # of the polluted independent set.
-        rename_targets = {
-            t.upper()
-            for t in classification.build_rename_map(target_mode).values()
-        }
-
-        # Pick up precision-independent Fortran helpers staged via
-        # ``copy_files`` (e.g. PBLAS/SRC/pilaenv.f) when the recipe is C —
-        # CMake's ``add_library(… STATIC …)`` handles mixed C + Fortran
-        # sources because both languages are enabled at the top
-        # project(). Copy-files are precision-independent by contract,
-        # so they land in COMMON_SOURCES below.
-        files = _collect_source_files(src_dir, config.language)
-
-        # Per-target LA_CONSTANTS / LA_XISNAN precision helpers. Each
-        # extended target owns exactly one prefix-pair module —
-        #   kind10 → *_ey   kind16 → *_qx   multifloats → *_mw
-        # (suffix taken from the target's ``la_constants_suffix``). All
-        # three pairs sit in the shared LAPACK SRC dir; only the
-        # target's own pair belongs in this staging tree — the other
-        # targets' pairs are excluded, so e.g. the *_ey/*_qx SRC files
-        # stay out of a multifloats build.
-        _la_own, _la_foreign = la_helper_pairs(target_mode)
-
-        common_files, precision_files = [], []
-        for f in files:
-            if f.stem in _la_foreign:
-                continue
-            rel = f'src/{f.name}'
-            stem = f.stem.upper()
-            # ``force_common`` is the explicit recipe override that pins a
-            # stem to the family-independent ``_common`` archive no matter
-            # what the symbol scanner decided. It takes priority over every
-            # other route (including the PRECISION defaults below) so a
-            # recipe author can rescue files the scanner mis-assigned to a
-            # non-target family — e.g. the integer BLACS entry points and
-            # the type-agnostic driver, which are family-independent (one
-            # copy serves e/y, q/x, m/w) and must not leak into the
-            # prefixed ``eyblacs`` archive. See ``codegen/recipes/blacs.yaml``.
-            # Match with OR without the trailing Fortran-underscore so a
-            # recipe can list the logical name (``igamx2d``) exactly as
-            # ``skip_files`` does (the C migrator strips it — see
-            # c_migrator.py), keeping the two levers' conventions aligned.
-            stem_nodeco = stem[:-1] if stem.endswith('_') else stem
-            if stem in config.force_common or stem_nodeco in config.force_common:
-                common_files.append(rel)
-            # The target's own LA_CONSTANTS/LA_XISNAN pair is single-
-            # precision (only this target's E/Y or Q/X block), so it is
-            # precision-specific: route it to PRECISION so it lands in
-            # the prefixed archive (libelapack / libqlapack), never the
-            # shared lapack_common. A precision-rename target (e.g. the
-            # migrated qisnan.f, whose renamed stem may collide with an
-            # ``independent`` module-procedure name) is likewise
-            # precision-specific by construction — see ``rename_targets``.
-            elif f.stem in _la_own or stem in rename_targets:
-                precision_files.append(rel)
-            # Any ``copy_files`` entry that survives to this branch is
-            # precision-independent (staged verbatim, no prefix rename,
-            # shareable across targets): the target-specific verbatim
-            # copies — LAPACK's LA_CONSTANTS/LA_XISNAN pairs — were
-            # already routed by the ``_la_own``/``_la_foreign`` checks
-            # above. The symbol scanner may never have visited these —
-            # e.g. a Fortran ``copy_files`` entry in a C recipe — so
-            # they won't appear in ``independent``. Treat them as
-            # common explicitly. (``cmd_build`` in __main__.py lacks
-            # the LA_* special-casing and therefore routes copy_files
-            # to PRECISION instead — see the comment there.)
-            elif stem in independent or stem in config.copy_files:
-                common_files.append(rel)
-            else:
-                precision_files.append(rel)
-
-        # Identify C sources that gate their entry-point signature on
-        # the ``INTFACE == C_CALL`` macro (upstream BLACS pattern). Each
-        # such file exposes a Fortran-callable symbol (e.g.
-        # ``blacs_gridinfo_``) in the default build and a C-callable
-        # symbol (``Cblacs_gridinfo``) when compiled with
-        # ``-DCallFromC``. The CMake helper compiles these sources
-        # twice so the final static library ships both entry points.
-        # Detection is a cheap regex scan of the staged source; any
-        # library that does not use the pattern emits an empty list.
-        dual_files = []
-        if config.language == 'c':
-            for f in files:
-                if f.suffix.lower() != '.c':
-                    continue
-                try:
-                    text = f.read_text(errors='replace')
-                except OSError:
-                    continue
-                if _DUAL_ENTRY_C_RE.search(text):
-                    dual_files.append(f'src/{f.name}')
-
-        # Write manifest.cmake
-        common_list = '\n    '.join(common_files) if common_files else ''
-        precision_list = '\n    '.join(precision_files) if precision_files else ''
-        dual_list = '\n    '.join(dual_files) if dual_files else ''
-        manifest = f"""\
-set({lib_name}_COMMON_SOURCES
-    {common_list}
-)
-
-set({lib_name}_PRECISION_SOURCES
-    {precision_list}
-)
-
-set({lib_name}_DUAL_INTERFACE_SOURCES
-    {dual_list}
-)
-
-set({lib_name}_LANGUAGE {config.language})
-"""
-        (lib_dir / 'manifest.cmake').write_text(manifest)
-        print(f'  Manifest: {len(common_files)} common, '
-              f'{len(precision_files)} precision files')
+        privatized_lib = _stage_one_library(
+            lib_name, recipe_path, staging_dir / lib_name, target_mode,
+            proj_root, parser, parser_cmd)
         staged.append(lib_name)
-        if config.privatize_symbols:
+        if privatized_lib:
             privatized.append(lib_name)
 
     # Copy MF helper modules into staging so it's self-contained
@@ -599,69 +729,27 @@ set({lib_name}_LANGUAGE {config.language})
         target_mode.c_mpi_module is not None and not needs_mf
     )
 
-    # Re-stage with a subset of --libraries must not shrink the unified
-    # build's library list. Read STAGED_LIBRARIES (and the parallel
-    # PRIVATIZED_LIBRARIES flag list) from any prior
-    # target_config.cmake, keep entries whose lib_dir still exists on
-    # disk, and union them with this run's freshly-staged set so the
-    # rewritten config reflects everything currently present in the
-    # staging tree.
-    def _prior_list(var_name: str) -> list[str]:
-        prior: list[str] = []
-        prior_config = staging_dir / 'target_config.cmake'
-        if prior_config.exists():
-            m = re.search(
-                r'^\s*set\s*\(\s*' + var_name + r'\s+([^)]*)\)',
-                prior_config.read_text(),
-                re.MULTILINE,
-            )
-            if m:
-                for tok in m.group(1).replace(';', ' ').split():
-                    tok = tok.strip().strip('"')
-                    if tok and (staging_dir / tok).is_dir():
-                        prior.append(tok)
-        return prior
-
-    def _merged_list(prior: list[str], fresh: list[str]) -> str:
-        merged: list[str] = []
-        for n in prior + fresh:
-            if n not in merged:
-                merged.append(n)
-        return ';'.join(merged)
-
-    staged_list = _merged_list(_prior_list('STAGED_LIBRARIES'), staged)
-    # A prior privatized entry survives only if the lib was NOT restaged
-    # this run (a restage recomputes the flag from its recipe).
-    privatized_list = _merged_list(
-        [n for n in _prior_list('PRIVATIZED_LIBRARIES') if n not in staged],
-        privatized)
+    staged_list, privatized_list = _merge_staged_lists(
+        staging_dir, staged, privatized)
 
     if needs_mf:
-        # Copy the first-party multifloats-mpi bridge library wholesale.
-        # It is a standalone library under runtime/ with its own
-        # CMakeLists.txt (add_subdirectory'd from cmake/CMakeLists.txt);
-        # staging just plants the whole directory so the relative
+        # The first-party multifloats-mpi bridge library. It is a
+        # standalone library under runtime/ with its own CMakeLists.txt
+        # (add_subdirectory'd from cmake/CMakeLists.txt); staging just
+        # plants the whole directory so the relative
         # add_subdirectory(runtime/multifloats-mpi) resolves in the staged
         # tree. (The MPICH_SKIP_MPICXX / OMPI_SKIP_MPICXX guard is baked
         # into multifloats_bridge.h itself.)
-        mf_local = proj_root / 'src' / 'multifloats-mpi'
-        if mf_local.is_dir():
-            mf_dst = staging_dir / 'runtime' / 'multifloats-mpi'
-            if mf_dst.exists():
-                shutil.rmtree(mf_dst)
-            shutil.copytree(mf_local, mf_dst)
+        _replace_tree(proj_root / 'src' / 'multifloats-mpi',
+                      staging_dir / 'runtime' / 'multifloats-mpi')
 
     if needs_quad_mpi:
-        # Copy the first-party quad-mpi bridge library wholesale (custom
-        # MPI reduce ops on the standard MPI_REAL16 / MPI_COMPLEX32). Like
+        # The first-party quad-mpi bridge library (custom MPI reduce ops
+        # on the standard MPI_REAL16 / MPI_COMPLEX32). Like
         # multifloats-mpi it is a standalone library under runtime/ with
         # its own CMakeLists.txt, add_subdirectory'd from the parent build.
-        quad_local = proj_root / 'src' / 'quad-mpi'
-        if quad_local.is_dir():
-            quad_dst = staging_dir / 'runtime' / 'quad-mpi'
-            if quad_dst.exists():
-                shutil.rmtree(quad_dst)
-            shutil.copytree(quad_local, quad_dst)
+        _replace_tree(proj_root / 'src' / 'quad-mpi',
+                      staging_dir / 'runtime' / 'quad-mpi')
 
     # Copy the libmpiseq assembly (CMakeLists + first-party stub sources)
     # wholesale, for every target: the sequential MPI stub library under
@@ -670,23 +758,12 @@ set({lib_name}_LANGUAGE {config.language})
     # there on _mpiseq_src presence + Intel MPI).
     _copy_runtime_mpiseq(proj_root, staging_dir)
 
-    target_config = f"""\
-# Generated by: python -m migrator stage --target {target_mode.name}
-set(TARGET_NAME "{target_mode.name}")
-set(LIB_PREFIX "{lib_prefix}")
-set(LIB_PREFIX_COMPLEX "{lib_prefix_complex}")
-set(LIB_PAIR_PREFIX "{lib_prefix}{lib_prefix_complex}")
-set(NEEDS_MULTIFLOATS {'TRUE' if needs_mf else 'FALSE'})
-set(NEEDS_QUAD_MPI {'TRUE' if needs_quad_mpi else 'FALSE'})
-set(C_AS_CXX {'TRUE' if needs_mf else 'FALSE'})
-set(STAGED_LIBRARIES {staged_list})
-# Libraries whose migrated sources went through the ep_ symbol-
-# privatization pass (task 44): their shared ``_common`` archives carry
-# the hermetic ep_ engine and install under ep-prefixed filenames /
-# packages (see EplinalgInstall.cmake).
-set(PRIVATIZED_LIBRARIES {privatized_list})
-"""
-    (staging_dir / 'target_config.cmake').write_text(target_config)
+    _write_target_config(
+        staging_dir, target_str=target_mode.name,
+        lib_prefix=lib_prefix, lib_prefix_complex=lib_prefix_complex,
+        needs_multifloats=needs_mf, needs_quad_mpi=needs_quad_mpi,
+        staged_list=staged_list, privatized_list=privatized_list,
+        annotate=True)
 
     # Copy CMake files to staging directory.
     _copy_cmake_glue(proj_root, staging_dir, warn=True)
@@ -711,42 +788,7 @@ set(PRIVATIZED_LIBRARIES {privatized_list})
 
     _copy_tests(proj_root, staging_dir)
 
-    # Copy vendored Netlib BLAS source for the differential precision
-    # tests' refblas_quad reference library (compiled with gfortran's
-    # -freal-8-real-16 to promote KIND=8 entities to KIND=16 in-place).
-    # Tests fall back to system -lblas if this directory is absent.
-    netlib_blas_src = proj_root / 'extern' / 'lapack-3.12.1' / 'BLAS' / 'SRC'
-    if netlib_blas_src.is_dir():
-        refblas_dst = staging_dir / '_refblas_src'
-        if refblas_dst.exists():
-            shutil.rmtree(refblas_dst)
-        shutil.copytree(netlib_blas_src, refblas_dst)
-
-    # Same recipe for LAPACK: vendored Netlib SRC/ promoted to quad
-    # precision gives tests/lapack/reflapack/ a KIND=16 reference to
-    # compare the migrated qxlapack/eylapack/mwlapack against. The
-    # INSTALL/ directory provides {s,d}lamch.f / {s,d}roundup_lwork.f,
-    # which LAPACK SRC routines call but which aren't in SRC/ itself —
-    # copy them into _reflapack_src/ alongside the SRC contents so a
-    # single glob compiles the full reference. Both the single- and
-    # double-precision variants are needed: the genuine standard ``lapack``
-    # archive carries every arithmetic (the genuine single-precision
-    # solvers smumps/cmumps call slamch_ / sroundup_lwork_, the double
-    # ones dlamch_ / droundup_lwork_). These verbatim upstream files are
-    # unpromoted here — only the migrated LAPACK archive elides
-    # roundup_lwork via _strip_roundup_lwork; the standard one keeps it.
-    netlib_lapack_src = proj_root / 'extern' / 'lapack-3.12.1' / 'SRC'
-    if netlib_lapack_src.is_dir():
-        reflapack_dst = staging_dir / '_reflapack_src'
-        if reflapack_dst.exists():
-            shutil.rmtree(reflapack_dst)
-        shutil.copytree(netlib_lapack_src, reflapack_dst)
-        install_src = proj_root / 'extern' / 'lapack-3.12.1' / 'INSTALL'
-        for fname in ('slamch.f', 'dlamch.f',
-                      'sroundup_lwork.f', 'droundup_lwork.f'):
-            src = install_src / fname
-            if src.is_file():
-                shutil.copy2(src, reflapack_dst / fname)
+    _stage_reference_sources(proj_root, staging_dir)
 
     # Stage standard-precision source directories for the std archives
     # built alongside each migrated extension (see the _STD_DIRS table
@@ -754,13 +796,7 @@ set(PRIVATIZED_LIBRARIES {privatized_list})
     # always copy from extern/; the recipe column only matters for
     # baseline staging.
     for dst_name, rel_src, _recipe in _STD_DIRS:
-        src = proj_root / 'extern' / rel_src
-        if not src.is_dir():
-            continue
-        dst = staging_dir / dst_name
-        if dst.exists():
-            shutil.rmtree(dst)
-        shutil.copytree(src, dst)
+        _replace_tree(proj_root / 'extern' / rel_src, staging_dir / dst_name)
 
     # libseq's mpi.f bundles BLACS/ScaLAPACK forwarders (which collide
     # with the real migrated archives) and only knows the standard MPI
@@ -785,7 +821,64 @@ set(PRIVATIZED_LIBRARIES {privatized_list})
     print(f'  cmake --build {staging_dir}/build -j')
 
 
-def _stage_baseline(args, target_name: str):
+def _cmake_bool(value) -> str:
+    """CMake spelling of a Python truth value."""
+    return 'TRUE' if value else 'FALSE'
+
+
+def _write_target_config(staging_dir: Path, *, target_str: str,
+                         subtitle: str | None = None,
+                         lib_prefix: str = '', lib_prefix_complex: str = '',
+                         needs_multifloats: bool = False,
+                         needs_quad_mpi: bool | None = None,
+                         staged_list: str = '', privatized_list: str = '',
+                         annotate: bool = False) -> None:
+    """Write the staged tree's ``target_config.cmake``.
+
+    One writer for both stagings. The defaults are the baseline shape —
+    empty prefixes, no multifloats, no staged or privatized archives —
+    so ``_stage_baseline`` only has to name the target.
+
+    ``needs_quad_mpi=None`` omits the ``NEEDS_QUAD_MPI`` line entirely:
+    the baseline never links quad MPI and its config has never carried
+    the variable. ``annotate`` adds the prose comment above
+    ``PRIVATIZED_LIBRARIES``, which is likewise only meaningful once
+    there are migrated archives to privatize. Both flags exist to keep
+    the two files byte-identical to what the separate writers produced.
+    """
+    lines = [f'# Generated by: python -m migrator stage --target {target_str}']
+    if subtitle:
+        lines.append(subtitle)
+    lines += [
+        f'set(TARGET_NAME "{target_str}")',
+        f'set(LIB_PREFIX "{lib_prefix}")',
+        f'set(LIB_PREFIX_COMPLEX "{lib_prefix_complex}")',
+        f'set(LIB_PAIR_PREFIX "{lib_prefix}{lib_prefix_complex}")',
+        f'set(NEEDS_MULTIFLOATS {_cmake_bool(needs_multifloats)})',
+    ]
+    if needs_quad_mpi is not None:
+        lines.append(f'set(NEEDS_QUAD_MPI {_cmake_bool(needs_quad_mpi)})')
+    # C sources are compiled as C++ exactly when the target needs the
+    # multifloats module — the C++ type is what the C code binds to.
+    lines += [
+        f'set(C_AS_CXX {_cmake_bool(needs_multifloats)})',
+        f'set(STAGED_LIBRARIES {staged_list})',
+    ]
+    if annotate:
+        lines += [
+            '# Libraries whose migrated sources went through the ep_ symbol-',
+            '# privatization pass (task 44): their shared ``_common`` archives'
+            ' carry',
+            '# the hermetic ep_ engine and install under ep-prefixed filenames'
+            ' /',
+            '# packages (see EplinalgInstall.cmake).',
+        ]
+    lines.append(f'set(PRIVATIZED_LIBRARIES {privatized_list})')
+    (staging_dir / 'target_config.cmake').write_text(
+        '\n'.join(lines) + '\n')
+
+
+def _stage_baseline(args, target_str: str):
     """Stage an unmigrated baseline tree for kind4 / kind8.
 
     No per-library migration is run — kind4 / kind8 are the upstream
@@ -801,7 +894,7 @@ def _stage_baseline(args, target_name: str):
     staging_dir.mkdir(parents=True, exist_ok=True)
 
     print(f'\n{"=" * 60}')
-    print(f'  Baseline staging: {target_name} (no migration)')
+    print(f'  Baseline staging: {target_str} (no migration)')
     print(f'{"=" * 60}')
 
     # target_config.cmake: empty LIB_PREFIX, no multifloats, no migrated
@@ -809,19 +902,10 @@ def _stage_baseline(args, target_name: str):
     # add_migrated_* helpers are no-ops without per-lib manifest.cmake
     # files (which we don't write here), so the build resolves to just
     # the standard archives.
-    target_config = (
-        f'# Generated by: python -m migrator stage --target {target_name}\n'
-        f'# Baseline (un-migrated) target — see codegen/targets/{target_name}.yaml.\n'
-        f'set(TARGET_NAME "{target_name}")\n'
-        'set(LIB_PREFIX "")\n'
-        'set(LIB_PREFIX_COMPLEX "")\n'
-        'set(LIB_PAIR_PREFIX "")\n'
-        'set(NEEDS_MULTIFLOATS FALSE)\n'
-        'set(C_AS_CXX FALSE)\n'
-        'set(STAGED_LIBRARIES )\n'
-        'set(PRIVATIZED_LIBRARIES )\n'
-    )
-    (staging_dir / 'target_config.cmake').write_text(target_config)
+    _write_target_config(
+        staging_dir, target_str=target_str,
+        subtitle=(f'# Baseline (un-migrated) target — see '
+                  f'codegen/targets/{target_str}.yaml.'))
 
     # CMake glue (top-level CMakeLists + its include() modules,
     # FortranCompiler module, presets). Same files cmd_stage copies;
@@ -857,12 +941,8 @@ def _stage_baseline(args, target_name: str):
         return proj_root / 'extern' / rel_src
 
     def _stage_dst(dst_name: str, src: Path) -> None:
-        if not src.is_dir():
-            return
-        dst = staging_dir / dst_name
-        if dst.exists():
-            shutil.rmtree(dst)
-        shutil.copytree(src, dst, ignore=shutil.ignore_patterns('.prepared.stamp'))
+        _replace_tree(src, staging_dir / dst_name,
+                      ignore=shutil.ignore_patterns('.prepared.stamp'))
 
     _stage_dst('_refblas_src',
                _staged_or_external('lapack-3.12.1/BLAS/SRC', 'blas'))

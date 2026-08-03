@@ -3,6 +3,12 @@ language: c
 source_dir: extern/scalapack-2.2.3/BLACS/SRC
 extensions: [.c, .h]
 
+# BLACS is the one C recipe on the legacy hardcoded-pattern migrator: it
+# carries MPI typedef patches, Bdef.h rewrites, MPI_REAL16 check
+# generation and Cd*/BI_d* routine patterns that the generic
+# rename-map-driven cloner has no analogue for.
+legacy_c_migrator: true
+
 # The prefixed archive ``${LIB_PREFIX}blacs`` (e.g. libeyblacs) must
 # contain ONLY its own floating type's routines (the Q/X/E/Y/M/W clones:
 # qgesd2d_, xgebr2d_, egamx2d_, Cegamx2d, ...), so its symbols and MKL's

@@ -188,6 +188,15 @@ class RecipeConfig:
     # gap closes, switch the recipe back to enumerated
     # ``expected_divergences``.
     defer_all_divergences: bool = False
+    # Route this C recipe through the legacy hardcoded-pattern C
+    # migrator instead of the generic rename-map-driven cloner. Only
+    # BLACS sets it: it carries MPI typedef patches, Bdef.h rewrites,
+    # MPI_REAL16 check generation, and BLACS-specific Cd*/BI_d* routine
+    # patterns that have no analogue in other C libraries. Every other C
+    # recipe (PBLAS / ScaLAPACK_C / XBLAS / future libraries) leaves this
+    # False and uses the cloner, whose prefix classifier discovers slot
+    # positions empirically and is naming-convention-agnostic.
+    legacy_c_migrator: bool = False
     # Patches under ``codegen/recipes/<lib>/patches/`` that touch only one half
     # of a co-family pair because the upstream sibling carries a
     # genuinely different bug shape (or no analogous bug). Listed here,
@@ -294,6 +303,103 @@ def _parse_call_arg_casts(
     return out
 
 
+def _validate_recipe_data(data, recipe_path: Path) -> None:
+    """Reject a recipe that is not a mapping or is missing a required key.
+
+    Unknown keys are only warned about — recipes are hand-written and a
+    stale key should not stop a build.
+    """
+    if not isinstance(data, dict):
+        raise ValueError(
+            f'{recipe_path}: top-level YAML must be a mapping, '
+            f'got {type(data).__name__}'
+        )
+
+    for required in ('library', 'language', 'source_dir'):
+        if required not in data:
+            raise KeyError(
+                f'{recipe_path}: missing required recipe key {required!r}'
+            )
+
+    unknown = sorted(set(data) - _KNOWN_RECIPE_KEYS)
+    if unknown:
+        print(
+            f'  warning: {recipe_path.name}: unknown recipe key(s) '
+            f'{unknown!r}; ignored. (Known keys: {sorted(_KNOWN_RECIPE_KEYS)})',
+            file=sys.stderr,
+        )
+
+
+def _expand_extra_migrate(data, project_root: Path,
+                          extensions: list[str]) -> list[Path]:
+    """``extra_migrate_files`` plus the expansion of ``extra_migrate_dirs``.
+
+    ``extra_migrate_dirs`` is the directory-level spelling of
+    ``extra_migrate_files``. Each entry is either a
+    project-root-relative directory path or a mapping ``{dir: <path>,
+    exclude: [<stem>, ...]}``; every file in the directory whose
+    extension matches the recipe ``extensions`` is migrated except the
+    excluded stems (matched case-insensitively, without extension).
+    Non-recursive, mirroring the pipeline's own directory walk.
+    Expansion happens at load time so every consumer (migration
+    pipeline, standard-precision sibling collector, symbol classifier)
+    sees the exact list a hand enumeration would produce.
+    """
+    extra_migrate = [project_root / p
+                     for p in (data.get('extra_migrate_files') or [])]
+    for entry in data.get('extra_migrate_dirs') or []:
+        if isinstance(entry, dict):
+            entry_dir = project_root / entry['dir']
+            excluded = {str(s).upper() for s in (entry.get('exclude') or [])}
+        else:
+            entry_dir = project_root / entry
+            excluded = set()
+        extra_migrate.extend(sorted(
+            p for p in entry_dir.iterdir()
+            if p.is_file() and p.suffix.lower() in extensions
+            and p.stem.upper() not in excluded
+        ))
+    return extra_migrate
+
+
+def _manifest_entries(path: Path):
+    """Yield the significant lines of a manifest: stripped, with blank
+    lines and ``#`` comment lines dropped."""
+    for entry in path.read_text().splitlines():
+        entry = entry.strip()
+        if entry and not entry.startswith('#'):
+            yield entry
+
+
+def _load_keep_kind(recipe_path: Path,
+                    manifest_rel) -> dict[str, frozenset[int]]:
+    """Read the keep-kind manifest, if the recipe names one.
+
+    The manifest is a plain text file with one ``<path>:<lineno>`` entry
+    per line; the path is ignored (we key by basename) and the lineno is
+    1-based.
+    """
+    keep_kind_lines: dict[str, set[int]] = {}
+    if manifest_rel:
+        manifest_path = recipe_path.parent / manifest_rel
+        for entry in _manifest_entries(manifest_path):
+            path_str, _, lineno_str = entry.rpartition(':')
+            if not path_str or not lineno_str:
+                continue
+            basename = Path(path_str).name
+            keep_kind_lines.setdefault(basename, set()).add(int(lineno_str))
+    return {k: frozenset(v) for k, v in keep_kind_lines.items()}
+
+
+def _load_privatize(recipe_path: Path, privatize_rel) -> set[str]:
+    """Read the symbol-privatization manifest, if the recipe names one:
+    one exact linker-level symbol name per line."""
+    if not privatize_rel:
+        return set()
+    privatize_path = recipe_path.parent / privatize_rel
+    return set(_manifest_entries(privatize_path))
+
+
 def load_recipe(recipe_path: Path,
                 project_root: Path | None = None) -> RecipeConfig:
     """Load a recipe YAML file.
@@ -316,53 +422,11 @@ def load_recipe(recipe_path: Path,
     with open(recipe_path) as f:
         data = yaml.safe_load(f)
 
-    if not isinstance(data, dict):
-        raise ValueError(
-            f'{recipe_path}: top-level YAML must be a mapping, '
-            f'got {type(data).__name__}'
-        )
-
-    for required in ('library', 'language', 'source_dir'):
-        if required not in data:
-            raise KeyError(
-                f'{recipe_path}: missing required recipe key {required!r}'
-            )
-
-    unknown = sorted(set(data) - _KNOWN_RECIPE_KEYS)
-    if unknown:
-        print(
-            f'  warning: {recipe_path.name}: unknown recipe key(s) '
-            f'{unknown!r}; ignored. (Known keys: {sorted(_KNOWN_RECIPE_KEYS)})',
-            file=sys.stderr,
-        )
+    _validate_recipe_data(data, recipe_path)
 
     source_dir = project_root / data['source_dir']
     extensions = [e.lower() for e in data.get('extensions', ['.f', '.f90'])]
-
-    # Expand ``extra_migrate_dirs`` (directory-level spelling of
-    # ``extra_migrate_files``) into a flat per-file list. Each entry is
-    # either a project-root-relative directory path or a mapping
-    # ``{dir: <path>, exclude: [<stem>, ...]}``; every file in the
-    # directory whose extension matches the recipe ``extensions`` is
-    # migrated except the excluded stems (matched case-insensitively,
-    # without extension). Non-recursive, mirroring the pipeline's own
-    # directory walk. Expansion happens at load time so every consumer
-    # (migration pipeline, standard-precision sibling collector, symbol
-    # classifier) sees the exact list a hand enumeration would produce.
-    extra_migrate = [project_root / p
-                     for p in (data.get('extra_migrate_files') or [])]
-    for entry in data.get('extra_migrate_dirs') or []:
-        if isinstance(entry, dict):
-            entry_dir = project_root / entry['dir']
-            excluded = {str(s).upper() for s in (entry.get('exclude') or [])}
-        else:
-            entry_dir = project_root / entry
-            excluded = set()
-        extra_migrate.extend(sorted(
-            p for p in entry_dir.iterdir()
-            if p.is_file() and p.suffix.lower() in extensions
-            and p.stem.upper() not in excluded
-        ))
+    extra_migrate = _expand_extra_migrate(data, project_root, extensions)
 
     skip = set(s.upper() for s in data.get('skip_files', []))
     copy = set(s.upper() for s in data.get('copy_files', []))
@@ -377,35 +441,10 @@ def load_recipe(recipe_path: Path,
     extra_dirs_raw = data.get('extra_symbol_dirs', [])
     extra_symbol_dirs = [project_root / d for d in extra_dirs_raw]
 
-    # Load the keep-kind manifest if specified. The manifest is a plain
-    # text file with one ``<path>:<lineno>`` entry per line; the path is
-    # ignored (we key by basename) and the lineno is 1-based.
-    keep_kind_lines: dict[str, set[int]] = {}
-    manifest_rel = data.get('keep_kind_manifest')
-    if manifest_rel:
-        manifest_path = recipe_path.parent / manifest_rel
-        for entry in manifest_path.read_text().splitlines():
-            entry = entry.strip()
-            if not entry or entry.startswith('#'):
-                continue
-            path_str, _, lineno_str = entry.rpartition(':')
-            if not path_str or not lineno_str:
-                continue
-            basename = Path(path_str).name
-            keep_kind_lines.setdefault(basename, set()).add(int(lineno_str))
-    keep_kind_frozen = {k: frozenset(v) for k, v in keep_kind_lines.items()}
-
-    # Load the symbol-privatization manifest if specified: one exact
-    # linker-level symbol name per line, ``#`` starts a comment line.
-    privatize_names: set[str] = set()
-    privatize_rel = data.get('privatize_symbols')
-    if privatize_rel:
-        privatize_path = recipe_path.parent / privatize_rel
-        for entry in privatize_path.read_text().splitlines():
-            entry = entry.strip()
-            if not entry or entry.startswith('#'):
-                continue
-            privatize_names.add(entry)
+    keep_kind_frozen = _load_keep_kind(recipe_path,
+                                       data.get('keep_kind_manifest'))
+    privatize_names = _load_privatize(recipe_path,
+                                      data.get('privatize_symbols'))
 
     return RecipeConfig(
         library=data['library'],

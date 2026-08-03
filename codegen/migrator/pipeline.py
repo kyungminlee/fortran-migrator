@@ -10,6 +10,7 @@ import re
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+from typing import NamedTuple
 
 from .config import RecipeConfig, load_recipe
 from .prepare import prepare_recipe
@@ -208,35 +209,34 @@ def _postprocess_migrated(migrated: str, src_path: Path,
     return migrated
 
 
-def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
-                          output_dir: Path, target_mode: TargetMode,
-                          dry_run: bool = False,
-                          classification=None,
-                          parser: str | None = None,
-                          parser_cmd: str | None = None) -> dict:
-    """Run Fortran migration pipeline."""
-    # Identify precision-independent symbols
-    if classification is None:
-        classification = classify_recipe_symbols(config)
-    independent = classification.independent
+class _Canonical(NamedTuple):
+    """The winning migration for one output name.
 
-    migrated_count = 0
-    copied_count = 0
-    skipped: list[str] = []
-    divergences: list[str] = []
+    ``normalized`` is the comment-stripped text every later writer of the
+    same output name is compared against; ``source`` is the file that
+    produced it, needed only to name both halves in a divergence report.
+    """
 
-    # Collect eligible source files. In addition to files with the
-    # recipe's declared extensions, include any file whose stem is listed
-    # in copy_files (regardless of extension) — this lets libraries
-    # carry shared, type-independent headers (e.g. MUMPS's
-    # mumps_tags.h / mumps_headers.h) through without having to widen
-    # the extensions list and accidentally migrate them.
-    #
-    # extra_fortran_dirs contributes additional directories whose files
-    # are migrated alongside source_dir. MUMPS uses this for
-    # per-arithmetic headers (``dmumps_struc.h`` → ``qmumps_struc.h``)
-    # that live in a parallel ``include/`` directory but are Fortran
-    # content that must go through the full migration pipeline.
+    normalized: str
+    source: str
+
+
+def _collect_migration_sources(config: RecipeConfig) -> list[Path]:
+    """Eligible source files, in canonical (D/Z-first) migration order.
+
+    In addition to files with the recipe's declared extensions, include
+    any file whose stem is listed in copy_files (regardless of
+    extension) — this lets libraries carry shared, type-independent
+    headers (e.g. MUMPS's mumps_tags.h / mumps_headers.h) through
+    without having to widen the extensions list and accidentally migrate
+    them.
+
+    extra_fortran_dirs contributes additional directories whose files
+    are migrated alongside source_dir. MUMPS uses this for
+    per-arithmetic headers (``dmumps_struc.h`` → ``qmumps_struc.h``)
+    that live in a parallel ``include/`` directory but are Fortran
+    content that must go through the full migration pipeline.
+    """
     src_dirs = [config.source_dir] + list(
         getattr(config, 'extra_fortran_dirs', []) or []
     )
@@ -256,8 +256,6 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     src_files = sorted(set(src_files).union(
         p for p in extra_migrate if p.is_file()
     ))
-    # Convergence buffer: first writer of each output name stores its
-    # text; subsequent writers must agree or we record a divergence.
     # D/Z sources are preferred as the canonical text: when a pair
     # (SGEMM, DGEMM) both target QGEMM, DGEMM's migrated body is kept
     # and SGEMM's is only consulted for the equality check. The
@@ -265,10 +263,74 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     # (e.g. to route around a bug that only exists in the D/Z half).
     prefer = config.prefer_source
     src_files.sort(key=lambda p: (_canonical_rank(p.stem, prefer), p.name))
+    return src_files
 
-    canonical_text: dict[str, str] = {}
-    canonical_normalized: dict[str, str] = {}
-    canonical_source: dict[str, str] = {}
+
+def _reduce_migrated(to_migrate: list[Path], results: dict,
+                     output_dir: Path, config: RecipeConfig,
+                     module_rename_pairs) -> tuple[int, list[str], list[str]]:
+    """Write migrated sources and fold co-family duplicates together.
+
+    ``to_migrate`` is already in canonical order, so the first writer of
+    each output name is the one that lands on disk; every later writer
+    of that name only has to agree with it after comment stripping.
+    Returns ``(migrated_count, skipped, divergences)``.
+    """
+    canonical: dict[str, _Canonical] = {}
+    migrated_count = 0
+    skipped: list[str] = []
+    divergences: list[str] = []
+
+    for src_path in to_migrate:
+        result = results.get(src_path)
+        if result is None:
+            skipped.append(src_path.name)
+            continue
+        out_name, migrated = result
+        migrated = _postprocess_migrated(migrated, src_path, config,
+                                         module_rename_pairs)
+        normalized = _canonicalize_for_compare(
+            _strip_fortran_comments(migrated, src_path.suffix)
+        )
+
+        prior = canonical.get(out_name)
+        if prior is None:
+            # First (canonical) writer for this target name
+            (output_dir / out_name).write_text(migrated)
+            canonical[out_name] = _Canonical(normalized, src_path.name)
+            migrated_count += 1
+        elif prior.normalized == normalized:
+            # Convergence: co-family member produced identical code
+            # (comments may differ and are ignored).
+            pass
+        else:
+            # Divergence: co-family members disagree. Keep the canonical
+            # (D/Z) version on disk and record the mismatch.
+            divergences.append(
+                f'{src_path.name} vs {prior.source} → {out_name}'
+            )
+
+    return migrated_count, skipped, divergences
+
+
+def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
+                          output_dir: Path, target_mode: TargetMode,
+                          dry_run: bool = False,
+                          classification=None,
+                          parser: str | None = None,
+                          parser_cmd: str | None = None) -> dict:
+    """Run Fortran migration pipeline."""
+    # Identify precision-independent symbols
+    if classification is None:
+        classification = classify_recipe_symbols(config)
+    independent = classification.independent
+
+    migrated_count = 0
+    copied_count = 0
+    skipped: list[str] = []
+    divergences: list[str] = []
+
+    src_files = _collect_migration_sources(config)
 
     # Build module-rename regex pairs once. Applied post-migration to
     # every migrated file (copy_files are deliberately untouched so the
@@ -309,38 +371,10 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     results = _migrate_parallel(to_migrate, rename_map, target_mode,
                                 parser, parser_cmd, config)
 
-    # Reduce in deterministic D/Z-first order.
-    for src_path in to_migrate:
-        result = results.get(src_path)
-        if result is None:
-            skipped.append(src_path.name)
-            continue
-        out_name, migrated = result
-        migrated = _postprocess_migrated(migrated, src_path, config,
-                                         module_rename_pairs)
-        normalized = _canonicalize_for_compare(
-            _strip_fortran_comments(migrated, src_path.suffix)
-        )
-
-        prior = canonical_normalized.get(out_name)
-        if prior is None:
-            # First (canonical) writer for this target name
-            (output_dir / out_name).write_text(migrated)
-            canonical_text[out_name] = migrated
-            canonical_normalized[out_name] = normalized
-            canonical_source[out_name] = src_path.name
-            migrated_count += 1
-        elif prior == normalized:
-            # Convergence: co-family member produced identical code
-            # (comments may differ and are ignored).
-            pass
-        else:
-            # Divergence: co-family members disagree. Keep the canonical
-            # (D/Z) version on disk and record the mismatch.
-            divergences.append(
-                f'{src_path.name} vs {canonical_source[out_name]} '
-                f'→ {out_name}'
-            )
+    migrated_count, more_skipped, more_divergences = _reduce_migrated(
+        to_migrate, results, output_dir, config, module_rename_pairs)
+    skipped.extend(more_skipped)
+    divergences.extend(more_divergences)
 
     return {
         'migrated': migrated_count,
@@ -564,15 +598,10 @@ def run_migration(recipe_path: Path, output_dir: Path,
                 print(f'  Skipped:  {len(result["skipped"])} files')
             _print_divergences(result)
     elif config.language == 'c':
-        # BLACS keeps the legacy hardcoded-pattern migrator (it carries
-        # MPI typedef patches, Bdef.h rewrites, MPI_REAL16 check
-        # generation, and BLACS-specific Cd*/BI_d* routine patterns
-        # that have no analogue in other C libraries). Every other C
-        # recipe (PBLAS / ScaLAPACK_C / XBLAS / future libraries) uses
-        # the generic rename-map-driven cloner — the prefix classifier
-        # discovers slot positions empirically, so the cloner is
-        # naming-convention-agnostic.
-        if config.library == 'blacs':
+        # Which C migrator a recipe wants is a declared recipe field,
+        # not a property of its name — see
+        # ``RecipeConfig.legacy_c_migrator``.
+        if config.legacy_c_migrator:
             result = run_c_migration(config, output_dir, target_mode, dry_run)
         else:
             result = run_c_migration(
