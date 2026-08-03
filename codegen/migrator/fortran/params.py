@@ -397,39 +397,39 @@ def convert_data_stmts(
     return "".join(result), fp_assignments, dropped_known
 
 
-# Names of free-form file-scope PARAMETER declarations that are
-# supplied as MF_* constants by the multifloats module. RTMIN and
-# RTMAX are intentionally excluded: in several LAPACK routines
-# they are local variables computed at runtime, not PARAMETERs.
-# The mapping mirrors la_constants_map but with explicit
-# multifloats target names for free-form Pattern A files (those
-# use ``USE multifloats`` directly, not ``USE LA_CONSTANTS_MW``).
-_MF_PARAM_NUKE_RENAMES = {
-    'zero': 'DD_ZERO', 'one': 'DD_ONE', 'czero': 'DD_ZERO',
-    'safmin': 'DD_SAFMIN', 'safmax': 'DD_SAFMAX',
-    'tsml': 'DD_TSML', 'tbig': 'DD_TBIG',
-    'ssml': 'DD_SSML', 'sbig': 'DD_SBIG',
-    # dnrm2.f90's local ``maxN = huge(0.0_wp)`` is equivalent to
-    # DD_SAFMAX (which is itself defined as huge(0.0_dp) packed
-    # into float64x2's high limb).
-    'maxn': 'DD_SAFMAX',
-}
+def _param_nuke_map(target_mode: TargetMode) -> dict[str, str]:
+    """Names of free-form file-scope PARAMETER declarations the target
+    module supplies itself, mapped to the module's spelling.
+
+    ``la_constants_map`` is the same list of constants one layer up (the
+    ``USE LA_CONSTANTS_MW`` rename map); the free-form Pattern A files
+    ``USE multifloats`` directly but want the same names dropped, so it
+    is the base here too. ``param_nuke_extra`` adds the names that are
+    not LA_CONSTANTS members at all — see the target YAML.
+
+    Both are lower-cased: the caller matches against a lower-cased line.
+    """
+    return {k.lower(): v
+            for k, v in (*target_mode.la_constants_map.items(),
+                         *target_mode.param_nuke_extra.items())}
 
 
-def nuke_multifloats_params(source: str, removed_known: dict[str, str]) -> str:
+def nuke_multifloats_params(source: str, removed_known: dict[str, str],
+                            target_mode: TargetMode) -> str:
     """Comment out free-form PARAMETER declarations the target supplies.
 
     Heuristic pass over free-form source: declaration lines that mention
-    a name from ``_MF_PARAM_NUKE_RENAMES`` are commented out (including
+    a name from :func:`_param_nuke_map` are commented out (including
     ``&``-continued follow-on lines), and each dropped name is recorded
     in *removed_known* (mutated in place) so
     ``replace_known_constants`` later rewrites its uses to the ``DD_*``
     constant.
     """
+    nuke_renames = _param_nuke_map(target_mode)
     lines_tmp = source.splitlines()
     res_tmp = []
     in_comment_block = False
-    nuke_names = set(_MF_PARAM_NUKE_RENAMES.keys())
+    nuke_names = set(nuke_renames)
 
     for line in lines_tmp:
         stripped = line.strip().lower()
@@ -447,11 +447,11 @@ def nuke_multifloats_params(source: str, removed_known: dict[str, str]) -> str:
             res_tmp.append('! ' + line)
             if line.rstrip().endswith('&'): in_comment_block = True
             for n in matched_names:
-                removed_known[n.upper()] = _MF_PARAM_NUKE_RENAMES[n]
+                removed_known[n.upper()] = nuke_renames[n]
         elif in_comment_block:
             res_tmp.append('! ' + line)
             if not line.rstrip().endswith('&'): in_comment_block = False
             for n in matched_names:
-                removed_known[n.upper()] = _MF_PARAM_NUKE_RENAMES[n]
+                removed_known[n.upper()] = nuke_renames[n]
         else: res_tmp.append(line)
     return '\n'.join(res_tmp)

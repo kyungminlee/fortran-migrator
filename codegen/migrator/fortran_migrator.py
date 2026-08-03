@@ -168,7 +168,7 @@ def _prepare_source(
     source = fix_misdeclared_statement_functions(source, source_kind=ctx.source_kind)
     source, removed_known = strip_known_constants_from_decls(source, target_mode)
     if free_form and nuke_mf_params and not target_mode.is_kind_based:
-        source = nuke_multifloats_params(source, removed_known)
+        source = nuke_multifloats_params(source, removed_known, target_mode)
     source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
     source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
     removed_known.update(dropped_p)
