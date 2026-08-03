@@ -3,15 +3,14 @@ program test_pddot
     use compare,       only: rel_err_scalar
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: ddot
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_row, numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_vector
     use target_pblas,  only: target_name, target_eps, target_pddot
     implicit none
 
     integer, parameter :: cases(*) = [100, 1000, 5000]
     integer, parameter :: mb = 16
-    integer :: i, n, loc_n, lld, info
+    integer :: i, n
     integer :: descx(9), descy(9)
     real(ep), allocatable :: x_loc(:), y_loc(:), x_glob(:), y_glob(:)
     real(ep) :: ref, got, err, tol
@@ -27,10 +26,8 @@ program test_pddot
         call gen_distrib_vector(n, mb, x_loc, x_glob, seed = 711 + 7 * i)
         call gen_distrib_vector(n, mb, y_loc, y_glob, seed = 811 + 7 * i)
 
-        loc_n = numroc_local(n, mb, my_row, 0, my_nprow)
-        lld   = max(1, loc_n)
-        call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld, info)
-        call descinit_local(descy, n, 1, mb, 1, 0, 0, my_context, lld, info)
+        call local_desc(descx, n, 1, mb, 1)
+        call local_desc(descy, n, 1, mb, 1)
 
         got = 0.0_ep
         call target_pddot(n, got, x_loc, 1, 1, descx, 1, &

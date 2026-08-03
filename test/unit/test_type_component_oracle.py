@@ -9,6 +9,8 @@ struct-definition module — the per-file variable oracle cannot see it.
 """
 
 from migrator.fortran.decls import scan_type_component_names
+from migrator.pipeline import _build_component_oracle
+from migrator.target_mode import load_target
 
 
 _STRUC = """\
@@ -67,19 +69,28 @@ def test_type_variable_decl_not_a_definition():
     assert scan_type_component_names(src) == (set(), set())
 
 
-def test_union_drops_real_intersect_complex():
-    # Mirror the pipeline reduction: A is real in the d-struct and complex
-    # in the c-struct, so it is ambiguous and dropped from both sets; the
-    # printed statistics survive in comp_real.
-    r = set()
-    c = set()
-    for src in (_STRUC, _STRUC_C):
-        rr, cc = scan_type_component_names(src)
-        r |= rr
-        c |= cc
-    ambiguous = r & c
-    comp_real = r - ambiguous
-    comp_complex = c - ambiguous
-    assert 'A' in ambiguous
+def _oracle(tmp_path, *sources, target='multifloats'):
+    """Run the real pipeline reduction over ``sources`` written to disk."""
+    paths = []
+    for i, src in enumerate(sources):
+        p = tmp_path / f'struc{i}.f'
+        p.write_text(src)
+        paths.append(p)
+    return _build_component_oracle(paths, load_target(target))
+
+
+def test_union_drops_real_intersect_complex(tmp_path):
+    # A is real in the d-struct and complex in the c-struct (the two scan
+    # tests above assert exactly that), so the union makes it ambiguous and
+    # it is dropped from both sets; the printed statistics survive in
+    # comp_real.
+    comp_real, comp_complex = _oracle(tmp_path, _STRUC, _STRUC_C)
     assert 'A' not in comp_real and 'A' not in comp_complex
     assert {'CNTL', 'RINFOG', 'DKEEP'} <= comp_real
+
+
+def test_oracle_empty_for_kind_based_target(tmp_path):
+    # real64x2 / cmplx64x2 narrowing does not apply to a KIND target, so the
+    # oracle short-circuits before scanning.
+    assert _oracle(tmp_path, _STRUC, _STRUC_C, target='kind16') == (frozenset(),
+                                                                   frozenset())

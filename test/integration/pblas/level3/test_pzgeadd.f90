@@ -3,9 +3,7 @@ program test_pzgeadd
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_mat_z
     use pblas_prec_report, only: report_init, report_case, report_finalize
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix_z, gather_matrix_z
     use target_pblas,  only: target_name, target_eps, target_pzgeadd
     implicit none
@@ -15,8 +13,7 @@ program test_pzgeadd
     integer, parameter :: ms(*) = [32, 64, 96]
     integer, parameter :: ns(*) = [40, 48, 80]
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, ic, m, n, ma, na_dim, info
-    integer :: locm_a, locn_a, locm_c, locn_c, lld_a, lld_c
+    integer :: i, ic, m, n, ma, na_dim
     integer :: desca(9), descc(9)
     complex(ep), allocatable :: A_loc(:,:), C_loc(:,:)
     complex(ep), allocatable :: A_glob(:,:), C0(:,:), C_ref(:,:), C_got(:,:)
@@ -42,12 +39,8 @@ program test_pzgeadd
             call gen_distrib_matrix_z(m, n, mb, nb, C_loc, C0, &
                                       seed = 17311 + 29*i + 211*ic)
 
-            locm_a = numroc_local(ma, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(na_dim, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-            locm_c = numroc_local(m, mb, my_row, 0, my_nprow)
-            locn_c = numroc_local(n, nb, my_col, 0, my_npcol); lld_c = max(1, locm_c)
-            call descinit_local(desca, ma, na_dim, mb, nb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descc, m, n, mb, nb, 0, 0, my_context, lld_c, info)
+            call local_desc(desca, ma, na_dim, mb, nb)
+            call local_desc(descc, m, n, mb, nb)
 
             call target_pzgeadd(transes(ic), m, n, alpha, A_loc, 1, 1, desca, &
                                 beta, C_loc, 1, 1, descc)

@@ -3,9 +3,7 @@ program test_pdgemm
     use compare,       only: max_rel_err_mat
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: dgemm
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix, gather_matrix
     use target_pblas,  only: target_name, target_eps, target_pdgemm
     implicit none
@@ -30,10 +28,8 @@ program test_pdgemm
     character(len=1), parameter :: transas(*) = ['N','N','N','N','N','N','T','N']
     character(len=1), parameter :: transbs(*) = ['N','N','N','N','N','N','N','T']
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, m, n, k, info
+    integer :: i, m, n, k
     integer :: ar, ac, br, bc
-    integer :: locm_a, locn_a, locm_b, locn_b, locm_c, locn_c
-    integer :: lld_a, lld_b, lld_c
     integer :: desca(9), descb(9), descc(9)
     character(len=1) :: transa, transb
     real(ep), allocatable :: A_loc(:,:), B_loc(:,:), C_loc(:,:)
@@ -64,16 +60,9 @@ program test_pdgemm
         call gen_distrib_matrix(br, bc, mb, nb, B_loc, B_glob, seed = 7811 + 23 * i)
         call gen_distrib_matrix(m,  n,  mb, nb, C_loc, C0,     seed = 7821 + 23 * i)
 
-        locm_a = numroc_local(ar, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(ac, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        locm_b = numroc_local(br, mb, my_row, 0, my_nprow)
-        locn_b = numroc_local(bc, nb, my_col, 0, my_npcol); lld_b = max(1, locm_b)
-        locm_c = numroc_local(m, mb, my_row, 0, my_nprow)
-        locn_c = numroc_local(n, nb, my_col, 0, my_npcol); lld_c = max(1, locm_c)
-
-        call descinit_local(desca, ar, ac, mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descb, br, bc, mb, nb, 0, 0, my_context, lld_b, info)
-        call descinit_local(descc, m,  n,  mb, nb, 0, 0, my_context, lld_c, info)
+        call local_desc(desca, ar, ac, mb, nb)
+        call local_desc(descb, br, bc, mb, nb)
+        call local_desc(descc, m,  n,  mb, nb)
 
         call target_pdgemm(transa, transb, m, n, k, alpha, &
                            A_loc, 1, 1, desca, B_loc, 1, 1, descb, &

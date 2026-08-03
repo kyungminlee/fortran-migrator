@@ -3,9 +3,7 @@ program test_pzhemm
     use compare,       only: max_rel_err_mat_z
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: zhemm
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix_z, gather_matrix_z
     use target_pblas,  only: target_name, target_eps, target_pzhemm
     implicit none
@@ -15,10 +13,8 @@ program test_pzhemm
     character(len=1), parameter :: sides(*) = ['L', 'L', 'R', 'R']
     character(len=1), parameter :: uplos(*) = ['U', 'L', 'U', 'L']
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, is, m, n, info
+    integer :: i, is, m, n
     integer :: ka
-    integer :: locm_a, locn_a, locm_b, locn_b, locm_c, locn_c
-    integer :: lld_a, lld_b, lld_c
     integer :: desca(9), descb(9), descc(9)
     character(len=1) :: side, uplo
     complex(ep), allocatable :: A_loc(:,:), B_loc(:,:), C_loc(:,:)
@@ -49,15 +45,9 @@ program test_pzhemm
             call gen_distrib_matrix_z(m, n, mb, nb, C_loc, C0, &
                                       seed = 14121 + 47 * i + 211 * is)
 
-            locm_a = numroc_local(ka, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(ka, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-            locm_b = numroc_local(m, mb, my_row, 0, my_nprow)
-            locn_b = numroc_local(n, nb, my_col, 0, my_npcol); lld_b = max(1, locm_b)
-            locm_c = locm_b; locn_c = locn_b; lld_c = lld_b
-
-            call descinit_local(desca, ka, ka, mb, mb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descb, m, n, mb, nb, 0, 0, my_context, lld_b, info)
-            call descinit_local(descc, m, n, mb, nb, 0, 0, my_context, lld_c, info)
+            call local_desc(desca, ka, ka, mb, mb)
+            call local_desc(descb, m, n, mb, nb)
+            call local_desc(descc, m, n, mb, nb)
 
             call target_pzhemm(side, uplo, m, n, alpha, &
                                A_loc, 1, 1, desca, B_loc, 1, 1, descb, &

@@ -3,9 +3,7 @@ program test_pzsyrk
     use compare,       only: max_rel_err_mat_z
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: zsyrk
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix_z, gather_matrix_z
     use target_pblas,  only: target_name, target_eps, target_pzsyrk
     implicit none
@@ -16,9 +14,8 @@ program test_pzsyrk
     character(len=1), parameter :: uplos(*)   = ['U', 'L', 'U', 'L']
     character(len=1), parameter :: transes(*) = ['N', 'N', 'T', 'T']
     integer, parameter :: mb = 8
-    integer :: i, ic, n, k, info
+    integer :: i, ic, n, k
     integer :: ar, ac
-    integer :: locm_a, locn_a, locm_c, locn_c, lld_a, lld_c
     integer :: desca(9), descc(9)
     character(len=1) :: uplo, trans
     complex(ep), allocatable :: A_loc(:,:), C_loc(:,:)
@@ -46,13 +43,8 @@ program test_pzsyrk
             call gen_distrib_matrix_z(n, n, mb, mb, C_loc, C0, &
                                       seed = 14311 + 53 * i + 211 * ic)
 
-            locm_a = numroc_local(ar, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(ac, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-            locm_c = numroc_local(n, mb, my_row, 0, my_nprow)
-            locn_c = numroc_local(n, mb, my_col, 0, my_npcol); lld_c = max(1, locm_c)
-
-            call descinit_local(desca, ar, ac, mb, mb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descc, n, n, mb, mb, 0, 0, my_context, lld_c, info)
+            call local_desc(desca, ar, ac, mb, mb)
+            call local_desc(descc, n, n, mb, mb)
 
             call target_pzsyrk(uplo, trans, n, k, alpha, &
                                A_loc, 1, 1, desca, beta, C_loc, 1, 1, descc)

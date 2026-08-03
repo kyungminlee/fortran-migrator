@@ -3,15 +3,14 @@ program test_pdamax
     use compare,       only: rel_err_scalar
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: idamax
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_row, numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_vector
     use target_pblas,  only: target_name, target_eps, target_pdamax
     implicit none
 
     integer, parameter :: cases(*) = [100, 1000, 5000]
     integer, parameter :: mb = 16
-    integer :: i, n, loc_n, lld, info, indx, idx_ref
+    integer :: i, n, indx, idx_ref
     integer :: descx(9)
     real(ep), allocatable :: x_loc(:), x_glob(:)
     real(ep) :: amax, err, tol
@@ -24,9 +23,7 @@ program test_pdamax
         n = cases(i)
         call gen_distrib_vector(n, mb, x_loc, x_glob, seed = 1901 + 7 * i)
 
-        loc_n = numroc_local(n, mb, my_row, 0, my_nprow)
-        lld   = max(1, loc_n)
-        call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld, info)
+        call local_desc(descx, n, 1, mb, 1)
 
         amax = 0.0_ep; indx = 0
         call target_pdamax(n, amax, indx, x_loc, 1, 1, descx, 1)

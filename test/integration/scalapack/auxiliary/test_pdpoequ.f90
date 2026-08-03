@@ -4,9 +4,9 @@ program test_pdpoequ
     use compare,          only: rel_err_scalar, max_rel_err_vec
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dpoequ
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_vector, &
                                 gather_vector_row, scatter_matrix
     use target_scalapack, only: target_name, target_eps, target_pdpoequ
@@ -15,7 +15,7 @@ program test_pdpoequ
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref
-    integer :: locm_a, locn_a, lld_a
+    integer :: locm_a, locn_a
     integer :: desca(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), M_glob(:,:), dummy(:,:)
     real(ep), allocatable :: SR_loc(:), SC_loc(:), SR_got(:), SC_got(:), S_ref(:)
@@ -37,11 +37,11 @@ program test_pdpoequ
         end do
 
         locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
         allocate(A_loc(max(1, locm_a), max(1, locn_a)))
         A_loc = 0.0_ep
         call scatter_matrix(n, n, mb, nb, A_glob, A_loc)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         allocate(SR_loc(max(1, locm_a)), SC_loc(max(1, locn_a)))
         call target_pdpoequ(n, A_loc, 1, 1, desca, SR_loc, SC_loc, &

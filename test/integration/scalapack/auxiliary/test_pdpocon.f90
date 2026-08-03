@@ -7,9 +7,8 @@ program test_pdpocon
     use compare,           only: rel_err_scalar
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use cond_helpers,      only: true_kappa1_posdef
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_npcol, &
+                                 my_col, numroc_local, local_desc
     use pblas_distrib,     only: gen_distrib_matrix, scatter_matrix
     use target_scalapack,  only: target_name, target_pdpocon, target_pdpotrf, &
                                  target_pdlansy
@@ -19,7 +18,7 @@ program test_pdpocon
     integer, parameter :: mb = 8, nb = 8
     character(len=1), parameter :: uplos(*) = ['U', 'L', 'U']
     integer :: i, n, info, info_ref, lwork, liwork, k
-    integer :: locm_a, locn_a, lld_a
+    integer :: locn_a
     integer :: desca(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_sym(:,:), A_for_kappa(:,:)
     real(ep), allocatable :: work(:)
@@ -40,10 +39,9 @@ program test_pdpocon
             A_sym(k, k) = A_sym(k, k) + real(2 * n, ep)
         end do
         ! Reflect into A_loc owners.
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
         call scatter_matrix(n, n, mb, nb, A_sym, A_loc)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         allocate(work(max(1, locn_a)))
         anorm = target_pdlansy('1', uplos(i), n, A_loc, 1, 1, desca, work)

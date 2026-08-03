@@ -4,16 +4,14 @@ program test_pdrot
     use prec_kinds,        only: ep
     use compare,           only: max_rel_err_vec
     use pblas_prec_report, only: report_init, report_case, report_finalize
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,     only: gen_distrib_matrix, gather_matrix
     use target_scalapack,  only: target_name, target_eps, target_pdrot
     implicit none
 
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, n, info, locm, lld_x, lld_y, lwork
+    integer :: i, n, info, lwork
     integer :: descx(9), descy(9)
     real(ep), allocatable :: x_loc(:,:), x_glob(:,:), x_got(:,:)
     real(ep), allocatable :: y_loc(:,:), y_glob(:,:), y_got(:,:)
@@ -32,9 +30,8 @@ program test_pdrot
         call gen_distrib_matrix(n, 1, mb, nb, x_loc, x_glob, seed = 23601 + 31*i)
         call gen_distrib_matrix(n, 1, mb, nb, y_loc, y_glob, seed = 23611 + 31*i)
 
-        locm = numroc_local(n, mb, my_row, 0, my_nprow); lld_x = max(1, locm); lld_y = lld_x
-        call descinit_local(descx, n, 1, mb, nb, 0, 0, my_context, lld_x, info)
-        call descinit_local(descy, n, 1, mb, nb, 0, 0, my_context, lld_y, info)
+        call local_desc(descx, n, 1, mb, nb)
+        call local_desc(descy, n, 1, mb, nb)
 
         allocate(wopt(1))
         call target_pdrot(n, x_loc, 1, 1, descx, 1, y_loc, 1, 1, descy, 1, &

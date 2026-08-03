@@ -7,9 +7,9 @@ program test_pdstedc
     use compare,          only: max_rel_err_vec
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dstebz
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                local_desc
     use pblas_distrib,    only: gather_matrix
     use target_scalapack, only: target_name, target_eps, target_pdstedc
     implicit none
@@ -45,7 +45,7 @@ program test_pdstedc
 
         locm = numroc_local(n, mb, my_row, 0, my_nprow)
         locn = numroc_local(n, nb, my_col, 0, my_npcol); lld_q = max(1, locm)
-        call descinit_local(descq, n, n, mb, nb, 0, 0, my_context, lld_q, info)
+        call local_desc(descq, n, n, mb, nb)
         allocate(Q_loc(lld_q, max(1, locn)))
         Q_loc = 0.0_ep
 

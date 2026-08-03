@@ -30,8 +30,10 @@ just the names those drivers use.
 
 import dataclasses
 import re
+from importlib import import_module
 from pathlib import Path
 
+from .parse_facts import ParseTreeFacts
 from .target_mode import TargetMode
 
 from .fortran.use_inject import insert_use_multifloats, specialize_use_module
@@ -49,6 +51,7 @@ from .fortran.decls import (
     replace_type_decls, replace_standalone_real_complex,
     _scan_complex_var_names, _scan_real_var_names,
     strip_known_constants_from_decls, fix_misdeclared_statement_functions,
+    source_has_fp_type_syntax,
 )
 from .fortran.fixedform import reformat_fixed_line, _segment_fixed_form_statements
 from .fortran.logical_lines import segment_free_form, reformat_free_line
@@ -82,20 +85,6 @@ from .fortran.io_narrow import (
 
 # ---------------------------------------------------------------------------
 # Orchestrators
-#
-# Two design notes that outlived their original call sites:
-#
-# * An experimental ``_force_int_assignment`` pass (wrap the RHS of
-#   ``INT_VAR = ...`` with ``INT(...)`` when the RHS mentions a known
-#   float64x2 variable) was prototyped and removed: the heuristic ("any
-#   token in real_names") misclassifies a float64x2 variable *passed* to an
-#   integer-returning function (e.g. ``JP = J - 1 + IUAMAX(M-J+1, A(J,J), 1)``
-#   where A is float64x2 but IUAMAX returns INTEGER). Reliable handling needs
-#   semantic facts (the migrated return type) — Phase 1.5 work.
-# * Module public names (type names, constants, generics, operator generics)
-#   are loaded from the target YAML via TargetMode fields: module_type_names,
-#   module_constant_names, module_generic_names, module_public_names (their
-#   union), and module_operator_generics.
 # ---------------------------------------------------------------------------
 
 
@@ -147,6 +136,75 @@ def _apply_value_passes(s: str, target_mode: TargetMode,
     return s
 
 
+def _prepare_source(
+    source: str, ctx: MigrationContext, *,
+    free_form: bool, nuke_mf_params: bool,
+) -> tuple[str, set[str], set[str], dict[str, str]]:
+    """Whole-file passes both drivers run *before* their per-line loop.
+
+    Returns the transformed source plus the three facts the loop bodies
+    key off: the real / complex variable-name sets and the map of
+    known constants that the declaration strip and the PARAMETER / DATA
+    conversions removed (so the loop can rewrite their references).
+
+    Two steps are free-form-only, and both are deliberate divergences
+    rather than oversights:
+
+    * ``rewrite_la_constants_use`` — ``la_constants`` is an F90 module,
+      so a ``USE la_constants`` only ever appears in free-form sources.
+    * ``nuke_multifloats_params`` — the heuristic that comments out
+      file-scope PARAMETERs the multifloats module supplies itself. It
+      is additionally gated by the caller's ``nuke_mf_params``, which
+      the parser-guided path turns off.
+
+    The counterpart divergences run in the loop, not here; see
+    :func:`migrate_fixed_form`'s docstring.
+    """
+    target_mode = ctx.target_mode
+    complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
+    real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
+    if free_form:
+        source = rewrite_la_constants_use(source, target_mode)
+    source = fix_misdeclared_statement_functions(source, source_kind=ctx.source_kind)
+    source, removed_known = strip_known_constants_from_decls(source, target_mode)
+    if free_form and nuke_mf_params and not target_mode.is_kind_based:
+        source = nuke_multifloats_params(source, removed_known, target_mode)
+    source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
+    source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
+    removed_known.update(dropped_p)
+    removed_known.update(dropped_d)
+    source = _dedup_intrinsic_stmts(source, target_mode)
+    source = insert_use_multifloats(
+        source, target_mode, extra_lines=param_assignments + data_assignments)
+    return source, real_names, complex_names, removed_known
+
+
+# Un-double-comment the ``wp`` parameter line that the module-based
+# targets leave behind. The two forms are NOT interchangeable and are
+# kept apart deliberately: the fixed-form corpus only ever produces the
+# one exact spelling, while free-form sources vary the spacing, so
+# widening the fixed-form pattern (or narrowing the free-form one)
+# would change the migrated bytes.
+_WP_UNCOMMENT_FIXED_RE = re.compile(
+    r'! !    integer, parameter :: wp = kind\(1\.d0\)')
+_WP_UNCOMMENT_FIXED_SUB = '!    integer, parameter :: wp = kind(1.d0)'
+_WP_UNCOMMENT_FREE_RE = re.compile(
+    r'(?i)!\s*!\s*integer\s*,\s*parameter\s*::\s*wp\s*=')
+_WP_UNCOMMENT_FREE_SUB = '!    integer, parameter :: wp ='
+
+
+def _finalize_source(source: str, target_mode: TargetMode, *,
+                     fixed_form: bool) -> str:
+    """Whole-file passes both drivers run *after* their per-line loop."""
+    if not target_mode.is_kind_based:
+        if fixed_form:
+            source = _WP_UNCOMMENT_FIXED_RE.sub(_WP_UNCOMMENT_FIXED_SUB, source)
+        else:
+            source = _WP_UNCOMMENT_FREE_RE.sub(_WP_UNCOMMENT_FREE_SUB, source)
+    source = _dedup_intrinsic_stmts(source, target_mode)
+    return specialize_use_module(source, target_mode, fixed_form=fixed_form)
+
+
 def migrate_fixed_form(source: str, ctx: MigrationContext, *,
                         has_float_types: bool = True,
                         has_real_literals: bool = True) -> str:
@@ -165,16 +223,8 @@ def migrate_fixed_form(source: str, ctx: MigrationContext, *,
     """
     rename_map, target_mode = ctx.rename_map, ctx.target_mode
     source_kind = ctx.source_kind
-    complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
-    real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
-    source = fix_misdeclared_statement_functions(source, source_kind=source_kind)
-    source, removed_known = strip_known_constants_from_decls(source, target_mode)
-    source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
-    source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
-    removed_known.update(dropped_p)
-    removed_known.update(dropped_d)
-    source = _dedup_intrinsic_stmts(source, target_mode)
-    source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
+    source, real_names, complex_names, removed_known = _prepare_source(
+        source, ctx, free_form=False, nuke_mf_params=False)
     physical = source.splitlines(keepends=True)
     statements = _segment_fixed_form_statements(physical)
     result = []
@@ -244,14 +294,7 @@ def migrate_fixed_form(source: str, ctx: MigrationContext, *,
         # preserves a missing newline at end-of-file.
         result.append(s + terms[-1])
 
-    source = ''.join(result)
-    if not target_mode.is_kind_based:
-        source = re.sub(r'! !    integer, parameter :: wp = kind\(1\.d0\)',
-                        '!    integer, parameter :: wp = kind(1.d0)', source)
-
-    source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_module(source, target_mode, fixed_form=True)
-    return source
+    return _finalize_source(''.join(result), target_mode, fixed_form=True)
 
 
 def migrate_free_form(source: str, ctx: MigrationContext, *,
@@ -266,21 +309,8 @@ def migrate_free_form(source: str, ctx: MigrationContext, *,
     """
     rename_map, target_mode = ctx.rename_map, ctx.target_mode
     source_kind = ctx.source_kind
-    complex_names = _scan_complex_var_names(source) if not target_mode.is_kind_based else set()
-    real_names = _scan_real_var_names(source) if not target_mode.is_kind_based else set()
-    source = rewrite_la_constants_use(source, target_mode)
-    source = fix_misdeclared_statement_functions(source, source_kind=source_kind)
-    source, removed_known = strip_known_constants_from_decls(source, target_mode)
-    if nuke_mf_params and not target_mode.is_kind_based:
-        source = nuke_multifloats_params(source, removed_known)
-
-    source, param_assignments, dropped_p = convert_parameter_stmts(source, target_mode)
-    source, data_assignments, dropped_d = convert_data_stmts(source, target_mode)
-    removed_known.update(dropped_p)
-    removed_known.update(dropped_d)
-
-    source = _dedup_intrinsic_stmts(source, target_mode)
-    source = insert_use_multifloats(source, target_mode, extra_lines=param_assignments + data_assignments)
+    source, real_names, complex_names, removed_known = _prepare_source(
+        source, ctx, free_form=True, nuke_mf_params=nuke_mf_params)
     lines = source.splitlines(keepends=True)
     result = []
     for line in lines:
@@ -314,14 +344,7 @@ def migrate_free_form(source: str, ctx: MigrationContext, *,
                                              ctx.comp_real, ctx.comp_complex)
         result.append(stripped + nl)
 
-    source = ''.join(result)
-    if not target_mode.is_kind_based:
-        source = re.sub(r'(?i)!\s*!\s*integer\s*,\s*parameter\s*::\s*wp\s*=',
-                        '!    integer, parameter :: wp =', source)
-
-    source = _dedup_intrinsic_stmts(source, target_mode)
-    source = specialize_use_module(source, target_mode, fixed_form=False)
-    return source
+    return _finalize_source(''.join(result), target_mode, fixed_form=False)
 
 
 def target_filename(name: str, rename_map: dict[str, str],
@@ -404,6 +427,35 @@ def _apply_local_passes(source: str, passes, *, fixed_form: bool) -> str:
     return ''.join(out)
 
 
+# ``--parser`` value → parser module name. Both modules expose the same
+# three names (``find_compiler``, ``run_parse_tree``, ``scan_file``), so
+# a third parser is a table entry rather than another branch below. The
+# import stays deferred: neither module is loaded unless a parser oracle
+# was actually requested.
+_PARSER_MODULES = {
+    'flang': 'flang_parser',
+    'gfortran': 'gfortran_parser',
+}
+
+
+def _scan_facts(src_path: Path, parser: str | None,
+                parser_cmd: str | None) -> ParseTreeFacts | None:
+    """Run the requested parse-tree oracle over one source file.
+
+    Returns None when no parser was requested, the parser name is
+    unknown, the compiler isn't installed, or the dump failed — the
+    caller then falls back to the pure source-level migration.
+    """
+    module_name = _PARSER_MODULES.get(parser or '')
+    if module_name is None:
+        return None
+    module = import_module(f'.{module_name}', __package__)
+    cmd = parser_cmd or module.find_compiler()
+    if not cmd:
+        return None
+    return module.scan_file(src_path, cmd)
+
+
 def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
                            target_mode: TargetMode,
                            parser: str | None = None,
@@ -413,15 +465,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
                            comp_complex: frozenset[str] = frozenset(),
                            ) -> tuple[str, str] | None:
     ext, source = src_path.suffix.lower(), src_path.read_text(errors='replace')
-    facts = None
-    if parser == 'flang':
-        from .flang_parser import scan_file as flang_scan, find_flang
-        cmd = parser_cmd or find_flang()
-        if cmd: facts = flang_scan(src_path, cmd)
-    elif parser == 'gfortran':
-        from .gfortran_parser import scan_file as gfortran_scan, find_gfortran
-        cmd = parser_cmd or find_gfortran()
-        if cmd: facts = gfortran_scan(src_path, cmd)
+    facts = _scan_facts(src_path, parser, parser_cmd)
 
     if keep_kind_lines:
         source = _apply_keep_kind_sentinel(source, keep_kind_lines)
@@ -460,10 +504,15 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
          lambda s: _rewrite_mpi_sum(s, target_mode)],
         fixed_form=fixed_form,
     )
-    # The remaining post-passes insert a whole USE line / rewrite single
-    # (never-continued) include lines / strip a LWORK round-up — none match
-    # across continuations, so they stay as whole-file passes. insert_use must
-    # run after _rewrite_mpi_sum (it keys off the MPI_QQ_* ops that pass emits).
+    # The remaining post-passes stay whole-file, for two different reasons.
+    # insert_use inserts a whole USE line and _rewrite_prefixed_includes
+    # rewrites single (never-continued) include lines, so neither has any
+    # continuation to match across. _strip_roundup_lwork does span
+    # continuations, but it walks them itself and re-emits a shortened
+    # declaration as one joined line — deliberately dropping the original
+    # layout, which is the opposite of what _apply_local_passes preserves.
+    # insert_use must run after _rewrite_mpi_sum (it keys off the MPI_QQ_*
+    # ops that pass emits).
     migrated = insert_use_multifloats_mpi_f(migrated, target_mode)
     migrated = _rewrite_prefixed_includes(migrated, target_mode)
     migrated = _strip_roundup_lwork(migrated, target_mode)
@@ -524,21 +573,7 @@ def _migrate_with_facts(source: str, ext: str, ctx: MigrationContext,
         # the migrated module still references DOUBLE PRECISION at
         # the field level — incompatible with callers that expect
         # the promoted REAL(KIND=...) target type.
-        # The various ways an FP type can appear in a source file. Keep
-        # this list aligned with `replace_type_decls` -- if it can
-        # rewrite the form, this fallback should trigger so the rewrite
-        # actually runs. Catches DOUBLE PRECISION, DOUBLE COMPLEX,
-        # COMPLEX*N, REAL*N, COMPLEX(...), REAL(...) declarations.
-        _fp_patterns = [
-            r'\bDOUBLE\s+PRECISION\b',
-            r'\bDOUBLE\s+COMPLEX\b',
-            r'\bCOMPLEX\s*\*\s*\d+',
-            r'\bREAL\s*\*\s*\d+',
-            r'\bCOMPLEX\s*\(\s*(?:KIND\s*=\s*)?\d+\s*\)',
-            r'\bREAL\s*\(\s*(?:KIND\s*=\s*)?\d+\s*\)',
-        ]
-        if any(re.search(p, source, re.IGNORECASE) for p in _fp_patterns):
-            has_float_types = True
+        has_float_types = source_has_fp_type_syntax(source)
     has_real_literals = bool(facts.real_literals)
     if not has_real_literals:
         # gfortran's dump only emits `value:` lines for symbols whose

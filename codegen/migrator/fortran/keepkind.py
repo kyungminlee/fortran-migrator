@@ -6,19 +6,21 @@ contained; extracted verbatim from ``fortran_migrator.py``.
 """
 import re
 
-from .lex import is_continuation_line
+from .lex import (
+    KEEPKIND_DBLE as _KK_DBLE_SENTINEL,
+    KEEPKIND_DCMPLX as _KK_DCMPLX_SENTINEL,
+    KEEPKIND_DP as _KK_SENTINEL,
+    KEEPKIND_MARKERS,
+    is_continuation_line,
+)
 
-
-_KK_SENTINEL = '__KEEPKIND_DP__'
-
-
-_KK_DBLE_SENTINEL = '__KEEPKIND_DBLE__'
-
-
-_KK_DCMPLX_SENTINEL = '__KEEPKIND_DCMPLX__'
-
-
-KEEPKIND_MARKERS = (_KK_SENTINEL, _KK_DBLE_SENTINEL, _KK_DCMPLX_SENTINEL)
+# The sentinel strings themselves live in ``lex`` — the bottom layer that
+# ``renames``, ``use_inject`` and ``lex``'s own decl-line matcher all
+# already import, and therefore the only place a single definition can
+# reach every module that has to recognise them. This module owns the
+# apply/restore passes; it keeps the ``_KK_*`` spellings as local aliases
+# so its own body (and the one test that reaches in for the sentinel)
+# reads unchanged.
 
 
 def has_keepkind_marker(text: str) -> bool:

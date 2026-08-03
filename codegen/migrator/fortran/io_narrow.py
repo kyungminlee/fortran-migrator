@@ -52,53 +52,54 @@ Scope guards
   touched — narrowing a binary record would corrupt the saved state.
 """
 import re
+from dataclasses import dataclass
 
-from .lex import _iter_outside_strings, _find_inline_bang, is_continuation_line
+from .lex import (
+    FIXED_FORM_MARGIN,
+    _find_inline_bang,
+    is_continuation_line,
+    match_paren,
+    string_mask,
+)
 
 _KW_RE = re.compile(r'(write|print)\b', re.IGNORECASE)
 _IDENT_RE = re.compile(r'[A-Za-z_]\w*')
 
 
-def _oracle_empty(real_names: set[str], complex_names: set[str],
-                  real_comp: set[str], complex_comp: set[str]) -> bool:
-    """True when every name oracle is empty — the no-op signal for
-    kind-based targets (kind10/kind16 are intrinsic reals)."""
-    return not (real_names or complex_names or real_comp or complex_comp)
+@dataclass(frozen=True)
+class NameOracle:
+    """The four name sets the narrowing passes consult, as one value.
 
+    They only ever travel together — deleting any one makes the rest
+    meaningless — and the two operations *on* them (:meth:`is_empty`,
+    :meth:`uppercased`) used to be free functions taking all four.
+    Bundling them also removes the parameter-rebinding hazard the loose
+    form had, where a caller reassigned two of its own four parameters to
+    their uppercased forms halfway through the body.
 
-def _upper_oracles(real_names: set[str], complex_names: set[str],
-                   real_comp: set[str], complex_comp: set[str],
-                   ) -> tuple[set[str], set[str], set[str], set[str]]:
-    """Uppercase the four per-call name oracles for case-insensitive
-    matching."""
-    return ({n.upper() for n in real_names},
-            {n.upper() for n in complex_names},
-            {n.upper() for n in real_comp},
-            {n.upper() for n in complex_comp})
+    ``real`` / ``cplx`` are the per-file variable-name oracles;
+    ``real_comp`` / ``cplx_comp`` are the global derived-type *component*
+    oracles, matched only against ``%``-qualified references.
+    """
+    real: frozenset[str] = frozenset()
+    cplx: frozenset[str] = frozenset()
+    real_comp: frozenset[str] = frozenset()
+    cplx_comp: frozenset[str] = frozenset()
 
+    def is_empty(self) -> bool:
+        """True when every oracle is empty — the no-op signal for
+        kind-based targets (kind10/kind16 are intrinsic reals)."""
+        return not (self.real or self.cplx or self.real_comp or self.cplx_comp)
 
-def _string_mask(line: str) -> list[bool]:
-    """Bool list, True where the character sits inside a string literal."""
-    inside = [True] * len(line)
-    for i, _ in _iter_outside_strings(line):
-        inside[i] = False
-    return inside
-
-
-def _match_paren(line: str, inside: list[bool], open_idx: int) -> int | None:
-    """Index of the ``)`` matching the ``(`` at ``open_idx`` (string-aware)."""
-    depth = 0
-    for i in range(open_idx, len(line)):
-        if inside[i]:
-            continue
-        c = line[i]
-        if c == '(':
-            depth += 1
-        elif c == ')':
-            depth -= 1
-            if depth == 0:
-                return i
-    return None
+    def uppercased(self) -> 'NameOracle':
+        """This oracle with every name upper-cased, for case-insensitive
+        matching against Fortran source."""
+        return NameOracle(
+            frozenset(n.upper() for n in self.real),
+            frozenset(n.upper() for n in self.cplx),
+            frozenset(n.upper() for n in self.real_comp),
+            frozenset(n.upper() for n in self.cplx_comp),
+        )
 
 
 def _split_top_level(line: str, inside: list[bool], start: int, end: int):
@@ -143,17 +144,10 @@ def _reference_last_name(text: str) -> tuple[str | None, bool]:
         last = m.group(0)
         i = m.end()
         if i < n and t[i] == '(':
-            depth, j = 0, i
-            while j < n:
-                c = t[j]
-                if c == '(':
-                    depth += 1
-                elif c == ')':
-                    depth -= 1
-                    if depth == 0:
-                        break
-                j += 1
-            if j >= n:
+            # Quote-blind: a subscript expression in a data reference never
+            # carries a string literal, and this text has no mask to hand.
+            j = match_paren(t, i)
+            if j is None:
                 return None, False  # unbalanced
             i = j + 1
         while i < n and t[i] == ' ':
@@ -204,18 +198,18 @@ def _wrap(itemtext: str, kind: str) -> str:
 
 
 def _narrow_items(line: str, inside: list[bool], list_start: int,
-                  stmt_end: int, real_up: set[str], complex_up: set[str],
-                  real_comp: set[str] = frozenset(),
-                  complex_comp: set[str] = frozenset()) -> str:
+                  stmt_end: int, oracle: NameOracle) -> str:
     """Wrap every pure real64x2/cmplx64x2 reference in the output list
     ``line[list_start:stmt_end]``.
 
-    ``real_up`` / ``complex_up`` are the per-file oracle (local variables and
-    dummies); they match a reference by its final name regardless of form.
-    ``real_comp`` / ``complex_comp`` are the *global* derived-type component
-    oracle; they match only a ``%``-qualified reference (``id%DKEEP(160)``),
-    never a bare name — a bare identifier that merely shares a struct
-    field's name is a different, locally-typed variable.
+    ``oracle`` must already be upper-cased (see
+    :meth:`NameOracle.uppercased`). Its ``real`` / ``cplx`` sets are the
+    per-file oracle (local variables and dummies); they match a reference
+    by its final name regardless of form. Its ``real_comp`` / ``cplx_comp``
+    sets are the *global* derived-type component oracle; they match only a
+    ``%``-qualified reference (``id%DKEEP(160)``), never a bare name — a
+    bare identifier that merely shares a struct field's name is a
+    different, locally-typed variable.
 
     Returns ``line`` unchanged when nothing matched (so the caller's
     ``s == joined`` verbatim path still fires)."""
@@ -230,9 +224,9 @@ def _narrow_items(line: str, inside: list[bool], list_start: int,
         item = line[s:e]
         name, qualified = _reference_last_name(item)
         is_real = name is not None and (
-            name in real_up or (qualified and name in real_comp))
+            name in oracle.real or (qualified and name in oracle.real_comp))
         is_complex = name is not None and (
-            name in complex_up or (qualified and name in complex_comp))
+            name in oracle.cplx or (qualified and name in oracle.cplx_comp))
         if is_real:
             out.append(_wrap(item, 'real'))
             changed = True
@@ -263,7 +257,9 @@ def narrow_multifloats_io_open(line: str, real_names: set[str],
     oracle — matched only against ``%``-qualified references (see
     :func:`_narrow_items`).
     """
-    if _oracle_empty(real_names, complex_names, real_comp, complex_comp):
+    oracle = NameOracle(frozenset(real_names), frozenset(complex_names),
+                        frozenset(real_comp), frozenset(complex_comp))
+    if oracle.is_empty():
         return line, False
     if not line:
         return line, False
@@ -271,9 +267,8 @@ def narrow_multifloats_io_open(line: str, real_names: set[str],
     if 'write' not in low and 'print' not in low:
         return line, False
 
-    real_up, complex_up, real_comp, complex_comp = _upper_oracles(
-        real_names, complex_names, real_comp, complex_comp)
-    inside = _string_mask(line)
+    oracle = oracle.uppercased()
+    inside = string_mask(line)
 
     # Statement start: skip an optional numeric label + whitespace.
     pos = re.match(r'\s*(?:\d+\s+)?', line).end()
@@ -284,7 +279,7 @@ def narrow_multifloats_io_open(line: str, real_names: set[str],
         open_idx = pos + ifm.end() - 1  # the '(' of the condition
         if inside[open_idx]:
             return line, False
-        close_idx = _match_paren(line, inside, open_idx)
+        close_idx = match_paren(line, open_idx, inside=inside)
         if close_idx is None:
             return line, False
         pos = close_idx + 1
@@ -306,7 +301,7 @@ def narrow_multifloats_io_open(line: str, real_names: set[str],
         open_idx = after + pm.end() - 1
         if inside[open_idx]:
             return line, False
-        close_idx = _match_paren(line, inside, open_idx)
+        close_idx = match_paren(line, open_idx, inside=inside)
         if close_idx is None:
             return line, False
         if not _is_formatted_control(line, inside, open_idx, close_idx):
@@ -329,8 +324,7 @@ def narrow_multifloats_io_open(line: str, real_names: set[str],
         if list_start is None:
             return line, False  # PRINT with no output list
 
-    new = _narrow_items(line, inside, list_start, stmt_end, real_up,
-                        complex_up, real_comp, complex_comp)
+    new = _narrow_items(line, inside, list_start, stmt_end, oracle)
     return new, True
 
 
@@ -364,13 +358,13 @@ def narrow_io_continuation(line: str, real_names: set[str],
     continuation fragment whose parent formatted output list is still
     open. The column-6 continuation marker (index 5) is preserved; the
     output-list items begin at column 7 (index 6)."""
-    if _oracle_empty(real_names, complex_names, real_comp, complex_comp):
+    oracle = NameOracle(frozenset(real_names), frozenset(complex_names),
+                        frozenset(real_comp), frozenset(complex_comp))
+    if oracle.is_empty():
         return line
     if not is_fixed_io_continuation(line):
         return line
-    real_up, complex_up, real_comp, complex_comp = _upper_oracles(
-        real_names, complex_names, real_comp, complex_comp)
-    inside = _string_mask(line)
+    inside = string_mask(line)
     stmt_end = _find_inline_bang(line)
-    return _narrow_items(line, inside, 6, stmt_end, real_up, complex_up,
-                        real_comp, complex_comp)
+    return _narrow_items(line, inside, FIXED_FORM_MARGIN, stmt_end,
+                         oracle.uppercased())

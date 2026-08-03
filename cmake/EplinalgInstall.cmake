@@ -29,6 +29,18 @@ set(_MPI_ABI_LIBS blacs mumps)
 # absent, independent of whether the resulting archive is ABI-bound.
 set(_MPI_REQUIRED_LIBS blacs pblas pbblas scalapack mumps)
 
+# _eplinalg_mpi_install_arg(<lib_name> <out_var>): the ``MPI`` keyword
+# fortran_install_library takes for an MPI-ABI-bound library, or "" —
+# i.e. the _MPI_ABI_LIBS membership test in the form the install sites
+# splice into their argument lists.
+function(_eplinalg_mpi_install_arg lib_name out_var)
+    set(_arg "")
+    if("${lib_name}" IN_LIST _MPI_ABI_LIBS)
+        set(_arg "MPI")
+    endif()
+    set(${out_var} "${_arg}" PARENT_SCOPE)
+endfunction()
+
 # _install_target_and_modules(<target> <fortran_install_library args…>):
 # every install site pairs fortran_install_library with the module
 # install (Fortran .mod files ship whenever the target compiled any).
@@ -182,10 +194,7 @@ function(_install_standard_archive lib_name)
     set(_export "${_pkg}Targets")
     _return_if_already_installed(_FC_STD_INSTALLED_${_pkg})
 
-    set(_mpi_arg "")
-    if("${lib_name}" IN_LIST _MPI_ABI_LIBS)
-        set(_mpi_arg "MPI")
-    endif()
+    _eplinalg_mpi_install_arg(${lib_name} _mpi_arg)
 
     # Walk the std archive's INTERFACE_LINK_LIBRARIES for std-sibling
     # references (e.g. ``lapack`` PUBLIC-links ``blas``) so the
@@ -244,20 +253,10 @@ function(_install_shared_common lib_name)
         set(_base_arg OUTPUT_BASE ${_out_base})
     endif()
 
-    set(_mpi_arg "")
-    if("${lib_name}" IN_LIST _MPI_ABI_LIBS)
-        set(_mpi_arg "MPI")
-    endif()
+    _eplinalg_mpi_install_arg(${lib_name} _mpi_arg)
     set(_deps "")
-    if("${lib_name}" STREQUAL "mumps" AND
-       (TARGET pord OR TARGET scotch OR TARGET metis))
-        list(APPEND _deps eplinalgOrdering)
-    endif()
-    # mumps_common references eplinalg::ptscotch only in real-MPI
-    # flavors; the per-tag deps file records it for exactly those.
-    if("${lib_name}" STREQUAL "mumps" AND TARGET ptscotch)
-        list(APPEND _deps eplinalgPtscotch)
-    endif()
+    # No WITH_GENUINE here — see _append_mumps_deps.
+    _append_mumps_deps(${lib_name} _deps)
 
     # C ``_common`` archives built in multifloats mode PUBLIC-link the
     # multifloats_mpi bridge (see add_migrated_c_library's dual-interface
@@ -400,6 +399,60 @@ function(_install_genuine_mumps)
     endforeach()
 endfunction()
 
+# _install_shared_packages(<lib_name>): install every arith-agnostic
+# package <lib_name> contributes, in dependency order. For all but
+# MUMPS that is just <lib>_common; MUMPS adds the ordering leaves and
+# the PT-Scotch increment ahead of it (eplinalgCommonMumps'
+# find_dependency list names both) and the genuine s/c/d/z solvers
+# after it (eplinalgGenuineMumps find_dependency's eplinalgCommonMumps).
+#
+# The three MUMPS calls used to sit inline in _install_library_pair,
+# straddling _install_shared_common — an ordering constraint stated
+# nowhere and easy to lose in an edit. They live here, in one function
+# whose only job is that ordering, so the generic path has a single
+# call and adding a fourth shared MUMPS package is a one-site change.
+function(_install_shared_packages lib_name)
+    if("${lib_name}" STREQUAL "mumps")
+        _install_ordering_package()
+        _install_ptscotch_package()
+    endif()
+    _install_shared_common(${lib_name})
+    if("${lib_name}" STREQUAL "mumps")
+        _install_genuine_mumps()
+    endif()
+endfunction()
+
+# _append_mumps_deps(<lib_name> <out_list> [WITH_GENUINE]): append the
+# packages a MUMPS Config must find_dependency() beyond the generic set
+# — the ordering leaves, and the MPI-tagged PT-Scotch increment when
+# this flavor has one. A no-op for every other library, so the generic
+# install path calls it unconditionally.
+#
+# WITH_GENUINE is what keeps the two call sites distinct: the precision
+# Configs also name eplinalgGenuineMumps, for consumer convenience —
+# the typed archive does not link the genuine solvers. eplinalgCommonMumps
+# does not name it, and must not: mumps_common is what the genuine
+# solvers link, so listing it there would close a find_dependency cycle.
+function(_append_mumps_deps lib_name out_list)
+    cmake_parse_arguments(_AMD "WITH_GENUINE" "" "" ${ARGN})
+    if(NOT "${lib_name}" STREQUAL "mumps")
+        return()
+    endif()
+    set(_deps ${${out_list}})
+    if(TARGET pord OR TARGET scotch OR TARGET metis)
+        list(APPEND _deps eplinalgOrdering)
+    endif()
+    # mumps_common references eplinalg::ptscotch only in real-MPI
+    # flavors; the per-tag deps file records it for exactly those.
+    if(TARGET ptscotch)
+        list(APPEND _deps eplinalgPtscotch)
+    endif()
+    if(_AMD_WITH_GENUINE AND (TARGET dzmumps OR TARGET scmumps))
+        list(APPEND _deps eplinalgGenuineMumps)
+    endif()
+    set(${out_list} "${_deps}" PARENT_SCOPE)
+endfunction()
+
 function(_install_library_pair lib_name)
     set(_precision_target "${LIB_PAIR_PREFIX}${lib_name}")
     set(_common_target "${lib_name}_common")
@@ -409,10 +462,7 @@ function(_install_library_pair lib_name)
         return()
     endif()
 
-    set(_install_mpi_arg "")
-    if("${lib_name}" IN_LIST _MPI_ABI_LIBS)
-        set(_install_mpi_arg "MPI")
-    endif()
+    _eplinalg_mpi_install_arg(${lib_name} _install_mpi_arg)
     if("${lib_name}" IN_LIST _MPI_REQUIRED_LIBS)
         # MPI-requiring libs only compile when MPI is available; the
         # target exists but the build never produces an archive file,
@@ -440,14 +490,7 @@ function(_install_library_pair lib_name)
     # references (eplinalg::${lib}_common, eplinalg::pord, …) resolve as
     # cross-export references into those standalone packages rather than
     # being bundled into — and colliding across — the typed export sets.
-    if("${lib_name}" STREQUAL "mumps")
-        _install_ordering_package()
-        _install_ptscotch_package()
-    endif()
-    _install_shared_common(${lib_name})
-    if("${lib_name}" STREQUAL "mumps")
-        _install_genuine_mumps()
-    endif()
+    _install_shared_packages(${lib_name})
 
     # If the std archive exists, its package is a transparent dep of
     # the precision Config so consumers only need find_package(qxblas)
@@ -484,17 +527,7 @@ function(_install_library_pair lib_name)
     # (${LIB_PAIR_PREFIX}mumps PUBLIC-links ptscotch directly, and
     # mumps_common the rest), and — for consumer convenience — the
     # genuine s/c/d/z solver package.
-    if("${lib_name}" STREQUAL "mumps")
-        if(TARGET pord OR TARGET scotch OR TARGET metis)
-            list(APPEND _precision_deps eplinalgOrdering)
-        endif()
-        if(TARGET ptscotch)
-            list(APPEND _precision_deps eplinalgPtscotch)
-        endif()
-        if(TARGET dzmumps OR TARGET scmumps)
-            list(APPEND _precision_deps eplinalgGenuineMumps)
-        endif()
-    endif()
+    _append_mumps_deps(${lib_name} _precision_deps WITH_GENUINE)
 
     # Install the precision-specific archive. fortran_install_library
     # writes ${_export}'s Config.cmake on this first call, emitting a

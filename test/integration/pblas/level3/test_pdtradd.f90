@@ -4,9 +4,7 @@ program test_pdtradd
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix, gather_matrix
     use target_pblas,  only: target_name, target_eps, target_pdtradd
     implicit none
@@ -16,8 +14,7 @@ program test_pdtradd
     character(len=1), parameter :: transes(*) = ['N', 'N', 'T', 'T']
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, ic, n, info, ig, jg
-    integer :: locm_a, locn_a, locm_c, locn_c, lld_a, lld_c
+    integer :: i, ic, n, ig, jg
     integer :: desca(9), descc(9)
     real(ep), allocatable :: A_loc(:,:), C_loc(:,:)
     real(ep), allocatable :: A_glob(:,:), C0(:,:), C_ref(:,:), C_got(:,:)
@@ -36,11 +33,8 @@ program test_pdtradd
             call gen_distrib_matrix(n, n, mb, nb, C_loc, C0, &
                                     seed = 17211 + 29*i + 211*ic)
 
-            locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-            locm_c = locm_a; locn_c = locn_a; lld_c = lld_a
-            call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descc, n, n, mb, nb, 0, 0, my_context, lld_c, info)
+            call local_desc(desca, n, n, mb, nb)
+            call local_desc(descc, n, n, mb, nb)
 
             call target_pdtradd(uplos(ic), transes(ic), n, n, alpha, &
                                 A_loc, 1, 1, desca, beta, C_loc, 1, 1, descc)

@@ -3,9 +3,8 @@ program test_pdgerq2
     use compare,          only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dgerqf
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_row, numroc_local, local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_matrix
     use target_scalapack, only: target_name, target_eps, target_pdgerq2
     implicit none
@@ -15,7 +14,7 @@ program test_pdgerq2
     integer, parameter :: ns(*) = [48, 96, 128]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, m, n, info, info_ref, lwork
-    integer :: locm_a, locn_a, lld_a
+    integer :: locm_a
     integer :: desca(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:), A_ref(:,:)
     real(ep), allocatable :: tau_got(:), tau_ref(:), work(:), work_ref(:)
@@ -30,8 +29,7 @@ program test_pdgerq2
         call gen_distrib_matrix(m, n, mb, nb, A_loc, A_glob, seed = 54101 + 31*i)
 
         locm_a = numroc_local(m, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, m, n, mb, nb)
 
         allocate(tau_got(max(1, locm_a)), work(1))
         call target_pdgerq2(m, n, A_loc, 1, 1, desca, tau_got, work, -1, info)

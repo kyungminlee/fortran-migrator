@@ -21,7 +21,7 @@ program test_pddtsv
 
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: nrhs  = 2
-    integer :: i, n, nb, info, info_ref, lwork, ig, jl, lldB, locm_b
+    integer :: i, n, nb, info, info_ref, lwork, ig, jl, lldB
     integer :: bytes_per_elem, ierr, src_rank, peer
     integer, parameter :: tag = 7611
     integer :: desca(9), descb(9)
@@ -76,7 +76,6 @@ program test_pddtsv
 
         ! B is held in NB-row blocks per process.
         lldB = nb
-        locm_b = nb
         allocate(B_loc(nb, nrhs))
         B_loc = 0.0_ep
         do ig = 1, n

@@ -35,7 +35,7 @@ program test_pbdtran
     implicit none
 
     integer, parameter :: nb = 4
-    integer :: ierr, dummy_count, fail_local, fail_global
+    integer :: ierr, fail_local, fail_global
 
     call grid_init()
     call report_init('pbdtran', target_name, my_rank)
@@ -50,7 +50,6 @@ program test_pbdtran
     fail_local = 0
     call mpi_allreduce(fail_local, fail_global, 1, mpi_integer, mpi_max, &
                        mpi_comm_world, ierr)
-    dummy_count = fail_global
 
     call report_finalize()
     call grid_exit()

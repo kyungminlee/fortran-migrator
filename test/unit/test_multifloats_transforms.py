@@ -36,7 +36,6 @@ from migrator.fortran.la_constants import _la_constants_rename_map
 # don't need editing whenever the prefix changes.
 _MF = load_target('multifloats')
 _RP = _MF.prefix_map['R'].lower()
-_CP = _MF.prefix_map['C'].lower()
 _RPU = _MF.prefix_map['R']
 _CPU = _MF.prefix_map['C']
 
@@ -58,7 +57,7 @@ def test_multifloats_target_basic_shape():
     # Prefix letters are loaded from codegen/targets/multifloats.yaml. The
     # specific choice (currently M/W) was made after a per-file shadow
     # analysis ruling out same-translation-unit collisions; tests below
-    # use the loaded values via _RP/_CP rather than hard-coded letters.
+    # use the loaded values via _RP/_RPU/_CPU rather than hard-coded letters.
     assert isinstance(mf.prefix_map['R'], str) and len(mf.prefix_map['R']) == 1
     assert isinstance(mf.prefix_map['C'], str) and len(mf.prefix_map['C']) == 1
     assert mf.prefix_map['R'].isupper()

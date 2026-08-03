@@ -6,9 +6,8 @@ program test_pdorm2r
     use compare,          only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dgeqrf, dormqr
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_npcol, &
+                                my_col, numroc_local, local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_matrix
     use target_scalapack, only: target_name, target_eps, &
                                 target_pdgeqrf, target_pdorm2r
@@ -19,7 +18,7 @@ program test_pdorm2r
     character(len=1), parameter :: transes(*) = ['N', 'T', 'N', 'T']
     integer, parameter :: mb = 8, nb = 8
     integer :: ic, mA, nA, k, mC, nC, info, info_ref, lwork
-    integer :: locmA, locnA, lldA, locmC, locnC, lldC
+    integer :: locnA
     integer :: desca(9), descc(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), C_loc(:,:), C_glob(:,:)
     real(ep), allocatable :: C_got(:,:), A_ref(:,:), C_ref(:,:)
@@ -44,12 +43,9 @@ program test_pdorm2r
         call gen_distrib_matrix(mA, nA, mb, nb, A_loc, A_glob, seed = 9601 + 17*ic)
         call gen_distrib_matrix(mC, nC, mb, nb, C_loc, C_glob, seed = 9611 + 17*ic)
 
-        locmA = numroc_local(mA, mb, my_row, 0, my_nprow)
-        locnA = numroc_local(nA, nb, my_col, 0, my_npcol); lldA = max(1, locmA)
-        locmC = numroc_local(mC, mb, my_row, 0, my_nprow)
-        locnC = numroc_local(nC, nb, my_col, 0, my_npcol); lldC = max(1, locmC)
-        call descinit_local(desca, mA, nA, mb, nb, 0, 0, my_context, lldA, info)
-        call descinit_local(descc, mC, nC, mb, nb, 0, 0, my_context, lldC, info)
+        locnA = numroc_local(nA, nb, my_col, 0, my_npcol)
+        call local_desc(desca, mA, nA, mb, nb)
+        call local_desc(descc, mC, nC, mb, nb)
 
         ! QR-factorize A.
         allocate(tau_got(max(1, locnA)), work(1))

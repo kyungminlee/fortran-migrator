@@ -11,6 +11,7 @@ from .clone import (
     classify_blacs_stem,
     clone_c_file,
     derive_routine_renames,
+    logical_stem,
     rename_c_file,
 )
 
@@ -50,11 +51,8 @@ def migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
     # symbol first), so duplication is benign and the migrated copies
     # match the precision the migrated bodies expect.
     def _is_blacs_precision_prefix(stem: str) -> bool:
-        # Mirrors the d/z clone discovery in the loops below (the s/c
-        # variants classify_blacs_stem also knows are copied through —
-        # only d/z are clone sources here).
-        plan = classify_blacs_stem(stem)
-        return plan is not None and plan[0] in ('d', 'z')
+        # Mirrors the d/z clone discovery in the loops below.
+        return classify_blacs_stem(stem) is not None
 
     for f in sources:
         ext = f.suffix.lower()
@@ -62,7 +60,7 @@ def migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
         # output entirely (headers are never precision-specific, so they
         # are exempt). Match on the underscore-stripped, uppercased stem
         # to align with the recipe's logical-name convention.
-        stem_upper = (f.stem[:-1] if f.stem.endswith('_') else f.stem).upper()
+        stem_upper = logical_stem(f.stem).upper()
         if ext == '.c' and stem_upper in _skip:
             continue
         if ext == '.h':
@@ -73,37 +71,24 @@ def migrate_blacs_c_directory(src_dir: Path, output_dir: Path,
 
     cloned = []
 
-    # Clone d-variant → real-extended
-    for f in sources:
-        if f.suffix.lower() != '.c':
-            continue
-        plan = classify_blacs_stem(f.stem)
-        if plan is None or plan[0] != 'd':
-            continue
-        _src_prefix, _is_complex, subs = plan
-        new_name = rename_c_file(f.name, 'd', rp)
-        if new_name == f.name:
-            continue
-        renames = derive_routine_renames(f.stem, Path(new_name).stem)
-        clone_c_file(f, output_dir / new_name,
-                     subs, template_vars, renames)
-        cloned.append(f'{f.name} → {new_name}')
-
-    # Clone z-variant → complex-extended
-    for f in sources:
-        if f.suffix.lower() != '.c':
-            continue
-        plan = classify_blacs_stem(f.stem)
-        if plan is None or plan[0] != 'z':
-            continue
-        _src_prefix, _is_complex, subs = plan
-        new_name = rename_c_file(f.name, 'z', cp)
-        if new_name == f.name:
-            continue
-        renames = derive_routine_renames(f.stem, Path(new_name).stem)
-        clone_c_file(f, output_dir / new_name,
-                     subs, template_vars, renames)
-        cloned.append(f'{f.name} → {new_name}')
+    # d → real-extended, then z → complex-extended. The two passes are
+    # kept in that order (rather than one interleaved pass) so the
+    # ``cloned`` report lists every real clone before every complex one.
+    for src_prefix, new_prefix in (('d', rp), ('z', cp)):
+        for f in sources:
+            if f.suffix.lower() != '.c':
+                continue
+            plan = classify_blacs_stem(f.stem)
+            if plan is None or plan[0] != src_prefix:
+                continue
+            subs = plan[2]
+            new_name = rename_c_file(f.name, src_prefix, new_prefix)
+            if new_name == f.name:
+                continue
+            renames = derive_routine_renames(f.stem, Path(new_name).stem)
+            clone_c_file(f, output_dir / new_name,
+                         subs, template_vars, renames)
+            cloned.append(f'{f.name} → {new_name}')
 
     # Patch Bdef.h with extended-precision type definitions and macros
     bdef_path = output_dir / 'Bdef.h'

@@ -148,6 +148,19 @@ la_constants_map:
 
 la_constants_suffix: _MW
 
+# Extra names for the free-form PARAMETER-nuking pass, merged over
+# la_constants_map. Neither is an LA_CONSTANTS member: czero is
+# declared alongside zero in the Pattern A files, and dnrm2.f90's
+# local ``maxN = huge(0.0_wp)`` is equivalent to DD_SAFMAX (itself
+# huge(0.0_dp) packed into float64x2's high limb).
+#
+# rtmin/rtmax are deliberately absent from both maps: in several
+# LAPACK routines they are local variables computed at runtime, not
+# PARAMETERs.
+param_nuke_extra:
+  czero: DD_ZERO
+  maxn: DD_SAFMAX
+
 c_interop:
   # Upstream multifloats C names (no _t suffix; complex POD with
   # .re/.im members of float64x2). The C++ bridge re-exports these as

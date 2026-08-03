@@ -9,9 +9,9 @@ program test_pzheevx
     use compare,           only: max_rel_err_vec
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,   only: zheev
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_nprow, &
+                                 my_npcol, my_row, my_col, numroc_local, &
+                                 local_desc
     use pblas_distrib,     only: gen_distrib_matrix_z, scatter_matrix_z
     use target_scalapack,  only: target_name, target_eps, target_pzheevx
     implicit none
@@ -42,8 +42,8 @@ program test_pzheevx
 
         locm = numroc_local(n, mb, my_row, 0, my_nprow)
         locn = numroc_local(n, nb, my_col, 0, my_npcol); lld = max(1, locm)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld, info)
-        call descinit_local(descZ, n, n, mb, nb, 0, 0, my_context, lld, info)
+        call local_desc(desca, n, n, mb, nb)
+        call local_desc(descZ, n, n, mb, nb)
 
         allocate(Z_loc(lld, max(1, locn))); Z_loc = (0.0_ep, 0.0_ep)
         allocate(w(n), gap(my_nprow * my_npcol), &

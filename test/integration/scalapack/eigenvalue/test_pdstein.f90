@@ -7,9 +7,9 @@ program test_pdstein
     use prec_kinds,       only: ep
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dstebz
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local, g2l
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                local_desc
     use pblas_distrib,    only: gather_matrix
     use target_scalapack, only: target_name, target_eps, target_pdstein
     implicit none
@@ -54,7 +54,7 @@ program test_pdstein
 
         locm = numroc_local(n, mb, my_row, 0, my_nprow)
         locn = numroc_local(m, nb, my_col, 0, my_npcol); lld_z = max(1, locm)
-        call descinit_local(descZ, n, m, mb, nb, 0, 0, my_context, lld_z, info)
+        call local_desc(descZ, n, m, mb, nb)
         allocate(Z_loc(lld_z, max(1, locn)))
         Z_loc = 0.0_ep
 

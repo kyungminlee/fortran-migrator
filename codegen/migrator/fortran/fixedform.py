@@ -5,11 +5,26 @@ fixed-form statements at their continuation boundaries. Extracted verbatim
 from ``fortran_migrator.py``.
 """
 from .lex import (
-    _build_split_mask, _ends_in_string, _find_inline_bang, is_comment_line,
+    FIXED_FORM_CODE_WIDTH, FIXED_FORM_LABEL_FIELD, FIXED_FORM_MARGIN,
+    FIXED_FORM_WIDTH, _build_split_mask, _ends_in_string, _find_inline_bang,
+    is_comment_line, is_continuation_line, split_term,
 )
 
+# Column 6 marker emitted on every continuation line this module produces.
+CONT_CHAR = '+'
+_CONT_PREFIX = FIXED_FORM_LABEL_FIELD + CONT_CHAR
 
-def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
+# Split-point search window, in body-relative columns. We prefer to break
+# at a comma or space; the search walks back from the last usable column
+# but never further than ``_SPLIT_WINDOW`` characters, and never past
+# ``_SPLIT_FLOOR`` (which keeps a pathologically token-free line from
+# being split down to a stub).
+_LAST_CODE_COL = FIXED_FORM_CODE_WIDTH - 1     # == 65
+_SPLIT_WINDOW = 30
+_SPLIT_FLOOR = 35
+
+
+def reformat_fixed_line(line: str) -> str:
     # Preprocessor directives (``#if``, ``#include``, ``#define`` ...) are
     # not bound by fixed-form column 72 and must not be split into
     # continuation lines — doing so produces a truncated directive on
@@ -18,7 +33,9 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
     # of length.
     if line.lstrip().startswith('#'):
         return line
-    if len(line) <= 72 or is_comment_line(line) or (len(line) > 6 and line[6:].lstrip().startswith('!')):
+    if (len(line) <= FIXED_FORM_WIDTH or is_comment_line(line)
+            or (len(line) > FIXED_FORM_MARGIN
+                and line[FIXED_FORM_MARGIN:].lstrip().startswith('!'))):
         return line
     # If an inline ``!`` comment sits within the first 72 columns, keep
     # the whole line intact — fixed-form Fortran ignores columns past
@@ -28,19 +45,21 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
     # within col 72 we must keep the line intact — splitting it would
     # land the comment text on a continuation chunk.
     bang = _find_inline_bang(line)
-    if bang < len(line) and bang < 72:
+    if bang < len(line) and bang < FIXED_FORM_WIDTH:
         return line
-    prefix, body = line[:6] if len(line) >= 6 else line.ljust(6), line[6:]
+    prefix, body = (line[:FIXED_FORM_MARGIN] if len(line) >= FIXED_FORM_MARGIN
+                    else line.ljust(FIXED_FORM_MARGIN)), line[FIXED_FORM_MARGIN:]
     safe = _build_split_mask(body)
     chunks = []
-    while len(body) > 66:
-        split_pos = 66
-        for i in range(65, max(35, 65 - 30), -1):
+    while len(body) > FIXED_FORM_CODE_WIDTH:
+        split_pos = FIXED_FORM_CODE_WIDTH
+        for i in range(_LAST_CODE_COL,
+                       max(_SPLIT_FLOOR, _LAST_CODE_COL - _SPLIT_WINDOW), -1):
             if body[i] in (',', ' ') and safe[i]:
                 split_pos = i + 1
                 break
         else:
-            for i in range(65, 0, -1):
+            for i in range(_LAST_CODE_COL, 0, -1):
                 if safe[i]:
                     split_pos = i
                     break
@@ -48,7 +67,7 @@ def reformat_fixed_line(line: str, cont_char: str = '+') -> str:
         body, safe = body[split_pos:], safe[split_pos:]
     chunks.append(body)
     result_lines = [prefix + chunks[0]]
-    for chunk in chunks[1:]: result_lines.append('     ' + cont_char + chunk)
+    for chunk in chunks[1:]: result_lines.append(_CONT_PREFIX + chunk)
     return '\n'.join(result_lines)
 
 
@@ -93,13 +112,7 @@ def _segment_fixed_form_statements(
     out: list[tuple[str, list[str], list[str], str]] = []
     i = 0
     while i < len(physical):
-        raw = physical[i]
-        if raw.endswith('\r\n'):
-            text, term = raw[:-2], '\r\n'
-        elif raw.endswith('\n') or raw.endswith('\r'):
-            text, term = raw[:-1], raw[-1]
-        else:
-            text, term = raw, ''
+        text, term = split_term(physical[i])
         if not text.strip():
             out.append(('blank', [text], [term], text))
             i += 1
@@ -118,15 +131,8 @@ def _segment_fixed_form_statements(
         joined = text
         j = i + 1
         while j < len(physical):
-            nxt = physical[j]
-            if nxt.endswith('\r\n'):
-                ntext, nterm = nxt[:-2], '\r\n'
-            elif nxt.endswith('\n') or nxt.endswith('\r'):
-                ntext, nterm = nxt[:-1], nxt[-1]
-            else:
-                ntext, nterm = nxt, ''
-            if (len(ntext) > 5 and ntext[:1] != '\t' and ntext[:5] == '     '
-                    and ntext[5:6] not in (' ', '0', '\t')):
+            ntext, nterm = split_term(physical[j])
+            if is_continuation_line(ntext, tab_marker=False):
                 lines.append(ntext)
                 terms.append(nterm)
                 # Strip the previous segment's inline ``!`` comment
@@ -144,9 +150,9 @@ def _segment_fixed_form_statements(
                 # a WRITE message gaining a doubled space). Outside a string
                 # the space is the harmless stand-in for the line break.
                 if _ends_in_string(head_code):
-                    joined = head_code + ntext[6:]
+                    joined = head_code + ntext[FIXED_FORM_MARGIN:]
                 else:
-                    joined = head_code + ' ' + ntext[6:]
+                    joined = head_code + ' ' + ntext[FIXED_FORM_MARGIN:]
                 j += 1
             else:
                 break

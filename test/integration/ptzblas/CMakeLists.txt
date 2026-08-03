@@ -24,14 +24,6 @@ if(NOT TARGET ${LIB_PAIR_PREFIX}ptzblas)
     return()
 endif()
 
-# ── Dedicated module directory ──────────────────────────────────────
-# tests/ptzblas compiles the shared tests/common reporter without the
-# strict-exact macro that tests/blas enables, so its prec_report.mod
-# must not land in the shared fmod_tests root where blas' variant
-# lives. Same per-suite subdir convention as the other suites.
-set(_ptz_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}/ptzblas_tests")
-file(MAKE_DIRECTORY ${_ptz_moddir})
-
 # ── Common helper modules ───────────────────────────────────────────
 add_library(ptzblas_test_common STATIC
     ../common/prec_kinds.f90
@@ -43,12 +35,7 @@ add_library(ptzblas_test_common STATIC
     ../common/ptzblas_ref_quad_blas.f90
     common/ref_quad_aux.f90
 )
-set_target_properties(ptzblas_test_common PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_ptz_moddir}"
-)
-target_include_directories(ptzblas_test_common PUBLIC
-    $<BUILD_INTERFACE:${_ptz_moddir}>
-)
+fortran_test_module_layout(ptzblas_test_common SUBDIR ptzblas_tests)
 target_link_libraries(ptzblas_test_common PUBLIC refblas_quad)
 
 # ── Per-target wrapper module ───────────────────────────────────────
@@ -64,12 +51,7 @@ add_fypp_source(_ptzblas_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(ptzblas_test_target STATIC ${_ptzblas_wrapper_src})
-set_target_properties(ptzblas_test_target PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_ptz_moddir}"
-)
-target_include_directories(ptzblas_test_target PUBLIC
-    $<BUILD_INTERFACE:${_ptz_moddir}>
-)
+fortran_test_module_layout(ptzblas_test_target SUBDIR ptzblas_tests)
 target_link_libraries(ptzblas_test_target PUBLIC
     ptzblas_test_common
     target_conv

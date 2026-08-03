@@ -15,11 +15,10 @@ when no test driver exists for that target).
 
 import argparse
 import re
-from collections import defaultdict
 from pathlib import Path
 
 from precision_report import (TARGET_ORDER, fmt_digits, load_reports,
-                              order_targets)
+                              prepare)
 
 
 LIBRARIES = ['BLAS', 'LAPACK', 'PBLAS', 'ScaLAPACK']
@@ -145,12 +144,13 @@ def main() -> int:
             ap.error(f'{d} is not a directory')
         reports.extend(load_reports(d))
 
-    by_routine: dict[str, dict[str, dict]] = defaultdict(dict)
-    for r in reports:
-        by_routine[r['routine']][r['target']] = r
-
-    targets = order_targets({r['target'] for r in reports}) \
-        if reports else list(TARGET_ORDER)
+    # Same (by_routine, targets) derivation precision_report.py does; the
+    # failed-case count it also returns is of no interest here. With no
+    # reports at all there is nothing to order, so fall back to the full
+    # target list to keep the table's columns.
+    by_routine, targets, _n_failed = prepare(reports)
+    if not reports:
+        targets = list(TARGET_ORDER)
 
     out: list[str] = []
     out.append('# Per-routine precision results')

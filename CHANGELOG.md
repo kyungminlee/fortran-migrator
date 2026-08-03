@@ -4,6 +4,33 @@ Release notes live on the [GitHub releases page](https://github.com/kyungminlee/
 this file summarizes each tagged version. The current version is in
 [VERSION](VERSION).
 
+## v0.21.0
+
+- Behavior-preserving cleanup across the codebase from an 81-finding
+  code-smell audit, following the same pass done for v0.17.0 over the
+  four modules and the CMake infrastructure it never opened. No library
+  ABI or build-interface changes; staged migrator output is byte-identical
+  to v0.20.0 for all five targets, with one intended exception below.
+- The `scalapack_tools` recipe is gone, inlined into `pbblas.yaml`. Its
+  migrated output stopped being built when NUMROC / ICEIL / ILCM were
+  folded into `scalapack_common`, and its only remaining job — naming
+  `extern/scalapack-2.2.3/TOOLS` as a symbol context — is now done by the
+  one recipe that needed it. Staged trees therefore lose a
+  `scalapack_tools/` directory (three files byte-identical to
+  `scalapack_common`'s own copies) and two entries from
+  `STAGED_LIBRARIES` / `PRIVATIZED_LIBRARIES`. Both staged kind10 trees
+  configure identically, so no build consumes any of it.
+- Migrator fix: a `REAL(` / `CMPLX(` / `DBLE(` call whose arguments
+  contain a *nested* `KIND=` is now migrated instead of skipped. The two
+  paren-call rewriters had disagreed — one tracked paren depth, one did
+  not — and the depth-blind one would leave `REAL(f(x, KIND=1))`
+  unconverted, since the `KIND=` it saw belongs to `f`. No call in the
+  current corpus reaches this.
+- Target YAMLs gain `param_nuke_extra:`, the names the free-form
+  PARAMETER-nuking pass must drop that are not `la_constants_map`
+  members. The pass previously carried a hardcoded copy of that map,
+  which no second module-based target could have shared.
+
 ## v0.20.0
 
 - Installed packages are consumable from single-language projects. The

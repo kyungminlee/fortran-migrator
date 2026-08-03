@@ -70,13 +70,6 @@ string(TOUPPER "${LIB_PREFIX_COMPLEX}" PFX_C)
 # ── Output directory for JSON reports ────────────────────────────────
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
 
-# ── Dedicated module directory ───────────────────────────────────────
-# Same prec_kinds / compare / prec_report / test_data module names as
-# tests/blas and tests/lapack, so isolate the .mod outputs to avoid
-# collision when multiple test trees build together.
-set(_mp_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}/mumps_tests")
-file(MAKE_DIRECTORY ${_mp_moddir})
-
 # ── C-side bridge ─────────────────────────────────────────────────────
 # Per-arithmetic dispatch — compile mumps_c.c twice (real + complex)
 # as OBJECT libraries so they can be folded into the single combined
@@ -278,12 +271,7 @@ add_library(mumps_test_common STATIC
     common/test_data_mumps.f90
     common/ref_quad_lapack_solve.f90
 )
-set_target_properties(mumps_test_common PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_mp_moddir}"
-)
-target_include_directories(mumps_test_common PUBLIC
-    $<BUILD_INTERFACE:${_mp_moddir}>
-)
+fortran_test_module_layout(mumps_test_common SUBDIR mumps_tests)
 # MPI reporter with deferred exit status: report_finalize only closes
 # the JSON; drivers run MPI_FINALIZE and then report_check_status().
 # The deferred configuration references no MPI collective, so the _seq
@@ -312,12 +300,7 @@ add_library(mumps_test_target STATIC
     ${_mumps_wrapper_src}
     common/mumps_lifecycle.f90
 )
-set_target_properties(mumps_test_target PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_mp_moddir}"
-)
-target_include_directories(mumps_test_target PUBLIC
-    $<BUILD_INTERFACE:${_mp_moddir}>
-)
+fortran_test_module_layout(mumps_test_target SUBDIR mumps_tests)
 target_link_libraries(mumps_test_target PUBLIC mumps_test_common target_conv)
 if(NEEDS_MULTIFLOATS AND TARGET multifloats_mpi_f)
     # On multifloats, target_qmumps / target_xmumps lazily call
@@ -413,7 +396,61 @@ set(_mumps_link_group_archives
 if(TARGET ${LIB_PAIR_PREFIX}xblas)
     list(APPEND _mumps_link_group_archives ${LIB_PAIR_PREFIX}xblas)
 endif()
-# Ordering archives (ICNTL(7)=4 pord, =5 metis, =3 scotch). The migrated
+# _mumps_collect_ordering_archives(<list-var>)
+#
+# Appends the ordering archives (ICNTL(7)=4 pord, =5 metis, =3 scotch) that
+# are actually staged to <list-var>, in the fixed esmumps->scotch order the
+# intra-Scotch cross-references need. Every link group in this file — migrated
+# and genuine, MPI and _seq — carries the same four, gated on their targets so
+# the tree still builds when an ordering wasn't staged.
+function(_mumps_collect_ordering_archives out_var)
+    set(_out "${${out_var}}")
+    foreach(_p pord metis esmumps scotch)
+        if(TARGET ${_p})
+            list(APPEND _out ${_p})
+        endif()
+    endforeach()
+    set(${out_var} "${_out}" PARENT_SCOPE)
+endfunction()
+
+# _mumps_link_group_raw(<tgt> <archives-var> [SPLIT_COMPOSITE_BLAS] [EXTRA <t>...])
+#
+# Emits one raw --start-group/--end-group block of $<TARGET_FILE:> archives.
+# target_link_libraries (vs. target_link_options) places these AFTER the .o
+# files in the link line — required so ld can resolve test_*.o symbols against
+# the group. <archives-var> is the *name* of the list variable to iterate; EXTRA
+# names further archives emitted inside the group after it.
+#
+# SPLIT_COMPOSITE_BLAS handles the ${LIB_PAIR_PREFIX}blas composite: under
+# PARALLEL_BLAS it is an INTERFACE library, which $<TARGET_FILE:> cannot
+# resolve, so the two underlying archives are inlined instead — overlay first
+# so its egemm_ wins over the serial archive's when ld scans the group. It is
+# opt-in because the genuine _seq group legitimately carries the *standard*
+# `blas` target, which under a baseline build is spelled the same way.
+function(_mumps_link_group_raw tgt archives_var)
+    cmake_parse_arguments(PARSE_ARGV 2 _lgr "SPLIT_COMPOSITE_BLAS" "" "EXTRA")
+
+    target_link_libraries(${tgt} PRIVATE "-Wl,--start-group")
+    foreach(_arc IN LISTS ${archives_var})
+        if(_lgr_SPLIT_COMPOSITE_BLAS AND _arc STREQUAL "${LIB_PAIR_PREFIX}blas"
+                AND PARALLEL_BLAS AND TARGET ${LIB_PAIR_PREFIX}blas_serial)
+            if(TARGET ${LIB_PAIR_PREFIX}blas_parallel)
+                target_link_libraries(${tgt} PRIVATE
+                    $<TARGET_FILE:${LIB_PAIR_PREFIX}blas_parallel>)
+            endif()
+            target_link_libraries(${tgt} PRIVATE
+                $<TARGET_FILE:${LIB_PAIR_PREFIX}blas_serial>)
+        else()
+            target_link_libraries(${tgt} PRIVATE $<TARGET_FILE:${_arc}>)
+        endif()
+    endforeach()
+    foreach(_extra IN LISTS _lgr_EXTRA)
+        target_link_libraries(${tgt} PRIVATE $<TARGET_FILE:${_extra}>)
+    endforeach()
+    target_link_libraries(${tgt} PRIVATE "-Wl,--end-group")
+endfunction()
+
+# Ordering archives. The migrated
 # solver + bridge + common members reference their symbols (eini/yini_driver.F's
 # metis_mumps_*, ana_orderings_wrappers_m's scotchf*_mumps_/metis_mumps_nodend_,
 # mumps_metis.c's METIS_MUMPS_*, mumps_pord.c's SPACE_ordering/firstPostorder,
@@ -423,14 +460,10 @@ endif()
 # LINK_GROUP targets here: eymumps PUBLIC-links mumps_common which PUBLIC-links
 # pord/metis/scotch, so pulling them into the group closes a group<->common
 # target-graph cycle. Instead they are appended AFTER the group as raw archive
-# files (see _mumps_attach_link_group); collect the target list here, gated on
+# files (see _mumps_attach_link_group_mpi); collect the target list here, gated on
 # their targets, ordered esmumps->scotch for the intra-Scotch chain.
 set(_mumps_ordering_archives "")
-foreach(_p pord metis esmumps scotch)
-    if(TARGET ${_p})
-        list(APPEND _mumps_ordering_archives ${_p})
-    endif()
-endforeach()
+_mumps_collect_ordering_archives(_mumps_ordering_archives)
 # PT-Scotch (distributed, MPI-only) — the -Dptscotch mumps runtime references
 # the distributed increment's SCOTCH_dgraph*_mumps / SCOTCHFDGRAPH*_mumps
 # symbols. Appended to the same trailing --start-group as the sequential
@@ -483,210 +516,210 @@ if(TARGET mpiseq)
     list(APPEND _mumps_test_variants "_seq")
 endif()
 
-function(_mumps_apply_link_variant tgt variant want_c)
-    if(variant STREQUAL "_seq")
-        # mpiseq.a covers both Fortran and C MPI surfaces. Already
-        # bundles libmpiseq's own mpi.f / mpic.c plus our supplementary
-        # mpiseq_qx_stubs.f / mpiseq_mw_stubs.f90 / mpiseq_c_stubs.c.
-        target_link_libraries(${tgt} PRIVATE mpiseq)
-        # Test sources still ``use mpi`` / ``#include "mpi.h"`` and
-        # reference ``MPI_COMM_WORLD`` / ``MPI_INIT`` etc. that need
-        # the real MPI module + headers at COMPILE time. Keep the
-        # include path from MPI::MPI_Fortran (and MPI::MPI_C if needed)
-        # but DO NOT pull MPI::* into linking — libmpiseq supplies the
-        # symbols.
-        target_include_directories(${tgt} PRIVATE
-            $<TARGET_PROPERTY:MPI::MPI_Fortran,INTERFACE_INCLUDE_DIRECTORIES>)
-        if(want_c)
-            target_include_directories(${tgt} PRIVATE
-                $<TARGET_PROPERTY:MPI::MPI_C,INTERFACE_INCLUDE_DIRECTORIES>)
-        endif()
-    else()
-        target_link_libraries(${tgt} PRIVATE MPI::MPI_Fortran)
-        if(want_c)
-            target_link_libraries(${tgt} PRIVATE MPI::MPI_C)
-        endif()
+# ── Explicit per-variant methods ────────────────────────────────────
+# The variants differ in exactly three concerns: which MPI layer the
+# executable links, how its archive group is assembled, and how the
+# test is registered with ctest. Each concern is a pair of explicit
+# functions — ``*_mpi`` (real MPI) and ``*_mpiseq`` (libmpiseq) — and
+# the variant token picks between them in one place per concern:
+# _mumps_setup_test_variant and _mumps_register_test_variant below,
+# plus _mumps_setup_genuine_variant for the genuine tests. A third
+# variant means writing its methods and extending those three
+# selectors, rather than hunting down variant tests scattered across
+# every function that builds a test.
+
+function(_mumps_link_mpi tgt want_c)
+    target_link_libraries(${tgt} PRIVATE MPI::MPI_Fortran)
+    if(want_c)
+        target_link_libraries(${tgt} PRIVATE MPI::MPI_C)
     endif()
+endfunction()
+
+function(_mumps_link_mpiseq tgt want_c)
+    # mpiseq.a covers both Fortran and C MPI surfaces. Already
+    # bundles libmpiseq's own mpi.f / mpic.c plus our supplementary
+    # mpiseq_qx_stubs.f / mpiseq_mw_stubs.f90 / mpiseq_c_stubs.c.
+    target_link_libraries(${tgt} PRIVATE mpiseq)
+    # Test sources still ``use mpi`` / ``#include "mpi.h"`` and
+    # reference ``MPI_COMM_WORLD`` / ``MPI_INIT`` etc. that need
+    # the real MPI module + headers at COMPILE time. Keep the
+    # include path from MPI::MPI_Fortran (and MPI::MPI_C if needed)
+    # but DO NOT pull MPI::* into linking — libmpiseq supplies the
+    # symbols.
+    target_include_directories(${tgt} PRIVATE
+        $<TARGET_PROPERTY:MPI::MPI_Fortran,INTERFACE_INCLUDE_DIRECTORIES>)
+    if(want_c)
+        target_include_directories(${tgt} PRIVATE
+            $<TARGET_PROPERTY:MPI::MPI_C,INTERFACE_INCLUDE_DIRECTORIES>)
+    endif()
+endfunction()
+
+function(_mumps_register_test_mpiseq tgt)
+    # libmpiseq path — plain binary, no mpiexec wrapper.
+    add_test(NAME mumps_${tgt}
+             COMMAND $<TARGET_FILE:${tgt}>
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
+    set_tests_properties(mumps_${tgt} PROPERTIES RUN_SERIAL TRUE)
 endfunction()
 
 function(_mumps_register_test_variant tgt variant)
     if(variant STREQUAL "_seq")
-        # libmpiseq path — plain binary, no mpiexec wrapper.
-        add_test(NAME mumps_${tgt}
-                 COMMAND $<TARGET_FILE:${tgt}>
-                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/precision_reports)
-        set_tests_properties(mumps_${tgt} PROPERTIES RUN_SERIAL TRUE)
+        _mumps_register_test_mpiseq(${tgt})
     else()
         _mumps_register_test(${tgt})
     endif()
 endfunction()
 
-function(_mumps_attach_link_group tgt variant want_c)
+function(_mumps_attach_link_group_mpiseq tgt)
+    # ``_seq`` variant: libmpiseq stands in for ALL of MPI + BLACS +
+    # PBLAS + ScaLAPACK, so the link list is mumps + lapack + blas
+    # + multifloats + the test harness. cmake's $<LINK_GROUP:> can't
+    # be used because the migrated archives have PUBLIC chains to
+    # scalapack / blacs / pblas / pbblas / ptzblas (which we're
+    # deliberately replacing with libmpiseq) — naming a subset
+    # triggers cmake's cycle detector. Likewise, plain
+    # target_link_libraries on these would drag the PUBLIC chain
+    # back in (and Intel MPI along the multifloats_mpi PRIVATE chain
+    # — STATIC libs propagate PRIVATE deps to consumers). Bypass
+    # cmake's link graph entirely: list every required archive
+    # inside a single ``--start-group`` block via $<TARGET_FILE:>,
+    # add an explicit add_dependencies so cmake builds them, and
+    # pull include directories manually from the targets that
+    # carry .mod / header search paths.
+    set(_archives
+        mumps_test_target          # test harness — needs to scan
+        mumps_c_bridge             #   alongside mwmumps
+        ${LIB_PAIR_PREFIX}mumps
+        ${LIB_PAIR_PREFIX}lapack
+        ${LIB_PAIR_PREFIX}blas
+        mumps_test_common
+        target_conv
+        mpiseq                     # MPI / BLACS / scalapack stubs
+    )
+    # Std non-precision archives carry shared helpers (mumps_abort_,
+    # qisnan_ for the kind16 EP NaN check, ...). Append whichever
+    # exist in this build.
+    foreach(_std mumps_common lapack_common blas_common)
+        if(TARGET ${_std})
+            list(APPEND _archives ${_std})
+        endif()
+    endforeach()
+    # Std blas / lapack supply precision-independent helpers (lsame_,
+    # ilaenv_, xerbla_, ieeeck_, dlamch_, …) that the migrated
+    # archives call. They used to resolve from refblas_quad /
+    # reflapack_quad before those archives' exports were renamed
+    # *_quad_; now they need a non-renamed source on the link line.
+    foreach(_std blas lapack)
+        if(TARGET ${_std})
+            list(APPEND _archives ${_std})
+        endif()
+    endforeach()
+    # The migrated solver + bridge + common members reference the ordering
+    # symbols (see _mumps_link_group_archives note); include the archives in
+    # the --start-group block.
+    _mumps_collect_ordering_archives(_archives)
+    if(TARGET ${LIB_PAIR_PREFIX}xblas)
+        list(APPEND _archives ${LIB_PAIR_PREFIX}xblas)
+    endif()
+    # Composite-${LIB_PAIR_PREFIX}blas is an INTERFACE under
+    # PARALLEL_BLAS=ON; $<TARGET_FILE:...> can't resolve it.
+    # Swap to the underlying _serial. See note above near
+    # _mumps_link_group_archives.
+    if(PARALLEL_BLAS AND TARGET ${LIB_PAIR_PREFIX}blas_serial)
+        list(TRANSFORM _archives REPLACE
+            "^${LIB_PAIR_PREFIX}blas$" "${LIB_PAIR_PREFIX}blas_serial")
+    endif()
+    if(NEEDS_MULTIFLOATS)
+        # multifloats_mpi (C++ MPI bridge) included as a raw
+        # archive — its calls to MPI_Type_create_struct /
+        # MPI_Op_create / etc. resolve against libmpiseq's
+        # mpiseq_c_stubs.c. The registration runs but produces
+        # zeroed handles. Single-rank in-place reductions
+        # short-circuit before MUMPS_COPY sees the handle, so
+        # this is harmless for MUMPS calls that use MPI_IN_PLACE;
+        # non-in-place multifloats reductions would STOP in
+        # libseq's MUMPS_COPY (datatype unknown) — that's a real
+        # limitation of the libmpiseq path on multifloats and
+        # surfaces at runtime if hit.
+        list(APPEND _archives
+            multifloats_mpi_f multifloats_mpi
+            multifloatsf multifloats)
+    endif()
+    if(NEEDS_QUAD_MPI)
+        # quad_mpi (C MPI bridge) + quad_mpi_f (Fortran handles)
+        # included as raw archives — quad_mpi's MPI_Op_create calls
+        # resolve against libmpiseq's mpiseq_c_stubs.c. Registration
+        # runs but produces zeroed handles; single-rank in-place
+        # reductions short-circuit before libseq's MUMPS_COPY sees
+        # the handle, so this is harmless for the MPI_IN_PLACE path
+        # MUMPS uses at np=1. Mirrors the multifloats branch above.
+        list(APPEND _archives quad_mpi_f quad_mpi)
+    endif()
+    # Under the binary-release acquisition the bare ``multifloats``
+    # target is an INTERFACE wrapper over the imported
+    # ``multifloats::multifloats`` core (cmake/CMakeLists.txt) —
+    # $<TARGET_FILE:> can't resolve an INTERFACE library, and
+    # add_dependencies() rejects imported targets. Swap in the
+    # imported core for the link line and drop it from the
+    # dependency list (imported archives are always up to date).
+    set(_dep_archives ${_archives})
+    if("multifloats" IN_LIST _archives AND TARGET multifloats)
+        get_target_property(_mf_type multifloats TYPE)
+        if(_mf_type STREQUAL "INTERFACE_LIBRARY")
+            list(TRANSFORM _archives REPLACE "^multifloats$"
+                 "multifloats::multifloats")
+            list(REMOVE_ITEM _dep_archives multifloats)
+        endif()
+    endif()
+    add_dependencies(${tgt} ${_dep_archives})
+    _mumps_link_group_raw(${tgt} _archives SPLIT_COMPOSITE_BLAS)
+    # mumps_test_target / mumps_c_bridge / mumps_test_common /
+    # multifloats_mpi_f / target_conv / mpiseq ship .mod files and
+    # bridge headers we need at compile time. Pull their public
+    # include dirs manually since we're not using
+    # target_link_libraries for them.
+    foreach(_arc IN LISTS _archives)
+        target_include_directories(${tgt} PRIVATE
+            $<TARGET_PROPERTY:${_arc},INTERFACE_INCLUDE_DIRECTORIES>)
+    endforeach()
+    # reflapack_quad / refblas_quad are reference archives the
+    # solve helpers reach for. They're optional (built only when
+    # tests/lapack and tests/blas are configured).
+    if(TARGET reflapack_quad)
+        target_link_libraries(${tgt} PRIVATE reflapack_quad)
+    endif()
+endfunction()
+
+function(_mumps_attach_link_group_mpi tgt)
+    set(_archives ${_mumps_link_group_archives})
+    target_link_libraries(${tgt} PRIVATE
+        "$<LINK_GROUP:RESCAN,${_archives}>"
+    )
+    # Ordering archives (pord/metis/scotch) appended AFTER the group as raw
+    # files. They are leaf libraries — nothing in them calls back into the
+    # mumps/scalapack group — so trailing placement resolves the ordering
+    # symbols the group members left undefined (ld carries the unresolved
+    # set forward). Raw $<TARGET_FILE:> + add_dependencies keeps them out of
+    # the target link graph, so the eymumps->mumps_common->pord PUBLIC
+    # chain does NOT form a group<->common cycle (which naming them as
+    # LINK_GROUP targets would). Their own --start-group covers the
+    # esmumps->scotch intra-Scotch cross-references.
+    if(_mumps_ordering_archives)
+        add_dependencies(${tgt} ${_mumps_ordering_archives})
+        _mumps_link_group_raw(${tgt} _mumps_ordering_archives)
+    endif()
+endfunction()
+
+# Selects the archive group + MPI layer for one variant of a migrated
+# test. Both halves emit target_link_libraries, so they stay adjacent
+# and in this order: the group first, the MPI layer after it.
+function(_mumps_setup_test_variant tgt variant want_c)
     if(variant STREQUAL "_seq")
-        # ``_seq`` variant: libmpiseq stands in for ALL of MPI + BLACS +
-        # PBLAS + ScaLAPACK, so the link list is mumps + lapack + blas
-        # + multifloats + the test harness. cmake's $<LINK_GROUP:> can't
-        # be used because the migrated archives have PUBLIC chains to
-        # scalapack / blacs / pblas / pbblas / ptzblas (which we're
-        # deliberately replacing with libmpiseq) — naming a subset
-        # triggers cmake's cycle detector. Likewise, plain
-        # target_link_libraries on these would drag the PUBLIC chain
-        # back in (and Intel MPI along the multifloats_mpi PRIVATE chain
-        # — STATIC libs propagate PRIVATE deps to consumers). Bypass
-        # cmake's link graph entirely: list every required archive
-        # inside a single ``--start-group`` block via $<TARGET_FILE:>,
-        # add an explicit add_dependencies so cmake builds them, and
-        # pull include directories manually from the targets that
-        # carry .mod / header search paths.
-        set(_archives
-            mumps_test_target          # test harness — needs to scan
-            mumps_c_bridge             #   alongside mwmumps
-            ${LIB_PAIR_PREFIX}mumps
-            ${LIB_PAIR_PREFIX}lapack
-            ${LIB_PAIR_PREFIX}blas
-            mumps_test_common
-            target_conv
-            mpiseq                     # MPI / BLACS / scalapack stubs
-        )
-        # Std non-precision archives carry shared helpers (mumps_abort_,
-        # qisnan_ for the kind16 EP NaN check, ...). Append whichever
-        # exist in this build.
-        foreach(_std mumps_common lapack_common blas_common)
-            if(TARGET ${_std})
-                list(APPEND _archives ${_std})
-            endif()
-        endforeach()
-        # Std blas / lapack supply precision-independent helpers (lsame_,
-        # ilaenv_, xerbla_, ieeeck_, dlamch_, …) that the migrated
-        # archives call. They used to resolve from refblas_quad /
-        # reflapack_quad before those archives' exports were renamed
-        # *_quad_; now they need a non-renamed source on the link line.
-        foreach(_std blas lapack)
-            if(TARGET ${_std})
-                list(APPEND _archives ${_std})
-            endif()
-        endforeach()
-        # Ordering archives (pord/metis/scotch) — the migrated solver + bridge
-        # + common members reference their symbols (see _mumps_link_group_archives
-        # note); include them in the --start-group block, gated on their targets.
-        foreach(_ord pord metis esmumps scotch)
-            if(TARGET ${_ord})
-                list(APPEND _archives ${_ord})
-            endif()
-        endforeach()
-        if(TARGET ${LIB_PAIR_PREFIX}xblas)
-            list(APPEND _archives ${LIB_PAIR_PREFIX}xblas)
-        endif()
-        # Composite-${LIB_PAIR_PREFIX}blas is an INTERFACE under
-        # PARALLEL_BLAS=ON; $<TARGET_FILE:...> can't resolve it.
-        # Swap to the underlying _serial. See note above near
-        # _mumps_link_group_archives.
-        if(PARALLEL_BLAS AND TARGET ${LIB_PAIR_PREFIX}blas_serial)
-            list(TRANSFORM _archives REPLACE
-                "^${LIB_PAIR_PREFIX}blas$" "${LIB_PAIR_PREFIX}blas_serial")
-        endif()
-        if(NEEDS_MULTIFLOATS)
-            # multifloats_mpi (C++ MPI bridge) included as a raw
-            # archive — its calls to MPI_Type_create_struct /
-            # MPI_Op_create / etc. resolve against libmpiseq's
-            # mpiseq_c_stubs.c. The registration runs but produces
-            # zeroed handles. Single-rank in-place reductions
-            # short-circuit before MUMPS_COPY sees the handle, so
-            # this is harmless for MUMPS calls that use MPI_IN_PLACE;
-            # non-in-place multifloats reductions would STOP in
-            # libseq's MUMPS_COPY (datatype unknown) — that's a real
-            # limitation of the libmpiseq path on multifloats and
-            # surfaces at runtime if hit.
-            list(APPEND _archives
-                multifloats_mpi_f multifloats_mpi
-                multifloatsf multifloats)
-        endif()
-        if(NEEDS_QUAD_MPI)
-            # quad_mpi (C MPI bridge) + quad_mpi_f (Fortran handles)
-            # included as raw archives — quad_mpi's MPI_Op_create calls
-            # resolve against libmpiseq's mpiseq_c_stubs.c. Registration
-            # runs but produces zeroed handles; single-rank in-place
-            # reductions short-circuit before libseq's MUMPS_COPY sees
-            # the handle, so this is harmless for the MPI_IN_PLACE path
-            # MUMPS uses at np=1. Mirrors the multifloats branch above.
-            list(APPEND _archives quad_mpi_f quad_mpi)
-        endif()
-        # Under the binary-release acquisition the bare ``multifloats``
-        # target is an INTERFACE wrapper over the imported
-        # ``multifloats::multifloats`` core (cmake/CMakeLists.txt) —
-        # $<TARGET_FILE:> can't resolve an INTERFACE library, and
-        # add_dependencies() rejects imported targets. Swap in the
-        # imported core for the link line and drop it from the
-        # dependency list (imported archives are always up to date).
-        set(_dep_archives ${_archives})
-        if("multifloats" IN_LIST _archives AND TARGET multifloats)
-            get_target_property(_mf_type multifloats TYPE)
-            if(_mf_type STREQUAL "INTERFACE_LIBRARY")
-                list(TRANSFORM _archives REPLACE "^multifloats$"
-                     "multifloats::multifloats")
-                list(REMOVE_ITEM _dep_archives multifloats)
-            endif()
-        endif()
-        add_dependencies(${tgt} ${_dep_archives})
-        # target_link_libraries (vs. target_link_options) places these
-        # AFTER the .o files in the link line — required so ld can
-        # resolve test_*.o symbols against the group.
-        target_link_libraries(${tgt} PRIVATE "-Wl,--start-group")
-        foreach(_arc IN LISTS _archives)
-            if(_arc STREQUAL "${LIB_PAIR_PREFIX}blas" AND PARALLEL_BLAS
-                    AND TARGET ${LIB_PAIR_PREFIX}blas_serial)
-                # Composite is INTERFACE → $<TARGET_FILE:> can't
-                # resolve. Inline the two underlying archives directly.
-                # Overlay first so its egemm_ wins over the serial
-                # archive's egemm_ when ld scans the group.
-                if(TARGET ${LIB_PAIR_PREFIX}blas_parallel)
-                    target_link_libraries(${tgt} PRIVATE
-                        $<TARGET_FILE:${LIB_PAIR_PREFIX}blas_parallel>)
-                endif()
-                target_link_libraries(${tgt} PRIVATE
-                    $<TARGET_FILE:${LIB_PAIR_PREFIX}blas_serial>)
-            else()
-                target_link_libraries(${tgt} PRIVATE $<TARGET_FILE:${_arc}>)
-            endif()
-        endforeach()
-        target_link_libraries(${tgt} PRIVATE "-Wl,--end-group")
-        # mumps_test_target / mumps_c_bridge / mumps_test_common /
-        # multifloats_mpi_f / target_conv / mpiseq ship .mod files and
-        # bridge headers we need at compile time. Pull their public
-        # include dirs manually since we're not using
-        # target_link_libraries for them.
-        foreach(_arc IN LISTS _archives)
-            target_include_directories(${tgt} PRIVATE
-                $<TARGET_PROPERTY:${_arc},INTERFACE_INCLUDE_DIRECTORIES>)
-        endforeach()
-        # reflapack_quad / refblas_quad are reference archives the
-        # solve helpers reach for. They're optional (built only when
-        # tests/lapack and tests/blas are configured).
-        if(TARGET reflapack_quad)
-            target_link_libraries(${tgt} PRIVATE reflapack_quad)
-        endif()
+        _mumps_attach_link_group_mpiseq(${tgt})
+        _mumps_link_mpiseq(${tgt} ${want_c})
     else()
-        set(_archives ${_mumps_link_group_archives})
-        target_link_libraries(${tgt} PRIVATE
-            "$<LINK_GROUP:RESCAN,${_archives}>"
-        )
-        # Ordering archives (pord/metis/scotch) appended AFTER the group as raw
-        # files. They are leaf libraries — nothing in them calls back into the
-        # mumps/scalapack group — so trailing placement resolves the ordering
-        # symbols the group members left undefined (ld carries the unresolved
-        # set forward). Raw $<TARGET_FILE:> + add_dependencies keeps them out of
-        # the target link graph, so the eymumps->mumps_common->pord PUBLIC
-        # chain does NOT form a group<->common cycle (which naming them as
-        # LINK_GROUP targets would). Their own --start-group covers the
-        # esmumps->scotch intra-Scotch cross-references.
-        if(_mumps_ordering_archives)
-            add_dependencies(${tgt} ${_mumps_ordering_archives})
-            target_link_libraries(${tgt} PRIVATE "-Wl,--start-group")
-            foreach(_ord IN LISTS _mumps_ordering_archives)
-                target_link_libraries(${tgt} PRIVATE $<TARGET_FILE:${_ord}>)
-            endforeach()
-            target_link_libraries(${tgt} PRIVATE "-Wl,--end-group")
-        endif()
+        _mumps_attach_link_group_mpi(${tgt})
+        _mumps_link_mpi(${tgt} ${want_c})
     endif()
 endfunction()
 
@@ -723,8 +756,7 @@ function(add_mumps_fortran_test test_src)
         endif()
         set(tgt ${name}${variant})
         add_executable(${tgt} ${test_src})
-        _mumps_attach_link_group(${tgt} "${variant}" FALSE)
-        _mumps_apply_link_variant(${tgt} "${variant}" FALSE)
+        _mumps_setup_test_variant(${tgt} "${variant}" FALSE)
         # Use the native objects in the LTO-fat archives (built with
         # -flto=auto -ffat-lto-objects upstream). Cross-archive LTO
         # partitioning produces spurious "undefined reference to
@@ -755,8 +787,7 @@ function(add_mumps_c_test test_src)
         # libqmumps's LTO partitioning, and ``cc`` doesn't have the
         # gfortran LTO plugin loaded.
         set_target_properties(${tgt} PROPERTIES LINKER_LANGUAGE Fortran)
-        _mumps_attach_link_group(${tgt} "${variant}" TRUE)
-        _mumps_apply_link_variant(${tgt} "${variant}" TRUE)
+        _mumps_setup_test_variant(${tgt} "${variant}" TRUE)
         target_link_options(${tgt} PRIVATE -fno-lto)
         target_include_directories(${tgt} PRIVATE
             ${_BRIDGE_INC_TARGET} ${_BRIDGE_INC_SHARED} ${_MUMPS_C_INC}
@@ -779,14 +810,44 @@ function(add_mumps_c_test test_src)
     endforeach()
 endfunction()
 
+# Genuine-test counterparts of _mumps_attach_link_group_*: the genuine
+# executables link their own disjoint archive groups, named (not
+# dereferenced) so the call sites stay readable.
+function(_mumps_attach_genuine_group_mpi tgt group_var)
+    target_link_libraries(${tgt} PRIVATE
+        "$<LINK_GROUP:RESCAN,${${group_var}}>")
+endfunction()
+
+function(_mumps_attach_genuine_group_mpiseq tgt group_seq_var)
+    add_dependencies(${tgt} ${${group_seq_var}} mpiseq)
+    _mumps_link_group_raw(${tgt} ${group_seq_var} EXTRA mpiseq)
+    foreach(_arc IN LISTS ${group_seq_var})
+        target_include_directories(${tgt} PRIVATE
+            $<TARGET_PROPERTY:${_arc},INTERFACE_INCLUDE_DIRECTORIES>)
+    endforeach()
+endfunction()
+
+# _mumps_setup_test_variant for the genuine tests.
+function(_mumps_setup_genuine_variant tgt variant want_c
+         group_var group_seq_var)
+    if(variant STREQUAL "_seq")
+        _mumps_attach_genuine_group_mpiseq(${tgt} ${group_seq_var})
+        _mumps_link_mpiseq(${tgt} ${want_c})
+    else()
+        _mumps_attach_genuine_group_mpi(${tgt} ${group_var})
+        _mumps_link_mpi(${tgt} ${want_c})
+    endif()
+endfunction()
+
 # Registers one genuine (unmigrated d/z/s/c) solve test per link variant.
 # The genuine executables link the disjoint genuine archive groups rather
-# than the migrated _mumps_link_group_archives, so they bypass
-# _mumps_attach_link_group: the plain variant resolves the circular
-# static refs with LINK_GROUP RESCAN, while _seq swaps the parallel
-# stack for libmpiseq via an explicit --start/--end-group of raw
-# $<TARGET_FILE:> archives. group_var / group_seq_var name (not
-# dereference) the list variables so both stay readable at the call site.
+# than the migrated _mumps_link_group_archives, so they go through
+# _mumps_setup_genuine_variant rather than _mumps_setup_test_variant:
+# the plain variant resolves the circular static refs with LINK_GROUP
+# RESCAN, while _seq swaps the parallel stack for libmpiseq via an
+# explicit --start/--end-group of raw $<TARGET_FILE:> archives.
+# group_var / group_seq_var name (not dereference) the list variables
+# so both stay readable at the call site.
 function(_mumps_add_genuine_test name src group_var group_seq_var
          want_c use_fortran_linker)
     foreach(_vkey IN LISTS _mumps_test_variants)
@@ -802,23 +863,8 @@ function(_mumps_add_genuine_test name src group_var group_seq_var
         target_link_options(${tgt} PRIVATE -fno-lto)
         # Upstream dmumps_c.h / zmumps_c.h / dmumps_struc.h / mumps_c_types.h.
         target_include_directories(${tgt} PRIVATE ${_MUMPS_C_INC})
-        if(variant STREQUAL "_seq")
-            add_dependencies(${tgt} ${${group_seq_var}} mpiseq)
-            target_link_libraries(${tgt} PRIVATE "-Wl,--start-group")
-            foreach(_arc IN LISTS ${group_seq_var})
-                target_link_libraries(${tgt} PRIVATE $<TARGET_FILE:${_arc}>)
-            endforeach()
-            target_link_libraries(${tgt} PRIVATE $<TARGET_FILE:mpiseq>)
-            target_link_libraries(${tgt} PRIVATE "-Wl,--end-group")
-            foreach(_arc IN LISTS ${group_seq_var})
-                target_include_directories(${tgt} PRIVATE
-                    $<TARGET_PROPERTY:${_arc},INTERFACE_INCLUDE_DIRECTORIES>)
-            endforeach()
-        else()
-            target_link_libraries(${tgt} PRIVATE
-                "$<LINK_GROUP:RESCAN,${${group_var}}>")
-        endif()
-        _mumps_apply_link_variant(${tgt} "${variant}" ${want_c})
+        _mumps_setup_genuine_variant(${tgt} "${variant}" ${want_c}
+            ${group_var} ${group_seq_var})
         _mumps_register_test_variant(${tgt} "${variant}")
     endforeach()
 endfunction()
@@ -952,19 +998,14 @@ if(TARGET dzmumps
             list(APPEND _genuine_group ${_p})
         endif()
     endforeach()
-    # Ordering archives (ICNTL(7)=4 pord, =5 metis, =3 scotch). mumps_common
-    # PUBLIC-links these, but its transitive interface is NOT pulled *into* the
-    # LINK_GROUP RESCAN below, so the ordering symbols the group members reference
-    # (mumps_pord.c's SPACE_ordering/firstPostorder, mumps_metis.c's
-    # metis_mumps_*, mumps_scotch.c's SCOTCH_*_mumps, and the Fortran
+    # Ordering archives. mumps_common PUBLIC-links these, but its transitive
+    # interface is NOT pulled *into* the LINK_GROUP RESCAN below, so the
+    # ordering symbols the group members reference (mumps_pord.c's
+    # SPACE_ordering/firstPostorder, mumps_metis.c's metis_mumps_*,
+    # mumps_scotch.c's SCOTCH_*_mumps, and the Fortran
     # ana_orderings_wrappers_m / d/z ini_driver callers) would be undefined at
-    # link. Name them explicitly inside the group, gated on the target so the
-    # tree still builds when a given ordering wasn't staged.
-    foreach(_p pord metis esmumps scotch)
-        if(TARGET ${_p})
-            list(APPEND _genuine_group ${_p})
-        endif()
-    endforeach()
+    # link. Name them explicitly inside the group.
+    _mumps_collect_ordering_archives(_genuine_group)
     # PT-Scotch increment for the genuine (MKL d/z) stack: dzmumps is built
     # with -Dptscotch too (cmake/CMakeLists.txt), so it references the
     # distributed SCOTCH_dgraph*_mumps / SCOTCHFDGRAPH*_mumps symbols. MPI-only
@@ -983,11 +1024,7 @@ if(TARGET dzmumps
     endforeach()
     # Same ordering archives for the sequential stack (mumps_common is present
     # in both variants and references them identically).
-    foreach(_p pord metis esmumps scotch)
-        if(TARGET ${_p})
-            list(APPEND _genuine_group_seq ${_p})
-        endif()
-    endforeach()
+    _mumps_collect_ordering_archives(_genuine_group_seq)
 
     _mumps_add_genuine_test(test_genuine_dz_solve ${_genuine_solve_src}
         _genuine_group _genuine_group_seq TRUE TRUE)

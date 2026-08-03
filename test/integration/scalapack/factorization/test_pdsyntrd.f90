@@ -5,9 +5,8 @@ program test_pdsyntrd
     use compare,          only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dsytrd
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_npcol, &
+                                my_col, numroc_local, local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_matrix, &
                                 scatter_matrix
     use target_scalapack, only: target_name, target_eps, target_pdsyntrd
@@ -17,7 +16,7 @@ program test_pdsyntrd
     character(len=1), parameter :: uplos(*) = ['U', 'L', 'U']
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref, lwork
-    integer :: locm_a, locn_a, lld_a
+    integer :: locn_a
     integer :: desca(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:)
     real(ep), allocatable :: A_sym(:,:), A_ref(:,:)
@@ -36,10 +35,9 @@ program test_pdsyntrd
         allocate(A_sym(n, n))
         A_sym = 0.5_ep * (A_glob + transpose(A_glob))
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
         call scatter_matrix(n, n, mb, nb, A_sym, A_loc)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         allocate(d(max(1, locn_a)), e(max(1, locn_a)), tau(max(1, locn_a)), work(1))
         call target_pdsyntrd(uplos(i), n, A_loc, 1, 1, desca, d, e, tau, &

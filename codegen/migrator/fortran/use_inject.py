@@ -8,12 +8,13 @@ import re
 
 from ..target_mode import TargetMode
 from .lex import (
+    FIXED_FORM_LABEL_FIELD, FIXED_FORM_WIDTH, FREE_FORM_WIDTH,
+    KEEPKIND_DBLE, KEEPKIND_MARKERS,
     _END_PROC_RE, _INTERFACE_BEGIN_RE, _INTERFACE_END_RE, _PROC_HEADER_RE,
     _looks_like_statement_function,
     _scan_local_declared_names, _scan_referenced_identifiers,
     is_continuation_line, split_top_level_commas, walk_procedure_header,
 )
-from .keepkind import _KK_DBLE_SENTINEL
 from .decls import _scan_complex_var_names
 from .renames import _INCLUDE_RE
 
@@ -104,8 +105,8 @@ def _wrap_use_clause(indent: str, body: str, fixed_form: bool) -> str:
     overflow the line, the current line is flushed and a new
     continuation line is started.
     """
-    cap = 72 if fixed_form else 132
-    cont_prefix = '     +' if fixed_form else (indent + '   ')
+    cap = FIXED_FORM_WIDTH if fixed_form else FREE_FORM_WIDTH
+    cont_prefix = (FIXED_FORM_LABEL_FIELD + '+') if fixed_form else (indent + '   ')
 
     full = indent + 'USE ' + body
     if len(full) <= cap:
@@ -178,7 +179,7 @@ def _build_use_only_clause(proc_lines: list[str],
     # ``CALL F(dble(PEAK))`` then dispatches to gfortran's intrinsic
     # ``dble`` which doesn't accept the multifloats real64x2 type.
     body_text = ''.join(proc_lines)
-    if _KK_DBLE_SENTINEL in body_text:
+    if KEEPKIND_DBLE in body_text:
         referenced.add('dble')
     # Predict the ``dble`` calls that ``_rewrite_int_kind_on_real64x2``
     # will inject in a later post-pass: ``INT(real64x2_expr, K)`` →
@@ -250,9 +251,7 @@ _DECL_KEYWORDS = (
     'CHARACTER', 'TYPE', 'USE', 'IMPLICIT', 'PARAMETER',
     'DATA', 'INTRINSIC', 'EXTERNAL', 'DIMENSION', 'SAVE',
     'EQUIVALENCE', 'COMMON', 'INCLUDE',
-    '__KEEPKIND_DP__',
-    '__KEEPKIND_DBLE__',
-    '__KEEPKIND_DCMPLX__',
+    *KEEPKIND_MARKERS,
 )
 
 

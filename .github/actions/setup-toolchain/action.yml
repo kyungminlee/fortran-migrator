@@ -1,0 +1,124 @@
+name: Set up build toolchain
+description: >
+  Install the compilers and MPI one build slot needs, and export the
+  environment they require. Shared by ci.yml's single build slot and every
+  combination of release.yml's target x compiler x MPI matrix — the two
+  installed the same toolchain with the same shell blocks, so it lives here
+  once. Every piece is opt-in: a slot passes only the inputs it uses, and
+  the steps it leaves at their defaults do not run.
+
+inputs:
+  gcc-packages:
+    description: >
+      apt packages for a GCC slot, e.g. "gcc-15 g++-15 gfortran-15". Empty
+      skips the GCC install (the slot uses another compiler family).
+    default: ''
+  oneapi-version:
+    description: >
+      Intel oneAPI compiler version as YEAR.MINOR (e.g. "2025.0") for an ifx
+      slot. Empty skips the oneAPI compiler install.
+    default: ''
+  flang-version:
+    description: >
+      LLVM Flang major version (e.g. "20") for a flang slot. Empty skips the
+      Flang install.
+    default: ''
+  mpi-packages:
+    description: >
+      apt packages for an MPI Ubuntu ships (libopenmpi-dev / libmpich-dev).
+      Empty skips the install — Intel MPI comes from `intel-mpi` below and a
+      seq slot needs no MPI at all.
+    default: ''
+  intel-mpi:
+    description: >
+      "true" to install Intel MPI (intel-oneapi-mpi-devel). Also true for a
+      seq slot: MUMPS_LIBSEQ_RELEASE hard-requires the Intel-MPI toolchain
+      (libmpiseq's stub ABI) even though the shipped archives link no real MPI.
+    default: 'false'
+  fc:
+    description: Fortran compiler the Intel MPI wrappers should shim to.
+    default: ''
+  cc:
+    description: C compiler the Intel MPI wrappers should shim to.
+    default: ''
+  cxx:
+    description: C++ compiler the Intel MPI wrappers should shim to.
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install GCC (gfortran)
+      if: inputs.gcc-packages != ''
+      shell: bash
+      run: |
+        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+        sudo apt-get update
+        sudo apt-get install -y ${{ inputs.gcc-packages }}
+
+    # One repository serves both the oneAPI compilers and Intel MPI, so it is
+    # added once for whichever of the two the slot wants.
+    - name: Add the Intel oneAPI apt repository
+      if: inputs.oneapi-version != '' || inputs.intel-mpi == 'true'
+      shell: bash
+      run: |
+        wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+          | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+        echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+          | sudo tee /etc/apt/sources.list.d/oneAPI.list
+        sudo apt-get update
+
+    - name: Install Intel oneAPI compilers
+      if: inputs.oneapi-version != ''
+      shell: bash
+      run: |
+        YEAR=$(echo "${{ inputs.oneapi-version }}" | cut -d. -f1)
+        MINOR=$(echo "${{ inputs.oneapi-version }}" | cut -d. -f2)
+        sudo apt-get install -y \
+          intel-oneapi-compiler-fortran-${YEAR}.${MINOR} \
+          intel-oneapi-compiler-dpcpp-cpp-${YEAR}.${MINOR}
+
+    - name: Install LLVM Flang
+      if: inputs.flang-version != ''
+      shell: bash
+      run: |
+        wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-${{ inputs.flang-version }} main"
+        sudo apt-get update
+        sudo apt-get install -y flang-${{ inputs.flang-version }} clang-${{ inputs.flang-version }} libomp-${{ inputs.flang-version }}-dev
+
+    - name: Install MPI (apt)
+      if: inputs.mpi-packages != ''
+      shell: bash
+      run: sudo apt-get install -y ${{ inputs.mpi-packages }}
+
+    - name: Install Intel MPI
+      if: inputs.intel-mpi == 'true'
+      shell: bash
+      run: |
+        sudo apt-get install -y intel-oneapi-mpi-devel
+
+    # Source Intel oneAPI's setvars.sh once and forward the resulting
+    # environment to subsequent steps via $GITHUB_ENV instead of
+    # re-sourcing it inside every cmake invocation. Only vars that
+    # setvars.sh actually adds/changes are forwarded.
+    - name: Setup Intel oneAPI environment
+      if: inputs.oneapi-version != '' || inputs.intel-mpi == 'true'
+      shell: bash
+      run: |
+        env | sort > /tmp/env.before
+        source /opt/intel/oneapi/setvars.sh > /dev/null
+        env | sort > /tmp/env.after
+        comm -13 /tmp/env.before /tmp/env.after >> "$GITHUB_ENV"
+
+    # Intel MPI's wrappers drive whatever compiler these name. An oneAPI
+    # slot already gets icx/ifx from setvars.sh, so it wants no shims.
+    - name: Setup Intel MPI compiler shims
+      if: inputs.intel-mpi == 'true' && inputs.oneapi-version == ''
+      shell: bash
+      run: |
+        {
+          echo "I_MPI_F90=${{ inputs.fc }}"
+          echo "I_MPI_CC=${{ inputs.cc }}"
+          echo "I_MPI_CXX=${{ inputs.cxx }}"
+        } >> "$GITHUB_ENV"

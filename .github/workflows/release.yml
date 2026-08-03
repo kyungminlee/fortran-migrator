@@ -96,7 +96,9 @@ jobs:
         # (mpiseq KIND-typing on ifx, mpich+oneAPI 2025 mpi.h shadowing,
         # flang's lack of -ffat-lto-objects, mumps mpif.h scan failure
         # on flang, etc.) that need targeted fixes before they can be
-        # promoted to release artifacts. Tracked as a follow-up.
+        # promoted to release artifacts. Tracked as a follow-up. When such
+        # a row comes back it needs the key setup-toolchain installs off:
+        # `oneapi: <YEAR.MINOR>` for ifx, `flang: <major>` for flang.
         compiler:
           - { name: gfortran-12,  fc: gfortran-12,   cc: gcc-12,    cxx: g++-12,      pkg: gcc-12 g++-12 gfortran-12 }
           - { name: gfortran-15,  fc: gfortran-15,   cc: gcc-15,    cxx: g++-15,      pkg: gcc-15 g++-15 gfortran-15 }
@@ -113,10 +115,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # doc/ is needed by the "Add documentation" step below; root
-          # files (README.md, LICENSE, CHANGELOG.md) are always included
-          # by cone-mode sparse checkout.
+          # doc/ is needed by the "Add documentation" step below;
+          # .github/actions/ by the setup-toolchain step (a local action
+          # must be present in the workspace); root files (README.md,
+          # LICENSE, CHANGELOG.md) are always included by cone-mode sparse
+          # checkout.
           sparse-checkout: |
+            .github/actions/
             cmake/
             doc/
 
@@ -126,78 +131,24 @@ jobs:
           name: staging-${{ matrix.target }}
           path: staging/
 
-      - name: Install GCC (gfortran)
-        if: startsWith(matrix.compiler.name, 'gfortran')
-        run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.compiler.pkg }}
-
-      - name: Install Intel oneAPI compilers
-        if: startsWith(matrix.compiler.name, 'ifx')
-        run: |
-          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
-            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
-            | sudo tee /etc/apt/sources.list.d/oneAPI.list
-          sudo apt-get update
-          YEAR=$(echo "${{ matrix.compiler.oneapi }}" | cut -d. -f1)
-          MINOR=$(echo "${{ matrix.compiler.oneapi }}" | cut -d. -f2)
-          sudo apt-get install -y \
-            intel-oneapi-compiler-fortran-${YEAR}.${MINOR} \
-            intel-oneapi-compiler-dpcpp-cpp-${YEAR}.${MINOR}
-
-      - name: Install LLVM Flang 20
-        if: matrix.compiler.name == 'flang-20'
-        run: |
-          wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-20 main"
-          sudo apt-get update
-          sudo apt-get install -y flang-20 clang-20 libomp-20-dev
-
-      - name: Install MPI (apt)
-        if: matrix.mpi.pkg != ''
-        run: sudo apt-get install -y ${{ matrix.mpi.pkg }}
-
-      - name: Install Intel MPI
-        if: env.USES_INTEL_MPI == 'true' && !startsWith(matrix.compiler.name, 'ifx')
-        run: |
-          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
-            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
-            | sudo tee /etc/apt/sources.list.d/oneAPI.list
-          sudo apt-get update
-          sudo apt-get install -y intel-oneapi-mpi-devel
-
-      - name: Install Intel MPI (with oneAPI compilers)
-        if: env.USES_INTEL_MPI == 'true' && startsWith(matrix.compiler.name, 'ifx')
-        run: |
-          sudo apt-get install -y intel-oneapi-mpi-devel
+      # Compilers + MPI for this slot, via the composite action ci.yml's
+      # build job shares. Which installs run is decided by which inputs the
+      # slot fills in: gfortran rows carry `pkg`, an ifx row would carry
+      # `oneapi`, a flang row `flang`.
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          gcc-packages: ${{ startsWith(matrix.compiler.name, 'gfortran') && matrix.compiler.pkg || '' }}
+          oneapi-version: ${{ matrix.compiler.oneapi }}
+          flang-version: ${{ matrix.compiler.flang }}
+          mpi-packages: ${{ matrix.mpi.pkg }}
+          intel-mpi: ${{ env.USES_INTEL_MPI }}
+          fc: ${{ matrix.compiler.fc }}
+          cc: ${{ matrix.compiler.cc }}
+          cxx: ${{ matrix.compiler.cxx }}
 
       - name: Install fypp (needed by multifloats and tests)
         if: matrix.target == 'multifloats' || env.IS_TEST_SLOT == 'true'
         run: pipx install fypp
-
-      # Source Intel oneAPI's setvars.sh once and forward the resulting
-      # environment to subsequent steps via $GITHUB_ENV instead of
-      # re-sourcing it inside every cmake invocation. Only vars that
-      # setvars.sh actually adds/changes are forwarded.
-      - name: Setup Intel oneAPI environment
-        if: matrix.compiler.oneapi != '' || env.USES_INTEL_MPI == 'true'
-        run: |
-          env | sort > /tmp/env.before
-          source /opt/intel/oneapi/setvars.sh > /dev/null
-          env | sort > /tmp/env.after
-          comm -13 /tmp/env.before /tmp/env.after >> "$GITHUB_ENV"
-
-      - name: Setup Intel MPI compiler shims
-        if: env.USES_INTEL_MPI == 'true' && matrix.compiler.oneapi == ''
-        run: |
-          {
-            echo "I_MPI_F90=${{ matrix.compiler.fc }}"
-            echo "I_MPI_CC=${{ matrix.compiler.cc }}"
-            echo "I_MPI_CXX=${{ matrix.compiler.cxx }}"
-          } >> "$GITHUB_ENV"
 
       - name: Configure
         run: |

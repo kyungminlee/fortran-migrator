@@ -3,9 +3,7 @@ program test_pzposv
     use compare,          only: max_rel_err_mat_z
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zposv
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z, gather_matrix_z, &
                                 scatter_matrix_z
     use target_scalapack, only: target_name, target_eps, target_pzposv
@@ -16,7 +14,6 @@ program test_pzposv
     integer, parameter :: mb = 8, nb = 8
     character(len=1), parameter :: uplos(*) = ['U', 'L', 'U']
     integer :: i, n, info, info_ref, k
-    integer :: locm_a, locn_a, lld_a, locm_b, lld_b
     integer :: desca(9), descb(9)
     complex(ep), allocatable :: A_loc(:,:), B_loc(:,:)
     complex(ep), allocatable :: A_glob(:,:), B_glob(:,:), B_got(:,:)
@@ -38,12 +35,9 @@ program test_pzposv
             A_herm(k, k) = A_herm(k, k) + cmplx(real(2 * n, ep), 0.0_ep, kind=ep)
         end do
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        locm_b = numroc_local(n, mb, my_row, 0, my_nprow); lld_b = max(1, locm_b)
         call scatter_matrix_z(n, n, mb, nb, A_herm, A_loc)
-        call descinit_local(desca, n, n,    mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descb, n, nrhs, mb, nb, 0, 0, my_context, lld_b, info)
+        call local_desc(desca, n, n,    mb, nb)
+        call local_desc(descb, n, nrhs, mb, nb)
 
         call target_pzposv(uplos(i), n, nrhs, A_loc, 1, 1, desca, &
                            B_loc, 1, 1, descb, info)

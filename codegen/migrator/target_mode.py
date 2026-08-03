@@ -34,7 +34,18 @@ class TargetMode:
     la_constants_map: dict[str, str]   # la_constants rename map
     la_constants_suffix: str           # '_EY' (kind10), '_QX' (kind16), '_MW' (multifloats)
 
-    # Module public names (for building USE...ONLY clauses)
+    # Extra names for the free-form PARAMETER-nuking pass
+    # (``params.nuke_multifloats_params``), merged over
+    # ``la_constants_map``. That map covers the constants the target
+    # module re-exports under the LA_CONSTANTS names; this key is for
+    # names the pass must also drop that are not LA_CONSTANTS members
+    # at all. Module-based targets only — the pass is gated on
+    # ``not is_kind_based``.
+    param_nuke_extra: dict[str, str] = field(default_factory=dict)
+
+    # Module public names (for building USE...ONLY clauses). All four are
+    # loaded from the target YAML's ``module:`` block; ``module_public_names``
+    # below is their union and is what the USE-injection passes key off.
     module_type_names: frozenset[str] = field(default_factory=frozenset)
     module_constant_names: frozenset[str] = field(default_factory=frozenset)
     module_generic_names: frozenset[str] = field(default_factory=frozenset)
@@ -141,6 +152,7 @@ def _load_target_yaml(path: Path) -> TargetMode:
         known_constants=d.get('known_constants') or {},
         la_constants_map=d.get('la_constants_map') or {},
         la_constants_suffix=d.get('la_constants_suffix', ''),
+        param_nuke_extra=d.get('param_nuke_extra') or {},
         module_type_names=module_type_names,
         module_constant_names=module_constant_names,
         module_generic_names=module_generic_names,

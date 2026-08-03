@@ -7,8 +7,7 @@ program test_pdgbsv
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dgesv
     use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nproc, &
-                                my1d_context, my1d_npcol, my1d_col, &
-                                descinit_1d
+                                my1d_context, my1d_col, descinit_1d
     use target_scalapack, only: target_name, target_eps, target_pdgbsv
     use mpi
     implicit none

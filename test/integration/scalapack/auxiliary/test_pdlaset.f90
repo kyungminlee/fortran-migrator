@@ -2,9 +2,9 @@ program test_pdlaset
     use prec_kinds,       only: ep
     use compare,          only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                local_desc
     use pblas_distrib,    only: gather_matrix
     use target_scalapack, only: target_name, target_eps, target_pdlaset
     implicit none
@@ -12,8 +12,8 @@ program test_pdlaset
     integer, parameter :: ms(*) = [32, 64, 96]
     integer, parameter :: ns(*) = [40, 48, 80]
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, m, n, info
-    integer :: locm_a, locn_a, lld_a
+    integer :: i, m, n
+    integer :: locm_a, locn_a
     integer :: desca(9)
     real(ep), allocatable :: A_loc(:,:), A_got(:,:), A_ref(:,:)
     real(ep) :: alpha, beta, err, tol
@@ -29,8 +29,8 @@ program test_pdlaset
         m = ms(i); n = ns(i)
 
         locm_a = numroc_local(m, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
+        call local_desc(desca, m, n, mb, nb)
 
         allocate(A_loc(max(1, locm_a), max(1, locn_a)))
         A_loc = -99.0_ep

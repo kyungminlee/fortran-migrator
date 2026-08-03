@@ -6,6 +6,7 @@ downstream migrator (:func:`fortran_migrator._migrate_with_facts`) is
 parser-agnostic.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 
@@ -40,3 +41,18 @@ class ParseTreeFacts:
     real_literals: list[str] = field(default_factory=list)
     variable_types: dict[str, str] = field(default_factory=dict)
     use_modules: set[str] = field(default_factory=set)
+
+    def extend_call_sites_unique(self, names: Iterable[str]) -> None:
+        """Append ``names`` to ``call_sites``, skipping ones already there.
+
+        Both scanners finish by folding in the procedure designators
+        they picked up outside call statements, and both must not
+        re-list a name the main sweep already recorded. The ordered
+        ``list`` + ``seen`` ``set`` bookkeeping that requires is this
+        class's invariant, not the scanners', so it lives here.
+        """
+        seen = set(self.call_sites)
+        for name in names:
+            if name not in seen:
+                self.call_sites.append(name)
+                seen.add(name)

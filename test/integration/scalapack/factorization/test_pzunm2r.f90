@@ -3,9 +3,8 @@ program test_pzunm2r
     use compare,          only: max_rel_err_mat_z
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zgeqrf, zunmqr
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_npcol, &
+                                my_col, numroc_local, local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z, gather_matrix_z
     use target_scalapack, only: target_name, target_eps, &
                                 target_pzgeqrf, target_pzunm2r
@@ -16,7 +15,7 @@ program test_pzunm2r
     character(len=1), parameter :: transes(*) = ['N', 'C', 'N', 'C']
     integer, parameter :: mb = 8, nb = 8
     integer :: ic, mA, nA, k, mC, nC, info, info_ref, lwork
-    integer :: locmA, locnA, lldA, locmC, locnC, lldC
+    integer :: locnA
     integer :: desca(9), descc(9)
     complex(ep), allocatable :: A_loc(:,:), A_glob(:,:), C_loc(:,:), C_glob(:,:)
     complex(ep), allocatable :: C_got(:,:), A_ref(:,:), C_ref(:,:)
@@ -39,12 +38,9 @@ program test_pzunm2r
         call gen_distrib_matrix_z(mA, nA, mb, nb, A_loc, A_glob, seed = 9901 + 17*ic)
         call gen_distrib_matrix_z(mC, nC, mb, nb, C_loc, C_glob, seed = 9911 + 17*ic)
 
-        locmA = numroc_local(mA, mb, my_row, 0, my_nprow)
-        locnA = numroc_local(nA, nb, my_col, 0, my_npcol); lldA = max(1, locmA)
-        locmC = numroc_local(mC, mb, my_row, 0, my_nprow)
-        locnC = numroc_local(nC, nb, my_col, 0, my_npcol); lldC = max(1, locmC)
-        call descinit_local(desca, mA, nA, mb, nb, 0, 0, my_context, lldA, info)
-        call descinit_local(descc, mC, nC, mb, nb, 0, 0, my_context, lldC, info)
+        locnA = numroc_local(nA, nb, my_col, 0, my_npcol)
+        call local_desc(desca, mA, nA, mb, nb)
+        call local_desc(descc, mC, nC, mb, nb)
 
         allocate(tau_got(max(1, locnA)), work(1))
         call target_pzgeqrf(mA, nA, A_loc, 1, 1, desca, tau_got, work, -1, info)

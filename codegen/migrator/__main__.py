@@ -16,12 +16,12 @@ import sys
 from pathlib import Path
 
 from .cmake_gen import generate_cmake
-from .divergence import run_divergence_report
+from .divergence_report import run_divergence_report
 from .pipeline import classify_recipe_symbols, run_migration
 from .prepare import prepare_recipe, run_prepare, verify_patches
 from .cli_common import (
-    LA_SUFFIXES, get_target_mode, la_helper_pairs, parser_args,
-    recipe_project_root,
+    DEFAULT_TARGET, LA_SUFFIXES, dedupe_by_inode, get_target_mode,
+    parser_args, recipe_project_root, route_sources,
 )
 from .fortran.lex import is_comment_line
 from .staging import cmd_stage
@@ -76,18 +76,21 @@ def cmd_migrate(args):
     )
 
 
+# Diff-presentation defaults. Shared by the ``diverge`` subparser and by
+# ``_run_diverge``'s keyword defaults, so callers that bypass argparse
+# (``cmd_run``) behave like a bare ``migrator diverge`` invocation
+# without the two spellings drifting apart.
+_DIVERGE_CONTEXT = 8
+_DIVERGE_MAX_WIDTH = 200
+
+
 def _run_diverge(recipe: Path, target_mode, project_root: Path | None,
                  parser: str | None, parser_cmd: str | None,
                  no_whitelist: bool = False,
                  grep: str | None = None, exclude: str | None = None,
-                 context: int = 8, full: bool = False,
-                 max_width: int = 200) -> int:
-    """Report every co-family pair whose migrated text differs.
-
-    Keyword defaults mirror the ``diverge`` subparser so callers that
-    bypass argparse (``cmd_run``) get the same behavior as a bare
-    ``migrator diverge`` invocation.
-    """
+                 context: int = _DIVERGE_CONTEXT, full: bool = False,
+                 max_width: int = _DIVERGE_MAX_WIDTH) -> int:
+    """Report every co-family pair whose migrated text differs."""
     report = run_divergence_report(
         recipe_path=recipe,
         target_mode=target_mode,
@@ -193,11 +196,10 @@ _REF_EXCLUDE_STEMS: dict[str, set[str]] = {
 # Libraries for which the embedded template emits a standard-precision
 # sibling archive. Matches the ``add_standard_fortran_library`` /
 # ``add_standard_c_library`` set in ``cmake/CMakeLists.txt``. Other
-# Fortran recipes (mumps, scalapack_tools, xblas) intentionally don't
-# get a sibling: mumps's sources need extra include directories the
-# embedded template doesn't wire; scalapack_tools' three helpers are
-# already inside the std scalapack archive; xblas is C-only and the C
-# template doesn't ship a sibling.
+# Fortran recipes (mumps, xblas) intentionally don't get a sibling:
+# mumps's sources need extra include directories the embedded template
+# doesn't wire; xblas is C-only and the C template doesn't ship a
+# sibling.
 _REF_LIBRARIES: set[str] = {
     'blas', 'lapack', 'ptzblas', 'pbblas', 'scalapack',
 }
@@ -239,18 +241,79 @@ def _collect_ref_sources(config) -> list[Path]:
     # Dedupe + stable order. Resolve to absolute paths so the
     # generated CMakeLists.txt finds them regardless of where the
     # build directory lives.
-    seen: dict[tuple, Path] = {}
-    for f in sources:
-        f = f.resolve()
-        try:
-            st = f.stat()
-            key = (st.st_dev, st.st_ino)
-        except OSError:
-            key = ('missing', str(f))
-        seen.setdefault(key, f)
-    return sorted(seen.values())
+    return dedupe_by_inode(p.resolve() for p in sources)
 
 
+
+
+# Patterns the ``verify`` subcommand rejects in migrated output. Named
+# rather than inlined at the search site so the four checks below read as
+# a list of policies.
+_RESIDUAL_TYPE_FIXED_RE = re.compile(
+    r'DOUBLE\s+PRECISION|COMPLEX\*16|COMPLEX\*8|DOUBLE\s+COMPLEX|REAL\*[48]',
+    re.IGNORECASE)
+_RESIDUAL_KIND1D0_RE = re.compile(r'kind\s*\(\s*1\.[de]0\s*\)', re.IGNORECASE)
+_RESIDUAL_TYPE_FREE_RE = re.compile(r'\bdouble\s+precision\b', re.IGNORECASE)
+_D_EXPONENT_LITERAL_RE = re.compile(r'[0-9]\.[0-9]*[Dd][+-]?[0-9]')
+_WP_LITERAL_RE = re.compile(r'\d+\.\d*_wp', re.IGNORECASE)
+_PARAM_OR_DATA_RE = re.compile(r'\s+(PARAMETER|DATA)\b', re.IGNORECASE)
+_FP_VALUE_RE = re.compile(r'\d+\.\d*[DdEe][+-]?\d+|\d*\.\d+')
+
+# Fixed-form source is limited to 72 significant columns.
+_MAX_FIXED_FORM_COLUMN = 72
+
+
+def _comment_predicate(path: Path):
+    """The comment test matching a file's source form.
+
+    ``.f``/``.F`` are fixed form, ``.f90``/``.F90`` free form.
+    """
+    return (_is_fixed_form_comment if path.suffix.lower() == '.f'
+            else _is_free_form_comment)
+
+
+def _strip_constructors(line: str, target_mode) -> str:
+    """Remove target-type constructor wrappers from a line."""
+    if not target_mode.real_constructor:
+        return line
+    ctor = re.escape(target_mode.real_constructor)
+    line = re.sub(rf"{ctor}\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
+    line = re.sub(rf'{ctor}\(\s*[^)]*\s*\)', '', line, flags=re.IGNORECASE)
+    if target_mode.complex_constructor:
+        cctor = re.escape(target_mode.complex_constructor)
+        line = re.sub(rf"{cctor}\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
+        line = re.sub(rf'{cctor}\(\s*[^)]*\s*\)', '', line, flags=re.IGNORECASE)
+    return line
+
+
+def _scan(files: list[Path], file_lines: dict[Path, list[str]],
+          line_test) -> list[str]:
+    """Format one finding per message ``line_test`` returns for a code line.
+
+    ``line_test(line)`` returns an iterable of messages rather than a
+    bool because the residual-type check reports a line that trips both
+    of its patterns twice, which is what the hand-written loops did.
+    Comment lines are skipped using the form implied by the extension.
+    """
+    findings = []
+    for f in files:
+        is_comment = _comment_predicate(f)
+        for i, line in enumerate(file_lines[f], 1):
+            if is_comment(line):
+                continue
+            findings.extend(f'  {f.name}:{i}: {msg}' for msg in line_test(line))
+    return findings
+
+
+def _report(title: str, findings: list[str]) -> int:
+    """Print one check's section and return its issue count."""
+    print(title)
+    for finding in findings:
+        print(finding)
+    if not findings:
+        print('  OK')
+    print()
+    return len(findings)
 
 
 def _run_verify(output_dir: Path, target_mode) -> int:
@@ -265,7 +328,6 @@ def _run_verify(output_dir: Path, target_mode) -> int:
     if not src_dir.is_dir():
         # Fall back to flat layout
         src_dir = out_dir
-    errors = 0
 
     f_files = sorted(list(src_dir.glob('*.f')) + list(src_dir.glob('*.F')))
     f90_files = sorted(list(src_dir.glob('*.f90')) + list(src_dir.glob('*.F90')))
@@ -284,114 +346,59 @@ def _run_verify(output_dir: Path, target_mode) -> int:
     # Determine if the target uses module-based constructors
     is_constructor_based = target_mode.real_constructor is not None
 
-    # Check residual precision types in code lines
-    print('Residual precision types (code lines):')
-    residuals = 0
-    for f in f_files:
-        for i, line in enumerate(file_lines[f], 1):
-            if _is_fixed_form_comment(line):
-                continue
-            if re.search(r'DOUBLE\s+PRECISION|COMPLEX\*16|COMPLEX\*8|DOUBLE\s+COMPLEX|REAL\*[48]',
-                         line, re.IGNORECASE):
-                print(f'  {f.name}:{i}: {line.strip()}')
-                residuals += 1
-    for f in f90_files:
-        for i, line in enumerate(file_lines[f], 1):
-            if _is_free_form_comment(line):
-                continue
-            if re.search(r'kind\s*\(\s*1\.[de]0\s*\)', line, re.IGNORECASE):
-                print(f'  {f.name}:{i}: {line.strip()}')
-                residuals += 1
-            if re.search(r'\bdouble\s+precision\b', line, re.IGNORECASE):
-                print(f'  {f.name}:{i}: {line.strip()}')
-                residuals += 1
-    if residuals == 0:
-        print('  OK')
-    else:
-        errors += residuals
-    print()
+    def stripped(line: str) -> str:
+        return _strip_constructors(line, target_mode)
 
-    # Build constructor-stripping patterns from target_mode
-    def _strip_constructors(line: str) -> str:
-        """Remove target-type constructor wrappers from a line."""
-        if not target_mode.real_constructor:
-            return line
-        ctor = re.escape(target_mode.real_constructor)
-        line = re.sub(rf"{ctor}\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
-        line = re.sub(rf'{ctor}\(\s*[^)]*\s*\)', '', line, flags=re.IGNORECASE)
-        if target_mode.complex_constructor:
-            cctor = re.escape(target_mode.complex_constructor)
-            line = re.sub(rf"{cctor}\(\s*'[^']*'\s*\)", '', line, flags=re.IGNORECASE)
-            line = re.sub(rf'{cctor}\(\s*[^)]*\s*\)', '', line, flags=re.IGNORECASE)
-        return line
+    def residual_type_fixed(line: str):
+        if _RESIDUAL_TYPE_FIXED_RE.search(line):
+            yield line.strip()
 
-    # Check residual D-exponent literals in code lines
-    print('Residual D-exponent literals (code lines):')
-    d_lits = 0
-    for f in f_files:
-        for i, line in enumerate(file_lines[f], 1):
-            if _is_fixed_form_comment(line):
-                continue
-            cleaned_line = _strip_constructors(line)
-            if re.search(r'[0-9]\.[0-9]*[Dd][+-]?[0-9]', cleaned_line):
-                print(f'  {f.name}:{i}: {line.strip()}')
-                d_lits += 1
-    for f in f90_files:
-        for i, line in enumerate(file_lines[f], 1):
-            if _is_free_form_comment(line):
-                continue
-            cleaned_line = _strip_constructors(line)
-            # In constructor mode, also reject _wp suffixed literals
-            if is_constructor_based and re.search(r'\d+\.\d*_wp', cleaned_line, re.IGNORECASE):
-                print(f'  {f.name}:{i}: {line.strip()}')
-                d_lits += 1
-    if d_lits == 0:
-        print('  OK')
-    else:
-        errors += d_lits
-    print()
+    def residual_type_free(line: str):
+        # Two independent patterns, both reported: a line matching both
+        # counts twice.
+        if _RESIDUAL_KIND1D0_RE.search(line):
+            yield line.strip()
+        if _RESIDUAL_TYPE_FREE_RE.search(line):
+            yield line.strip()
 
+    def d_literal(line: str):
+        if _D_EXPONENT_LITERAL_RE.search(stripped(line)):
+            yield line.strip()
+
+    def wp_literal(line: str):
+        # In constructor mode, also reject _wp suffixed literals.
+        if is_constructor_based and _WP_LITERAL_RE.search(stripped(line)):
+            yield line.strip()
+
+    def unconverted_fp_statement(line: str):
+        if not _PARAM_OR_DATA_RE.match(line):
+            return
+        if _FP_VALUE_RE.search(stripped(line)):
+            yield line.strip()
+
+    def overlong(line: str):
+        if len(line) > _MAX_FIXED_FORM_COLUMN:
+            yield f'{len(line)} chars'
+
+    errors = 0
+    errors += _report(
+        'Residual precision types (code lines):',
+        _scan(f_files, file_lines, residual_type_fixed)
+        + _scan(f90_files, file_lines, residual_type_free))
+    errors += _report(
+        'Residual D-exponent literals (code lines):',
+        _scan(f_files, file_lines, d_literal)
+        + _scan(f90_files, file_lines, wp_literal))
     if is_constructor_based:
         # Constructor-based target: residual unconverted FP PARAMETER /
         # DATA statements (those that mention a value-shaped numeric and
         # are not commented out).
-        print('Residual FP PARAMETER/DATA (code lines):')
-        leftover = 0
-        for f in all_files:
-            is_fixed = f.suffix.lower() == '.f'
-            for i, line in enumerate(file_lines[f], 1):
-                if is_fixed and _is_fixed_form_comment(line):
-                    continue
-                if not is_fixed and _is_free_form_comment(line):
-                    continue
-                m = re.match(r'\s+(PARAMETER|DATA)\b', line, re.IGNORECASE)
-                if not m:
-                    continue
-                cleaned = _strip_constructors(line)
-                if re.search(r'\d+\.\d*[DdEe][+-]?\d+|\d*\.\d+', cleaned):
-                    print(f'  {f.name}:{i}: {line.strip()}')
-                    leftover += 1
-        if leftover == 0:
-            print('  OK')
-        else:
-            errors += leftover
-        print()
-
-    # Check column width for fixed-form code lines
-    print('Column overflow (code lines > 72 chars):')
-    overflows = 0
-    for f in f_files:
-        for i, line in enumerate(file_lines[f], 1):
-            if _is_fixed_form_comment(line):
-                continue
-            if len(line) > 72:
-                print(f'  {f.name}:{i}: {len(line)} chars')
-                overflows += 1
-    if overflows == 0:
-        print('  OK')
-    else:
-        errors += overflows
-    print()
+        errors += _report(
+            'Residual FP PARAMETER/DATA (code lines):',
+            _scan(all_files, file_lines, unconverted_fp_statement))
+    errors += _report(
+        'Column overflow (code lines > 72 chars):',
+        _scan(f_files, file_lines, overlong))
 
     if errors:
         print(f'FAILED: {errors} issue(s)')
@@ -404,6 +411,57 @@ def cmd_verify(args):
     """Verify migrated output: residual types, literals, column width."""
     if _run_verify(args.output_dir, get_target_mode(args)):
         sys.exit(1)
+
+
+# How much of a failed step's log to echo, and how many error-looking
+# lines to surface ahead of it.
+_LOG_TAIL_LINES = 50
+_MAX_ERROR_LINES = 30
+
+
+def _run_to_log(cmd: list[str], log_path: Path) -> list[str] | None:
+    """Run ``cmd`` with stdout and stderr captured to ``log_path``.
+
+    Returns ``None`` when the command succeeded, otherwise the log's
+    lines — already read, so the caller can report on them without a
+    second pass over the file.
+    """
+    with log_path.open('w') as logf:
+        r = subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT,
+                           text=True)
+    if r.returncode == 0:
+        return None
+    return log_path.read_text(errors='replace').splitlines()
+
+
+def _fail_with_log_tail(lines: list[str], message: str,
+                        header: str | None = None) -> None:
+    """Echo the tail of a failed step's log to stderr, then exit 1."""
+    if header:
+        print(header, file=sys.stderr)
+    print('\n'.join(lines[-_LOG_TAIL_LINES:]), file=sys.stderr)
+    print(message, file=sys.stderr)
+    sys.exit(1)
+
+
+def _report_built_libraries(build_dir: Path, lib_name: str,
+                            target_mode) -> None:
+    """Print the size of each archive the build was expected to produce."""
+    pmap = target_mode.prefix_map
+    pair_pfx = f"{pmap['R'].lower()}{pmap['C'].lower()}"
+    precision_lib_name = f'lib{pair_pfx}{lib_name}.a'
+    common_lib_name = f'lib{lib_name}_common.a'
+    ref_lib_name = f'lib{lib_name}.a'
+
+    print('\nBuild succeeded:')
+    for name in [common_lib_name, ref_lib_name, precision_lib_name]:
+        matches = list(build_dir.rglob(name))
+        if matches:
+            p = matches[0]
+            size = p.stat().st_size
+            print(f'  {name}: {size // 1024}K')
+
+    print(f'\nLibraries in {build_dir}/')
 
 
 def _run_build(recipe: Path, output_dir: Path, target_mode,
@@ -432,42 +490,24 @@ def _run_build(recipe: Path, output_dir: Path, target_mode,
             p for p in src_dir.iterdir()
             if p.is_file() and p.suffix.lower() in allowed
         )
-    # copy_files are routed to the precision library unconditionally.
-    # This single-target build has no per-target file special-casing,
-    # and some copy_files entries are target-specific verbatim copies
-    # whose bodies USE precision modules (LAPACK's LA_XISNAN_QX USEs
-    # LA_CONSTANTS_QX) — a common-lib copy would create a forbidden
-    # common -> precision module dependency. NOTE this deliberately
-    # differs from ``cmd_stage`` (staging.py), which routes those
-    # LA_* pairs via ``_la_own``/``_la_foreign`` first and can then
-    # safely send the remaining, genuinely shareable copy_files
-    # entries (MUMPS common modules, PBLAS Fortran helpers) to the
-    # shared common archive.
+    # Routing is shared with ``cmd_stage`` (cli_common.route_sources);
+    # the three keyword defaults left off here are exactly what makes
+    # this the single-target build's variant, and the shared docstring
+    # is where the reasons live:
     #
-    # The LA_CONSTANTS/LA_XISNAN pair filter below IS shared with
-    # staging.py (cli_common.la_helper_pairs): only the target's own
-    # suffix pair (_ey/_qx/_mw) may be compiled. Foreign pairs are not
-    # just dead weight — the *_mw pair does ``use multifloats``, which
-    # doesn't exist in a kind10/kind16 build, so compiling it would
-    # break the build.
-    _, _la_foreign = la_helper_pairs(target_mode)
-    common_files, precision_files = [], []
-    for f in files:
-        if f.stem in _la_foreign:
-            continue
-        rel = f.relative_to(output_dir)
-        stem = f.stem.upper()
-        # ``force_common`` pins a stem to the family-independent archive
-        # regardless of scanner assignment (mirror of ``copy_files``,
-        # which forces PRECISION). Highest priority. See config.py.
-        if stem in config.force_common:
-            common_files.append(str(rel))
-        elif stem in config.copy_files:
-            precision_files.append(str(rel))
-        elif stem in independent:
-            common_files.append(str(rel))
-        else:
-            precision_files.append(str(rel))
+    #   - no ``precision_stems``: no LA_* own-pair or rename-target
+    #     special-casing.
+    #   - no ``strip_trailing_underscore``: ``force_common`` matches the
+    #     decorated stem only.
+    #   - ``copy_files_to='precision'``: this build has no per-target
+    #     file special-casing, and some copy_files entries USE precision
+    #     modules (LAPACK's LA_XISNAN_QX USEs LA_CONSTANTS_QX), so a
+    #     common-lib copy would create a forbidden common -> precision
+    #     module dependency.
+    common_files, precision_files = route_sources(
+        files, target_mode, config, independent,
+        rel=lambda f: str(f.relative_to(output_dir)),
+    )
 
     ref_sources = _collect_ref_sources(config)
 
@@ -499,55 +539,30 @@ def _run_build(recipe: Path, output_dir: Path, target_mode,
     build_log = build_dir / 'build.log'
 
     print('\nConfiguring...')
-    with configure_log.open('w') as logf:
-        r = subprocess.run(configure_args, stdout=logf,
-                           stderr=subprocess.STDOUT, text=True)
-    if r.returncode != 0:
+    lines = _run_to_log(configure_args, configure_log)
+    if lines is not None:
         # Tail the log to stderr so the user sees the actual cause.
-        log_text = configure_log.read_text(errors='replace')
-        tail = log_text.splitlines()[-50:]
-        print('\n'.join(tail), file=sys.stderr)
-        print(f'\nConfigure failed; full log: {configure_log}', file=sys.stderr)
-        sys.exit(1)
+        _fail_with_log_tail(
+            lines, f'\nConfigure failed; full log: {configure_log}')
 
     # Build (parallel)
     jobs = os.cpu_count() or 4
     print(f'Building ({jobs} parallel jobs)...')
-    with build_log.open('w') as logf:
-        r = subprocess.run(
-            [cmake_cmd, '--build', str(build_dir), '-j', str(jobs)],
-            stdout=logf, stderr=subprocess.STDOUT, text=True,
-        )
-    if r.returncode != 0:
-        log_text = build_log.read_text(errors='replace')
-        lines = log_text.splitlines()
-        # Surface lines mentioning errors plus the last 50 lines for context.
+    lines = _run_to_log(
+        [cmake_cmd, '--build', str(build_dir), '-j', str(jobs)], build_log)
+    if lines is not None:
+        # Surface lines mentioning errors, then the tail for context.
         err_lines = [l for l in lines
                      if ': error' in l.lower() or 'Error:' in l]
-        for l in err_lines[:30]:
+        for l in err_lines[:_MAX_ERROR_LINES]:
             print(f'  {l}')
-        print('\n--- last 50 lines of build.log ---', file=sys.stderr)
-        print('\n'.join(lines[-50:]), file=sys.stderr)
-        print(f'\nBuild failed ({len(err_lines)} error line(s) detected); '
-              f'full log: {build_log}', file=sys.stderr)
-        sys.exit(1)
+        _fail_with_log_tail(
+            lines,
+            f'\nBuild failed ({len(err_lines)} error line(s) detected); '
+            f'full log: {build_log}',
+            header=f'\n--- last {_LOG_TAIL_LINES} lines of build.log ---')
 
-    # Report results
-    pmap = target_mode.prefix_map
-    pair_pfx = f"{pmap['R'].lower()}{pmap['C'].lower()}"
-    precision_lib_name = f'lib{pair_pfx}{lib_name}.a'
-    common_lib_name = f'lib{lib_name}_common.a'
-    ref_lib_name = f'lib{lib_name}.a'
-
-    print('\nBuild succeeded:')
-    for name in [common_lib_name, ref_lib_name, precision_lib_name]:
-        matches = list(build_dir.rglob(name))
-        if matches:
-            p = matches[0]
-            size = p.stat().st_size
-            print(f'  {name}: {size // 1024}K')
-
-    print(f'\nLibraries in {build_dir}/')
+    _report_built_libraries(build_dir, lib_name, target_mode)
 
 
 def cmd_build(args):
@@ -640,8 +655,14 @@ def _add_parser_args(p):
              '(overrides PATH lookup)')
 
 def _add_target_args(p):
-    p.add_argument('--target', type=str, default='kind16',
+    p.add_argument('--target', type=str, default=DEFAULT_TARGET,
                    help='Target name (e.g. "multifloats", "kind16") or path to a target .yaml file')
+
+def _add_recipe_arg(p):
+    p.add_argument('recipe', type=Path, help='Recipe YAML file')
+
+def _add_project_root_arg(p):
+    p.add_argument('--project-root', type=Path, default=None)
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -655,8 +676,8 @@ def build_parser():
         'prepare',
         help='Stage upstream sources for a recipe and apply its patch list',
     )
-    p.add_argument('recipe', type=Path, help='Recipe YAML file')
-    p.add_argument('--project-root', type=Path, default=None)
+    _add_recipe_arg(p)
+    _add_project_root_arg(p)
     p.add_argument('--rebuild', action='store_true',
                    help='Wipe and re-stage even if the cache stamp is fresh')
     p.set_defaults(func=cmd_prepare)
@@ -668,35 +689,35 @@ def build_parser():
              'must touch all four siblings (or be listed in '
              'asymmetric_patches:)',
     )
-    p.add_argument('recipe', type=Path, help='Recipe YAML file')
-    p.add_argument('--project-root', type=Path, default=None)
+    _add_recipe_arg(p)
+    _add_project_root_arg(p)
     p.set_defaults(func=cmd_verify_patches)
 
     # --- migrate ---
     p = sub.add_parser('migrate', help='Migrate source files')
-    p.add_argument('recipe', type=Path, help='Recipe YAML file')
+    _add_recipe_arg(p)
     p.add_argument('output_dir', type=Path, help='Output directory')
     _add_target_args(p)
     p.add_argument('--dry-run', action='store_true')
-    p.add_argument('--project-root', type=Path, default=None)
+    _add_project_root_arg(p)
     _add_parser_args(p)
     p.set_defaults(func=cmd_migrate)
 
     # --- diverge ---
     p = sub.add_parser('diverge',
                        help='Report co-family pairs with differing output')
-    p.add_argument('recipe', type=Path, help='Recipe YAML file')
+    _add_recipe_arg(p)
     _add_target_args(p)
-    p.add_argument('--project-root', type=Path, default=None)
+    _add_project_root_arg(p)
     p.add_argument('--grep', default=None,
                    help='Regex: only show entries with diff matching')
     p.add_argument('--exclude', default=None,
                    help='Regex: drop entries whose diff matches')
-    p.add_argument('--context', type=int, default=8,
+    p.add_argument('--context', type=int, default=_DIVERGE_CONTEXT,
                    help='Max diff lines per entry (default 8)')
     p.add_argument('--full', action='store_true',
                    help='Print full diff per entry (ignores --context)')
-    p.add_argument('--max-width', type=int, default=200,
+    p.add_argument('--max-width', type=int, default=_DIVERGE_MAX_WIDTH,
                    help='Truncate each diff line to this many chars')
     p.add_argument('--no-whitelist', action='store_true',
                    help='Bypass expected_divergences / defer_all_divergences '
@@ -712,20 +733,20 @@ def build_parser():
 
     # --- build ---
     p = sub.add_parser('build', help='Generate CMake project and build')
-    p.add_argument('recipe', type=Path, help='Recipe YAML file')
+    _add_recipe_arg(p)
     p.add_argument('output_dir', type=Path)
     _add_target_args(p)
     p.add_argument('--fc', default='gfortran')
-    p.add_argument('--project-root', type=Path, default=None)
+    _add_project_root_arg(p)
     p.set_defaults(func=cmd_build)
 
     # --- run (full pipeline) ---
     p = sub.add_parser('run', help='Run full pipeline')
-    p.add_argument('recipe', type=Path, help='Recipe YAML file')
+    _add_recipe_arg(p)
     p.add_argument('work_dir', type=Path, help='Working directory')
     _add_target_args(p)
     p.add_argument('--fc', default='gfortran')
-    p.add_argument('--project-root', type=Path, default=None)
+    _add_project_root_arg(p)
     _add_parser_args(p)
     p.set_defaults(func=cmd_run)
 
@@ -736,7 +757,7 @@ def build_parser():
     p.add_argument('staging_dir', type=Path,
                    help='Output staging directory')
     _add_target_args(p)
-    p.add_argument('--project-root', type=Path, default=None)
+    _add_project_root_arg(p)
     p.add_argument('--libraries', nargs='+', default=None,
                    help='Subset of libraries to migrate (default: all)')
     _add_parser_args(p)

@@ -5,9 +5,9 @@ program test_pdgesvx
     use compare,           only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,   only: dgesv
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_nprow, &
+                                 my_npcol, my_row, my_col, numroc_local, &
+                                 local_desc
     use pblas_distrib,     only: gen_distrib_matrix, gather_matrix, &
                                  set_local_from_global
     use target_scalapack,  only: target_name, target_eps, target_pdgesvx
@@ -49,10 +49,10 @@ program test_pdgesvx
         locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
         locm_b = numroc_local(n, mb, my_row, 0, my_nprow)
         locn_b = numroc_local(nrhs, nb, my_col, 0, my_npcol); lld_b = max(1, locm_b)
-        call descinit_local(desca,  n, n,    mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descaf, n, n,    mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descb,  n, nrhs, mb, nb, 0, 0, my_context, lld_b, info)
-        call descinit_local(descx,  n, nrhs, mb, nb, 0, 0, my_context, lld_b, info)
+        call local_desc(desca,  n, n,    mb, nb)
+        call local_desc(descaf, n, n,    mb, nb)
+        call local_desc(descb,  n, nrhs, mb, nb)
+        call local_desc(descx,  n, nrhs, mb, nb)
 
         allocate(AF_loc(lld_a, max(1, locn_a)), X_loc(lld_b, max(1, locn_b)))
         AF_loc = 0.0_ep; X_loc = 0.0_ep

@@ -8,7 +8,7 @@ program test_qgebs2d
     use blacs_prec_report, only: report_init, report_case, report_finalize
     use test_data,         only: gen_matrix_quad
     use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_row, my_col, my_nprow, my_npcol
+                                 my_row, my_col
     use target_blacs,      only: target_name, target_qgebs2d, target_qgebr2d
     use mpi
     implicit none

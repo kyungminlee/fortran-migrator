@@ -7,7 +7,6 @@ depends:
   - lapack.yaml         # transitively includes BLAS
   - blacs.yaml          # BLACS comm routines (SGEBR2D/DGEBR2D, etc.)
   - pblas.yaml          # ScaLAPACK routines call PBLAS entry points directly
-  - scalapack_tools.yaml  # leaf symbol-provider (NUMROC/ICEIL/ILCM context for PBBLAS)
 
 # Additional source dirs to scan for symbols (not migrated, just for renaming)
 # Scans both Fortran and C files, plus subdirectories.
@@ -43,9 +42,9 @@ extra_migrate_dirs:
 # mandatory dep of ${LIB_PREFIX}pbblas, so under extended-MKL they
 # collided with MKL's numroc_/iceil_/ilcm_. Folding them into the
 # drop-when-MKL scalapack_common removes that overlap (same profile
-# as blacs_common). scalapack_tools.yaml is retained only as a leaf
-# symbol-provider so pbblas.yaml keeps its cycle-free numroc symbol
-# context; its migrated output is no longer built.
+# as blacs_common). PBBLAS still needs these three in its symbol
+# universe so its call sites pass through unrenamed; it gets that by
+# scanning TOOLS itself (pbblas.yaml's extra_symbol_dirs).
 
 extra_migrate_files:
   # PJLAENV_EP — extended-precision-aware variant of PJLAENV. Lives
@@ -103,7 +102,7 @@ force_common:
   - descinit
   - descset
   - npreroc
-  # precision-independent integer helpers (folded in from scalapack_tools)
+  # precision-independent integer helpers (see the note above)
   - iceil
   - ilcm
   - numroc

@@ -7,6 +7,21 @@ Extracted verbatim from ``fortran_migrator.py``.
 import re
 
 
+# --- Source layout ----------------------------------------------------
+# The fixed-form card image. Every pass that wraps or re-splits a line
+# used to spell these out itself, so a change to one wrapper silently
+# disagreed with the others.
+FIXED_FORM_MARGIN = 6                 # cols 1-6: label field + cont. marker
+FIXED_FORM_WIDTH = 72                 # last column a compiler reads
+FIXED_FORM_CODE_WIDTH = FIXED_FORM_WIDTH - FIXED_FORM_MARGIN   # == 66
+FREE_FORM_WIDTH = 132                 # the width we wrap free form at
+# Columns 1-5 of a continuation line: blank. Column 6 (the marker
+# character) is deliberately *not* part of this constant — the emitters
+# disagree on it ('+' in fixedform / use_inject, '$' in intrinsics_rw)
+# and the migrated corpus records that disagreement byte for byte.
+FIXED_FORM_LABEL_FIELD = ' ' * (FIXED_FORM_MARGIN - 1)
+
+
 # Hoisted patterns reused across hot-path callers (replace_literals,
 # replace_generic_conversions, _rewrite_int_of_complex / _rewrite_int_kind_on_real64x2,
 # _filter_known_constants_from_decl, _unwrap_redundant_constructors). All
@@ -162,16 +177,32 @@ def _looks_like_statement_function(stripped: str, lines: list[str], k: int) -> b
     return False
 
 
-# ``__KEEPKIND_DP__`` is the keep-kind sentinel that stands in for
-# ``DOUBLE PRECISION`` (see fortran/keepkind.py). ``specialize_use_module``
-# scans for locally-declared names while the sentinel is still in place —
-# the restore happens only after migrate_*_form returns — so this pattern
-# must recognise the sentinel too, or a keep-kind-protected local (e.g. a
-# ``DOUBLE PRECISION :: GAMMA`` that collides with a multifloats generic)
-# is missed and wrongly imported via ``USE ..., only:``.
+# --- Keep-kind sentinels ----------------------------------------------
+# The tokens ``fortran/keepkind.py`` swaps in for ``DOUBLE PRECISION`` /
+# ``dble`` / ``dcmplx`` on the lines listed in a recipe's
+# keep-kind.manifest, so those lines survive every type-rewriting regex
+# untouched. They live here rather than in ``keepkind`` because three
+# other modules must recognise them and this is the layer all of them
+# already import; ``keepkind``, which owns the apply/restore passes,
+# takes them from here under its own ``_KK_*`` spellings.
+#
+# Every pass that runs *between* apply and restore has to treat a
+# sentinel exactly as it would treat the token it stands for. Miss one
+# and the effect is silent: ``specialize_use_module``, for instance,
+# scans for locally-declared names while the sentinel is still in place,
+# so a keep-kind-protected ``DOUBLE PRECISION :: GAMMA`` that collides
+# with a multifloats generic would be missed and wrongly imported via
+# ``USE ..., only:``.
+KEEPKIND_DP = '__KEEPKIND_DP__'
+KEEPKIND_DBLE = '__KEEPKIND_DBLE__'
+KEEPKIND_DCMPLX = '__KEEPKIND_DCMPLX__'
+KEEPKIND_MARKERS = (KEEPKIND_DP, KEEPKIND_DBLE, KEEPKIND_DCMPLX)
+
+
 _DECL_LINE_RE = re.compile(
     r'^\s+(?:TYPE\s*\([^)]*\)|INTEGER\b|REAL\b|COMPLEX\b|LOGICAL\b|'
-    r'CHARACTER\b|DOUBLE\s+PRECISION\b|DOUBLE\s+COMPLEX\b|__KEEPKIND_DP__)',
+    r'CHARACTER\b|DOUBLE\s+PRECISION\b|DOUBLE\s+COMPLEX\b|'
+    + KEEPKIND_DP + r')',
     re.IGNORECASE,
 )
 
@@ -247,17 +278,10 @@ def _scan_local_declared_names(proc_lines: list[str]) -> set[str]:
         # Drop ``= initializer`` clauses (PARAMETER initializers may
         # contain references to module names like ``complex128x2``
         # that should not be treated as locally-declared variables).
-        # Split at top-level commas, then drop everything from ``=``
-        # onward in each item.
-        items = []
-        cur = ''
-        for ch in tail + ',':
-            if ch == ',':
-                items.append(cur)
-                cur = ''
-            else:
-                cur += ch
-        for item in items:
+        # Split at commas, then drop everything from ``=`` onward in each
+        # item. A plain split is enough: the loop above has already removed
+        # every parenthesised group, so no comma survives inside one.
+        for item in tail.split(','):
             lhs = item.split('=', 1)[0]
             for m in _IDENT_RE.finditer(lhs):
                 names.add(m.group(1).lower())
@@ -403,6 +427,37 @@ def _count_open_parens(line: str) -> int:
     return depth
 
 
+def match_paren(text: str, open_idx: int, *,
+                inside: list[bool] | None = None) -> int | None:
+    """Index of the ``)`` matching the ``(`` at ``open_idx``, or ``None``
+    when the parenthesis is never closed (truncated line, or a ``(`` that
+    belongs to a construct this scan does not understand).
+
+    ``inside`` is an optional string-literal mask from :func:`string_mask`;
+    when given, characters inside a quoted literal are skipped, so a ``)``
+    in a FORMAT string cannot close the scan. Callers that operate on
+    already-comment-stripped code and have no mask to hand pass nothing and
+    get the quote-blind scan every hand-rolled copy of this loop used.
+
+    Canonical primitive: the callers below all used to inline this loop,
+    and three spellings of "one past the close" (``pos``, ``j``, ``i + 1``)
+    drifted out of each other. Return the close index; let each caller add
+    one where it needs the exclusive bound.
+    """
+    depth = 0
+    for i in range(open_idx, len(text)):
+        if inside is not None and inside[i]:
+            continue
+        ch = text[i]
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
+
+
 def is_continuation_line(line: str, *, tab_marker: bool = True) -> bool:
     # Fixed-form continuation: cols 1-5 blank (spaces only — NOT tabs), col 6
     # holds a non-blank, non-zero marker. A tab in col 1 is the gfortran/intel
@@ -421,7 +476,36 @@ def is_continuation_line(line: str, *, tab_marker: bool = True) -> bool:
     return line[5] not in (' ', '0', '')
 
 
-def split_top_level_commas(text: str, *, strip: bool = False) -> list[str]:
+def is_maskable_continuation(line: str) -> bool:
+    """Stricter cousin of :func:`is_continuation_line`: True only when col 6
+    holds a marker that is safe to temporarily overwrite.
+
+    Passes that mask the marker out (so a rewrite regex cannot see it) and
+    restore it afterwards must additionally refuse the comment markers
+    ``!``, ``C``, ``c`` and ``*`` — masking one of those would corrupt the
+    line on restore. This is a genuinely different predicate, not a variant
+    spelling of the one above; it is named here so that is visible.
+    """
+    return (len(line) >= 6 and line[:5] == '     '
+            and line[5] not in (' ', '0', '!', 'C', 'c', '*', '\t'))
+
+
+def split_term(raw: str) -> tuple[str, str]:
+    """Split a physical line into ``(text, line_terminator)``.
+
+    Canonical home for a scan that was inlined once per module that reads
+    physical lines. ``'\\r\\n'`` must be tested before ``'\\n'``.
+    """
+    if raw.endswith('\r\n'):
+        return raw[:-2], '\r\n'
+    if raw.endswith('\n') or raw.endswith('\r'):
+        return raw[:-1], raw[-1]
+    return raw, ''
+
+
+def split_top_level_commas(text: str, *, strip: bool = False,
+                           brackets: bool = False,
+                           keep_trailing: bool = False) -> list[str]:
     """Split ``text`` on commas at paren depth 0.
 
     Deliberately quote-blind, matching every historical hand-rolled
@@ -433,21 +517,31 @@ def split_top_level_commas(text: str, *, strip: bool = False) -> list[str]:
     are kept ("a,,b" -> ["a", "", "b"]) but a trailing empty piece is
     dropped ("a," -> ["a"]; "" -> []).
     ``strip=True`` strips each piece and drops all empty ones.
+
+    ``brackets=True`` also counts ``[`` / ``]`` toward the depth, so a
+    comma inside an array constructor does not split.
+    ``keep_trailing=True`` emits the final piece even when it is empty
+    ("a," -> ["a", ""]; "" -> [""]).
+    Both default off: they exist for the divergence canonicalizer,
+    whose hand-rolled copy of this scan behaved that way, and changing
+    the default would change every other caller's output.
     """
     parts: list[str] = []
     current: list[str] = []
+    openers = '([' if brackets else '('
+    closers = ')]' if brackets else ')'
     depth = 0
     for ch in text:
-        if ch == '(':
+        if ch in openers:
             depth += 1
-        elif ch == ')':
+        elif ch in closers:
             depth -= 1
         elif ch == ',' and depth == 0:
             parts.append(''.join(current))
             current = []
             continue
         current.append(ch)
-    if current:
+    if current or keep_trailing:
         parts.append(''.join(current))
     if strip:
         return [p for p in (part.strip() for part in parts) if p]
@@ -477,13 +571,27 @@ def walk_procedure_header(lines: list[str], start: int) -> int:
     return j
 
 
+def string_mask(text: str) -> list[bool]:
+    """Boolean mask over ``text`` — True where the character sits inside a
+    string literal. The opening quote of a literal counts as inside.
+
+    Companion to :func:`match_paren` and the inverse of
+    :func:`_build_split_mask`; both used to be spelled out separately,
+    once here and once in ``io_narrow``, from the same
+    ``_iter_outside_strings`` walk.
+    """
+    inside = [True] * len(text)
+    for i, _ in _iter_outside_strings(text):
+        inside[i] = False
+    return inside
+
+
 def _build_split_mask(body: str) -> list[bool]:
     """Boolean mask over ``body`` — True at positions safe to split a
     fixed-form line at (i.e. not inside a string literal). The opening
     quote of a literal is itself marked unsafe, matching legacy
     behavior so the splitter never lands a continuation marker
-    immediately before a string."""
-    mask = [False] * len(body)
-    for i, _ in _iter_outside_strings(body):
-        mask[i] = True
-    return mask
+    immediately before a string.
+
+    Exact complement of :func:`string_mask`."""
+    return [not b for b in string_mask(body)]

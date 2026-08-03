@@ -25,13 +25,6 @@ if(NOT TARGET ${LIB_PAIR_PREFIX}blacs)
     return()
 endif()
 
-# ── Dedicated module directory ──────────────────────────────────────
-# The shared tests/common helper modules are compiled once per suite
-# (with per-suite reporter macros), so a per-tree subdir keeps our
-# .mod files from colliding in the shared fmod_tests/ tree.
-set(_bl_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}/blacs_tests")
-file(MAKE_DIRECTORY ${_bl_moddir})
-
 # ── Common helper modules ───────────────────────────────────────────
 add_library(blacs_test_common STATIC
     ../common/prec_kinds.f90
@@ -41,15 +34,10 @@ add_library(blacs_test_common STATIC
     ../common/test_data.f90
     ../common/pblas_grid.F90
 )
-set_target_properties(blacs_test_common PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_bl_moddir}"
-)
+fortran_test_module_layout(blacs_test_common SUBDIR blacs_tests)
 # MPI reporter: rank 0 writes the JSON, report_finalize broadcasts the
 # pass/fail flag — see tests/common/prec_report.F90.
 target_compile_definitions(blacs_test_common PRIVATE PREC_REPORT_MPI)
-target_include_directories(blacs_test_common PUBLIC
-    $<BUILD_INTERFACE:${_bl_moddir}>
-)
 target_link_libraries(blacs_test_common PUBLIC
     ${LIB_PAIR_PREFIX}blacs
     MPI::MPI_Fortran
@@ -68,12 +56,7 @@ add_fypp_source(_blacs_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(blacs_test_target STATIC ${_blacs_wrapper_src})
-set_target_properties(blacs_test_target PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_bl_moddir}"
-)
-target_include_directories(blacs_test_target PUBLIC
-    $<BUILD_INTERFACE:${_bl_moddir}>
-)
+fortran_test_module_layout(blacs_test_target SUBDIR blacs_tests)
 target_link_libraries(blacs_test_target PUBLIC
     blacs_test_common
     target_conv

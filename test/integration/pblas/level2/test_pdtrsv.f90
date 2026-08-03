@@ -3,9 +3,7 @@ program test_pdtrsv
     use compare,       only: max_rel_err_vec
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: dtrsv
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix, gen_distrib_vector, &
                              gather_vector, set_local_from_global
     use target_pblas,  only: target_name, target_eps, target_pdtrsv
@@ -16,9 +14,8 @@ program test_pdtrsv
     character(len=1), parameter :: transes(*) = ['N', 'T']
     character(len=1), parameter :: diags(*)   = ['N', 'U']
     integer, parameter :: mb = 8
-    integer :: i, iu, it, id, j, n, info
+    integer :: i, iu, it, id, j, n
     integer :: combo
-    integer :: locm_a, locn_a, locn_x, lld_a, lld_x
     integer :: desca(9), descx(9)
     character(len=1) :: uplo, trans, diag
     real(ep) :: bump
@@ -53,12 +50,8 @@ program test_pdtrsv
                         call set_local_from_global(j, j, A_glob(j, j), mb, mb, A_loc)
                     end do
 
-                    locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-                    locn_a = numroc_local(n, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-                    locn_x = numroc_local(n, mb, my_row, 0, my_nprow); lld_x = max(1, locn_x)
-
-                    call descinit_local(desca, n, n, mb, mb, 0, 0, my_context, lld_a, info)
-                    call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
+                    call local_desc(desca, n, n, mb, mb)
+                    call local_desc(descx, n, 1, mb, 1)
 
                     call target_pdtrsv(uplo, trans, diag, n, A_loc, 1, 1, desca, &
                                        x_loc, 1, 1, descx, 1)

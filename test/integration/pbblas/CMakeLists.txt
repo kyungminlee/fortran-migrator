@@ -39,13 +39,6 @@ if(NOT TARGET ${LIB_PAIR_PREFIX}blacs)
     return()
 endif()
 
-# ── Dedicated module directory ──────────────────────────────────────
-# The shared tests/common helper modules are compiled once per suite
-# (with per-suite reporter macros), so a per-tree mod dir keeps each
-# tree's .mod files isolated in the shared fmod_tests/ tree.
-set(_pbb_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}/pbblas_tests")
-file(MAKE_DIRECTORY ${_pbb_moddir})
-
 # ── Common helper modules ───────────────────────────────────────────
 # pblas_distrib is a fypp template (one body instantiated for the real
 # and complex families) — expand it into this suite's binary dir.
@@ -62,15 +55,10 @@ add_library(pbblas_test_common STATIC
     ../common/pblas_grid.F90
     ${_pbb_distrib_src}
 )
-set_target_properties(pbblas_test_common PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_pbb_moddir}"
-)
+fortran_test_module_layout(pbblas_test_common SUBDIR pbblas_tests)
 # MPI reporter: rank 0 writes the JSON, report_finalize broadcasts the
 # pass/fail flag — see tests/common/prec_report.F90.
 target_compile_definitions(pbblas_test_common PRIVATE PREC_REPORT_MPI)
-target_include_directories(pbblas_test_common PUBLIC
-    $<BUILD_INTERFACE:${_pbb_moddir}>
-)
 target_link_libraries(pbblas_test_common PUBLIC
     refblas_quad
     ${LIB_PAIR_PREFIX}blacs
@@ -90,12 +78,7 @@ add_fypp_source(_pbblas_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(pbblas_test_target STATIC ${_pbblas_wrapper_src})
-set_target_properties(pbblas_test_target PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_pbb_moddir}"
-)
-target_include_directories(pbblas_test_target PUBLIC
-    $<BUILD_INTERFACE:${_pbb_moddir}>
-)
+fortran_test_module_layout(pbblas_test_target SUBDIR pbblas_tests)
 target_link_libraries(pbblas_test_target PUBLIC
     pbblas_test_common
     target_conv

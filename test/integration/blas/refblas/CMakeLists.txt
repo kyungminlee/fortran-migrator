@@ -12,9 +12,16 @@
 #   -DBLAS_REF=netlib  (default) → build from vendored sources
 #   -DBLAS_REF=system            → link system -lblas (double, capped)
 
-if(BLAS_REF STREQUAL "system")
+# Bail-out form: refblas_quad becomes a pass-through to the system
+# -lblas. Every caller still needs its own return() — a return() here
+# would only leave this function.
+function(_refblas_quad_fallback)
     add_library(refblas_quad INTERFACE)
     target_link_libraries(refblas_quad INTERFACE blas)
+endfunction()
+
+if(BLAS_REF STREQUAL "system")
+    _refblas_quad_fallback()
     return()
 endif()
 
@@ -23,8 +30,7 @@ if(NOT CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
     message(STATUS "tests/blas/refblas: BLAS_REF=netlib needs gfortran "
                    "for -freal-8-real-16 promotion. Falling back to "
                    "system -lblas.")
-    add_library(refblas_quad INTERFACE)
-    target_link_libraries(refblas_quad INTERFACE blas)
+    _refblas_quad_fallback()
     return()
 endif()
 
@@ -33,8 +39,7 @@ if(NOT IS_DIRECTORY ${_refsrc_dir})
     message(STATUS "tests/blas/refblas: ${_refsrc_dir} not found "
                    "(expected to be copied by `migrator stage`); "
                    "falling back to system -lblas.")
-    add_library(refblas_quad INTERFACE)
-    target_link_libraries(refblas_quad INTERFACE blas)
+    _refblas_quad_fallback()
     return()
 endif()
 
@@ -57,50 +62,9 @@ target_compile_options(refblas_quad PRIVATE
     -std=legacy
 )
 
-# Rename Fortran-mangled exports from `<name>_` to `<name>_quad_` so
-# refblas_quad doesn't collide with the standard ``blas`` archive's
-# native-precision symbols when the kind4 / kind8 baseline tests link
-# both. The matching update on the consumer side lives in
-# tests/common/ref_quad_blas.f90: every routine declared in the
-# interface block is suffixed ``_quad``, with a thin module procedure
-# under the original name forwarding to the renamed external. Test
-# files keep ``use ref_quad_blas, only: dasum`` unchanged.
-#
-# Looks for the rename script in two places — the in-tree path
-# scripts/refquad_rename_archive.sh (when this CMakeLists is consumed
-# from the repo) and ../scripts/... (when consumed from the staging
-# tree, where ``migrator stage`` plants the cmake/ files alongside
-# ``scripts/``). Skipped silently if neither path resolves.
-find_file(REFQUAD_RENAME_SCRIPT refquad_rename_archive.sh
-    PATHS
-        ${CMAKE_SOURCE_DIR}/scripts
-        ${CMAKE_SOURCE_DIR}/../scripts
-        ${PROJECT_SOURCE_DIR}/scripts
-        ${PROJECT_SOURCE_DIR}/../scripts
-    NO_DEFAULT_PATH)
-if(REFQUAD_RENAME_SCRIPT)
-    # Common-archive excludes: their T/W defs are migrated-side
-    # helpers (la_constants_ep, iparam2stage_ep_, mumps_abort_,
-    # …). reflapack_quad references some of them; we must NOT rename
-    # those references because the migrated link cycle expects them
-    # under their original names.
-    set(_refquad_excludes)
-    foreach(_c blas_common lapack_common scalapack_common
-               pblas_common pbblas_common ptzblas_common blacs_common
-               mumps_common xblas_common)
-        if(TARGET ${_c})
-            list(APPEND _refquad_excludes -x $<TARGET_FILE:${_c}>)
-        endif()
-    endforeach()
-    add_custom_command(TARGET refblas_quad POST_BUILD
-        COMMAND sh ${REFQUAD_RENAME_SCRIPT}
-                $<TARGET_FILE:refblas_quad>
-                ${_refquad_excludes}
-        COMMENT "refblas_quad: rename Fortran exports -> *_quad_"
-        VERBATIM)
-else()
-    message(WARNING "refblas_quad: rename script not found; "
-                    "kind4/kind8 baseline tests will see symbol collisions")
-endif()
+# Rename the exports to `<name>_quad_` so refblas_quad doesn't collide
+# with the standard ``blas`` archive under a kind4 / kind8 baseline link
+# — see refquad_rename_exports() in tests/CMakeLists.txt.
+refquad_rename_exports(refblas_quad)
 # .f90 files are free-form by extension; the rest are fixed-form.
 # No per-file form override needed.

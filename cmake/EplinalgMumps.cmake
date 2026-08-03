@@ -33,14 +33,87 @@ endif()
 # macro()s, NOT function()s, on purpose: a macro runs in the caller's
 # scope, so every ``set()`` still lands at directory scope exactly as
 # when this file was a single inline block. That is the contract the
-# cross-section variables rely on — the MUMPS_HAVE_* gates, the Scotch
-# define/flag/rename lists the PT-Scotch section and
-# _add_mumps_ordering_defines() consume, and the _mumps_c_* paths the
-# genuine build reads; each macro's header lists what it defines and
-# consumes. Only the two parameterized helpers stay function()s, and
+# cross-section variables rely on — the MUMPS_HAVE_* gates, the
+# published _MUMPS_SCOTCH_* build settings the PT-Scotch section
+# rebuilds its increment from, and the _mumps_c_* paths the genuine
+# build reads; each macro's header lists what it defines and consumes.
+# A function() would still *see* those through the scope chain, but
+# nothing at its call site would say so, so what a function needs it
+# takes as arguments: _add_mumps_ordering_defines() gets the Scotch
+# include dir and rename lists from _mumps_scotch_fortran_args().
+# Only the parameterized helpers stay function()s, and
 # they are defined at file scope: a function body recorded inside a
 # macro would have its ${ARGN} rewritten by the enclosing macro's own
 # argument substitution.
+
+# _mumps_ordering_archive(<target> OUTPUT_NAME <name> SOURCES <file>…
+#                         [PUBLIC_INCLUDE <dir>…] [PRIVATE_INCLUDE <dir>…]
+#                         [INSTALL_INCLUDE <dir>] [DEFINES <def>…]
+#                         [OPTIONS <opt>…] [NON_MSVC_OPTIONS <opt>…]
+#                         [LINK <target>…] [C99_PIC] [LIBM]): build one
+# vendored ordering archive. The five sections below each hand-rolled the
+# same construction — add_library(STATIC), the $<BUILD_INTERFACE:>/
+# $<INSTALL_INTERFACE:> include wrapping, PRIVATE defines, the
+# _mumps-tagged OUTPUT_NAME, the "compile third-party code as-is"
+# warning-quiet options, and the link edges — five times, which is how
+# ``pord`` ended up the only one without C_STANDARD/PIC and ``ptscotch``
+# the only Scotch archive reaching libm indirectly.
+#
+# Everything that differs per archive is a keyword, and nothing is
+# implied: C99_PIC and LIBM are opt-in precisely so this refactor moves
+# no flag onto a target that did not already carry it. OPTIONS goes on
+# unconditionally, NON_MSVC_OPTIONS only when NOT MSVC, and OPTIONS is
+# applied first — that order is what puts esmumps' force-included rename
+# header ahead of its warning-quiet flags, as before.
+#
+# A function(), not a macro: it needs no directory-scope variable and
+# publishes none (the MUMPS_HAVE_* latch stays in the calling section,
+# where the availability guard that decides it lives). Targets are
+# unaffected by function scope — add_library() from a function still
+# defines the target in the calling directory.
+function(_mumps_ordering_archive target)
+    cmake_parse_arguments(_MOA "C99_PIC;LIBM" "OUTPUT_NAME;INSTALL_INCLUDE"
+        "SOURCES;PUBLIC_INCLUDE;PRIVATE_INCLUDE;DEFINES;OPTIONS;NON_MSVC_OPTIONS;LINK"
+        ${ARGN})
+    add_library(${target} STATIC ${_MOA_SOURCES})
+    set(_moa_pub "")
+    foreach(_d ${_MOA_PUBLIC_INCLUDE})
+        list(APPEND _moa_pub $<BUILD_INTERFACE:${_d}>)
+    endforeach()
+    if(_MOA_INSTALL_INCLUDE)
+        list(APPEND _moa_pub $<INSTALL_INTERFACE:${_MOA_INSTALL_INCLUDE}>)
+    endif()
+    if(_moa_pub)
+        target_include_directories(${target} PUBLIC ${_moa_pub})
+    endif()
+    if(_MOA_PRIVATE_INCLUDE)
+        set(_moa_prv "")
+        foreach(_d ${_MOA_PRIVATE_INCLUDE})
+            list(APPEND _moa_prv $<BUILD_INTERFACE:${_d}>)
+        endforeach()
+        target_include_directories(${target} PRIVATE ${_moa_prv})
+    endif()
+    if(_MOA_DEFINES)
+        target_compile_definitions(${target} PRIVATE ${_MOA_DEFINES})
+    endif()
+    set(_moa_props OUTPUT_NAME ${_MOA_OUTPUT_NAME})
+    if(_MOA_C99_PIC)
+        list(APPEND _moa_props C_STANDARD 99 POSITION_INDEPENDENT_CODE ON)
+    endif()
+    set_target_properties(${target} PROPERTIES ${_moa_props})
+    if(_MOA_OPTIONS)
+        target_compile_options(${target} PRIVATE ${_MOA_OPTIONS})
+    endif()
+    if(_MOA_NON_MSVC_OPTIONS AND NOT MSVC)
+        target_compile_options(${target} PRIVATE ${_MOA_NON_MSVC_OPTIONS})
+    endif()
+    if(_MOA_LINK)
+        target_link_libraries(${target} PUBLIC ${_MOA_LINK})
+    endif()
+    if(_MOA_LIBM AND UNIX)
+        target_link_libraries(${target} PUBLIC m)
+    endif()
+endfunction()
 
 # _eplinalg_mumps_pord(): PORD ordering archive; defines target
 # ``pord``. Directory scope out: MUMPS_HAVE_PORD, _mumps_pord_{src,inc}.
@@ -63,14 +136,13 @@ macro(_eplinalg_mumps_pord)
     if(IS_DIRECTORY ${_mumps_pord_src} AND IS_DIRECTORY ${_mumps_pord_inc})
         file(GLOB _pord_c CONFIGURE_DEPENDS ${_mumps_pord_src}/*.c)
         if(_pord_c)
-            add_library(pord STATIC ${_pord_c})
             # Ship the archive as libpord_mumps.a (not libpord.a): the
             # CMake target keeps its short name ``pord`` for the internal
             # link graph, but the installed filename carries the _mumps
             # tag so it cannot collide on disk with a system/other-dev
             # ordering archive of the same base name (mirrors the _mumps
             # symbol namespacing).
-            set_target_properties(pord PROPERTIES OUTPUT_NAME pord_mumps)
+            #
             # PORD symbols (SPACE_ordering, firstPostorder, …) are called
             # by plain C name from mumps_pord.c — no Fortran mangling, so
             # no ``Add_`` here. Its sources #include <space.h> etc. from
@@ -79,9 +151,16 @@ macro(_eplinalg_mumps_pord)
             # The INSTALL_INTERFACE dir is where _install_ordering_package
             # ships those headers, so find_package consumers can call the
             # PORD API directly.
-            target_include_directories(pord PUBLIC
-                $<BUILD_INTERFACE:${_mumps_pord_inc}>
-                $<INSTALL_INTERFACE:include/pord_mumps>)
+            #
+            # No C99_PIC and no LIBM: PORD is the one archive here that has
+            # always built at the toolchain default C standard, without PIC
+            # and without a libm edge. Left as-is deliberately — see the
+            # keyword rationale on _mumps_ordering_archive().
+            _mumps_ordering_archive(pord
+                OUTPUT_NAME pord_mumps
+                SOURCES ${_pord_c}
+                PUBLIC_INCLUDE ${_mumps_pord_inc}
+                INSTALL_INCLUDE include/pord_mumps)
             set(MUMPS_HAVE_PORD TRUE)
             message(STATUS "MUMPS: PORD ordering enabled (ICNTL(7)=4)")
         endif()
@@ -120,7 +199,6 @@ macro(_eplinalg_mumps_metis)
         file(GLOB _metis_c CONFIGURE_DEPENDS
             ${_mumps_metis_gklib}/*.c ${_mumps_metis_lib}/*.c)
         if(_metis_c)
-            add_library(metis STATIC ${_metis_c})
             # GKlib.h / metis.h / rename.h / defs.h … are angle-bracket
             # includes resolved from all three staged dirs; PUBLIC so the
             # public metis.h also reaches mumps_metis*.c once the runtime
@@ -128,18 +206,38 @@ macro(_eplinalg_mumps_metis)
             # METIS_MUMPS_* renamed API) is installed — GKlib/libmetis
             # headers are build-internal — via _install_ordering_package
             # into the INSTALL_INTERFACE dir.
-            target_include_directories(metis PUBLIC
-                $<BUILD_INTERFACE:${_mumps_metis_inc}>
-                $<BUILD_INTERFACE:${_mumps_metis_gklib}>
-                $<BUILD_INTERFACE:${_mumps_metis_lib}>
-                $<INSTALL_INTERFACE:include/metis_mumps>)
+            #
             # Width macros: 32-bit idx / real — the header default and the
             # width mumps_metis.c's ``IDXTYPEWIDTH == 32`` path expects.
             # NDEBUG* match the upstream (non-ASSERT) GKlib build; the
-            # platform/feature macros mirror GKlib/GKlibSystem.cmake.
-            target_compile_definitions(metis PRIVATE
-                IDXTYPEWIDTH=32 REALTYPEWIDTH=32
-                NDEBUG NDEBUG2 _FILE_OFFSET_BITS=64)
+            # platform/feature macros mirror GKlib/GKlibSystem.cmake (the
+            # probe-dependent ones are appended below).
+            #
+            # OUTPUT_NAME libmetis_mumps.a — filename-namespaced like the
+            # _mumps symbol rename, so it never clashes with a system METIS.
+            #
+            # GKlib is warning-noisy by design (upstream builds it with a
+            # long -Wno-* list); quiet it rather than drown the log.
+            #
+            # LIBM: METIS's coarsening and refinement heuristics call log/
+            # pow/sqrt (`nm -u libmetis_mumps.a` lists log, pow, powf,
+            # sqrt), so libm belongs in the PUBLIC interface of the
+            # installed eplinalg::metis. In-tree nothing noticed: every link
+            # so far ran through the gfortran driver, and libgfortran.so
+            # itself carries NEEDED libm.so.6. A C consumer of the installed
+            # package links no Fortran runtime and fails outright with
+            # `undefined reference to sqrt`. This is the one archive in the
+            # stack where the missing declaration is a live failure rather
+            # than latent, precisely because it is pure C.
+            _mumps_ordering_archive(metis C99_PIC LIBM
+                OUTPUT_NAME metis_mumps
+                SOURCES ${_metis_c}
+                PUBLIC_INCLUDE ${_mumps_metis_inc} ${_mumps_metis_gklib}
+                               ${_mumps_metis_lib}
+                INSTALL_INCLUDE include/metis_mumps
+                DEFINES IDXTYPEWIDTH=32 REALTYPEWIDTH=32
+                        NDEBUG NDEBUG2 _FILE_OFFSET_BITS=64
+                NON_MSVC_OPTIONS -w -fno-strict-aliasing)
             if(UNIX AND NOT APPLE)
                 target_compile_definitions(metis PRIVATE LINUX)
             endif()
@@ -152,29 +250,6 @@ macro(_eplinalg_mumps_metis)
             check_function_exists(getline _METIS_HAVE_GETLINE)
             if(_METIS_HAVE_GETLINE)
                 target_compile_definitions(metis PRIVATE HAVE_GETLINE)
-            endif()
-            set_target_properties(metis PROPERTIES
-                C_STANDARD 99 POSITION_INDEPENDENT_CODE ON
-                # libmetis_mumps.a — filename-namespaced like the _mumps
-                # symbol rename, so it never clashes with a system METIS.
-                OUTPUT_NAME metis_mumps)
-            # GKlib is warning-noisy by design (upstream builds it with a
-            # long -Wno-* list); quiet it rather than drown the log.
-            if(NOT MSVC)
-                target_compile_options(metis PRIVATE -w -fno-strict-aliasing)
-            endif()
-            # METIS's coarsening and refinement heuristics call log/pow/
-            # sqrt (`nm -u libmetis_mumps.a` lists log, pow, powf, sqrt),
-            # so libm belongs in the PUBLIC interface of the installed
-            # eplinalg::metis. In-tree nothing noticed: every link so far
-            # ran through the gfortran driver, and libgfortran.so itself
-            # carries NEEDED libm.so.6. A C consumer of the installed
-            # package links no Fortran runtime and fails outright with
-            # `undefined reference to sqrt`. This is the one archive in
-            # the stack where the missing declaration is a live failure
-            # rather than latent, precisely because it is pure C.
-            if(UNIX)
-                target_link_libraries(metis PUBLIC m)
             endif()
             set(MUMPS_HAVE_METIS TRUE)
             message(STATUS "MUMPS: METIS ordering enabled (ICNTL(7)=5)")
@@ -189,9 +264,13 @@ endmacro()
 # _eplinalg_mumps_scotch(): sequential Scotch ordering archives;
 # defines targets ``scotch``/``esmumps``. Directory scope out:
 # MUMPS_HAVE_SCOTCH, _mumps_scotch_{libsrc,esmsrc,inc}, the
-# SCOTCH_*_SOURCES lists (from scotch_sources.cmake), and — consumed by
-# later sections — _scotch_defs / _scotch_cflags / _scotch_err_c
-# (PT-Scotch) and _scotch_f_renames (_add_mumps_ordering_defines).
+# SCOTCH_*_SOURCES lists (from scotch_sources.cmake), and the published
+# _MUMPS_SCOTCH_{DEFS,CFLAGS,ERR_C} group — the build settings the
+# PT-Scotch section below rebuilds its increment from. The upper-case
+# prefix marks exactly that: values another section reads directly.
+# The Fortran rename list is not part of it; the only reader outside
+# this section is _mumps_scotch_fortran_args(), which hands it to
+# _add_mumps_ordering_defines() as an argument.
 macro(_eplinalg_mumps_scotch)
     # ── Scotch ordering library (privately namespaced) ──────────────
     # Scotch 7.0.4, vendored under extern/scotch-7.0.4 and staged into
@@ -226,9 +305,9 @@ macro(_eplinalg_mumps_scotch)
         foreach(_f ${SCOTCH_LIBSCOTCH_SOURCES})
             list(APPEND _scotch_lib_c ${_mumps_scotch_libsrc}/${_f})
         endforeach()
-        set(_scotch_err_c "")
+        set(_MUMPS_SCOTCH_ERR_C "")
         foreach(_f ${SCOTCH_SCOTCHERR_SOURCES})
-            list(APPEND _scotch_err_c ${_mumps_scotch_libsrc}/${_f})
+            list(APPEND _MUMPS_SCOTCH_ERR_C ${_mumps_scotch_libsrc}/${_f})
         endforeach()
         set(_scotch_esm_c "")
         foreach(_f ${SCOTCH_ESMUMPS_SOURCES})
@@ -238,7 +317,7 @@ macro(_eplinalg_mumps_scotch)
             # Exact define set the upstream Scotch CMake applies, plus the
             # namespacing suffix. -Drestrict=__restrict quiets the C99
             # keyword; COMMON_RANDOM_FIXED_SEED makes orderings reproducible.
-            set(_scotch_defs
+            set(_MUMPS_SCOTCH_DEFS
                 COMMON_RANDOM_FIXED_SEED
                 SCOTCH_VERSION_NUM=7 SCOTCH_RELEASE_NUM=0 SCOTCH_PATCHLEVEL_NUM=4
                 SCOTCH_RENAME SCOTCH_NAME_SUFFIX=_mumps
@@ -257,47 +336,6 @@ macro(_eplinalg_mumps_scotch)
             # demand, so an application-supplied handler *object* still
             # overrides the archive member, and nothing here swaps
             # handlers — one archive fewer to ship and order.
-            add_library(scotch STATIC ${_scotch_lib_c} ${_scotch_err_c})
-            # The INSTALL_INTERFACE dir receives scotch.h/scotchf.h and
-            # scotch_rename_mumps.h (consumers calling bare SCOTCH_* must
-            # include the rename header to reach the _mumps-suffixed
-            # archive symbols) via _install_ordering_package.
-            target_include_directories(scotch PUBLIC
-                $<BUILD_INTERFACE:${_mumps_scotch_inc}>
-                $<BUILD_INTERFACE:${_mumps_scotch_libsrc}>
-                $<INSTALL_INTERFACE:include/scotch_mumps>)
-            target_compile_definitions(scotch PRIVATE ${_scotch_defs})
-            set_target_properties(scotch PROPERTIES
-                C_STANDARD 99 POSITION_INDEPENDENT_CODE ON
-                OUTPUT_NAME scotch_mumps)
-
-            add_library(esmumps STATIC ${_scotch_esm_c})
-            target_include_directories(esmumps PUBLIC
-                $<BUILD_INTERFACE:${_mumps_scotch_inc}>
-                $<INSTALL_INTERFACE:include/scotch_mumps>)
-            target_include_directories(esmumps PRIVATE
-                $<BUILD_INTERFACE:${_mumps_scotch_esmsrc}>
-                $<BUILD_INTERFACE:${_mumps_scotch_libsrc}>)
-            target_compile_definitions(esmumps PRIVATE ${_scotch_defs})
-            set_target_properties(esmumps PROPERTIES
-                C_STANDARD 99 POSITION_INDEPENDENT_CODE ON
-                OUTPUT_NAME esmumps_mumps)
-            # esmumps.c / order_scotch_graph.c / … include the *public*
-            # scotch.h (bare prototypes) and call bare SCOTCH_* — its own
-            # esmumps/module.h does NOT carry the public rename list (only
-            # libscotch/module.h does). Force-include scotch_rename_mumps.h
-            # so those bare calls bind to the _mumps-suffixed archive
-            # symbols, exactly as the MUMPS C callers do.
-            target_compile_options(esmumps PRIVATE
-                "SHELL:-include ${_mumps_scotch_inc}/scotch_rename_mumps.h")
-            target_link_libraries(esmumps PUBLIC scotch)
-            # Scotch's graph mapping calls fmod; same reasoning as the
-            # metis libm declaration above. esmumps needs no separate
-            # entry — it PUBLIC-links scotch and inherits it.
-            if(UNIX)
-                target_link_libraries(scotch PUBLIC m)
-            endif()
-
             # Scotch is warning-noisy; quiet it rather than drown the log.
             # It also leans on a "based array" idiom (`tab = ptr - baseval`,
             # a pointer legally *before* the allocation, re-based on every
@@ -309,12 +347,47 @@ macro(_eplinalg_mumps_scotch)
             # this because its own Makefiles do not inject fortify; match that
             # by turning it off for the vendored sources only (same "compile
             # third-party code as-is" rationale as -w -fno-strict-aliasing).
-            if(NOT MSVC)
-                set(_scotch_cflags -w -fno-strict-aliasing
-                    -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
-                target_compile_options(scotch  PRIVATE ${_scotch_cflags})
-                target_compile_options(esmumps PRIVATE ${_scotch_cflags})
-            endif()
+            # Published for the PT-Scotch increment. Set unconditionally —
+            # every consumer (here and there) passes it as NON_MSVC_OPTIONS,
+            # so an MSVC build still applies none of it.
+            set(_MUMPS_SCOTCH_CFLAGS -w -fno-strict-aliasing
+                -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
+
+            # The INSTALL_INTERFACE dir receives scotch.h/scotchf.h and
+            # scotch_rename_mumps.h (consumers calling bare SCOTCH_* must
+            # include the rename header to reach the _mumps-suffixed
+            # archive symbols) via _install_ordering_package.
+            #
+            # LIBM: Scotch's graph mapping calls fmod; same reasoning as the
+            # metis libm declaration above. esmumps needs no separate entry —
+            # it PUBLIC-links scotch and inherits it.
+            _mumps_ordering_archive(scotch C99_PIC LIBM
+                OUTPUT_NAME scotch_mumps
+                SOURCES ${_scotch_lib_c} ${_MUMPS_SCOTCH_ERR_C}
+                PUBLIC_INCLUDE ${_mumps_scotch_inc} ${_mumps_scotch_libsrc}
+                INSTALL_INCLUDE include/scotch_mumps
+                DEFINES ${_MUMPS_SCOTCH_DEFS}
+                NON_MSVC_OPTIONS ${_MUMPS_SCOTCH_CFLAGS})
+
+            # esmumps.c / order_scotch_graph.c / … include the *public*
+            # scotch.h (bare prototypes) and call bare SCOTCH_* — its own
+            # esmumps/module.h does NOT carry the public rename list (only
+            # libscotch/module.h does). Force-include scotch_rename_mumps.h
+            # so those bare calls bind to the _mumps-suffixed archive
+            # symbols, exactly as the MUMPS C callers do. It goes in as
+            # OPTIONS, not NON_MSVC_OPTIONS: the rename binding is required
+            # on every toolchain, and being first keeps it ahead of the
+            # warning-quiet flags on the command line.
+            _mumps_ordering_archive(esmumps C99_PIC
+                OUTPUT_NAME esmumps_mumps
+                SOURCES ${_scotch_esm_c}
+                PUBLIC_INCLUDE ${_mumps_scotch_inc}
+                PRIVATE_INCLUDE ${_mumps_scotch_esmsrc} ${_mumps_scotch_libsrc}
+                INSTALL_INCLUDE include/scotch_mumps
+                DEFINES ${_MUMPS_SCOTCH_DEFS}
+                OPTIONS "SHELL:-include ${_mumps_scotch_inc}/scotch_rename_mumps.h"
+                NON_MSVC_OPTIONS ${_MUMPS_SCOTCH_CFLAGS}
+                LINK scotch)
             # The C caller sites are remapped bare→_mumps by force-including
             # scotch_rename_mumps.h. The Fortran caller (ana_orderings_
             # wrappers_m.F / [dz]ana_aux_par.F) reaches Scotch through the
@@ -342,10 +415,11 @@ macro(_eplinalg_mumps_scotch)
 endmacro()
 
 # _eplinalg_mumps_ptscotch(): PT-Scotch distributed increment; consumes
-# _scotch_defs / _scotch_cflags / _scotch_err_c and
+# _MUMPS_SCOTCH_DEFS / _MUMPS_SCOTCH_CFLAGS / _MUMPS_SCOTCH_ERR_C and
 # SCOTCH_LIBPTSCOTCH_SOURCES from _eplinalg_mumps_scotch(); defines
 # target ``ptscotch``. Directory scope out: MUMPS_HAVE_PTSCOTCH and
-# _scotch_pt_f_renames (consumed by _add_mumps_ordering_defines).
+# _scotch_pt_f_renames, which — like the sequential rename list —
+# leaves the section only through _mumps_scotch_fortran_args().
 macro(_eplinalg_mumps_ptscotch)
     # ── PT-Scotch (distributed parallel analysis) ───────────────────
     # The 131-file distributed increment (dgraph*/bdgraph*/vdgraph*/
@@ -382,7 +456,7 @@ macro(_eplinalg_mumps_ptscotch)
         endforeach()
         # Sequential defines + the distributed flag. The suffix MUST stay
         # _mumps (not _mumps_pt) — see increment rationale above.
-        set(_ptscotch_defs ${_scotch_defs} SCOTCH_PTSCOTCH)
+        set(_ptscotch_defs ${_MUMPS_SCOTCH_DEFS} SCOTCH_PTSCOTCH)
 
         # Filename carries the MPI tag (unlike the shared, untagged
         # sequential libscotch_mumps.a): OpenMPI and Intel-MPI copies are
@@ -405,16 +479,11 @@ macro(_eplinalg_mumps_ptscotch)
         # libscotch is never pulled — the MPI-aware handler wins with
         # no duplicate definitions, mirroring upstream's -lptscotcherr
         # -lscotch -lscotcherr order with two fewer archives.
-        add_library(ptscotch STATIC ${_ptscotch_lib_c} ${_scotch_err_c})
         # ptscotch.h/ptscotchf.h are installed with the sequential Scotch
         # headers (same include/scotch_mumps dir): they are pre-generated,
         # MPI-ABI-independent files (see vendoring note above), so the
         # untagged eplinalgOrdering package can carry them for every flavor.
-        target_include_directories(ptscotch PUBLIC
-            $<BUILD_INTERFACE:${_mumps_scotch_inc}>
-            $<BUILD_INTERFACE:${_mumps_scotch_libsrc}>
-            $<INSTALL_INTERFACE:include/scotch_mumps>)
-        target_compile_definitions(ptscotch PRIVATE ${_ptscotch_defs})
+        #
         # The distributed increment references the sequential SCOTCH_*_mumps
         # symbols but does not define them. Declaring the dependency PUBLIC
         # makes CMake emit ptscotch BEFORE scotch on every consumer's static
@@ -422,17 +491,20 @@ macro(_eplinalg_mumps_ptscotch)
         # resolve — mirroring upstream's -lptscotch -lscotch order. Every
         # consumer then only has to link ptscotch; scotch follows
         # transitively in the correct order and dedups against any explicit
-        # scotch entry.
-        target_link_libraries(ptscotch PUBLIC scotch MPI::MPI_C)
-        set_target_properties(ptscotch PROPERTIES
-            C_STANDARD 99 POSITION_INDEPENDENT_CODE ON
-            OUTPUT_NAME ${_ptscotch_out})
-
-        # Same warning-quiet + based-array fortify mitigation as sequential
-        # Scotch (the distributed sources use the identical idiom).
-        if(NOT MSVC)
-            target_compile_options(ptscotch PRIVATE ${_scotch_cflags})
-        endif()
+        # scotch entry. No LIBM of its own: the fmod caller is the sequential
+        # side, and scotch carries libm PUBLIC, so it arrives transitively.
+        #
+        # NON_MSVC_OPTIONS: the same warning-quiet + based-array fortify
+        # mitigation as sequential Scotch (the distributed sources use the
+        # identical idiom).
+        _mumps_ordering_archive(ptscotch C99_PIC
+            OUTPUT_NAME ${_ptscotch_out}
+            SOURCES ${_ptscotch_lib_c} ${_MUMPS_SCOTCH_ERR_C}
+            PUBLIC_INCLUDE ${_mumps_scotch_inc} ${_mumps_scotch_libsrc}
+            INSTALL_INCLUDE include/scotch_mumps
+            DEFINES ${_ptscotch_defs}
+            NON_MSVC_OPTIONS ${_MUMPS_SCOTCH_CFLAGS}
+            LINK scotch MPI::MPI_C)
 
         # Distributed Fortran entry points MUMPS calls under -Dptscotch
         # ([dscz]ana_aux_par.F, ana_orderings_wrappers_m.F). Same
@@ -477,7 +549,35 @@ macro(_eplinalg_mumps_ptscotch)
     endif()
 endmacro()
 
-# _add_mumps_ordering_defines(<target> [FORTRAN_ONLY]): put the
+# _mumps_scotch_fortran_args(<out_var>): pack the Scotch/PT-Scotch
+# pieces _add_mumps_ordering_defines() puts on a Fortran target — the
+# include dir for INCLUDE 'scotchf.h' and the two CPP rename sets — as
+# a keyword argument list, so the call site declares the dependency
+# instead of the callee reaching up the scope chain for it:
+#
+#     _mumps_scotch_fortran_args(_sc_args)
+#     _add_mumps_ordering_defines(<target> ${_sc_args})
+#
+# Whichever ordering section did not turn on contributes no keywords,
+# so the result splices in unconditionally. A macro, so it reads the
+# sections' variables in the directory scope that set them: this is
+# the one place they are read from outside their own section.
+macro(_mumps_scotch_fortran_args out_var)
+    set(${out_var} "")
+    if(MUMPS_HAVE_SCOTCH)
+        list(APPEND ${out_var}
+            SCOTCH_INCLUDE "${_mumps_scotch_inc}"
+            SCOTCH_RENAMES ${_scotch_f_renames})
+    endif()
+    if(MUMPS_HAVE_PTSCOTCH)
+        list(APPEND ${out_var} PTSCOTCH_RENAMES ${_scotch_pt_f_renames})
+    endif()
+endmacro()
+
+# _add_mumps_ordering_defines(<target> [FORTRAN_ONLY]
+#                             [SCOTCH_INCLUDE <dir>]
+#                             [SCOTCH_RENAMES <def>…]
+#                             [PTSCOTCH_RENAMES <def>…]): put the
 # ordering ``-D`` defines (-Dpord/-Dmetis/-Dscotch/-Dptscotch, each
 # gated on its MUMPS_HAVE_* flag) on a MUMPS Fortran target. The
 # analysis Fortran (ana_set_ordering.F, ana_orderings_wrappers_m.F,
@@ -490,12 +590,15 @@ endmacro()
 # the CPP renames binding bare SCOTCHF*/CONTEXT* Fortran calls to
 # the _mumps-suffixed archive symbols, plus the include dir for
 # INCLUDE 'scotchf.h' (ptscotchf.h shares it); PT-Scotch adds the
-# distributed rename set. FORTRAN_ONLY gates the plain defines to
-# Fortran (for targets whose C sources must not see them); the
-# renames are always Fortran-gated. Ordering-archive LINKS stay at
-# the call sites — each target wires them differently.
+# distributed rename set. Those three come in as arguments — see
+# _mumps_scotch_fortran_args() above, which every call site uses to
+# build them. FORTRAN_ONLY gates the plain defines to Fortran (for
+# targets whose C sources must not see them); the renames are always
+# Fortran-gated. Ordering-archive LINKS stay at the call sites — each
+# target wires them differently.
 function(_add_mumps_ordering_defines target)
-    cmake_parse_arguments(_MOD "FORTRAN_ONLY" "" "" ${ARGN})
+    cmake_parse_arguments(_MOD "FORTRAN_ONLY" "SCOTCH_INCLUDE"
+        "SCOTCH_RENAMES;PTSCOTCH_RENAMES" ${ARGN})
     foreach(_ord pord metis scotch ptscotch)
         string(TOUPPER "${_ord}" _ord_up)
         if(NOT MUMPS_HAVE_${_ord_up})
@@ -509,12 +612,12 @@ function(_add_mumps_ordering_defines target)
         endif()
         if(_ord STREQUAL "scotch")
             target_compile_definitions(${target} PRIVATE
-                $<$<COMPILE_LANGUAGE:Fortran>:${_scotch_f_renames}>)
+                $<$<COMPILE_LANGUAGE:Fortran>:${_MOD_SCOTCH_RENAMES}>)
             target_include_directories(${target} PRIVATE
-                $<BUILD_INTERFACE:${_mumps_scotch_inc}>)
+                $<BUILD_INTERFACE:${_MOD_SCOTCH_INCLUDE}>)
         elseif(_ord STREQUAL "ptscotch")
             target_compile_definitions(${target} PRIVATE
-                $<$<COMPILE_LANGUAGE:Fortran>:${_scotch_pt_f_renames}>)
+                $<$<COMPILE_LANGUAGE:Fortran>:${_MOD_PTSCOTCH_RENAMES}>)
         endif()
     endforeach()
 endfunction()
@@ -523,6 +626,7 @@ endfunction()
 # migrated ${LIB_PAIR_PREFIX}mumps solver archive and mumps_common;
 # consumes the MUMPS_HAVE_* gates via _add_mumps_ordering_defines.
 macro(_eplinalg_mumps_wire_migrated)
+    _mumps_scotch_fortran_args(_mumps_sc_args)
     if(TARGET ${LIB_PAIR_PREFIX}mumps)
         foreach(_dep ${LIB_PAIR_PREFIX}scalapack ${LIB_PAIR_PREFIX}lapack ${LIB_PAIR_PREFIX}blas)
             if(TARGET ${_dep})
@@ -555,7 +659,7 @@ macro(_eplinalg_mumps_wire_migrated)
         # Link the distributed increment BEFORE the sequential library
         # (upstream -lptscotch -lscotch order; scotch itself is reached
         # via mumps_common's folded C runtime).
-        _add_mumps_ordering_defines(${LIB_PAIR_PREFIX}mumps)
+        _add_mumps_ordering_defines(${LIB_PAIR_PREFIX}mumps ${_mumps_sc_args})
         if(MUMPS_HAVE_PTSCOTCH)
             target_link_libraries(${LIB_PAIR_PREFIX}mumps PUBLIC ptscotch)
         endif()
@@ -569,7 +673,7 @@ macro(_eplinalg_mumps_wire_migrated)
     # runtime too). The C-side force-includes and ordering-archive links
     # are added in the C-runtime block below.
     if(TARGET mumps_common)
-        _add_mumps_ordering_defines(mumps_common)
+        _add_mumps_ordering_defines(mumps_common ${_mumps_sc_args})
     endif()
 endmacro()
 
@@ -974,6 +1078,7 @@ macro(_eplinalg_mumps_genuine_dz_sc)
             ${_cmumps_F} ${_mumps_c_src}/cmumps_gpu.c)
         fortran_module_layout(scmumps)
 
+        _mumps_scotch_fortran_args(_mumps_sc_args)
         foreach(_g dzmumps scmumps)
             # _mumps_c_bridge_inc_shared carries mumps_int_def.h,
             # which the gpu-stub C pulls in via mumps_c_types.h.
@@ -990,7 +1095,7 @@ macro(_eplinalg_mumps_genuine_dz_sc)
                 $<$<COMPILE_LANGUAGE:C>:Add_>)
             # Ordering defines, Fortran-only: the ${ARITH}mumps_gpu.c
             # stubs in these archives never gate on them.
-            _add_mumps_ordering_defines(${_g} FORTRAN_ONLY)
+            _add_mumps_ordering_defines(${_g} FORTRAN_ONLY ${_mumps_sc_args})
             # Pristine upstream compiles within column limits, but
             # relieve line length anyway to match the migrated
             # archives and stay robust to compiler defaults.

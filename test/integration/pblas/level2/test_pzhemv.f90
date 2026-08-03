@@ -3,9 +3,7 @@ program test_pzhemv
     use compare,       only: max_rel_err_vec_z
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: zhemv
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix_z, gen_distrib_vector_z, &
                              gather_vector_z
     use target_pblas,  only: target_name, target_eps, target_pzhemv
@@ -14,8 +12,7 @@ program test_pzhemv
     integer, parameter :: ns(*) = [32, 80, 160]
     character(len=1), parameter :: uplos(*) = ['U', 'L']
     integer, parameter :: mb = 8
-    integer :: i, iu, n, info
-    integer :: locm_a, locn_a, locn_x, lld_a, lld_x
+    integer :: i, iu, n
     integer :: desca(9), descx(9), descy(9)
     character(len=1) :: uplo
     complex(ep), allocatable :: A_loc(:,:), x_loc(:), y_loc(:)
@@ -40,13 +37,9 @@ program test_pzhemv
             call gen_distrib_vector_z(n, mb, y_loc, y_glob, &
                                       seed = 5421 + 19 * i + 113 * iu)
 
-            locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(n, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-            locn_x = numroc_local(n, mb, my_row, 0, my_nprow); lld_x = max(1, locn_x)
-
-            call descinit_local(desca, n, n, mb, mb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
-            call descinit_local(descy, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
+            call local_desc(desca, n, n, mb, mb)
+            call local_desc(descx, n, 1, mb, 1)
+            call local_desc(descy, n, 1, mb, 1)
 
             call target_pzhemv(uplo, n, alpha, A_loc, 1, 1, desca, &
                                x_loc, 1, 1, descx, 1, beta, &

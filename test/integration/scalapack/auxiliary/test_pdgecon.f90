@@ -7,9 +7,9 @@ program test_pdgecon
     use compare,           only: rel_err_scalar
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use cond_helpers,      only: true_kappa1_general
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_nprow, &
+                                 my_npcol, my_row, my_col, numroc_local, &
+                                 local_desc
     use pblas_distrib,     only: gen_distrib_matrix, set_local_from_global
     use target_scalapack,  only: target_name, target_pdgecon, target_pdgetrf, &
                                  target_pdlange
@@ -46,7 +46,7 @@ program test_pdgecon
 
         locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
         locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         ! ANORM via the existing pdlange wrapper, taken on the
         ! original A *before* the in-place LU.

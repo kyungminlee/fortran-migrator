@@ -4,9 +4,9 @@ program test_pzunmbr
     use compare,           only: max_rel_err_mat_z
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,   only: zgebrd, zunmbr
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_nprow, &
+                                 my_npcol, my_row, my_col, numroc_local, &
+                                 local_desc
     use pblas_distrib,     only: gen_distrib_matrix_z, gather_matrix_z
     use target_scalapack,  only: target_name, target_eps, &
                                  target_pzgebrd, target_pzunmbr
@@ -21,7 +21,7 @@ program test_pzunmbr
     integer, parameter :: m_a = 64, n_a = 48
     integer, parameter :: mb = 8, nb = 8
     integer :: ic, mC, nC, k_arg, info, info_ref, lwork, mn
-    integer :: locm_a, locn_a, lld_a, locm_c, locn_c, lld_c
+    integer :: locm_a, locn_a
     integer :: desca(9), descc(9)
     complex(ep), allocatable :: A_loc(:,:), A_glob(:,:), C_loc(:,:), C_glob(:,:)
     complex(ep), allocatable :: A_ref(:,:), C_ref(:,:), C_got(:,:)
@@ -40,8 +40,8 @@ program test_pzunmbr
     call gen_distrib_matrix_z(m_a, n_a, mb, nb, A_loc, A_glob, seed = 24501)
 
     locm_a = numroc_local(m_a, mb, my_row, 0, my_nprow)
-    locn_a = numroc_local(n_a, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-    call descinit_local(desca, m_a, n_a, mb, nb, 0, 0, my_context, lld_a, info)
+    locn_a = numroc_local(n_a, nb, my_col, 0, my_npcol)
+    call local_desc(desca, m_a, n_a, mb, nb)
 
     allocate(d(max(1,locn_a)), e(max(1,locm_a)), &
              tauq(max(1,locn_a)), taup(max(1,locm_a)), work(1))
@@ -69,9 +69,7 @@ program test_pzunmbr
 
         call gen_distrib_matrix_z(mC, nC, mb, nb, C_loc, C_glob, seed = 24601 + 13*ic)
 
-        locm_c = numroc_local(mC, mb, my_row, 0, my_nprow)
-        locn_c = numroc_local(nC, nb, my_col, 0, my_npcol); lld_c = max(1, locm_c)
-        call descinit_local(descc, mC, nC, mb, nb, 0, 0, my_context, lld_c, info)
+        call local_desc(descc, mC, nC, mb, nb)
 
         allocate(work(1))
         call target_pzunmbr(vects(ic), sides(ic), transes(ic), &

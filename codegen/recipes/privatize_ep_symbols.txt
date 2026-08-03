@@ -10,7 +10,7 @@
 #
 # Contents: the union of the family-independent support symbols defined
 # by blacs_common, pblas_common, scalapack_common (incl. the TOOLS
-# helpers now hosted by scalapack_tools) and ptzblas_common -- i.e.
+# helpers) and ptzblas_common -- i.e.
 # everything the Netlib-derived engine exports under the same names as
 # MKL's proprietary BLACS/PBLAS/ScaLAPACK internals while disagreeing on
 # struct layout (BLACBUFF 48 vs 56 bytes). xblas has no collision and is

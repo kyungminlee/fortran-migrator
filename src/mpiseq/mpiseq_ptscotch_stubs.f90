@@ -11,7 +11,8 @@
 ! ``_seq`` link of those same archives resolves; a single-rank
 ! libmpiseq executable can never reach distributed ordering (MUMPS
 ! forces sequential analysis on one process), so like the rest of the
-! libmpiseq surface each stub prints "should not be called" and stops.
+! libmpiseq surface each stub prints "should not be called" and stops,
+! through the shared mpiseq_stop_stub.f90 body.
 ! Sequential Scotch (ICNTL(7)=3) is untouched — its symbols resolve
 ! from the ordinary scotch archive.
 !
@@ -33,30 +34,26 @@ subroutine SCOTCHFDGRAPHBUILD_MUMPS(grafdat, baseval, vertlocnbr, &
   integer :: edgelocnbr, edgelocsiz
   integer :: edgeloctab(*), edgegsttab(*), edloloctab(*)
   integer :: ierr
-  write(*,*) 'Error. SCOTCHFDGRAPHBUILD should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFDGRAPHBUILD')
 end subroutine SCOTCHFDGRAPHBUILD_MUMPS
 
 subroutine SCOTCHFDGRAPHEXIT_MUMPS(grafdat)
   implicit none
   double precision :: grafdat(*)
-  write(*,*) 'Error. SCOTCHFDGRAPHEXIT should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFDGRAPHEXIT')
 end subroutine SCOTCHFDGRAPHEXIT_MUMPS
 
 subroutine SCOTCHFDGRAPHORDERINIT_MUMPS(grafdat, ordedat, ierr)
   implicit none
   double precision :: grafdat(*), ordedat(*)
   integer :: ierr
-  write(*,*) 'Error. SCOTCHFDGRAPHORDERINIT should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFDGRAPHORDERINIT')
 end subroutine SCOTCHFDGRAPHORDERINIT_MUMPS
 
 subroutine SCOTCHFDGRAPHORDEREXIT_MUMPS(grafdat, ordedat)
   implicit none
   double precision :: grafdat(*), ordedat(*)
-  write(*,*) 'Error. SCOTCHFDGRAPHORDEREXIT should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFDGRAPHORDEREXIT')
 end subroutine SCOTCHFDGRAPHORDEREXIT_MUMPS
 
 subroutine SCOTCHFDGRAPHORDERCOMPUTE_MUMPS(grafdat, ordedat, stradat, &
@@ -64,8 +61,7 @@ subroutine SCOTCHFDGRAPHORDERCOMPUTE_MUMPS(grafdat, ordedat, stradat, &
   implicit none
   double precision :: grafdat(*), ordedat(*), stradat(*)
   integer :: ierr
-  write(*,*) 'Error. SCOTCHFDGRAPHORDERCOMPUTE should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFDGRAPHORDERCOMPUTE')
 end subroutine SCOTCHFDGRAPHORDERCOMPUTE_MUMPS
 
 subroutine SCOTCHFDGRAPHORDERGATHER_MUMPS(grafdat, dorddat, corddat, &
@@ -73,8 +69,7 @@ subroutine SCOTCHFDGRAPHORDERGATHER_MUMPS(grafdat, dorddat, corddat, &
   implicit none
   double precision :: grafdat(*), dorddat(*), corddat(*)
   integer :: ierr
-  write(*,*) 'Error. SCOTCHFDGRAPHORDERGATHER should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFDGRAPHORDERGATHER')
 end subroutine SCOTCHFDGRAPHORDERGATHER_MUMPS
 
 subroutine SCOTCHFDGRAPHCORDERINIT_MUMPS(grafdat, corddat, permtab, &
@@ -83,15 +78,13 @@ subroutine SCOTCHFDGRAPHCORDERINIT_MUMPS(grafdat, corddat, permtab, &
   double precision :: grafdat(*), corddat(*)
   integer :: permtab(*), peritab(*), rangtab(*), treetab(*)
   integer :: cblknbr, ierr
-  write(*,*) 'Error. SCOTCHFDGRAPHCORDERINIT should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFDGRAPHCORDERINIT')
 end subroutine SCOTCHFDGRAPHCORDERINIT_MUMPS
 
 subroutine SCOTCHFDGRAPHCORDEREXIT_MUMPS(grafdat, corddat)
   implicit none
   double precision :: grafdat(*), corddat(*)
-  write(*,*) 'Error. SCOTCHFDGRAPHCORDEREXIT should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFDGRAPHCORDEREXIT')
 end subroutine SCOTCHFDGRAPHCORDEREXIT_MUMPS
 
 subroutine SCOTCHFSTRATDGRAPHORDER_MUMPS(stradat, string, ierr)
@@ -99,8 +92,7 @@ subroutine SCOTCHFSTRATDGRAPHORDER_MUMPS(stradat, string, ierr)
   double precision :: stradat(*)
   character(len=*) :: string
   integer :: ierr
-  write(*,*) 'Error. SCOTCHFSTRATDGRAPHORDER should not be called.'
-  stop
+  call mpiseq_stop_stub('SCOTCHFSTRATDGRAPHORDER')
 end subroutine SCOTCHFSTRATDGRAPHORDER_MUMPS
 
 ! C-side twin: mumps_scotch.c's MUMPS_DGRAPHINIT calls
@@ -113,7 +105,8 @@ integer(c_int) function SCOTCH_dgraphInit_mumps(grafptr, comm) &
   implicit none
   type(c_ptr), value :: grafptr
   integer(c_int), value :: comm
-  write(*,*) 'Error. SCOTCH_dgraphInit should not be called.'
+  call mpiseq_stop_stub('SCOTCH_dgraphInit')
+  ! Never reached — the helper stops. Kept so the function result is
+  ! defined on every path as far as the compiler can see.
   SCOTCH_dgraphInit_mumps = 1
-  stop
 end function SCOTCH_dgraphInit_mumps

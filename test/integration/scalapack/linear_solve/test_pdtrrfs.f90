@@ -10,9 +10,9 @@ program test_pdtrrfs
     use compare,           only: max_rel_err_vec
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,   only: dtrrfs
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_nprow, &
+                                 my_npcol, my_row, my_col, numroc_local, &
+                                 local_desc
     use pblas_distrib,     only: gen_distrib_matrix, gather_matrix, &
                                  scatter_matrix
     use target_scalapack,  only: target_name, target_eps, target_pdtrrfs
@@ -22,7 +22,7 @@ program test_pdtrrfs
     integer, parameter :: nrhs = 2
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref, lwork, liwork, k, j
-    integer :: locm_a, locn_a, lld_a, locm_b, locn_b, lld_b
+    integer :: locm_b, locn_b, lld_b
     integer :: desca(9), descb(9), descx(9)
     integer :: ig, jg
     real(ep), allocatable :: T_loc(:,:), T_glob(:,:)
@@ -61,11 +61,9 @@ program test_pdtrrfs
         B_loc = 0.0_ep
         call scatter_matrix(n, nrhs, mb, nb, B_glob, B_loc)
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, n, n,    mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descb, n, nrhs, mb, nb, 0, 0, my_context, lld_b, info)
-        call descinit_local(descx, n, nrhs, mb, nb, 0, 0, my_context, lld_b, info)
+        call local_desc(desca, n, n,    mb, nb)
+        call local_desc(descb, n, nrhs, mb, nb)
+        call local_desc(descx, n, nrhs, mb, nb)
 
         allocate(ferr(nrhs), berr(nrhs))
         allocate(work(1), iwork(1))

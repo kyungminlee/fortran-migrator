@@ -49,13 +49,6 @@ else()
     endif()
 endif()
 
-# ── Dedicated module directory ──────────────────────────────────────
-# The shared tests/common helper modules are compiled once per suite
-# (with per-suite reporter macros), so a per-tree mod dir keeps each
-# tree's .mod files isolated in the shared fmod_tests/ tree.
-set(_pb_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}/pblas_tests")
-file(MAKE_DIRECTORY ${_pb_moddir})
-
 # ── Common helper modules ───────────────────────────────────────────
 # pblas_distrib is a fypp template (one body instantiated for the real
 # and complex families) — expand it into this suite's binary dir.
@@ -73,28 +66,18 @@ add_library(pblas_test_common STATIC
     ../common/pblas_grid.F90
     ${_pb_distrib_src}
 )
-set_target_properties(pblas_test_common PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_pb_moddir}"
-)
+fortran_test_module_layout(pblas_test_common SUBDIR pblas_tests)
 # MPI reporter: rank 0 writes the JSON, report_finalize broadcasts the
 # pass/fail flag — see tests/common/prec_report.F90.
 target_compile_definitions(pblas_test_common PRIVATE PREC_REPORT_MPI)
-target_include_directories(pblas_test_common PUBLIC
-    $<BUILD_INTERFACE:${_pb_moddir}>
+# Under a baseline build (kind4/kind8) LIB_PAIR_PREFIX is empty, so the
+# prefixed name resolves to the standard Netlib archive — which is what
+# baseline wants; only migrated targets build a prefixed one.
+target_link_libraries(pblas_test_common PUBLIC
+    refblas_quad
+    ${LIB_PAIR_PREFIX}blacs
+    MPI::MPI_Fortran
 )
-if(BASELINE_BUILD)
-    target_link_libraries(pblas_test_common PUBLIC
-        refblas_quad
-        blacs
-        MPI::MPI_Fortran
-    )
-else()
-    target_link_libraries(pblas_test_common PUBLIC
-        refblas_quad
-        ${LIB_PAIR_PREFIX}blacs
-        MPI::MPI_Fortran
-    )
-endif()
 
 # ── Per-target wrapper module ───────────────────────────────────────
 set(_wrapper_dir ${CMAKE_CURRENT_SOURCE_DIR}/target_${TARGET_NAME})
@@ -109,25 +92,12 @@ add_fypp_source(_pblas_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(pblas_test_target STATIC ${_pblas_wrapper_src})
-set_target_properties(pblas_test_target PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_pb_moddir}"
+fortran_test_module_layout(pblas_test_target SUBDIR pblas_tests)
+target_link_libraries(pblas_test_target PUBLIC
+    pblas_test_common
+    target_conv
+    ${LIB_PAIR_PREFIX}pblas
 )
-target_include_directories(pblas_test_target PUBLIC
-    $<BUILD_INTERFACE:${_pb_moddir}>
-)
-if(BASELINE_BUILD)
-    target_link_libraries(pblas_test_target PUBLIC
-        pblas_test_common
-        target_conv
-        pblas
-    )
-else()
-    target_link_libraries(pblas_test_target PUBLIC
-        pblas_test_common
-        target_conv
-        ${LIB_PAIR_PREFIX}pblas
-    )
-endif()
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(pblas_test_target PUBLIC multifloatsf)
 endif()

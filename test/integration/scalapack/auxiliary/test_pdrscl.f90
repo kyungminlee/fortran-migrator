@@ -4,17 +4,14 @@ program test_pdrscl
     use prec_kinds,       only: ep
     use compare,          only: max_rel_err_vec
     use pblas_prec_report, only: report_init, report_case, report_finalize
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_matrix
     use target_scalapack, only: target_name, target_eps, target_pdrscl
     implicit none
 
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, n, info
-    integer :: locm_x, lld_x
+    integer :: i, n
     integer :: descx(9)
     real(ep), allocatable :: x_loc(:,:), x_glob(:,:), x_got(:,:)
     real(ep) :: sa, err, tol
@@ -29,8 +26,7 @@ program test_pdrscl
         call gen_distrib_matrix(n, 1, mb, nb, x_loc, x_glob, seed = 23201 + 31*i)
         sa = 7.0_ep + 0.1_ep * real(i, ep)
 
-        locm_x = numroc_local(n, mb, my_row, 0, my_nprow); lld_x = max(1, locm_x)
-        call descinit_local(descx, n, 1, mb, nb, 0, 0, my_context, lld_x, info)
+        call local_desc(descx, n, 1, mb, nb)
 
         call target_pdrscl(n, sa, x_loc, 1, 1, descx, 1)
         call gather_matrix(n, 1, mb, nb, x_loc, x_got)

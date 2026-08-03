@@ -5,9 +5,7 @@ program test_pdtrtri
     use compare,          only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dtrtri
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_matrix, &
                                 set_local_from_global
     use target_scalapack, only: target_name, target_eps, target_pdtrtri
@@ -18,7 +16,6 @@ program test_pdtrtri
     character(len=1), parameter :: uplos(*) = [character(len=1) :: 'U', 'L']
     character(len=1), parameter :: diags(*) = [character(len=1) :: 'N', 'U']
     integer :: i, ku, kd, n, info, info_ref, k
-    integer :: locm_a, locn_a, lld_a
     integer :: desca(9)
     integer :: ig, jg
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:), A_ref(:,:)
@@ -40,9 +37,7 @@ program test_pdtrtri
                     call set_local_from_global(k, k, A_glob(k, k), mb, nb, A_loc)
                 end do
 
-                locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-                locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-                call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+                call local_desc(desca, n, n, mb, nb)
 
                 call target_pdtrtri(uplos(ku), diags(kd), n, A_loc, 1, 1, desca, info)
                 call gather_matrix(n, n, mb, nb, A_loc, A_got)

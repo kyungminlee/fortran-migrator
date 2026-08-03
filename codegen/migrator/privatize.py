@@ -2,8 +2,7 @@
 
 The family-independent support archives of the extended-precision stack
 (``blacs_common``, ``pblas_common``, ``scalapack_common``,
-``ptzblas_common``, plus the ``scalapack_tools`` helpers) are built from
-Netlib sources and export the same symbol names as MKL's proprietary
+``ptzblas_common``) are built from Netlib sources and export the same symbol names as MKL's proprietary
 BLACS/PBLAS/ScaLAPACK internals — while disagreeing on internal struct
 layout (``BLACBUFF`` is 48 bytes in the Netlib engine, 56 in MKL's).
 A consumer linking both gets exactly one definition per name

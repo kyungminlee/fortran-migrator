@@ -6,9 +6,9 @@ program test_pzgesvd
     use compare,          only: max_rel_err_vec
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zgesvd
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z
     use target_scalapack, only: target_name, target_eps, target_pzgesvd
     implicit none
@@ -17,7 +17,7 @@ program test_pzgesvd
     integer, parameter :: ns(*) = [32, 48, 64]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, m, n, info, info_ref, lwork, minmn, lrwork
-    integer :: locm_a, locn_a, lld_a, locm_u, locn_vt, lld_u, lld_vt
+    integer :: locm_u, locn_vt, lld_u, lld_vt
     integer :: desca(9), descu(9), descvt(9)
     complex(ep), allocatable :: A_loc(:,:), U_loc(:,:), VT_loc(:,:)
     complex(ep), allocatable :: A_glob(:,:), A_ref(:,:)
@@ -34,14 +34,12 @@ program test_pzgesvd
         m = ms(i); n = ns(i); minmn = min(m, n)
         call gen_distrib_matrix_z(m, n, mb, nb, A_loc, A_glob, seed = 21501 + 31*i)
 
-        locm_a  = numroc_local(m, mb, my_row, 0, my_nprow)
-        locn_a  = numroc_local(n, nb, my_col, 0, my_npcol); lld_a  = max(1, locm_a)
         locm_u  = numroc_local(m,     mb, my_row, 0, my_nprow); lld_u  = max(1, locm_u)
         locn_vt = numroc_local(n,     nb, my_col, 0, my_npcol)
         lld_vt  = max(1, numroc_local(minmn, mb, my_row, 0, my_nprow))
-        call descinit_local(desca,  m, n, mb, nb, 0, 0, my_context, lld_a,  info)
-        call descinit_local(descu,  m, minmn, mb, nb, 0, 0, my_context, lld_u,  info)
-        call descinit_local(descvt, minmn, n, mb, nb, 0, 0, my_context, lld_vt, info)
+        call local_desc(desca,  m, n, mb, nb)
+        call local_desc(descu,  m, minmn, mb, nb)
+        call local_desc(descvt, minmn, n, mb, nb)
 
         allocate(U_loc(lld_u, max(1, numroc_local(minmn, nb, my_col, 0, my_npcol))))
         allocate(VT_loc(lld_vt, max(1, locn_vt)))
