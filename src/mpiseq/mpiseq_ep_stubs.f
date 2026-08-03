@@ -17,25 +17,19 @@ C***********************************************************************
       IMPLICIT NONE
       INTEGER CNTXT, NPROW, NPCOL
       CHARACTER C
-        WRITE(*,*) 'Error. EP_BLACS_GRIDINIT should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('EP_BLACS_GRIDINIT')
       END SUBROUTINE ep_blacs_gridinit
 C***********************************************************************
       SUBROUTINE ep_blacs_gridinfo( CNTXT, NPROW, NPCOL, MYROW, MYCOL )
       IMPLICIT NONE
       INTEGER CNTXT, NPROW, NPCOL, MYROW, MYCOL
-        WRITE(*,*) 'Error. EP_BLACS_GRIDINFO should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('EP_BLACS_GRIDINFO')
       END SUBROUTINE ep_blacs_gridinfo
 C***********************************************************************
       SUBROUTINE ep_blacs_gridexit( CNTXT )
       IMPLICIT NONE
       INTEGER CNTXT
-        WRITE(*,*) 'Error. EP_BLACS_GRIDEXIT should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('EP_BLACS_GRIDEXIT')
       END SUBROUTINE ep_blacs_gridexit
 C***********************************************************************
       SUBROUTINE ep_descinit( DESC, M, N, MB, NB, IRSRC, ICSRC,
@@ -43,7 +37,5 @@ C***********************************************************************
       IMPLICIT NONE
       INTEGER ICSRC, ICTXT, INFO, IRSRC, LLD, M, MB, N, NB
       INTEGER DESC( * )
-        WRITE(*,*) 'Error. EP_DESCINIT should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('EP_DESCINIT')
       END SUBROUTINE ep_descinit

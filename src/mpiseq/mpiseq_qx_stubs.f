@@ -16,7 +16,8 @@ C  prefixes: Q/X (kind16, REAL*16) and E/Y (kind10, REAL*10).
 C
 C  Each stub mirrors upstream's pattern exactly: print "should not be
 C  called", STOP. Single-rank operation never reaches them; they exist
-C  only so the link resolves.
+C  only so the link resolves. That body lives once, in
+C  mpiseq_stop_stub.f90, and every stub here calls it.
 C
 C  Multifloats prefixes (M, W) live in mpiseq_mw_stubs.f90 — kept in a
 C  separate free-form file because the stubs require TYPE(real64x2) /
@@ -28,9 +29,7 @@ C***********************************************************************
       INTEGER            IA, INFO, JA, M, N
       INTEGER            DESCA( * ), IPIV( * )
       REAL*16            A( * )
-        WRITE(*,*) 'Error. PQGETRF should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PQGETRF')
       END SUBROUTINE PQGETRF
 C***********************************************************************
       SUBROUTINE PQGETRS( TRANS, N, NRHS, A, IA, JA, DESCA, IPIV,
@@ -40,9 +39,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * ), IPIV( * )
       REAL*16            A( * ), B( * )
-        WRITE(*,*) 'Error. PQGETRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PQGETRS')
       END SUBROUTINE PQGETRS
 C***********************************************************************
       SUBROUTINE PQPOTRF( UPLO, N, A, IA, JA, DESCA, INFO )
@@ -51,9 +48,7 @@ C***********************************************************************
       INTEGER            IA, INFO, JA, N
       INTEGER            DESCA( * )
       REAL*16            A( * )
-        WRITE(*,*) 'Error. PQPOTRF should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PQPOTRF')
       END SUBROUTINE PQPOTRF
 C***********************************************************************
       SUBROUTINE PQPOTRS( UPLO, N, NRHS, A, IA, JA, DESCA,
@@ -63,9 +58,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * )
       REAL*16            A( * ), B( * )
-        WRITE(*,*) 'Error. PQPOTRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PQPOTRS')
       END SUBROUTINE PQPOTRS
 C***********************************************************************
       SUBROUTINE PQTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, IA, JA, DESCA,
@@ -75,9 +68,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * )
       REAL*16            A( * ), B( * )
-        WRITE(*,*) 'Error. PQTRTRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PQTRTRS')
       END SUBROUTINE PQTRTRS
 C***********************************************************************
       SUBROUTINE PXGETRF( M, N, A, IA, JA, DESCA, IPIV, INFO )
@@ -85,9 +76,7 @@ C***********************************************************************
       INTEGER            IA, INFO, JA, M, N
       INTEGER            DESCA( * ), IPIV( * )
       COMPLEX*32         A( * )
-        WRITE(*,*) 'Error. PXGETRF should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PXGETRF')
       END SUBROUTINE PXGETRF
 C***********************************************************************
       SUBROUTINE PXGETRS( TRANS, N, NRHS, A, IA, JA, DESCA, IPIV,
@@ -97,9 +86,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * ), IPIV( * )
       COMPLEX*32         A( * ), B( * )
-        WRITE(*,*) 'Error. PXGETRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PXGETRS')
       END SUBROUTINE PXGETRS
 C***********************************************************************
       SUBROUTINE PXPOTRF( UPLO, N, A, IA, JA, DESCA, INFO )
@@ -108,9 +95,7 @@ C***********************************************************************
       INTEGER            IA, INFO, JA, N
       INTEGER            DESCA( * )
       COMPLEX*32         A( * )
-        WRITE(*,*) 'Error. PXPOTRF should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PXPOTRF')
       END SUBROUTINE PXPOTRF
 C***********************************************************************
       SUBROUTINE PXPOTRS( UPLO, N, NRHS, A, IA, JA, DESCA,
@@ -120,9 +105,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * )
       COMPLEX*32         A( * ), B( * )
-        WRITE(*,*) 'Error. PXPOTRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PXPOTRS')
       END SUBROUTINE PXPOTRS
 C***********************************************************************
       SUBROUTINE PXTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, IA, JA, DESCA,
@@ -132,9 +115,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * )
       COMPLEX*32         A( * ), B( * )
-        WRITE(*,*) 'Error. PXTRTRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PXTRTRS')
       END SUBROUTINE PXTRTRS
 C***********************************************************************
       SUBROUTINE PEGETRF( M, N, A, IA, JA, DESCA, IPIV, INFO )
@@ -142,9 +123,7 @@ C***********************************************************************
       INTEGER            IA, INFO, JA, M, N
       INTEGER            DESCA( * ), IPIV( * )
       REAL*10            A( * )
-        WRITE(*,*) 'Error. PEGETRF should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PEGETRF')
       END SUBROUTINE PEGETRF
 C***********************************************************************
       SUBROUTINE PEGETRS( TRANS, N, NRHS, A, IA, JA, DESCA, IPIV,
@@ -154,9 +133,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * ), IPIV( * )
       REAL*10            A( * ), B( * )
-        WRITE(*,*) 'Error. PEGETRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PEGETRS')
       END SUBROUTINE PEGETRS
 C***********************************************************************
       SUBROUTINE PEPOTRF( UPLO, N, A, IA, JA, DESCA, INFO )
@@ -165,9 +142,7 @@ C***********************************************************************
       INTEGER            IA, INFO, JA, N
       INTEGER            DESCA( * )
       REAL*10            A( * )
-        WRITE(*,*) 'Error. PEPOTRF should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PEPOTRF')
       END SUBROUTINE PEPOTRF
 C***********************************************************************
       SUBROUTINE PEPOTRS( UPLO, N, NRHS, A, IA, JA, DESCA,
@@ -177,9 +152,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * )
       REAL*10            A( * ), B( * )
-        WRITE(*,*) 'Error. PEPOTRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PEPOTRS')
       END SUBROUTINE PEPOTRS
 C***********************************************************************
       SUBROUTINE PETRTRS( UPLO, TRANS, DIAG, N, NRHS, A, IA, JA, DESCA,
@@ -189,9 +162,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * )
       REAL*10            A( * ), B( * )
-        WRITE(*,*) 'Error. PETRTRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PETRTRS')
       END SUBROUTINE PETRTRS
 C***********************************************************************
       SUBROUTINE PYGETRF( M, N, A, IA, JA, DESCA, IPIV, INFO )
@@ -199,9 +170,7 @@ C***********************************************************************
       INTEGER            IA, INFO, JA, M, N
       INTEGER            DESCA( * ), IPIV( * )
       COMPLEX*20         A( * )
-        WRITE(*,*) 'Error. PYGETRF should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PYGETRF')
       END SUBROUTINE PYGETRF
 C***********************************************************************
       SUBROUTINE PYGETRS( TRANS, N, NRHS, A, IA, JA, DESCA, IPIV,
@@ -211,9 +180,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * ), IPIV( * )
       COMPLEX*20         A( * ), B( * )
-        WRITE(*,*) 'Error. PYGETRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PYGETRS')
       END SUBROUTINE PYGETRS
 C***********************************************************************
       SUBROUTINE PYPOTRF( UPLO, N, A, IA, JA, DESCA, INFO )
@@ -222,9 +189,7 @@ C***********************************************************************
       INTEGER            IA, INFO, JA, N
       INTEGER            DESCA( * )
       COMPLEX*20         A( * )
-        WRITE(*,*) 'Error. PYPOTRF should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PYPOTRF')
       END SUBROUTINE PYPOTRF
 C***********************************************************************
       SUBROUTINE PYPOTRS( UPLO, N, NRHS, A, IA, JA, DESCA,
@@ -234,9 +199,7 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * )
       COMPLEX*20         A( * ), B( * )
-        WRITE(*,*) 'Error. PYPOTRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PYPOTRS')
       END SUBROUTINE PYPOTRS
 C***********************************************************************
       SUBROUTINE PYTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, IA, JA, DESCA,
@@ -246,7 +209,5 @@ C***********************************************************************
       INTEGER            IA, IB, INFO, JA, JB, N, NRHS
       INTEGER            DESCA( * ), DESCB( * )
       COMPLEX*20         A( * ), B( * )
-        WRITE(*,*) 'Error. PYTRTRS should not be called.'
-        STOP
-      RETURN
+        CALL MPISEQ_STOP_STUB('PYTRTRS')
       END SUBROUTINE PYTRTRS

@@ -61,47 +61,41 @@ MPI_Fint mf_mpi_ww_amn_f      = 0;
  * 8-byte aligned) — true for every caller, since the buffers originate
  * as Fortran TYPE(real64x2)/TYPE(cmplx64x2) arrays or their C mirrors. */
 
-static void mm_sum_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<float64x2 *>(in);
-    auto *b = static_cast<float64x2 *>(inout);
-    for (int i = 0; i < *len; ++i) b[i] = b[i] + a[i];
+/* All six ops are the same MPI_User_function: walk *len elements of the
+ * two buffers as T and fold each ``in`` element into its ``inout``
+ * counterpart. Only that fold differs, so it is the template's second
+ * parameter and the loop is written once. Combine is a function
+ * (non-type) parameter rather than a functor type, so every
+ * instantiation is a plain function with MPI's exact signature and
+ * inlines the fold the same way the hand-written copies did. */
+template <typename T, void Combine(const T &, T &)>
+static void mf_user_op(void *in, void *inout, int *len, MPI_Datatype *) {
+    auto *a = static_cast<T *>(in);
+    auto *b = static_cast<T *>(inout);
+    for (int i = 0; i < *len; ++i) Combine(a[i], b[i]);
 }
 
-static void ww_sum_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<complex64x2 *>(in);
-    auto *b = static_cast<complex64x2 *>(inout);
-    for (int i = 0; i < *len; ++i) {
-        b[i].re = b[i].re + a[i].re;
-        b[i].im = b[i].im + a[i].im;
-    }
+static void mm_sum(const float64x2 &a, float64x2 &b) { b = b + a; }
+
+static void ww_sum(const complex64x2 &a, complex64x2 &b) {
+    b.re = b.re + a.re;
+    b.im = b.im + a.im;
 }
 
-static void mm_amx_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<float64x2 *>(in);
-    auto *b = static_cast<float64x2 *>(inout);
-    for (int i = 0; i < *len; ++i)
-        if (mf_abs(a[i]) > mf_abs(b[i])) b[i] = a[i];
+static void mm_amx(const float64x2 &a, float64x2 &b) {
+    if (mf_abs(a) > mf_abs(b)) b = a;
 }
 
-static void mm_amn_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<float64x2 *>(in);
-    auto *b = static_cast<float64x2 *>(inout);
-    for (int i = 0; i < *len; ++i)
-        if (mf_abs(a[i]) < mf_abs(b[i])) b[i] = a[i];
+static void mm_amn(const float64x2 &a, float64x2 &b) {
+    if (mf_abs(a) < mf_abs(b)) b = a;
 }
 
-static void ww_amx_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<complex64x2 *>(in);
-    auto *b = static_cast<complex64x2 *>(inout);
-    for (int i = 0; i < *len; ++i)
-        if (mf_cabs1(a[i]) > mf_cabs1(b[i])) b[i] = a[i];
+static void ww_amx(const complex64x2 &a, complex64x2 &b) {
+    if (mf_cabs1(a) > mf_cabs1(b)) b = a;
 }
 
-static void ww_amn_fn(void *in, void *inout, int *len, MPI_Datatype *) {
-    auto *a = static_cast<complex64x2 *>(in);
-    auto *b = static_cast<complex64x2 *>(inout);
-    for (int i = 0; i < *len; ++i)
-        if (mf_cabs1(a[i]) < mf_cabs1(b[i])) b[i] = a[i];
+static void ww_amn(const complex64x2 &a, complex64x2 &b) {
+    if (mf_cabs1(a) < mf_cabs1(b)) b = a;
 }
 
 /* ---- One-time registration -------------------------------------- */
@@ -121,12 +115,18 @@ extern "C" void multifloats_mpi_init(void) {
     MPI_Type_contiguous(4, MPI_DOUBLE, &MPI_COMPLEX64X2);
     MPI_Type_commit(&MPI_COMPLEX64X2);
 
-    MPI_Op_create(mm_sum_fn, EP_MPI_OP_COMMUTE, &MPI_MM_SUM);
-    MPI_Op_create(ww_sum_fn, EP_MPI_OP_COMMUTE, &MPI_WW_SUM);
-    MPI_Op_create(mm_amx_fn, EP_MPI_OP_COMMUTE, &MPI_MM_AMX);
-    MPI_Op_create(mm_amn_fn, EP_MPI_OP_COMMUTE, &MPI_MM_AMN);
-    MPI_Op_create(ww_amx_fn, EP_MPI_OP_COMMUTE, &MPI_WW_AMX);
-    MPI_Op_create(ww_amn_fn, EP_MPI_OP_COMMUTE, &MPI_WW_AMN);
+    MPI_Op_create(mf_user_op<float64x2, mm_sum>,
+                  EP_MPI_OP_COMMUTE, &MPI_MM_SUM);
+    MPI_Op_create(mf_user_op<complex64x2, ww_sum>,
+                  EP_MPI_OP_COMMUTE, &MPI_WW_SUM);
+    MPI_Op_create(mf_user_op<float64x2, mm_amx>,
+                  EP_MPI_OP_COMMUTE, &MPI_MM_AMX);
+    MPI_Op_create(mf_user_op<float64x2, mm_amn>,
+                  EP_MPI_OP_COMMUTE, &MPI_MM_AMN);
+    MPI_Op_create(mf_user_op<complex64x2, ww_amx>,
+                  EP_MPI_OP_COMMUTE, &MPI_WW_AMX);
+    MPI_Op_create(mf_user_op<complex64x2, ww_amn>,
+                  EP_MPI_OP_COMMUTE, &MPI_WW_AMN);
 
     mf_mpi_float64x2_f   = MPI_Type_c2f(MPI_FLOAT64X2);
     mf_mpi_complex64x2_f = MPI_Type_c2f(MPI_COMPLEX64X2);

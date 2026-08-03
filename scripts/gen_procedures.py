@@ -114,7 +114,15 @@ def collect(library: str, p_prefix: str) -> dict[str, dict[str, dict[str, str | 
     return out
 
 
-def write_table(out, library: str, by_fam: dict, p_prefix: str = "") -> None:
+def header_rows(first_col: str) -> str:
+    """Markdown header + separator for a table whose columns after the
+    first are the targets, in TARGETS order."""
+    cols = [first_col, *TARGETS]
+    return ("| " + " | ".join(cols) + " |\n"
+            + "|" + "|".join("-" * (len(c) + 2) for c in cols) + "|\n")
+
+
+def write_table(out, library: str, by_fam: dict) -> None:
     out.write(f"\n## {library}\n\n")
     total = 0
     for fam in FAMILIES:
@@ -122,8 +130,7 @@ def write_table(out, library: str, by_fam: dict, p_prefix: str = "") -> None:
         if not stems:
             continue
         out.write(f"\n### {library} — {FAMILY_LABEL[fam]} ({len(stems)} stems)\n\n")
-        out.write("| stem | single | double | kind10 | kind16 | multifloats |\n")
-        out.write("|------|--------|--------|--------|--------|-------------|\n")
+        out.write(header_rows("stem"))
         for stem in stems:
             cells = by_fam[fam][stem]
             row = [stem]
@@ -168,8 +175,7 @@ def main():
         f.write("references at `extern/lapack-3.12.1/{BLAS,LAPACK}/SRC` and\n")
         f.write("`extern/scalapack-2.2.3/{PBLAS,SRC}`.\n\n")
         f.write("**Prefix map**\n\n")
-        f.write("| family | single | double | kind10 | kind16 | multifloats |\n")
-        f.write("|--------|--------|--------|--------|--------|-------------|\n")
+        f.write(header_rows("family"))
         labels = [("R", "real (R)"), ("C", "complex (C)"),
                   ("RC", "real-from-complex (RC)"),
                   ("CR", "complex-with-real-scalar (CR)"),

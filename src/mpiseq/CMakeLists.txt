@@ -67,6 +67,10 @@ add_library(mpiseq STATIC
     # only when NEEDS_MULTIFLOATS — they need TYPE(real64x2) /
     # TYPE(cmplx64x2) from the multifloats Fortran module.
     ${CMAKE_CURRENT_SOURCE_DIR}/mpiseq_qx_stubs.f
+    # The abort body all of the above share, in its own translation
+    # unit so calling it never drags a stub file's other symbols into
+    # a link (see the header comment there).
+    ${CMAKE_CURRENT_SOURCE_DIR}/mpiseq_stop_stub.f90
 )
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_sources(mpiseq PRIVATE

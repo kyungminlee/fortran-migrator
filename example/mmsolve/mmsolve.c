@@ -29,8 +29,6 @@
  *   mpirun -n 4 ./mmsolve -t d A.mtx b.mtx x.mtx
  */
 
-#include <float.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,8 +90,13 @@ static void quiet_icntl(int *icntl) {
  * no PT-Scotch, so it is not offered there. */
 enum { ORD_DEFAULT = 0, ORD_PORD, ORD_SCOTCH, ORD_METIS, ORD_PTSCOTCH };
 static int g_ordering = ORD_DEFAULT;
-static int g_infog7   = -1;   /* INFOG(7): ordering method MUMPS actually used */
-static int g_infog32  = -1;   /* INFOG(32): analysis type used (1=seq, 2=parallel) */
+
+/* What one solve reports back. INFOG(1) is the status the caller branches
+ * on; INFOG(7) (ordering method MUMPS actually used) and INFOG(32)
+ * (analysis type: 1=seq, 2=parallel) are diagnostics printed on success.
+ * The two diagnostics stay -1 when the solve fails before analysis has
+ * set them. */
+struct solve_result { int infog1, infog7, infog32; };
 
 static void set_ordering(int *icntl) {
     /* 0-based: ICNTL(7)=icntl[6], ICNTL(28)=icntl[27], ICNTL(29)=icntl[28]. */
@@ -127,12 +130,12 @@ static int ordering_from_name(const char *s) {
  * the per-element conversion statements run inside the host-side loops
  * (index k over a[], index i over rhs[]/xr[]/xi[]). */
 #define GEN_SOLVE(NAME, STRUC, CFUN, VALT, PRE, FILL_A, FILL_RHS, EXTRACT_X)     \
-static int NAME(const MM *A, const MM *b, int is_host, int sym, int verbose,     \
-                double *xr, double *xi) {                                        \
+static struct solve_result NAME(const MM *A, const MM *b, int is_host, int sym,  \
+                int verbose, double *xr, double *xi) {                           \
     PRE                                                                          \
     STRUC id; memset(&id, 0, sizeof id);                                         \
     MUMPS_INT *irn = NULL, *jcn = NULL; VALT *a = NULL, *rhs = NULL;             \
-    int n = 0; long nz = 0; int infog1 = 0;                                      \
+    int n = 0; long nz = 0; struct solve_result res = {0, -1, -1};               \
     if (is_host) {                                                               \
         n = A->n; nz = A->nnz;                                                   \
         irn = malloc(sizeof(MUMPS_INT) * (size_t)nz);                            \
@@ -146,20 +149,20 @@ static int NAME(const MM *A, const MM *b, int is_host, int sym, int verbose,    
     id.par = 1; id.sym = sym;                                                    \
     id.comm_fortran = (MUMPS_INT)MPI_Comm_c2f(MPI_COMM_WORLD);                   \
     id.job = JOB_INIT; CFUN(&id);                                                \
-    if (id.infog[0] < 0) { infog1 = id.infog[0]; goto cleanup; }                 \
+    if (id.infog[0] < 0) { res.infog1 = id.infog[0]; goto cleanup; }             \
     if (!verbose) quiet_icntl(id.icntl);                                         \
     set_ordering(id.icntl);                                                      \
     if (is_host) { id.n = n; id.nnz = (MUMPS_INT8)nz;                            \
                    id.irn = irn; id.jcn = jcn; id.a = a; id.rhs = rhs; }         \
     id.job = JOB_ANALYZE_FACTOR_SOLVE; CFUN(&id);                                \
-    if (id.infog[0] < 0) { infog1 = id.infog[0]; id.job = JOB_END; CFUN(&id); goto cleanup; } \
-    g_infog7 = id.infog[6];  /* INFOG(7): ordering actually used */               \
-    g_infog32 = id.infog[31];  /* INFOG(32): analysis type (1=seq, 2=parallel) */ \
+    if (id.infog[0] < 0) { res.infog1 = id.infog[0]; id.job = JOB_END; CFUN(&id); goto cleanup; } \
+    res.infog7 = id.infog[6];                                                    \
+    res.infog32 = id.infog[31];                                                  \
     if (is_host) for (int i = 0; i < n; i++) { EXTRACT_X }                       \
     id.job = JOB_END; CFUN(&id);                                                 \
 cleanup:                                                                         \
     free(irn); free(jcn); free(a); free(rhs);                                    \
-    return infog1;                                                               \
+    return res;                                                                  \
 }
 
 /* ── real solve (s, d, e, q): plain scalar cast in and out ───────────*/
@@ -218,7 +221,8 @@ GEN_CPLX_DD(solve_w, WMUMPS_STRUC_C, wmumps_c, mumps_complex64x2)
  * letters, the real/complex family split, and solver dispatch. */
 static const struct solver {
     char letter;
-    int (*solve)(const MM *, const MM *, int, int, int, double *, double *);
+    struct solve_result (*solve)(const MM *, const MM *, int, int, int,
+                                 double *, double *);
     int is_complex;
 } solvers[] = {
     {'s', solve_s, 0}, {'c', solve_c, 1},
@@ -308,16 +312,16 @@ int main(int argc, char **argv)
     if (is_host) { xr = calloc((size_t)n, sizeof(double));
                    if (is_cplx) xi = calloc((size_t)n, sizeof(double)); }
 
-    int infog = sv->solve(&A, &b, is_host, sym, verbose, xr, xi);
+    struct solve_result res = sv->solve(&A, &b, is_host, sym, verbose, xr, xi);
 
     int rc = 0;
-    if (infog < 0) {
-        if (is_host) fprintf(stderr, "mmsolve: MUMPS failed, INFOG(1)=%d\n", infog);
+    if (res.infog1 < 0) {
+        if (is_host) fprintf(stderr, "mmsolve: MUMPS failed, INFOG(1)=%d\n", res.infog1);
         rc = 1;
     } else if (is_host) {
         if (mm_write_vector(xpath, n, xr, is_cplx ? xi : NULL)) rc = 1;
         else printf("mmsolve: type=%c  n=%d  nnz=%ld  sym=%d  INFOG(7)=%d  INFOG(32)=%d  ->  %s\n",
-                    type, n, A.nnz, sym, g_infog7, g_infog32, xpath);
+                    type, n, A.nnz, sym, res.infog7, res.infog32, xpath);
     }
 
     free(xr); free(xi); mm_free(&A); mm_free(&b);
