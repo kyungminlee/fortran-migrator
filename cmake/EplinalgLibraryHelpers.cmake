@@ -58,6 +58,37 @@ function(link_if_present target)
     endforeach()
 endfunction()
 
+# _eplinalg_collect_sources(<out_var> <name> <src_dir> <exclude_re>
+#                           <what> <glob…>)
+#
+# The "collect the upstream sources, or say why we're skipping" opening
+# both add_standard_*_library helpers share. A missing directory and an
+# empty set after the filter are both reported as a STATUS skip and
+# yield an empty <out_var>, which the callers treat as "return without
+# creating a target". <what> names the sources in the empty-set message
+# ("sources" / "C sources") so each helper's log line is unchanged.
+function(_eplinalg_collect_sources out_var name src_dir exclude_re what)
+    set(${out_var} "" PARENT_SCOPE)
+    if(NOT IS_DIRECTORY "${src_dir}")
+        message(STATUS "${name} (standard): ${src_dir} not found — skipping")
+        return()
+    endif()
+    set(_srcs "")
+    foreach(_pat ${ARGN})
+        file(GLOB _hits CONFIGURE_DEPENDS ${_pat})
+        list(APPEND _srcs ${_hits})
+    endforeach()
+    if(exclude_re)
+        list(FILTER _srcs EXCLUDE REGEX "${exclude_re}")
+    endif()
+    if(NOT _srcs)
+        message(STATUS "${name} (standard): no ${what} under ${src_dir} — skipping")
+        return()
+    endif()
+    set(${out_var} "${_srcs}" PARENT_SCOPE)
+endfunction()
+
+
 # Build a stock, standard-precision archive (S/D/C/Z entry points) from
 # vendored upstream sources. The target name is the bare library name
 # (``blas``, ``lapack``, ...) — no ``_std`` suffix — so consumers can
@@ -74,24 +105,14 @@ endfunction()
 #                cross-precision routines like dsdot/sdsdot).
 function(add_standard_fortran_library name src_dir)
     cmake_parse_arguments(_std "" "EXCLUDE_REGEX" "" ${ARGN})
-    if(NOT IS_DIRECTORY "${src_dir}")
-        message(STATUS "${name} (standard): ${src_dir} not found — skipping")
-        return()
-    endif()
     # Glob both lower- and upper-case Fortran source extensions: ``.F``
     # and ``.F90`` are preprocessed Fortran (LAPACK uses capital-F for
     # iparam2stage.F and the la_*_ep / la_*_mf helpers). On case-
     # sensitive filesystems the lower-case glob misses them entirely.
-    file(GLOB _f   CONFIGURE_DEPENDS ${src_dir}/*.f)
-    file(GLOB _F   CONFIGURE_DEPENDS ${src_dir}/*.F)
-    file(GLOB _f90 CONFIGURE_DEPENDS ${src_dir}/*.f90)
-    file(GLOB _F90 CONFIGURE_DEPENDS ${src_dir}/*.F90)
-    set(_srcs ${_f} ${_F} ${_f90} ${_F90})
-    if(_std_EXCLUDE_REGEX)
-        list(FILTER _srcs EXCLUDE REGEX "${_std_EXCLUDE_REGEX}")
-    endif()
+    _eplinalg_collect_sources(_srcs ${name} "${src_dir}" "${_std_EXCLUDE_REGEX}"
+        "sources"
+        ${src_dir}/*.f ${src_dir}/*.F ${src_dir}/*.f90 ${src_dir}/*.F90)
     if(NOT _srcs)
-        message(STATUS "${name} (standard): no sources under ${src_dir} — skipping")
         return()
     endif()
     add_library(${name} STATIC ${_srcs})
@@ -117,16 +138,9 @@ endfunction()
 function(add_standard_c_library name src_dir)
     cmake_parse_arguments(_std "" "EXCLUDE_REGEX"
         "COMPILE_DEFINITIONS;INCLUDE_DIRS" ${ARGN})
-    if(NOT IS_DIRECTORY "${src_dir}")
-        message(STATUS "${name} (standard): ${src_dir} not found — skipping")
-        return()
-    endif()
-    file(GLOB _srcs CONFIGURE_DEPENDS ${src_dir}/*.c)
-    if(_std_EXCLUDE_REGEX)
-        list(FILTER _srcs EXCLUDE REGEX "${_std_EXCLUDE_REGEX}")
-    endif()
+    _eplinalg_collect_sources(_srcs ${name} "${src_dir}" "${_std_EXCLUDE_REGEX}"
+        "C sources" ${src_dir}/*.c)
     if(NOT _srcs)
-        message(STATUS "${name} (standard): no C sources under ${src_dir} — skipping")
         return()
     endif()
     add_library(${name} STATIC ${_srcs})

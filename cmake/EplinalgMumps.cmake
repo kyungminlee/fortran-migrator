@@ -33,11 +33,15 @@ endif()
 # macro()s, NOT function()s, on purpose: a macro runs in the caller's
 # scope, so every ``set()`` still lands at directory scope exactly as
 # when this file was a single inline block. That is the contract the
-# cross-section variables rely on — the MUMPS_HAVE_* gates, the Scotch
-# define/flag/rename lists the PT-Scotch section and
-# _add_mumps_ordering_defines() consume, and the _mumps_c_* paths the
-# genuine build reads; each macro's header lists what it defines and
-# consumes. Only the two parameterized helpers stay function()s, and
+# cross-section variables rely on — the MUMPS_HAVE_* gates, the
+# published _MUMPS_SCOTCH_* build settings the PT-Scotch section
+# rebuilds its increment from, and the _mumps_c_* paths the genuine
+# build reads; each macro's header lists what it defines and consumes.
+# A function() would still *see* those through the scope chain, but
+# nothing at its call site would say so, so what a function needs it
+# takes as arguments: _add_mumps_ordering_defines() gets the Scotch
+# include dir and rename lists from _mumps_scotch_fortran_args().
+# Only the two parameterized helpers stay function()s, and
 # they are defined at file scope: a function body recorded inside a
 # macro would have its ${ARGN} rewritten by the enclosing macro's own
 # argument substitution.
@@ -189,9 +193,13 @@ endmacro()
 # _eplinalg_mumps_scotch(): sequential Scotch ordering archives;
 # defines targets ``scotch``/``esmumps``. Directory scope out:
 # MUMPS_HAVE_SCOTCH, _mumps_scotch_{libsrc,esmsrc,inc}, the
-# SCOTCH_*_SOURCES lists (from scotch_sources.cmake), and — consumed by
-# later sections — _scotch_defs / _scotch_cflags / _scotch_err_c
-# (PT-Scotch) and _scotch_f_renames (_add_mumps_ordering_defines).
+# SCOTCH_*_SOURCES lists (from scotch_sources.cmake), and the published
+# _MUMPS_SCOTCH_{DEFS,CFLAGS,ERR_C} group — the build settings the
+# PT-Scotch section below rebuilds its increment from. The upper-case
+# prefix marks exactly that: values another section reads directly.
+# The Fortran rename list is not part of it; the only reader outside
+# this section is _mumps_scotch_fortran_args(), which hands it to
+# _add_mumps_ordering_defines() as an argument.
 macro(_eplinalg_mumps_scotch)
     # ── Scotch ordering library (privately namespaced) ──────────────
     # Scotch 7.0.4, vendored under extern/scotch-7.0.4 and staged into
@@ -226,9 +234,9 @@ macro(_eplinalg_mumps_scotch)
         foreach(_f ${SCOTCH_LIBSCOTCH_SOURCES})
             list(APPEND _scotch_lib_c ${_mumps_scotch_libsrc}/${_f})
         endforeach()
-        set(_scotch_err_c "")
+        set(_MUMPS_SCOTCH_ERR_C "")
         foreach(_f ${SCOTCH_SCOTCHERR_SOURCES})
-            list(APPEND _scotch_err_c ${_mumps_scotch_libsrc}/${_f})
+            list(APPEND _MUMPS_SCOTCH_ERR_C ${_mumps_scotch_libsrc}/${_f})
         endforeach()
         set(_scotch_esm_c "")
         foreach(_f ${SCOTCH_ESMUMPS_SOURCES})
@@ -238,7 +246,7 @@ macro(_eplinalg_mumps_scotch)
             # Exact define set the upstream Scotch CMake applies, plus the
             # namespacing suffix. -Drestrict=__restrict quiets the C99
             # keyword; COMMON_RANDOM_FIXED_SEED makes orderings reproducible.
-            set(_scotch_defs
+            set(_MUMPS_SCOTCH_DEFS
                 COMMON_RANDOM_FIXED_SEED
                 SCOTCH_VERSION_NUM=7 SCOTCH_RELEASE_NUM=0 SCOTCH_PATCHLEVEL_NUM=4
                 SCOTCH_RENAME SCOTCH_NAME_SUFFIX=_mumps
@@ -257,7 +265,7 @@ macro(_eplinalg_mumps_scotch)
             # demand, so an application-supplied handler *object* still
             # overrides the archive member, and nothing here swaps
             # handlers — one archive fewer to ship and order.
-            add_library(scotch STATIC ${_scotch_lib_c} ${_scotch_err_c})
+            add_library(scotch STATIC ${_scotch_lib_c} ${_MUMPS_SCOTCH_ERR_C})
             # The INSTALL_INTERFACE dir receives scotch.h/scotchf.h and
             # scotch_rename_mumps.h (consumers calling bare SCOTCH_* must
             # include the rename header to reach the _mumps-suffixed
@@ -266,7 +274,7 @@ macro(_eplinalg_mumps_scotch)
                 $<BUILD_INTERFACE:${_mumps_scotch_inc}>
                 $<BUILD_INTERFACE:${_mumps_scotch_libsrc}>
                 $<INSTALL_INTERFACE:include/scotch_mumps>)
-            target_compile_definitions(scotch PRIVATE ${_scotch_defs})
+            target_compile_definitions(scotch PRIVATE ${_MUMPS_SCOTCH_DEFS})
             set_target_properties(scotch PROPERTIES
                 C_STANDARD 99 POSITION_INDEPENDENT_CODE ON
                 OUTPUT_NAME scotch_mumps)
@@ -278,7 +286,7 @@ macro(_eplinalg_mumps_scotch)
             target_include_directories(esmumps PRIVATE
                 $<BUILD_INTERFACE:${_mumps_scotch_esmsrc}>
                 $<BUILD_INTERFACE:${_mumps_scotch_libsrc}>)
-            target_compile_definitions(esmumps PRIVATE ${_scotch_defs})
+            target_compile_definitions(esmumps PRIVATE ${_MUMPS_SCOTCH_DEFS})
             set_target_properties(esmumps PROPERTIES
                 C_STANDARD 99 POSITION_INDEPENDENT_CODE ON
                 OUTPUT_NAME esmumps_mumps)
@@ -310,10 +318,10 @@ macro(_eplinalg_mumps_scotch)
             # by turning it off for the vendored sources only (same "compile
             # third-party code as-is" rationale as -w -fno-strict-aliasing).
             if(NOT MSVC)
-                set(_scotch_cflags -w -fno-strict-aliasing
+                set(_MUMPS_SCOTCH_CFLAGS -w -fno-strict-aliasing
                     -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
-                target_compile_options(scotch  PRIVATE ${_scotch_cflags})
-                target_compile_options(esmumps PRIVATE ${_scotch_cflags})
+                target_compile_options(scotch  PRIVATE ${_MUMPS_SCOTCH_CFLAGS})
+                target_compile_options(esmumps PRIVATE ${_MUMPS_SCOTCH_CFLAGS})
             endif()
             # The C caller sites are remapped bare→_mumps by force-including
             # scotch_rename_mumps.h. The Fortran caller (ana_orderings_
@@ -342,10 +350,11 @@ macro(_eplinalg_mumps_scotch)
 endmacro()
 
 # _eplinalg_mumps_ptscotch(): PT-Scotch distributed increment; consumes
-# _scotch_defs / _scotch_cflags / _scotch_err_c and
+# _MUMPS_SCOTCH_DEFS / _MUMPS_SCOTCH_CFLAGS / _MUMPS_SCOTCH_ERR_C and
 # SCOTCH_LIBPTSCOTCH_SOURCES from _eplinalg_mumps_scotch(); defines
 # target ``ptscotch``. Directory scope out: MUMPS_HAVE_PTSCOTCH and
-# _scotch_pt_f_renames (consumed by _add_mumps_ordering_defines).
+# _scotch_pt_f_renames, which — like the sequential rename list —
+# leaves the section only through _mumps_scotch_fortran_args().
 macro(_eplinalg_mumps_ptscotch)
     # ── PT-Scotch (distributed parallel analysis) ───────────────────
     # The 131-file distributed increment (dgraph*/bdgraph*/vdgraph*/
@@ -382,7 +391,7 @@ macro(_eplinalg_mumps_ptscotch)
         endforeach()
         # Sequential defines + the distributed flag. The suffix MUST stay
         # _mumps (not _mumps_pt) — see increment rationale above.
-        set(_ptscotch_defs ${_scotch_defs} SCOTCH_PTSCOTCH)
+        set(_ptscotch_defs ${_MUMPS_SCOTCH_DEFS} SCOTCH_PTSCOTCH)
 
         # Filename carries the MPI tag (unlike the shared, untagged
         # sequential libscotch_mumps.a): OpenMPI and Intel-MPI copies are
@@ -405,7 +414,7 @@ macro(_eplinalg_mumps_ptscotch)
         # libscotch is never pulled — the MPI-aware handler wins with
         # no duplicate definitions, mirroring upstream's -lptscotcherr
         # -lscotch -lscotcherr order with two fewer archives.
-        add_library(ptscotch STATIC ${_ptscotch_lib_c} ${_scotch_err_c})
+        add_library(ptscotch STATIC ${_ptscotch_lib_c} ${_MUMPS_SCOTCH_ERR_C})
         # ptscotch.h/ptscotchf.h are installed with the sequential Scotch
         # headers (same include/scotch_mumps dir): they are pre-generated,
         # MPI-ABI-independent files (see vendoring note above), so the
@@ -431,7 +440,7 @@ macro(_eplinalg_mumps_ptscotch)
         # Same warning-quiet + based-array fortify mitigation as sequential
         # Scotch (the distributed sources use the identical idiom).
         if(NOT MSVC)
-            target_compile_options(ptscotch PRIVATE ${_scotch_cflags})
+            target_compile_options(ptscotch PRIVATE ${_MUMPS_SCOTCH_CFLAGS})
         endif()
 
         # Distributed Fortran entry points MUMPS calls under -Dptscotch
@@ -477,7 +486,35 @@ macro(_eplinalg_mumps_ptscotch)
     endif()
 endmacro()
 
-# _add_mumps_ordering_defines(<target> [FORTRAN_ONLY]): put the
+# _mumps_scotch_fortran_args(<out_var>): pack the Scotch/PT-Scotch
+# pieces _add_mumps_ordering_defines() puts on a Fortran target — the
+# include dir for INCLUDE 'scotchf.h' and the two CPP rename sets — as
+# a keyword argument list, so the call site declares the dependency
+# instead of the callee reaching up the scope chain for it:
+#
+#     _mumps_scotch_fortran_args(_sc_args)
+#     _add_mumps_ordering_defines(<target> ${_sc_args})
+#
+# Whichever ordering section did not turn on contributes no keywords,
+# so the result splices in unconditionally. A macro, so it reads the
+# sections' variables in the directory scope that set them: this is
+# the one place they are read from outside their own section.
+macro(_mumps_scotch_fortran_args out_var)
+    set(${out_var} "")
+    if(MUMPS_HAVE_SCOTCH)
+        list(APPEND ${out_var}
+            SCOTCH_INCLUDE "${_mumps_scotch_inc}"
+            SCOTCH_RENAMES ${_scotch_f_renames})
+    endif()
+    if(MUMPS_HAVE_PTSCOTCH)
+        list(APPEND ${out_var} PTSCOTCH_RENAMES ${_scotch_pt_f_renames})
+    endif()
+endmacro()
+
+# _add_mumps_ordering_defines(<target> [FORTRAN_ONLY]
+#                             [SCOTCH_INCLUDE <dir>]
+#                             [SCOTCH_RENAMES <def>…]
+#                             [PTSCOTCH_RENAMES <def>…]): put the
 # ordering ``-D`` defines (-Dpord/-Dmetis/-Dscotch/-Dptscotch, each
 # gated on its MUMPS_HAVE_* flag) on a MUMPS Fortran target. The
 # analysis Fortran (ana_set_ordering.F, ana_orderings_wrappers_m.F,
@@ -490,12 +527,15 @@ endmacro()
 # the CPP renames binding bare SCOTCHF*/CONTEXT* Fortran calls to
 # the _mumps-suffixed archive symbols, plus the include dir for
 # INCLUDE 'scotchf.h' (ptscotchf.h shares it); PT-Scotch adds the
-# distributed rename set. FORTRAN_ONLY gates the plain defines to
-# Fortran (for targets whose C sources must not see them); the
-# renames are always Fortran-gated. Ordering-archive LINKS stay at
-# the call sites — each target wires them differently.
+# distributed rename set. Those three come in as arguments — see
+# _mumps_scotch_fortran_args() above, which every call site uses to
+# build them. FORTRAN_ONLY gates the plain defines to Fortran (for
+# targets whose C sources must not see them); the renames are always
+# Fortran-gated. Ordering-archive LINKS stay at the call sites — each
+# target wires them differently.
 function(_add_mumps_ordering_defines target)
-    cmake_parse_arguments(_MOD "FORTRAN_ONLY" "" "" ${ARGN})
+    cmake_parse_arguments(_MOD "FORTRAN_ONLY" "SCOTCH_INCLUDE"
+        "SCOTCH_RENAMES;PTSCOTCH_RENAMES" ${ARGN})
     foreach(_ord pord metis scotch ptscotch)
         string(TOUPPER "${_ord}" _ord_up)
         if(NOT MUMPS_HAVE_${_ord_up})
@@ -509,12 +549,12 @@ function(_add_mumps_ordering_defines target)
         endif()
         if(_ord STREQUAL "scotch")
             target_compile_definitions(${target} PRIVATE
-                $<$<COMPILE_LANGUAGE:Fortran>:${_scotch_f_renames}>)
+                $<$<COMPILE_LANGUAGE:Fortran>:${_MOD_SCOTCH_RENAMES}>)
             target_include_directories(${target} PRIVATE
-                $<BUILD_INTERFACE:${_mumps_scotch_inc}>)
+                $<BUILD_INTERFACE:${_MOD_SCOTCH_INCLUDE}>)
         elseif(_ord STREQUAL "ptscotch")
             target_compile_definitions(${target} PRIVATE
-                $<$<COMPILE_LANGUAGE:Fortran>:${_scotch_pt_f_renames}>)
+                $<$<COMPILE_LANGUAGE:Fortran>:${_MOD_PTSCOTCH_RENAMES}>)
         endif()
     endforeach()
 endfunction()
@@ -523,6 +563,7 @@ endfunction()
 # migrated ${LIB_PAIR_PREFIX}mumps solver archive and mumps_common;
 # consumes the MUMPS_HAVE_* gates via _add_mumps_ordering_defines.
 macro(_eplinalg_mumps_wire_migrated)
+    _mumps_scotch_fortran_args(_mumps_sc_args)
     if(TARGET ${LIB_PAIR_PREFIX}mumps)
         foreach(_dep ${LIB_PAIR_PREFIX}scalapack ${LIB_PAIR_PREFIX}lapack ${LIB_PAIR_PREFIX}blas)
             if(TARGET ${_dep})
@@ -555,7 +596,7 @@ macro(_eplinalg_mumps_wire_migrated)
         # Link the distributed increment BEFORE the sequential library
         # (upstream -lptscotch -lscotch order; scotch itself is reached
         # via mumps_common's folded C runtime).
-        _add_mumps_ordering_defines(${LIB_PAIR_PREFIX}mumps)
+        _add_mumps_ordering_defines(${LIB_PAIR_PREFIX}mumps ${_mumps_sc_args})
         if(MUMPS_HAVE_PTSCOTCH)
             target_link_libraries(${LIB_PAIR_PREFIX}mumps PUBLIC ptscotch)
         endif()
@@ -569,7 +610,7 @@ macro(_eplinalg_mumps_wire_migrated)
     # runtime too). The C-side force-includes and ordering-archive links
     # are added in the C-runtime block below.
     if(TARGET mumps_common)
-        _add_mumps_ordering_defines(mumps_common)
+        _add_mumps_ordering_defines(mumps_common ${_mumps_sc_args})
     endif()
 endmacro()
 
@@ -974,6 +1015,7 @@ macro(_eplinalg_mumps_genuine_dz_sc)
             ${_cmumps_F} ${_mumps_c_src}/cmumps_gpu.c)
         fortran_module_layout(scmumps)
 
+        _mumps_scotch_fortran_args(_mumps_sc_args)
         foreach(_g dzmumps scmumps)
             # _mumps_c_bridge_inc_shared carries mumps_int_def.h,
             # which the gpu-stub C pulls in via mumps_c_types.h.
@@ -990,7 +1032,7 @@ macro(_eplinalg_mumps_genuine_dz_sc)
                 $<$<COMPILE_LANGUAGE:C>:Add_>)
             # Ordering defines, Fortran-only: the ${ARITH}mumps_gpu.c
             # stubs in these archives never gate on them.
-            _add_mumps_ordering_defines(${_g} FORTRAN_ONLY)
+            _add_mumps_ordering_defines(${_g} FORTRAN_ONLY ${_mumps_sc_args})
             # Pristine upstream compiles within column limits, but
             # relieve line length anyway to match the migrated
             # archives and stay robust to compiler defaults.

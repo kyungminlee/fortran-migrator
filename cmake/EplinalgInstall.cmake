@@ -29,6 +29,18 @@ set(_MPI_ABI_LIBS blacs mumps)
 # absent, independent of whether the resulting archive is ABI-bound.
 set(_MPI_REQUIRED_LIBS blacs pblas pbblas scalapack mumps)
 
+# _eplinalg_mpi_install_arg(<lib_name> <out_var>): the ``MPI`` keyword
+# fortran_install_library takes for an MPI-ABI-bound library, or "" —
+# i.e. the _MPI_ABI_LIBS membership test in the form the install sites
+# splice into their argument lists.
+function(_eplinalg_mpi_install_arg lib_name out_var)
+    set(_arg "")
+    if("${lib_name}" IN_LIST _MPI_ABI_LIBS)
+        set(_arg "MPI")
+    endif()
+    set(${out_var} "${_arg}" PARENT_SCOPE)
+endfunction()
+
 # _install_target_and_modules(<target> <fortran_install_library args…>):
 # every install site pairs fortran_install_library with the module
 # install (Fortran .mod files ship whenever the target compiled any).
@@ -182,10 +194,7 @@ function(_install_standard_archive lib_name)
     set(_export "${_pkg}Targets")
     _return_if_already_installed(_FC_STD_INSTALLED_${_pkg})
 
-    set(_mpi_arg "")
-    if("${lib_name}" IN_LIST _MPI_ABI_LIBS)
-        set(_mpi_arg "MPI")
-    endif()
+    _eplinalg_mpi_install_arg(${lib_name} _mpi_arg)
 
     # Walk the std archive's INTERFACE_LINK_LIBRARIES for std-sibling
     # references (e.g. ``lapack`` PUBLIC-links ``blas``) so the
@@ -244,10 +253,7 @@ function(_install_shared_common lib_name)
         set(_base_arg OUTPUT_BASE ${_out_base})
     endif()
 
-    set(_mpi_arg "")
-    if("${lib_name}" IN_LIST _MPI_ABI_LIBS)
-        set(_mpi_arg "MPI")
-    endif()
+    _eplinalg_mpi_install_arg(${lib_name} _mpi_arg)
     set(_deps "")
     if("${lib_name}" STREQUAL "mumps" AND
        (TARGET pord OR TARGET scotch OR TARGET metis))
@@ -409,10 +415,7 @@ function(_install_library_pair lib_name)
         return()
     endif()
 
-    set(_install_mpi_arg "")
-    if("${lib_name}" IN_LIST _MPI_ABI_LIBS)
-        set(_install_mpi_arg "MPI")
-    endif()
+    _eplinalg_mpi_install_arg(${lib_name} _install_mpi_arg)
     if("${lib_name}" IN_LIST _MPI_REQUIRED_LIBS)
         # MPI-requiring libs only compile when MPI is available; the
         # target exists but the build never produces an archive file,

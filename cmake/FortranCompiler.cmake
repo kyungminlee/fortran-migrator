@@ -37,6 +37,17 @@ if(_FORTRAN_COMPILER_INCLUDED)
 endif()
 set(_FORTRAN_COMPILER_INCLUDED TRUE)
 
+# The Config/deps generators below take their text blocks as keyword
+# arguments and are routinely handed empty ones (no MPI detection, no
+# Fortran runtime block, ...). Under CMP0174's OLD behavior every empty
+# value warns and leaves the variable unset; NEW sets it to the empty
+# string, which is what splicing the block into the template expects.
+# Functions capture the policy state in effect where they are defined,
+# so setting it here covers all of them.
+if(POLICY CMP0174)
+  cmake_policy(SET CMP0174 NEW)
+endif()
+
 # ---------------------------------------------------------------------------
 # Verify Fortran is enabled
 # ---------------------------------------------------------------------------
@@ -219,56 +230,109 @@ message(STATUS "FortranCompiler: mod_tag=${FORTRAN_MOD_COMPAT_TAG}, lib_tag=${FO
 # ---------------------------------------------------------------------------
 # MPI vendor probe (single source).
 #
-# One canonical C program identifies the MPI implementation flavor and
-# version from mpi.h's vendor-specific macros:
-#   Intel MPI : I_MPI_VERSION (string, e.g. "2021.18.0")
-#   OpenMPI   : OMPI_MAJOR_VERSION / OMPI_MINOR_VERSION (ints)
-#   MPICH     : MPICH_VERSION (string, e.g. "4.2.0")
-# Its ``<flavor> <version>`` output parses via _FC_MPI_TAG_REGEX into a
-# ``<flavor>-<major>.<minor>`` tag (``intelmpi-2021.18`` /
-# ``openmpi-5.0`` / ``mpich-4.2``). The same program and regex serve
-# the producer-side probe (_fc_detect_mpi_tag, called by the top-level
+# The MPI implementation is identified from mpi.h's vendor-specific
+# macros, in three places that must agree: the canonical C probe's
+# ``#if`` chain, the mpi.h text scan that stands in for it when no C
+# compiler is available, and the copy of that scan emitted into every
+# generated Config (_fc_consumer_mpi_detect_block below). All three are
+# derived from the one ordered table here, so adding a vendor is a row
+# and the ordering invariant is the table's order rather than three
+# hand-kept chains.
+#
+# Order matters: Intel MPI is MPICH-derived and defines MPICH_VERSION as
+# well, so I_MPI_VERSION has to be tested first or an Intel prefix would
+# tag as ``mpich-…``.
+#
+# Each row is ``<id>|<flavor>|<shape>|<macros>``, where the shape says
+# how the vendor spells its version and <macros> is comma-separated:
+#   version-string : one macro holding "<major>.<minor>[.patch]"
+#                    (Intel MPI's I_MPI_VERSION, MPICH's MPICH_VERSION)
+#   version-pair   : two integer macros, major then minor (OpenMPI)
+# The probe's ``<flavor> <version>`` output parses via _FC_MPI_TAG_REGEX
+# into a ``<flavor>-<major>.<minor>`` tag (``intelmpi-2021.18`` /
+# ``openmpi-5.0`` / ``mpich-4.2``). The same program and regex serve the
+# producer-side probe (_fc_detect_mpi_tag, called by the top-level
 # CMakeLists to compute MPI_TAG) and the consumer-side probe re-escaped
-# into every generated Config (_fc_consumer_mpi_detect_block below) —
-# the two must derive identical tags or the installed filenames and the
-# consumer's lookup diverge.
+# into every generated Config — the two must derive identical tags or
+# the installed filenames and the consumer's lookup diverge.
 # ---------------------------------------------------------------------------
+set(_FC_MPI_VENDORS
+    "intel|intelmpi|version-string|I_MPI_VERSION"
+    "ompi|openmpi|version-pair|OMPI_MAJOR_VERSION,OMPI_MINOR_VERSION"
+    "mpich|mpich|version-string|MPICH_VERSION")
+
+# Split one _FC_MPI_VENDORS row into its four fields, the macros as a
+# real list. A macro (not a function) so callers get the values in their
+# own scope under the variable names they pass.
+macro(_fc_mpi_vendor_fields entry id flavor shape macros)
+  string(REPLACE "|" ";" _fc_vrow "${entry}")
+  list(GET _fc_vrow 0 ${id})
+  list(GET _fc_vrow 1 ${flavor})
+  list(GET _fc_vrow 2 ${shape})
+  list(GET _fc_vrow 3 ${macros})
+  string(REPLACE "," ";" ${macros} "${${macros}}")
+  unset(_fc_vrow)
+endmacro()
+
+# The probe program, plus the per-vendor mpi.h regexes
+# (_FC_MPI_HEADER_REGEX_<id>, or _<id>_MAJOR/_<id>_MINOR for a pair) and
+# the scan regex that pulls the candidate #defines out of the header.
+# The text scan exists because the probe has to be compiled and run,
+# which a consumer whose project() enables Fortran only cannot do — and
+# every MPI-bound package would then be unfindable from the very
+# consumer shape doc/user/ advertises.
 set(_FC_MPI_PROBE_SOURCE "\
 #include <mpi.h>
 #include <stdio.h>
 int main(void){
-#if defined(I_MPI_VERSION)
-  printf(\"intelmpi %s\\n\", I_MPI_VERSION);
-#elif defined(OMPI_MAJOR_VERSION) && defined(OMPI_MINOR_VERSION)
-  printf(\"openmpi %d.%d\\n\", OMPI_MAJOR_VERSION, OMPI_MINOR_VERSION);
-#elif defined(MPICH_VERSION)
-  printf(\"mpich %s\\n\", MPICH_VERSION);
+")
+set(_fc_scan_macros "")
+set(_fc_probe_kw "#if")
+foreach(_fc_entry IN LISTS _FC_MPI_VENDORS)
+  _fc_mpi_vendor_fields("${_fc_entry}" _fc_id _fc_flavor _fc_shape _fc_macros)
+  list(APPEND _fc_scan_macros ${_fc_macros})
+  if(_fc_shape STREQUAL "version-pair")
+    list(GET _fc_macros 0 _fc_maj)
+    list(GET _fc_macros 1 _fc_min)
+    string(APPEND _FC_MPI_PROBE_SOURCE
+"${_fc_probe_kw} defined(${_fc_maj}) && defined(${_fc_min})
+  printf(\"${_fc_flavor} %d.%d\\n\", ${_fc_maj}, ${_fc_min});
+")
+    set(_FC_MPI_HEADER_REGEX_${_fc_id}_MAJOR "${_fc_maj}[ \t]+([0-9]+)")
+    set(_FC_MPI_HEADER_REGEX_${_fc_id}_MINOR "${_fc_min}[ \t]+([0-9]+)")
+  else()
+    list(GET _fc_macros 0 _fc_macro)
+    string(APPEND _FC_MPI_PROBE_SOURCE
+"${_fc_probe_kw} defined(${_fc_macro})
+  printf(\"${_fc_flavor} %s\\n\", ${_fc_macro});
+")
+    set(_FC_MPI_HEADER_REGEX_${_fc_id} "${_fc_macro}[ \t]+\"([0-9]+)\\.([0-9]+)")
+  endif()
+  set(_fc_probe_kw "#elif")
+endforeach()
+string(APPEND _FC_MPI_PROBE_SOURCE "\
 #else
   printf(\"unknown ?\\n\");
 #endif
   return 0;
 }
 ")
+list(JOIN _fc_scan_macros "|" _fc_scan_alt)
+set(_FC_MPI_HEADER_SCAN_REGEX "define[ \t]+(${_fc_scan_alt})[ \t]")
+unset(_fc_entry)
+unset(_fc_id)
+unset(_fc_flavor)
+unset(_fc_shape)
+unset(_fc_macros)
+unset(_fc_maj)
+unset(_fc_min)
+unset(_fc_macro)
+unset(_fc_probe_kw)
+unset(_fc_scan_macros)
+unset(_fc_scan_alt)
 
 # ``flavor major.minor[.patch]`` → capture flavor, major, minor.
 set(_FC_MPI_TAG_REGEX "^([a-z]+) ([0-9]+)\\.([0-9]+)")
-
-# Language-free fallback: the same three vendor macros, read straight out
-# of mpi.h as text. The probe above has to be compiled and run, which a
-# consumer whose project() enables Fortran only cannot do — and every
-# MPI-bound package would then be unfindable from the very consumer
-# shape doc/user/ advertises. Reading the macros keys on exactly what the
-# probe prints, so the two derivations agree.
-#
-# Match precedence must mirror the probe's ``#if`` chain: Intel MPI is
-# MPICH-derived and defines MPICH_VERSION as well, so I_MPI_VERSION has
-# to be tested first or an Intel prefix would tag as ``mpich-…``.
-set(_FC_MPI_HEADER_SCAN_REGEX
-    "define[ \t]+(I_MPI_VERSION|OMPI_MAJOR_VERSION|OMPI_MINOR_VERSION|MPICH_VERSION)[ \t]")
-set(_FC_MPI_HEADER_INTEL_REGEX      "I_MPI_VERSION[ \t]+\"([0-9]+)\\.([0-9]+)")
-set(_FC_MPI_HEADER_OMPI_MAJOR_REGEX "OMPI_MAJOR_VERSION[ \t]+([0-9]+)")
-set(_FC_MPI_HEADER_OMPI_MINOR_REGEX "OMPI_MINOR_VERSION[ \t]+([0-9]+)")
-set(_FC_MPI_HEADER_MPICH_REGEX      "MPICH_VERSION[ \t]+\"([0-9]+)\\.([0-9]+)")
 
 # Escape a literal (probe program, regex) so it survives one more level
 # of CMake string parsing when spliced into a generated Config.
@@ -580,10 +644,33 @@ function(_fc_consumer_mpi_detect_block outvar config_name)
   string(REPLACE "\n" "\\n" _probe "${_probe}")
   _fc_escape_for_config(_regex       "${_FC_MPI_TAG_REGEX}")
   _fc_escape_for_config(_re_scan     "${_FC_MPI_HEADER_SCAN_REGEX}")
-  _fc_escape_for_config(_re_intel    "${_FC_MPI_HEADER_INTEL_REGEX}")
-  _fc_escape_for_config(_re_ompi_maj "${_FC_MPI_HEADER_OMPI_MAJOR_REGEX}")
-  _fc_escape_for_config(_re_ompi_min "${_FC_MPI_HEADER_OMPI_MINOR_REGEX}")
-  _fc_escape_for_config(_re_mpich    "${_FC_MPI_HEADER_MPICH_REGEX}")
+  # The emitted text-scan chain, generated from _FC_MPI_VENDORS — same
+  # table, same order as the probe's #if chain above it in the Config.
+  set(_fallback "")
+  set(_kw "if")
+  foreach(_entry IN LISTS _FC_MPI_VENDORS)
+    _fc_mpi_vendor_fields("${_entry}" _id _flavor _shape _macros)
+    if(_shape STREQUAL "version-pair")
+      _fc_escape_for_config(_re_maj "${_FC_MPI_HEADER_REGEX_${_id}_MAJOR}")
+      _fc_escape_for_config(_re_min "${_FC_MPI_HEADER_REGEX_${_id}_MINOR}")
+      string(APPEND _fallback
+"      ${_kw}(_FC_mpi_defs MATCHES \"${_re_maj}\")
+        set(_FC_mpi_${_id}_major \"\${CMAKE_MATCH_1}\")
+        if(_FC_mpi_defs MATCHES \"${_re_min}\")
+          set(_FC_consumer_mpi_tag \"${_flavor}-\${_FC_mpi_${_id}_major}.\${CMAKE_MATCH_1}\")
+        endif()
+        unset(_FC_mpi_${_id}_major)
+")
+    else()
+      _fc_escape_for_config(_re "${_FC_MPI_HEADER_REGEX_${_id}}")
+      string(APPEND _fallback
+"      ${_kw}(_FC_mpi_defs MATCHES \"${_re}\")
+        set(_FC_consumer_mpi_tag \"${_flavor}-\${CMAKE_MATCH_1}.\${CMAKE_MATCH_2}\")
+")
+    endif()
+    set(_kw "elseif")
+  endforeach()
+  string(APPEND _fallback "      endif()")
   set(${outvar} "\
 # --- Derive consumer's MPI flavor + major.minor tag ---
 # Request MPI components only for the languages the consuming project()
@@ -667,17 +754,7 @@ else()
     find_file(_FC_mpi_header NAMES mpi.h HINTS \${_FC_mpi_inc} NO_DEFAULT_PATH)
     if(_FC_mpi_header)
       file(STRINGS \"\${_FC_mpi_header}\" _FC_mpi_defs REGEX \"${_re_scan}\")
-      if(_FC_mpi_defs MATCHES \"${_re_intel}\")
-        set(_FC_consumer_mpi_tag \"intelmpi-\${CMAKE_MATCH_1}.\${CMAKE_MATCH_2}\")
-      elseif(_FC_mpi_defs MATCHES \"${_re_ompi_maj}\")
-        set(_FC_mpi_ompi_major \"\${CMAKE_MATCH_1}\")
-        if(_FC_mpi_defs MATCHES \"${_re_ompi_min}\")
-          set(_FC_consumer_mpi_tag \"openmpi-\${_FC_mpi_ompi_major}.\${CMAKE_MATCH_1}\")
-        endif()
-        unset(_FC_mpi_ompi_major)
-      elseif(_FC_mpi_defs MATCHES \"${_re_mpich}\")
-        set(_FC_consumer_mpi_tag \"mpich-\${CMAKE_MATCH_1}.\${CMAKE_MATCH_2}\")
-      endif()
+${_fallback}
       unset(_FC_mpi_defs)
     endif()
     unset(_FC_mpi_header CACHE)
@@ -702,28 +779,108 @@ endif()
 " PARENT_SCOPE)
 endfunction()
 
+# The find_dependency(MPI) block a Config needs whenever its Targets
+# file references MPI::MPI_* imported targets (see
+# _fc_mpi_dep_components, which computes <components>) — independent of
+# the flavor tag. Empty when the target references none.
+function(_fc_mpi_dep_block outvar components)
+  if(NOT components)
+    set(${outvar} "" PARENT_SCOPE)
+    return()
+  endif()
+  list(JOIN components " " _str)
+  set(${outvar} "\
+# The Targets file references MPI::MPI_{${_str}} imported
+# targets (static archives export PRIVATE deps as LINK_ONLY entries); bring
+# them into scope so those references resolve.
+#
+# Only components for languages the consuming project() enabled may be
+# requested: FindMPI reports a component NOT-FOUND when its language was
+# never enabled, so an unconditional COMPONENTS list makes this package
+# unfindable from a single-language consumer.
+set(_FC_mpi_want ${_str})
+set(_FC_mpi_req \"\")
+set(_FC_mpi_shim \"\")
+foreach(_FC_lang IN LISTS _FC_mpi_want)
+  if(CMAKE_\${_FC_lang}_COMPILER_LOADED)
+    list(APPEND _FC_mpi_req \${_FC_lang})
+  else()
+    list(APPEND _FC_mpi_shim \${_FC_lang})
+  endif()
+endforeach()
+# None of the wanted components is available — request whatever the
+# consumer does have, so the shims below have a real one to forward to.
+if(NOT _FC_mpi_req)
+  foreach(_FC_lang C CXX Fortran)
+    if(CMAKE_\${_FC_lang}_COMPILER_LOADED)
+      list(APPEND _FC_mpi_req \${_FC_lang})
+    endif()
+  endforeach()
+endif()
+if(_FC_mpi_req)
+  find_dependency(MPI COMPONENTS \${_FC_mpi_req})
+else()
+  find_dependency(MPI)
+endif()
+# Forwarding shims for the components this consumer cannot enable. What
+# these archives need from MPI::MPI_<lang> is the MPI runtime on the link
+# line — the same libraries whichever language asked for it — and they
+# reference it only as a LINK_ONLY item, so the component's compile
+# options never apply to the consumer's own sources (FindMPI fences those
+# behind a COMPILE_LANGUAGE genex in any case). This can never shadow a real
+# component: a shim is created only for a language the consumer has not
+# enabled, and FindMPI cannot produce MPI::MPI_<lang> for such a language.
+foreach(_FC_lang IN LISTS _FC_mpi_shim)
+  if(NOT TARGET MPI::MPI_\${_FC_lang})
+    foreach(_FC_alt IN LISTS _FC_mpi_req)
+      if(TARGET MPI::MPI_\${_FC_alt})
+        add_library(MPI::MPI_\${_FC_lang} INTERFACE IMPORTED)
+        set_target_properties(MPI::MPI_\${_FC_lang} PROPERTIES
+          INTERFACE_LINK_LIBRARIES MPI::MPI_\${_FC_alt})
+        break()
+      endif()
+    endforeach()
+  endif()
+endforeach()
+unset(_FC_mpi_want)
+unset(_FC_mpi_req)
+unset(_FC_mpi_shim)
+" PARENT_SCOPE)
+endfunction()
+
 # Content of the per-tag transparent-deps file installed next to the
 # per-tag targets file (see the flavor comment at the call site).
-function(_fc_tag_deps_content outvar deps_file config_name full_tag fortran_rt_block mpi_dep_block deps_block)
+#
+# Keyword arguments (PARSE_ARGV, so an empty block stays an empty
+# argument instead of collapsing out of the list):
+#   DEPS_FILE, CONFIG_NAME, FULL_TAG, FORTRAN_RT_BLOCK, MPI_DEP_BLOCK,
+#   DEPS_BLOCK.
+function(_fc_tag_deps_content outvar)
+  cmake_parse_arguments(PARSE_ARGV 1 _a ""
+    "DEPS_FILE;CONFIG_NAME;FULL_TAG;FORTRAN_RT_BLOCK;MPI_DEP_BLOCK;DEPS_BLOCK"
+    "")
   set(${outvar} "\
-# ${deps_file}
+# ${_a_DEPS_FILE}
 # Auto-generated by FortranCompiler.cmake
 #
-# Transparent dependencies of the '${full_tag}' flavor of package
-# ${config_name}. Kept per-tag (not in the shared Config) because one
+# Transparent dependencies of the '${_a_FULL_TAG}' flavor of package
+# ${_a_CONFIG_NAME}. Kept per-tag (not in the shared Config) because one
 # prefix can hold several flavors of this package with different
-# dependency sets. Included by ${config_name}Config.cmake after it
+# dependency sets. Included by ${_a_CONFIG_NAME}Config.cmake after it
 # resolves the consumer's tag; CMakeFindDependencyMacro is already in
 # scope there.
-${fortran_rt_block}${mpi_dep_block}${deps_block}" PARENT_SCOPE)
+${_a_FORTRAN_RT_BLOCK}${_a_MPI_DEP_BLOCK}${_a_DEPS_BLOCK}" PARENT_SCOPE)
 endfunction()
 
 # Content of the Config for a tagged package: re-derives the tag on the
 # consumer side (via the detection blocks passed in) and includes the
 # matching per-tag deps + targets files.
-function(_fc_tagged_config_content outvar config_name export_name consumer_tag_expr fc_detect_block mpi_detect_block cleanup_mpi)
+function(_fc_tagged_config_content outvar)
+  cmake_parse_arguments(PARSE_ARGV 1 _a ""
+    "CONFIG_NAME;EXPORT_NAME;CONSUMER_TAG_EXPR;FC_DETECT_BLOCK;MPI_DETECT_BLOCK;CLEANUP_MPI"
+    "")
   set(${outvar} "\
-# ${config_name}Config.cmake
+# ${_a_CONFIG_NAME}Config.cmake
 # Auto-generated by FortranCompiler.cmake
 #
 # Re-derives, on the consumer side, the ABI tag components baked into
@@ -745,10 +902,10 @@ cmake_minimum_required(VERSION 3.12)
 # emitted — consumers list every per-precision package they need on
 # their own.
 include(CMakeFindDependencyMacro)
-${fc_detect_block}
-${mpi_detect_block}
+${_a_FC_DETECT_BLOCK}
+${_a_MPI_DETECT_BLOCK}
 # Look for exact tag match
-set(_FC_targets_file \"\${CMAKE_CURRENT_LIST_DIR}/${export_name}-${consumer_tag_expr}.cmake\")
+set(_FC_targets_file \"\${CMAKE_CURRENT_LIST_DIR}/${_a_EXPORT_NAME}-${_a_CONSUMER_TAG_EXPR}.cmake\")
 
 if(NOT EXISTS \"\${_FC_targets_file}\")
   # No exact match — list the tags that ARE installed here and fail.
@@ -757,14 +914,14 @@ if(NOT EXISTS \"\${_FC_targets_file}\")
   # per-configuration fragments install(EXPORT) generates
   # (<export>-<tag>-release.cmake). Listing them as if they were
   # available builds is what made this message unreadable.
-  file(GLOB _FC_available \"\${CMAKE_CURRENT_LIST_DIR}/${export_name}-*.cmake\")
+  file(GLOB _FC_available \"\${CMAKE_CURRENT_LIST_DIR}/${_a_EXPORT_NAME}-*.cmake\")
   set(_FC_available_names \"\")
   foreach(_FC_f IN LISTS _FC_available)
     get_filename_component(_FC_fname \"\${_FC_f}\" NAME)
-    if(_FC_fname MATCHES \"^${export_name}-deps-\")
+    if(_FC_fname MATCHES \"^${_a_EXPORT_NAME}-deps-\")
       continue()
     endif()
-    string(REGEX REPLACE \"^${export_name}-(.*)\\\\.cmake$\" \"\\\\1\" _FC_fname \"\${_FC_fname}\")
+    string(REGEX REPLACE \"^${_a_EXPORT_NAME}-(.*)\\\\.cmake$\" \"\\\\1\" _FC_fname \"\${_FC_fname}\")
     if(_FC_fname MATCHES \"-(release|debug|relwithdebinfo|minsizerel|noconfig)$\")
       continue()
     endif()
@@ -776,7 +933,7 @@ if(NOT EXISTS \"\${_FC_targets_file}\")
   list(JOIN _FC_available_names \", \" _FC_available_list)
   set(\${CMAKE_FIND_PACKAGE_NAME}_FOUND FALSE)
   set(\${CMAKE_FIND_PACKAGE_NAME}_NOT_FOUND_MESSAGE
-    \"${config_name}: no pre-built library installed for the ABI tag this consumer resolves to, '${consumer_tag_expr}'. Tags available in \${CMAKE_CURRENT_LIST_DIR}: [\${_FC_available_list}]\")
+    \"${_a_CONFIG_NAME}: no pre-built library installed for the ABI tag this consumer resolves to, '${_a_CONSUMER_TAG_EXPR}'. Tags available in \${CMAKE_CURRENT_LIST_DIR}: [\${_FC_available_list}]\")
   unset(_FC_consumer_family)
   unset(_FC_consumer_tag)
   unset(_FC_targets_file)
@@ -784,7 +941,7 @@ if(NOT EXISTS \"\${_FC_targets_file}\")
   unset(_FC_fname)
   unset(_FC_available_names)
   unset(_FC_available_list)
-  ${cleanup_mpi}
+  ${_a_CLEANUP_MPI}
   return()
 endif()
 
@@ -793,23 +950,25 @@ endif()
 # nested find_dependency() calls whose Configs come from this same
 # template and (re)use the same _FC_* variables in this scope — stash
 # the targets path in a package-unique variable across that include.
-set(_FC_targets_file_${export_name} \"\${_FC_targets_file}\")
-include(\"\${CMAKE_CURRENT_LIST_DIR}/${export_name}-deps-${consumer_tag_expr}.cmake\")
-include(\"\${_FC_targets_file_${export_name}}\")
-unset(_FC_targets_file_${export_name})
+set(_FC_targets_file_${_a_EXPORT_NAME} \"\${_FC_targets_file}\")
+include(\"\${CMAKE_CURRENT_LIST_DIR}/${_a_EXPORT_NAME}-deps-${_a_CONSUMER_TAG_EXPR}.cmake\")
+include(\"\${_FC_targets_file_${_a_EXPORT_NAME}}\")
+unset(_FC_targets_file_${_a_EXPORT_NAME})
 
 unset(_FC_consumer_family)
 unset(_FC_consumer_tag)
 unset(_FC_targets_file)
-${cleanup_mpi}
+${_a_CLEANUP_MPI}
 " PARENT_SCOPE)
 endfunction()
 
 # Content of the Config for an untagged package: a single fixed targets
 # file, no consumer-side detection at all.
-function(_fc_untagged_config_content outvar config_name export_name mpi_dep_block deps_block)
+function(_fc_untagged_config_content outvar)
+  cmake_parse_arguments(PARSE_ARGV 1 _a ""
+    "CONFIG_NAME;EXPORT_NAME;MPI_DEP_BLOCK;DEPS_BLOCK" "")
   set(${outvar} "\
-# ${config_name}Config.cmake
+# ${_a_CONFIG_NAME}Config.cmake
 # Auto-generated by FortranCompiler.cmake
 #
 # This package's archive contains no Fortran objects and is not bound
@@ -820,8 +979,8 @@ function(_fc_untagged_config_content outvar config_name export_name mpi_dep_bloc
 cmake_minimum_required(VERSION 3.12)
 
 include(CMakeFindDependencyMacro)
-${mpi_dep_block}${deps_block}
-include(\"\${CMAKE_CURRENT_LIST_DIR}/${export_name}.cmake\")
+${_a_MPI_DEP_BLOCK}${_a_DEPS_BLOCK}
+include(\"\${CMAKE_CURRENT_LIST_DIR}/${_a_EXPORT_NAME}.cmake\")
 " PARENT_SCOPE)
 endfunction()
 
@@ -977,68 +1136,7 @@ function(fortran_install_library target)
   # find_dependency(MPI) whenever the Targets file references
   # MPI::MPI_* — independent of the flavor tag (see
   # _fc_mpi_dep_components above).
-  if(_mpi_dep_components)
-    list(JOIN _mpi_dep_components " " _mpi_dep_components_str)
-    set(_mpi_dep_block "\
-# The Targets file references MPI::MPI_{${_mpi_dep_components_str}} imported
-# targets (static archives export PRIVATE deps as LINK_ONLY entries); bring
-# them into scope so those references resolve.
-#
-# Only components for languages the consuming project() enabled may be
-# requested: FindMPI reports a component NOT-FOUND when its language was
-# never enabled, so an unconditional COMPONENTS list makes this package
-# unfindable from a single-language consumer.
-set(_FC_mpi_want ${_mpi_dep_components_str})
-set(_FC_mpi_req \"\")
-set(_FC_mpi_shim \"\")
-foreach(_FC_lang IN LISTS _FC_mpi_want)
-  if(CMAKE_\${_FC_lang}_COMPILER_LOADED)
-    list(APPEND _FC_mpi_req \${_FC_lang})
-  else()
-    list(APPEND _FC_mpi_shim \${_FC_lang})
-  endif()
-endforeach()
-# None of the wanted components is available — request whatever the
-# consumer does have, so the shims below have a real one to forward to.
-if(NOT _FC_mpi_req)
-  foreach(_FC_lang C CXX Fortran)
-    if(CMAKE_\${_FC_lang}_COMPILER_LOADED)
-      list(APPEND _FC_mpi_req \${_FC_lang})
-    endif()
-  endforeach()
-endif()
-if(_FC_mpi_req)
-  find_dependency(MPI COMPONENTS \${_FC_mpi_req})
-else()
-  find_dependency(MPI)
-endif()
-# Forwarding shims for the components this consumer cannot enable. What
-# these archives need from MPI::MPI_<lang> is the MPI runtime on the link
-# line — the same libraries whichever language asked for it — and they
-# reference it only as a LINK_ONLY item, so the component's compile
-# options never apply to the consumer's own sources (FindMPI fences those
-# behind a COMPILE_LANGUAGE genex in any case). This can never shadow a real
-# component: a shim is created only for a language the consumer has not
-# enabled, and FindMPI cannot produce MPI::MPI_<lang> for such a language.
-foreach(_FC_lang IN LISTS _FC_mpi_shim)
-  if(NOT TARGET MPI::MPI_\${_FC_lang})
-    foreach(_FC_alt IN LISTS _FC_mpi_req)
-      if(TARGET MPI::MPI_\${_FC_alt})
-        add_library(MPI::MPI_\${_FC_lang} INTERFACE IMPORTED)
-        set_target_properties(MPI::MPI_\${_FC_lang} PROPERTIES
-          INTERFACE_LINK_LIBRARIES MPI::MPI_\${_FC_alt})
-        break()
-      endif()
-    endforeach()
-  endif()
-endforeach()
-unset(_FC_mpi_want)
-unset(_FC_mpi_req)
-unset(_FC_mpi_shim)
-")
-  else()
-    set(_mpi_dep_block "")
-  endif()
+  _fc_mpi_dep_block(_mpi_dep_block "${_mpi_dep_components}")
 
   if(_is_mpi_lib)
     _fc_consumer_mpi_detect_block(_mpi_detect_block "${_config_name}")
@@ -1092,8 +1190,12 @@ unset(_FC_mpi_shim)
     # targets file; the Config includes the one matching the consumer's tag.
     set(_deps_file "${ARG_EXPORT}-deps-${_full_tag}.cmake")
     _fc_tag_deps_content(_deps_content
-      "${_deps_file}" "${_config_name}" "${_full_tag}"
-      "${_fortran_rt_block}" "${_mpi_dep_block}" "${_deps_block}")
+      DEPS_FILE "${_deps_file}"
+      CONFIG_NAME "${_config_name}"
+      FULL_TAG "${_full_tag}"
+      FORTRAN_RT_BLOCK "${_fortran_rt_block}"
+      MPI_DEP_BLOCK "${_mpi_dep_block}"
+      DEPS_BLOCK "${_deps_block}")
     file(GENERATE
       OUTPUT "${PROJECT_BINARY_DIR}/cmake/${_deps_file}"
       CONTENT "${_deps_content}"
@@ -1104,12 +1206,18 @@ unset(_FC_mpi_shim)
     )
 
     _fc_tagged_config_content(_config_content
-      "${_config_name}" "${ARG_EXPORT}" "${_consumer_tag_expr}"
-      "${_fc_detect_block}" "${_mpi_detect_block}" "${_cleanup_mpi}")
+      CONFIG_NAME "${_config_name}"
+      EXPORT_NAME "${ARG_EXPORT}"
+      CONSUMER_TAG_EXPR "${_consumer_tag_expr}"
+      FC_DETECT_BLOCK "${_fc_detect_block}"
+      MPI_DETECT_BLOCK "${_mpi_detect_block}"
+      CLEANUP_MPI "${_cleanup_mpi}")
   else()
     _fc_untagged_config_content(_config_content
-      "${_config_name}" "${ARG_EXPORT}"
-      "${_mpi_dep_block}" "${_deps_block}")
+      CONFIG_NAME "${_config_name}"
+      EXPORT_NAME "${ARG_EXPORT}"
+      MPI_DEP_BLOCK "${_mpi_dep_block}"
+      DEPS_BLOCK "${_deps_block}")
   endif()
 
   file(GENERATE
