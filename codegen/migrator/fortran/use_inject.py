@@ -8,6 +8,7 @@ import re
 
 from ..target_mode import TargetMode
 from .lex import (
+    FIXED_FORM_LABEL_FIELD, FIXED_FORM_WIDTH, FREE_FORM_WIDTH,
     _END_PROC_RE, _INTERFACE_BEGIN_RE, _INTERFACE_END_RE, _PROC_HEADER_RE,
     _looks_like_statement_function,
     _scan_local_declared_names, _scan_referenced_identifiers,
@@ -104,8 +105,8 @@ def _wrap_use_clause(indent: str, body: str, fixed_form: bool) -> str:
     overflow the line, the current line is flushed and a new
     continuation line is started.
     """
-    cap = 72 if fixed_form else 132
-    cont_prefix = '     +' if fixed_form else (indent + '   ')
+    cap = FIXED_FORM_WIDTH if fixed_form else FREE_FORM_WIDTH
+    cont_prefix = (FIXED_FORM_LABEL_FIELD + '+') if fixed_form else (indent + '   ')
 
     full = indent + 'USE ' + body
     if len(full) <= cap:

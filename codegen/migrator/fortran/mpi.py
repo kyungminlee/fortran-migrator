@@ -7,7 +7,9 @@ migrated archives need (MPI_QQ_* / MPI_MM_* / ...) and injects the matching
 import re
 
 from ..target_mode import TargetMode
-from .lex import _END_PROC_RE, _PROC_HEADER_RE, walk_procedure_header
+from .lex import (
+    _END_PROC_RE, _PROC_HEADER_RE, match_paren, walk_procedure_header,
+)
 
 
 # Fortran-side MPI datatype name rewriter. In an `s*`/`c*` source MUMPS
@@ -121,20 +123,9 @@ def _sub_mpi_reduce_calls(source: str, rewrite) -> str:
         if m.start() < pos:
             continue  # inside a call we already consumed
         # Scan from the opening '(' (last char of the match) to its
-        # balanced close, tracking nesting depth.
-        depth = 0
-        i = m.end() - 1
-        n = len(source)
-        while i < n:
-            ch = source[i]
-            if ch == '(':
-                depth += 1
-            elif ch == ')':
-                depth -= 1
-                if depth == 0:
-                    break
-            i += 1
-        if depth != 0:
+        # balanced close.
+        i = match_paren(source, m.end() - 1)
+        if i is None:
             continue  # unbalanced (truncated file); leave untouched
         out.append(source[pos:m.start()])
         out.append(rewrite(source[m.start():i + 1]))

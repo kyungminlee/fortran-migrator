@@ -15,21 +15,15 @@ Segment tuple shape mirrors the fixed-form one:
 ``(kind, lines, terms, joined)`` with ``kind`` in
 ``'blank' | 'comment' | 'pp' | 'code'``.
 """
-from .lex import _ends_in_string, _find_inline_bang, _iter_outside_strings
+from .lex import (
+    _ends_in_string, _find_inline_bang, _iter_outside_strings,
+    split_term as _split_term,
+)
 
 __all__ = [
     'segment_free_form', 'reformat_free_line',
     '_ends_in_string', '_code_and_cont', '_split_term', '_strip_leading_amp',
 ]
-
-
-def _split_term(raw: str) -> tuple[str, str]:
-    """Split a physical line into (text, line_terminator)."""
-    if raw.endswith('\r\n'):
-        return raw[:-2], '\r\n'
-    if raw.endswith('\n') or raw.endswith('\r'):
-        return raw[:-1], raw[-1]
-    return raw, ''
 
 
 def _code_and_cont(text: str) -> tuple[str, bool, bool]:

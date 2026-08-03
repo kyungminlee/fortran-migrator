@@ -9,7 +9,7 @@ import re
 from ..target_mode import TargetMode
 from .lex import (
     _FORTRAN_OP_RE, _INT_CALL_RE, _NINT_CALL_RE, _STRING_SPLIT_RE,
-    split_top_level_commas,
+    match_paren, split_top_level_commas,
 )
 from .keepkind import has_keepkind_marker
 
@@ -224,16 +224,12 @@ def _rewrite_int_kind_on_real64x2(
             break
         out.append(line[i:m.start()])
         paren_open = m.end() - 1
-        depth, j = 1, paren_open + 1
-        while j < len(line) and depth > 0:
-            ch = line[j]
-            if ch == '(': depth += 1
-            elif ch == ')': depth -= 1
-            j += 1
-        if depth != 0:
+        paren_close = match_paren(line, paren_open)
+        if paren_close is None:
             out.append(line[m.start():])
             break
-        inner = line[paren_open + 1:j - 1]
+        j = paren_close + 1
+        inner = line[paren_open + 1:paren_close]
         parts = split_top_level_commas(inner)
         if (len(parts) == 2
                 and re.fullmatch(r'\s*(?:KIND\s*=\s*)?\w+\s*', parts[1])):
@@ -281,18 +277,9 @@ def _rewrite_int_of_complex(line: str, complex_names: set[str]) -> str:
             if not m:
                 break
             paren_open = m.end() - 1
-            depth = 1
-            i = paren_open + 1
-            while i < len(out) and depth > 0:
-                ch = out[i]
-                if ch == '(':
-                    depth += 1
-                elif ch == ')':
-                    depth -= 1
-                i += 1
-            if depth != 0:
+            paren_close = match_paren(out, paren_open)
+            if paren_close is None:
                 break
-            paren_close = i - 1
             inner = out[paren_open + 1:paren_close]
             head = re.match(r'\s*([A-Za-z_]\w*)', inner)
             if head and head.group(1).upper() in complex_names:
