@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from .cmake_gen import generate_cmake
-from .divergence import run_divergence_report
+from .divergence_report import run_divergence_report
 from .pipeline import classify_recipe_symbols, run_migration
 from .prepare import prepare_recipe, run_prepare, verify_patches
 from .cli_common import (

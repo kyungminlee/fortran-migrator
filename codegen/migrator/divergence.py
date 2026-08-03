@@ -1,26 +1,24 @@
-"""Convergence comparison engine and divergence reporting.
+"""Convergence comparison engine.
 
-Extracted verbatim from ``pipeline.py`` as part of the migrator
-file-restructuring refactor. Behaviour is unchanged; ``pipeline.py``
-imports :func:`_canonicalize_for_compare` and
+Everything here is pure text canonicalization: two sources migrated
+onto the same target are normalized until only meaningful differences
+remain, so a byte comparison answers "did these converge?".
+
+``pipeline.py`` imports :func:`_canonicalize_for_compare` and
 :func:`_strip_fortran_comments` from here for its convergence-buffer
-equality check, and ``__main__`` imports :func:`run_divergence_report`.
-
-Everything in this module is pure text comparison — the actual
-migration machinery (parsing, renaming, parallel workers) stays in
-``pipeline.py`` and is imported lazily by :func:`run_divergence_report`.
+equality check; :mod:`divergence_report` drives the whole comparison
+for the ``--divergence-report`` command. This module imports no
+migration machinery of its own, so neither direction cycles.
 """
 
 import re
 from pathlib import Path
 
 from .config import RecipeConfig
-from .prepare import prepare_recipe
-from .prefix_classifier import classify_symbols
 from .fortran.lex import (
-    _find_inline_bang, is_comment_line, is_continuation_line,
+    _find_inline_bang, is_comment_line, is_continuation_line, match_paren,
+    split_top_level_commas,
 )
-from .fortran_migrator import target_filename
 
 
 def _stem_upper(filename: str) -> str:
@@ -131,6 +129,58 @@ def _sort_decl_match(match: re.Match, key=None, sep: str = ',') -> str:
     return f'{kw} ' + sep.join(items)
 
 
+_CAST_CALL_RE = re.compile(r'\b(?:REAL|CMPLX)\s*\(', re.IGNORECASE)
+_KIND_ARG_RE = re.compile(r'\s*KIND\s*=\s*\d+\s*')
+
+
+def _maybe_parenthesize(expr: str) -> str:
+    """Return ``expr``, parenthesized only when it needs to be.
+
+    A stripped cast keeps the surrounding context's precedence only if
+    a top-level additive operator survives the strip
+    (``REAL(N-1, KIND=16)*T`` → ``(N-1)*T`` rather than ``N-1*T``).
+    Single atoms keep their natural form, so ``REAL(X, KIND=16)`` → ``X``.
+    """
+    return f'({expr})' if _has_top_level_operator(expr) else expr
+
+
+def _rewrite_cast_call(call_head: str, inner: str) -> str:
+    """Canonicalize one ``REAL(...)`` / ``CMPLX(...)`` call.
+
+    ``call_head`` is the matched ``REAL(`` / ``CMPLX(`` text and
+    ``inner`` its already-recursively-stripped argument list, without
+    the closing paren. The result carries its own closing paren when
+    the call survives.
+    """
+    parts = split_top_level_commas(inner, brackets=True, keep_trailing=True)
+
+    # ``REAL(KIND=N)`` in declaration position is a type specifier, not
+    # a cast — leave it whole.
+    is_kind_decl = len(parts) == 1 and _KIND_ARG_RE.fullmatch(parts[0])
+    # A trailing ``KIND=N`` argument on any multi-arg call is noise:
+    # covers ``CMPLX(re, im, KIND=16)`` as well as ``REAL(x, KIND=16)``.
+    is_kinded_multi = len(parts) >= 2 and _KIND_ARG_RE.fullmatch(parts[-1])
+    is_real_call = call_head.upper().lstrip().startswith('REAL')
+
+    if is_kinded_multi:
+        if len(parts) == 2:
+            # 1-data-arg form: reduce to the bare identifier/expr.
+            return _maybe_parenthesize(parts[0].strip())
+        # Multi-arg CMPLX(a, b, KIND=N) → CMPLX(a, b)
+        return call_head + ','.join(p.strip() for p in parts[:-1]) + ')'
+
+    if is_real_call and not is_kind_decl and len(parts) == 1:
+        # Single-arg REAL(X) is stripped too: it is an integer→real
+        # promotion the compiler would insert implicitly when X is used
+        # in a real context, so ``REAL(MAXITR)*UNFL`` is semantically
+        # identical to ``MAXITR*UNFL`` after migration.
+        return _maybe_parenthesize(parts[0].strip())
+
+    # Not a shape we rewrite — keep the call, with its inner expression
+    # already stripped recursively.
+    return call_head + inner + ')'
+
+
 def _strip_real_cmplx_casts(text: str) -> str:
     """Strip ``REAL(expr, KIND=N)`` and ``CMPLX(expr, KIND=N)`` wrappers,
     replacing them with just ``expr``. Single-argument ``REAL(expr)``
@@ -138,88 +188,27 @@ def _strip_real_cmplx_casts(text: str) -> str:
     ``CMPLX(expr)`` is NOT — it materially changes the result type
     from real to complex and the two halves genuinely may differ in
     how they construct complex literals."""
-    pattern = re.compile(r'\b(?:REAL|CMPLX)\s*\(', re.IGNORECASE)
     out = []
     i = 0
     while i < len(text):
-        m = pattern.search(text, i)
+        m = _CAST_CALL_RE.search(text, i)
         if not m:
             out.append(text[i:])
             break
         out.append(text[i:m.start()])
-        # Find matching ')'
-        depth = 1
-        j = m.end()
-        while j < len(text) and depth > 0:
-            c = text[j]
-            if c == '(':
-                depth += 1
-            elif c == ')':
-                depth -= 1
-                if depth == 0:
-                    break
-            j += 1
-        if depth != 0:
+        call_head = m.group(0)
+        close = match_paren(text, m.end() - 1)
+        if close is None:
             # Unmatched — give up on this match
-            out.append(text[m.start():m.end()])
+            out.append(call_head)
             i = m.end()
             continue
-        inner = text[m.end():j]
         # Recurse into the inner expression so nested casts are
         # stripped even when the outer call doesn't match the KIND
         # shape we rewrite.
-        inner = _strip_real_cmplx_casts(inner)
-        parts = _split_top_level_comma(inner)
-        is_real_call = text[m.start():m.end()].upper().lstrip().startswith('REAL')
-        # Skip declaration-form ``REAL(KIND=N)`` — that's a type
-        # specifier, not a cast.
-        is_kind_decl = (len(parts) == 1 and
-                        re.fullmatch(r'\s*KIND\s*=\s*\d+\s*', parts[0]))
-        # Strip trailing ``KIND=N`` from any multi-arg call. This
-        # covers ``CMPLX(re, im, KIND=16)`` as well as
-        # ``REAL(x, KIND=16)``.
-        is_kinded_multi = (len(parts) >= 2 and
-                           re.fullmatch(r'\s*KIND\s*=\s*\d+\s*', parts[-1]))
-        if is_kinded_multi:
-            # Drop the KIND= tail argument but keep the call.
-            call_head = text[m.start():m.end()]
-            new_inner = ','.join(p.strip() for p in parts[:-1])
-            if len(parts) == 2:
-                # 1-data-arg form: reduce to bare identifier/expr.
-                inner_expr = parts[0].strip()
-                if _has_top_level_operator(inner_expr):
-                    out.append('(' + inner_expr + ')')
-                else:
-                    out.append(inner_expr)
-            else:
-                # Multi-arg CMPLX(a, b, KIND=N) → CMPLX(a, b)
-                out.append(call_head + new_inner + ')')
-            i = j + 1
-            continue
-        if not is_kind_decl and (
-                (len(parts) == 1 and is_real_call)):
-            # Wrap the stripped expression in parens ONLY when the
-            # inner contains a top-level additive operator — the
-            # surrounding context's precedence then matches the
-            # unwrapped side (``REAL(N-1, KIND=16)*T`` → ``(N-1)*T``
-            # rather than ``N-1*T``). Single atoms keep their natural
-            # form so ``REAL(X, KIND=16)`` → ``X``.
-            #
-            # Single-arg REAL(X)/CMPLX(X) is also stripped: it is an
-            # integer→real promotion that the Fortran compiler would
-            # insert implicitly when X is used in a real context, so
-            # ``REAL(MAXITR)*UNFL`` is semantically identical to
-            # ``MAXITR*UNFL`` after migration.
-            inner_expr = parts[0].strip()
-            if _has_top_level_operator(inner_expr):
-                out.append('(' + inner_expr + ')')
-            else:
-                out.append(inner_expr)
-        else:
-            # Not the shape we want — keep original call, but with
-            # inner expression already stripped recursively.
-            out.append(text[m.start():m.end()] + inner + ')')
-        i = j + 1
+        inner = _strip_real_cmplx_casts(text[m.end():close])
+        out.append(_rewrite_cast_call(call_head, inner))
+        i = close + 1
     return ''.join(out)
 
 
@@ -250,23 +239,6 @@ def _has_top_level_operator(s: str) -> bool:
                 continue
             return True
     return False
-
-
-def _split_top_level_comma(s: str) -> list[str]:
-    """Split on commas that are not inside nested parens or brackets."""
-    out: list[str] = []
-    depth = 0
-    start = 0
-    for i, c in enumerate(s):
-        if c in '([':
-            depth += 1
-        elif c in ')]':
-            depth -= 1
-        elif c == ',' and depth == 0:
-            out.append(s[start:i])
-            start = i + 1
-    out.append(s[start:])
-    return out
 
 
 _LABEL_PATTERN = re.compile(
@@ -683,112 +655,3 @@ def _canonicalize_for_compare(text: str) -> str:
     for step in _CANONICALIZE_PASSES:
         text = step(text)
     return text
-
-
-def run_divergence_report(recipe_path: Path, target_mode=None,
-                           project_root: Path | None = None,
-                           parser: str | None = None,
-                           parser_cmd: str | None = None,
-                           apply_whitelist: bool = True) -> list[dict]:
-    """Migrate every co-family source pair in-memory and return the
-    normalized diff for each pair whose members disagree.
-
-    Returns a list of ``{'target', 'canonical', 'other', 'diff'}``
-    dicts, sorted by target filename. ``diff`` is the list of +/-
-    lines (without context) from the unified diff of the two
-    canonicalized texts.
-    """
-    # Deferred import: pipeline.py imports this module at top level for
-    # the convergence comparison helpers, so pulling the migration
-    # machinery back in must wait until call time to avoid a cycle.
-    from .pipeline import (
-        _apply_extra_renames,
-        _build_module_rename_pairs,
-        _canonical_rank,
-        _collect_all_symbols,
-        _migrate_parallel,
-        _postprocess_migrated,
-    )
-
-    config = prepare_recipe(recipe_path, project_root)
-
-    symbols = _collect_all_symbols(config, project_root)
-    classification = classify_symbols(symbols)
-    rename_map = classification.build_rename_map(target_mode)
-    rename_map = _apply_extra_renames(rename_map, config, target_mode)
-
-    # Group eligible source files by their target output name.
-    src_files = sorted(
-        p for p in config.source_dir.iterdir()
-        if p.suffix.lower() in config.extensions
-    )
-    by_target: dict[str, list[Path]] = {}
-    for p in src_files:
-        stem_u = p.stem.upper()
-        if stem_u in config.skip_files or stem_u in config.copy_files:
-            continue
-        if stem_u in classification.independent:
-            continue
-        by_target.setdefault(target_filename(p.name, rename_map, target_mode), []).append(p)
-
-    # Migrate every member of every multi-member group in parallel.
-    pairs: list[tuple[Path, Path]] = []
-    for members in by_target.values():
-        if len(members) < 2:
-            continue
-        members.sort(key=lambda p: (
-            _canonical_rank(p.stem, config.prefer_source),
-            p.name,
-        ))
-        canonical = members[0]
-        for other in members[1:]:
-            pairs.append((canonical, other))
-
-    all_paths = {p for pair in pairs for p in pair}
-    module_rename_pairs = _build_module_rename_pairs(config)
-    results = _migrate_parallel(all_paths, rename_map, target_mode,
-                                parser, parser_cmd, config)
-    texts: dict[Path, str] = {}
-    for p, res in results.items():
-        if res is None:
-            continue
-        _, migrated = res
-        texts[p] = _postprocess_migrated(migrated, p, config,
-                                         module_rename_pairs)
-
-    # Memoize the normalized text per path. A 4-member precision
-    # family produces 3 pairs that all share the same canonical;
-    # without this cache the canonical's _canonicalize_for_compare +
-    # _strip_fortran_comments pipeline ran once per pair.
-    normalized: dict[Path, str] = {}
-
-    def _normalize(p: Path) -> str:
-        n = normalized.get(p)
-        if n is None:
-            n = _canonicalize_for_compare(
-                _strip_fortran_comments(texts[p], p.suffix))
-            normalized[p] = n
-        return n
-
-    report: list[dict] = []
-    for canonical, other in pairs:
-        if canonical not in texts or other not in texts:
-            continue
-        n_can = _normalize(canonical)
-        n_oth = _normalize(other)
-        if n_can == n_oth:
-            continue
-        diff = _filter_precision_drift(
-            n_oth.splitlines(), n_can.splitlines())
-        if not diff:
-            continue
-        report.append({
-            'target': target_filename(canonical.name, rename_map, target_mode),
-            'canonical': canonical.name,
-            'other': other.name,
-            'diff': diff,
-        })
-    report.sort(key=lambda r: (r['other'], r['canonical']))
-    if not apply_whitelist:
-        return report
-    return _filter_expected_divergences(report, config)

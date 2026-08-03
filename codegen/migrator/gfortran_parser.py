@@ -15,60 +15,52 @@ The output reuses :class:`parse_facts.ParseTreeFacts` and its component
 dataclasses so that the downstream migrator is parser-agnostic.
 """
 
-import functools
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 from .parse_facts import ParseTreeFacts, RoutineDef, TypeDecl
+from .parser_common import run_dump, which_first
 
 
 # ---------------------------------------------------------------------------
 # Locate gfortran
 # ---------------------------------------------------------------------------
 
-@functools.cache
-def find_gfortran() -> str | None:
-    """Find the gfortran executable on PATH. Cached — the migrator
-    calls this once per source file when --parser gfortran is set."""
-    for name in ('gfortran', 'gfortran-14', 'gfortran-13', 'gfortran-12'):
-        path = shutil.which(name)
-        if path:
-            return path
-    return None
+# The parser-module interface the migrator dispatches on: every parser
+# module exports ``find_compiler``, ``run_parse_tree`` and ``scan_file``
+# under those names, so the caller needs no per-parser branch.
+_GFORTRAN_NAMES = ('gfortran', 'gfortran-14', 'gfortran-13', 'gfortran-12')
+
+
+def find_compiler() -> str | None:
+    """Find the gfortran executable on PATH, or None if absent."""
+    return which_first(_GFORTRAN_NAMES)
 
 
 # ---------------------------------------------------------------------------
 # Run gfortran
 # ---------------------------------------------------------------------------
 
-def run_gfortran_parse_tree(source_path: Path,
-                            gfortran_cmd: str | None = None) -> str | None:
+def run_parse_tree(source_path: Path,
+                   gfortran_cmd: str | None = None) -> str | None:
     """Run gfortran to get a parse tree dump.
 
     Returns the dump text, or None if gfortran is unavailable or fails.
     """
     if gfortran_cmd is None:
-        gfortran_cmd = find_gfortran()
+        gfortran_cmd = find_compiler()
     if gfortran_cmd is None:
         return None
 
     # gfortran doesn't have a direct equivalent to -fno-sema for dumping.
-    # -fdump-fortran-original always runs after resolution.
-    cmd = [gfortran_cmd, '-fdump-fortran-original', '-fsyntax-only',
-           str(source_path)]
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=30,
-        )
-        # gfortran prints the dump to stdout and may still return 0 even
-        # with warnings; accept any output.
-        if not result.stdout:
-            return None
-        return result.stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return None
+    # -fdump-fortran-original always runs after resolution.  It prints
+    # the dump to stdout and may still return 0 with only warnings, so
+    # an empty dump — not the exit status — is the failure signal.
+    return run_dump(
+        [gfortran_cmd, '-fdump-fortran-original', '-fsyntax-only',
+         str(source_path)],
+        lambda result: bool(result.stdout),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -356,15 +348,11 @@ def parse_tree_facts(tree_text: str) -> ParseTreeFacts:
     for name in sorted(call_names):
         facts.call_sites.append(name.upper())
 
-    seen_call_names = set(facts.call_sites)
-    for name in sorted(func_ref_names):
-        uname = name.upper()
+    facts.extend_call_sites_unique(
         # Skip gfortran internal helper symbols (e.g. __max_i4, __convert_*)
-        if uname.startswith('__'):
-            continue
-        if uname not in seen_call_names:
-            facts.call_sites.append(uname)
-            seen_call_names.add(uname)
+        name.upper() for name in sorted(func_ref_names)
+        if not name.startswith('__')
+    )
 
     return facts
 
@@ -394,7 +382,7 @@ def scan_file(source_path: Path,
 
     Returns None if gfortran is not available or fails.
     """
-    tree_text = run_gfortran_parse_tree(source_path, gfortran_cmd)
+    tree_text = run_parse_tree(source_path, gfortran_cmd)
     if tree_text is None:
         return None
     return parse_tree_facts(tree_text)

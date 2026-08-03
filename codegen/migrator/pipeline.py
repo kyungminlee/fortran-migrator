@@ -16,7 +16,7 @@ from .config import RecipeConfig, load_recipe
 from .prepare import prepare_recipe
 
 
-def _build_module_rename_pairs(
+def build_module_rename_pairs(
     config: RecipeConfig,
 ) -> list[tuple[re.Pattern[str], str]]:
     """Compile the recipe's ``module_renames:`` map into regex pairs.
@@ -150,7 +150,7 @@ def classify_recipe_symbols(config: RecipeConfig):
     return classify_symbols(symbols)
 
 
-def _canonical_rank(stem: str, prefer: frozenset[str]) -> int:
+def canonical_rank(stem: str, prefer: frozenset[str]) -> int:
     # 0 = highest priority (recipe-pinned), 1 = D/Z default,
     # 2 = S/C fallback. Sorting ascending makes the preferred
     # source the first writer for each target.
@@ -162,7 +162,7 @@ def _canonical_rank(stem: str, prefer: frozenset[str]) -> int:
     return 2
 
 
-def _migrate_parallel(paths, rename_map: dict[str, str],
+def migrate_parallel(paths, rename_map: dict[str, str],
                       target_mode: TargetMode,
                       parser: str | None, parser_cmd: str | None,
                       config: RecipeConfig,
@@ -198,7 +198,7 @@ def _migrate_parallel(paths, rename_map: dict[str, str],
     return results
 
 
-def _postprocess_migrated(migrated: str, src_path: Path,
+def postprocess_migrated(migrated: str, src_path: Path,
                           config: RecipeConfig,
                           module_rename_pairs) -> str:
     """Post-migration text fixups: module renames + call-arg casts."""
@@ -262,7 +262,7 @@ def _collect_migration_sources(config: RecipeConfig) -> list[Path]:
     # ``prefer_source`` recipe field flips this for individual stems
     # (e.g. to route around a bug that only exists in the D/Z half).
     prefer = config.prefer_source
-    src_files.sort(key=lambda p: (_canonical_rank(p.stem, prefer), p.name))
+    src_files.sort(key=lambda p: (canonical_rank(p.stem, prefer), p.name))
     return src_files
 
 
@@ -287,7 +287,7 @@ def _reduce_migrated(to_migrate: list[Path], results: dict,
             skipped.append(src_path.name)
             continue
         out_name, migrated = result
-        migrated = _postprocess_migrated(migrated, src_path, config,
+        migrated = postprocess_migrated(migrated, src_path, config,
                                          module_rename_pairs)
         normalized = _canonicalize_for_compare(
             _strip_fortran_comments(migrated, src_path.suffix)
@@ -335,7 +335,7 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
     # Build module-rename regex pairs once. Applied post-migration to
     # every migrated file (copy_files are deliberately untouched so the
     # verbatim upstream module keeps its original name).
-    module_rename_pairs = _build_module_rename_pairs(config)
+    module_rename_pairs = build_module_rename_pairs(config)
 
     # Partition: copy/skip/dry-run decisions stay in the main process;
     # only the Flang-bound migration is dispatched to workers.
@@ -368,7 +368,7 @@ def run_fortran_migration(config: RecipeConfig, rename_map: dict[str, str],
 
     # Parallel migration. We reduce results in canonical-first order so
     # D/Z output is the one written to disk.
-    results = _migrate_parallel(to_migrate, rename_map, target_mode,
+    results = migrate_parallel(to_migrate, rename_map, target_mode,
                                 parser, parser_cmd, config)
 
     migrated_count, more_skipped, more_divergences = _reduce_migrated(
@@ -439,6 +439,29 @@ def _collect_all_symbols(config: RecipeConfig,
         symbols |= _scan_extra_dirs(dep_cfg.extra_symbol_dirs, dep_c_types)
         queue.extend(dep_cfg.depends)
     return symbols
+
+
+class ClassifiedSymbols(NamedTuple):
+    """The symbol universe of a recipe and what it renames to."""
+    symbols: set[str]
+    classification: object          # prefix_classifier.SymbolClassification
+    rename_map: dict[str, str]
+
+
+def classify_and_rename(config: RecipeConfig, target_mode: TargetMode,
+                        project_root: Path | None = None,
+                        ) -> ClassifiedSymbols:
+    """Assemble the symbol universe and derive the rename map from it.
+
+    The shared prologue of both drivers that migrate a whole recipe —
+    :func:`run_migration` here and ``divergence_report`` — so the two
+    cannot drift on which symbols are in scope or which renames apply.
+    """
+    symbols = _collect_all_symbols(config, project_root)
+    classification = classify_symbols(symbols)
+    rename_map = classification.build_rename_map(target_mode)
+    rename_map = _apply_extra_renames(rename_map, config, target_mode)
+    return ClassifiedSymbols(symbols, classification, rename_map)
 
 
 def run_c_migration(config: RecipeConfig, output_dir: Path,
@@ -562,11 +585,8 @@ def run_migration(recipe_path: Path, output_dir: Path,
         extra_c_return_types=tuple(config.c_return_types),
     )
     own_count = len(own_symbols)
-    symbols = _collect_all_symbols(config, project_root)
-
-    classification = classify_symbols(symbols)
-    rename_map = classification.build_rename_map(target_mode)
-    rename_map = _apply_extra_renames(rename_map, config, target_mode)
+    symbols, classification, rename_map = classify_and_rename(
+        config, target_mode, project_root)
 
     # NOTE: target_mode.known_constants (ZERO/ONE/...) are handled
     # per-file by strip_known_constants_from_decls +

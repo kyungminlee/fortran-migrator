@@ -503,7 +503,9 @@ def split_term(raw: str) -> tuple[str, str]:
     return raw, ''
 
 
-def split_top_level_commas(text: str, *, strip: bool = False) -> list[str]:
+def split_top_level_commas(text: str, *, strip: bool = False,
+                           brackets: bool = False,
+                           keep_trailing: bool = False) -> list[str]:
     """Split ``text`` on commas at paren depth 0.
 
     Deliberately quote-blind, matching every historical hand-rolled
@@ -515,21 +517,31 @@ def split_top_level_commas(text: str, *, strip: bool = False) -> list[str]:
     are kept ("a,,b" -> ["a", "", "b"]) but a trailing empty piece is
     dropped ("a," -> ["a"]; "" -> []).
     ``strip=True`` strips each piece and drops all empty ones.
+
+    ``brackets=True`` also counts ``[`` / ``]`` toward the depth, so a
+    comma inside an array constructor does not split.
+    ``keep_trailing=True`` emits the final piece even when it is empty
+    ("a," -> ["a", ""]; "" -> [""]).
+    Both default off: they exist for the divergence canonicalizer,
+    whose hand-rolled copy of this scan behaved that way, and changing
+    the default would change every other caller's output.
     """
     parts: list[str] = []
     current: list[str] = []
+    openers = '([' if brackets else '('
+    closers = ')]' if brackets else ')'
     depth = 0
     for ch in text:
-        if ch == '(':
+        if ch in openers:
             depth += 1
-        elif ch == ')':
+        elif ch in closers:
             depth -= 1
         elif ch == ',' and depth == 0:
             parts.append(''.join(current))
             current = []
             continue
         current.append(ch)
-    if current:
+    if current or keep_trailing:
         parts.append(''.join(current))
     if strip:
         return [p for p in (part.strip() for part in parts) if p]

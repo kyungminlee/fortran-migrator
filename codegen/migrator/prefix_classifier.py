@@ -33,7 +33,35 @@ This naturally handles any prefix convention without hardcoding:
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
+
+# Diagnostic prose for the two rename-map collision checks below. These
+# are documentation — how to get out of the collision — so they live
+# here rather than inline in the checks.
+_CROSS_FAMILY_HELP = (
+    "\n  Two distinct upstream families rename to the "
+    "same target — the migrator would silently merge "
+    "them, leading to nondeterministic link-time symbol "
+    "selection and (typically) a SEGV from a calling "
+    "convention mismatch. Add an ``extra_renames:`` "
+    "entry in the owning library's recipe (codegen/recipes/"
+    "<lib>.yaml) that pins one of the conflicting sources "
+    "to a distinct target name, or remap the conflicting "
+    "letter in ``prefixes:`` of codegen/targets/<target>.yaml to "
+    "an unused letter (W and U are unused across the "
+    "entire BLAS / LAPACK / ScaLAPACK / MUMPS source "
+    "corpus)."
+)
+
+_ORPHAN_HELP = (
+    "\n  Orphan symbols and rename targets share names; the "
+    "linker may silently pick the wrong definition. If the "
+    "orphan is the intended implementation (e.g. an "
+    "upstream-provided helper), this is benign. Otherwise, "
+    "investigate the family-discovery picker or change the "
+    "target prefix to avoid the overlap."
+)
 
 # Character → type tag. Real and complex never merge: pass-1 and pass-2
 # only share a tagged pattern when their tags agree position-by-position.
@@ -56,8 +84,12 @@ class PrecisionSlot:
 
 @dataclass
 class PrecisionFamily:
-    """A group of symbols sharing the same tagged pattern."""
-    pattern: str                     # e.g., '#RGEMM', '#C#RROT'
+    """A group of symbols sharing the same tagged pattern.
+
+    The tagged pattern itself (``'#RGEMM'``, ``'#C#RROT'``) is the
+    grouping key inside :func:`classify_symbols` and is not carried on
+    the family: every consumer keys off ``members`` or ``slots``.
+    """
     members: dict[str, str]          # precision_key → symbol name
     slots: list[PrecisionSlot]       # positions + type tags
 
@@ -106,35 +138,30 @@ class SymbolClassification:
             if new_name and new_name != sym:
                 rename[sym] = new_name
 
-        # Collision diagnostic 1: an orphaned (un-renamed) symbol whose
-        # name equals another symbol's rename target will silently
-        # shadow that target at link time. We hit this with multifloats'
-        # DD/ZZ prefixes: BLAS DDOT renamed to DDDOT collided with
-        # ScaLAPACK's orphaned DDDOT wrapper, corrupting pddpotf2.
-        # Surface the conflict so the developer can investigate
-        # (re-pick the prefix, force-rename, etc.) rather than letting
-        # the migrator emit a silent miscompile.
-        #
-        # Collision diagnostic 2: two distinct source symbols both
-        # rename to the same target. We hit this with multifloats'
-        # D→T, Z→V where DVASUM and DZASUM both rename to TVASUM.
-        # That's a hard merge; one of them needs an explicit
-        # ``extra_renames`` entry in the owning library's recipe to
-        # pin the source to a distinct target name, or the target's
-        # ``prefixes:`` map in ``codegen/targets/<target>.yaml`` must move
-        # the conflicting letter to an unused one.
+        # target → the sources that produce it, the input both collision
+        # diagnostics below key on.
         targets: dict[str, list[str]] = {}
         for src, tgt in rename.items():
             targets.setdefault(tgt, []).append(src)
-        collisions = sorted(
-            (tgt, sorted(srcs)) for tgt, srcs in targets.items()
-            if tgt in self.independent
-        )
-        # Flag only CROSS-family collisions. Co-family pairs (SGEMM,
-        # DGEMM) both rename to QGEMM by design — the same family
-        # converges. The dangerous case is two DISTINCT families
-        # (different upstream patterns) producing the same target,
-        # which would silently merge two unrelated routines.
+
+        self._check_cross_family_collisions(targets)
+        self._warn_orphan_collisions(targets)
+        return rename
+
+    def _check_cross_family_collisions(
+            self, targets: dict[str, list[str]]) -> None:
+        """Raise if two distinct source symbols rename to one target.
+
+        We hit this with multifloats' D→T, Z→V where DVASUM and DZASUM
+        both rename to TVASUM. That's a hard merge; one of them needs an
+        explicit ``extra_renames`` entry in the owning library's recipe.
+
+        Flag only CROSS-family collisions. Co-family pairs (SGEMM,
+        DGEMM) both rename to QGEMM by design — the same family
+        converges. The dangerous case is two DISTINCT families
+        (different upstream patterns) producing the same target, which
+        would silently merge two unrelated routines.
+        """
         cross_family: list[tuple[str, list[str]]] = []
         for tgt, srcs in targets.items():
             if len(srcs) <= 1:
@@ -146,48 +173,47 @@ class SymbolClassification:
             fam_ids = {id(self._symbol_to_family.get(s.upper())) for s in srcs}
             if len(fam_ids) > 1:
                 cross_family.append((tgt, sorted(srcs)))
+        if not cross_family:
+            return
         cross_family.sort()
-        if cross_family:
-            lines = [
-                f"  {tgt!r}: produced by {srcs}"
-                for tgt, srcs in cross_family
-            ]
-            raise RuntimeError(
-                "prefix-classifier cross-family rename collisions:\n"
-                + "\n".join(lines)
-                + "\n  Two distinct upstream families rename to the "
-                "same target — the migrator would silently merge "
-                "them, leading to nondeterministic link-time symbol "
-                "selection and (typically) a SEGV from a calling "
-                "convention mismatch. Add an ``extra_renames:`` "
-                "entry in the owning library's recipe (codegen/recipes/"
-                "<lib>.yaml) that pins one of the conflicting sources "
-                "to a distinct target name, or remap the conflicting "
-                "letter in ``prefixes:`` of codegen/targets/<target>.yaml to "
-                "an unused letter (W and U are unused across the "
-                "entire BLAS / LAPACK / ScaLAPACK / MUMPS source "
-                "corpus)."
-            )
-        if collisions:
-            import sys
-            lines = [
-                f"  {tgt!r}: rename target of {srcs}, "
-                f"but also exists as an orphaned (un-renamed) symbol"
-                for tgt, srcs in collisions
-            ]
-            print(
-                "WARNING: prefix-classifier rename-map collisions:\n"
-                + "\n".join(lines)
-                + "\n  Orphan symbols and rename targets share names; the "
-                "linker may silently pick the wrong definition. If the "
-                "orphan is the intended implementation (e.g. an "
-                "upstream-provided helper), this is benign. Otherwise, "
-                "investigate the family-discovery picker or change the "
-                "target prefix to avoid the overlap.",
-                file=sys.stderr,
-            )
+        lines = [
+            f"  {tgt!r}: produced by {srcs}"
+            for tgt, srcs in cross_family
+        ]
+        raise RuntimeError(
+            "prefix-classifier cross-family rename collisions:\n"
+            + "\n".join(lines)
+            + _CROSS_FAMILY_HELP
+        )
 
-        return rename
+    def _warn_orphan_collisions(self, targets: dict[str, list[str]]) -> None:
+        """Warn when a rename target is also an orphaned symbol's name.
+
+        An orphaned (un-renamed) symbol whose name equals another
+        symbol's rename target will silently shadow that target at link
+        time. We hit this with multifloats' DD/ZZ prefixes: BLAS DDOT
+        renamed to DDDOT collided with ScaLAPACK's orphaned DDDOT
+        wrapper, corrupting pddpotf2. Surface the conflict so the
+        developer can investigate (re-pick the prefix, force-rename,
+        etc.) rather than letting the migrator emit a silent miscompile.
+        """
+        collisions = sorted(
+            (tgt, sorted(srcs)) for tgt, srcs in targets.items()
+            if tgt in self.independent
+        )
+        if not collisions:
+            return
+        lines = [
+            f"  {tgt!r}: rename target of {srcs}, "
+            f"but also exists as an orphaned (un-renamed) symbol"
+            for tgt, srcs in collisions
+        ]
+        print(
+            "WARNING: prefix-classifier rename-map collisions:\n"
+            + "\n".join(lines)
+            + _ORPHAN_HELP,
+            file=sys.stderr,
+        )
 
 
 def _build_tagged_pattern(sym: str, positions: tuple[int, ...]) -> str:
@@ -316,7 +342,7 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
     assigned: set[str] = set()
     result = SymbolClassification()
 
-    for (pattern, positions), (single, double) in sorted_candidates:
+    for (_pattern, positions), (single, double) in sorted_candidates:
         # Skip members already claimed by a larger/tighter family
         unassigned_single = {s: t for s, t in single.items()
                              if s not in assigned}
@@ -340,7 +366,6 @@ def classify_symbols(symbols: set[str]) -> SymbolClassification:
             member_dict[prec_key] = sym
 
         family = PrecisionFamily(
-            pattern=pattern,
             members=member_dict,
             slots=slots,
         )

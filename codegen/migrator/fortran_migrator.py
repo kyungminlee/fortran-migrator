@@ -30,8 +30,10 @@ just the names those drivers use.
 
 import dataclasses
 import re
+from importlib import import_module
 from pathlib import Path
 
+from .parse_facts import ParseTreeFacts
 from .target_mode import TargetMode
 
 from .fortran.use_inject import insert_use_multifloats, specialize_use_module
@@ -425,6 +427,35 @@ def _apply_local_passes(source: str, passes, *, fixed_form: bool) -> str:
     return ''.join(out)
 
 
+# ``--parser`` value → parser module name. Both modules expose the same
+# three names (``find_compiler``, ``run_parse_tree``, ``scan_file``), so
+# a third parser is a table entry rather than another branch below. The
+# import stays deferred: neither module is loaded unless a parser oracle
+# was actually requested.
+_PARSER_MODULES = {
+    'flang': 'flang_parser',
+    'gfortran': 'gfortran_parser',
+}
+
+
+def _scan_facts(src_path: Path, parser: str | None,
+                parser_cmd: str | None) -> ParseTreeFacts | None:
+    """Run the requested parse-tree oracle over one source file.
+
+    Returns None when no parser was requested, the parser name is
+    unknown, the compiler isn't installed, or the dump failed — the
+    caller then falls back to the pure source-level migration.
+    """
+    module_name = _PARSER_MODULES.get(parser or '')
+    if module_name is None:
+        return None
+    module = import_module(f'.{module_name}', __package__)
+    cmd = parser_cmd or module.find_compiler()
+    if not cmd:
+        return None
+    return module.scan_file(src_path, cmd)
+
+
 def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
                            target_mode: TargetMode,
                            parser: str | None = None,
@@ -434,15 +465,7 @@ def migrate_file_to_string(src_path: Path, rename_map: dict[str, str],
                            comp_complex: frozenset[str] = frozenset(),
                            ) -> tuple[str, str] | None:
     ext, source = src_path.suffix.lower(), src_path.read_text(errors='replace')
-    facts = None
-    if parser == 'flang':
-        from .flang_parser import scan_file as flang_scan, find_flang
-        cmd = parser_cmd or find_flang()
-        if cmd: facts = flang_scan(src_path, cmd)
-    elif parser == 'gfortran':
-        from .gfortran_parser import scan_file as gfortran_scan, find_gfortran
-        cmd = parser_cmd or find_gfortran()
-        if cmd: facts = gfortran_scan(src_path, cmd)
+    facts = _scan_facts(src_path, parser, parser_cmd)
 
     if keep_kind_lines:
         source = _apply_keep_kind_sentinel(source, keep_kind_lines)

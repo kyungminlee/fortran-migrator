@@ -14,13 +14,11 @@ tree tells us WHAT needs transformation, then source-level regex applies
 the actual byte-range replacements (preserving formatting).
 """
 
-import functools
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 from .parse_facts import ParseTreeFacts, RoutineDef, TypeDecl
+from .parser_common import run_dump, which_first
 
 
 # The Flang parse-tree dump emits ``Name = 'IDENT'`` markers on
@@ -29,40 +27,33 @@ from .parse_facts import ParseTreeFacts, RoutineDef, TypeDecl
 _NAME_RE = re.compile(r"Name\s*=\s*'(\w+)'")
 
 
-@functools.cache
-def find_flang() -> str | None:
-    """Find the flang-new executable. Cached — shutil.which stats $PATH
-    on every invocation, and the migrator calls this once per source
-    file when --parser flang is set."""
-    for name in ('flang-new', 'flang'):
-        path = shutil.which(name)
-        if path:
-            return path
-    return None
+# The parser-module interface the migrator dispatches on: every parser
+# module exports ``find_compiler``, ``run_parse_tree`` and ``scan_file``
+# under those names, so the caller needs no per-parser branch.
+_FLANG_NAMES = ('flang-new', 'flang')
 
 
-def run_flang_parse_tree(source_path: Path,
-                         flang_cmd: str | None = None) -> str | None:
+def find_compiler() -> str | None:
+    """Find the flang-new executable, or None if it isn't on PATH."""
+    return which_first(_FLANG_NAMES)
+
+
+def run_parse_tree(source_path: Path,
+                   flang_cmd: str | None = None) -> str | None:
     """Run Flang to get a parse tree dump.
 
     Returns the parse tree text, or None if Flang fails.
     """
     if flang_cmd is None:
-        flang_cmd = find_flang()
+        flang_cmd = find_compiler()
     if flang_cmd is None:
         return None
 
-    cmd = [flang_cmd, '-fc1', '-fdebug-dump-parse-tree-no-sema',
-           str(source_path)]
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=30
-        )
-        if result.returncode != 0:
-            return None
-        return result.stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return None
+    return run_dump(
+        [flang_cmd, '-fc1', '-fdebug-dump-parse-tree-no-sema',
+         str(source_path)],
+        lambda result: result.returncode == 0,
+    )
 
 
 def parse_tree_facts(tree_text: str) -> ParseTreeFacts:
@@ -141,18 +132,13 @@ def parse_tree_facts(tree_text: str) -> ParseTreeFacts:
 
     # Also scan for all ProcedureDesignator names (function references
     # that appear as sub-expressions, like DCONJG, LSAME, etc.).
-    # Use a set for O(1) duplicate detection — the previous
-    # ``any(...)`` scan over the list was O(N) per ProcedureDesignator,
-    # quadratic in total over the parse tree.
-    seen_call_names = set(facts.call_sites)
+    designators: list[str] = []
     for line in lines:
         if 'ProcedureDesignator -> Name' in line:
             m = _NAME_RE.search(line)
             if m:
-                name = m.group(1).upper()
-                if name not in seen_call_names:
-                    facts.call_sites.append(name)
-                    seen_call_names.add(name)
+                designators.append(m.group(1).upper())
+    facts.extend_call_sites_unique(designators)
 
     return facts
 
@@ -249,7 +235,7 @@ def scan_file(source_path: Path,
 
     Returns None if Flang is not available or fails.
     """
-    tree_text = run_flang_parse_tree(source_path, flang_cmd)
+    tree_text = run_parse_tree(source_path, flang_cmd)
     if tree_text is None:
         return None
     return parse_tree_facts(tree_text)
