@@ -9,16 +9,22 @@ extensions: [.f]
 depends:
   - blas.yaml
   - blacs.yaml
-  # PBBLAS' pb*tran / pb*trnv / pb*trsrt / pb*trget / pb*trst1 call
-  # NUMROC / ICEIL / ILCM. These are precision-independent integer
-  # helpers that live in ScaLAPACK's TOOLS/ tree but are hosted in
-  # their own tiny library so PBBLAS' downstreams (e.g. tests/pbblas)
-  # don't have to drag in libqscalapack to resolve them.
-  - scalapack_tools.yaml
 
-# PBBLAS files also reference PTZBLAS routines (DAGEMV, etc.)
+# PBBLAS files also reference PTZBLAS routines (DAGEMV, etc.).
+#
+# TOOLS/ is scanned for the same reason: PBBLAS' pb*tran / pb*trnv /
+# pb*trsrt / pb*trget / pb*trst1 call NUMROC / ICEIL / ILCM, which are
+# precision-independent integer helpers living in ScaLAPACK's TOOLS/
+# tree. Scanning puts them in the symbol universe so the call sites
+# pass through unrenamed; PBBLAS does not migrate them. They are
+# *defined* in scalapack_common, which is what PBBLAS' downstreams
+# link — see the force_common note in scalapack.yaml. Scanning TOOLS
+# directly rather than depending on scalapack.yaml keeps the symbol
+# universe to what PBBLAS actually needs: a depends edge would pull in
+# all of SRC/ and REDIST/ and rewrite the rename map with it.
 extra_symbol_dirs:
   - extern/scalapack-2.2.3/PBLAS/SRC/PTZBLAS
+  - extern/scalapack-2.2.3/TOOLS
 
 skip_files: []
 

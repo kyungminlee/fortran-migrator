@@ -196,11 +196,10 @@ _REF_EXCLUDE_STEMS: dict[str, set[str]] = {
 # Libraries for which the embedded template emits a standard-precision
 # sibling archive. Matches the ``add_standard_fortran_library`` /
 # ``add_standard_c_library`` set in ``cmake/CMakeLists.txt``. Other
-# Fortran recipes (mumps, scalapack_tools, xblas) intentionally don't
-# get a sibling: mumps's sources need extra include directories the
-# embedded template doesn't wire; scalapack_tools' three helpers are
-# already inside the std scalapack archive; xblas is C-only and the C
-# template doesn't ship a sibling.
+# Fortran recipes (mumps, xblas) intentionally don't get a sibling:
+# mumps's sources need extra include directories the embedded template
+# doesn't wire; xblas is C-only and the C template doesn't ship a
+# sibling.
 _REF_LIBRARIES: set[str] = {
     'blas', 'lapack', 'ptzblas', 'pbblas', 'scalapack',
 }

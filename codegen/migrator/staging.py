@@ -189,11 +189,6 @@ LIBRARY_ORDER = [
     ('blacs',       'blacs.yaml'),
     ('lapack',      'lapack.yaml'),
     ('ptzblas',     'ptzblas.yaml'),
-    # Leaf symbol-provider for NUMROC / ICEIL / ILCM: kept so pbblas.yaml
-    # keeps its cycle-free numroc symbol context. Its migrated output is
-    # no longer built — the three helpers are folded into scalapack_common
-    # (migrated by scalapack.yaml). Still staged (harmless, unused manifest).
-    ('scalapack_tools', 'scalapack_tools.yaml'),
     ('pbblas',      'pbblas.yaml'),
     ('pblas',       'pblas.yaml'),
     ('scalapack',   'scalapack.yaml'),
