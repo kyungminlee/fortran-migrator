@@ -9,7 +9,9 @@ import functools
 from pathlib import Path
 
 from ..target_mode import TargetMode
-from .lex import _STRING_SPLIT_RE, _find_inline_bang, is_comment_line
+from .lex import (
+    KEEPKIND_DP, _STRING_SPLIT_RE, _find_inline_bang, is_comment_line,
+)
 
 
 @functools.cache
@@ -32,7 +34,7 @@ def replace_routine_names(line: str, rename_map: dict[str, str]) -> str:
     """Replace routine names using the rename map (case-preserving).
 
     Tokenize-then-lookup: scan ``line`` for identifier-shaped tokens
-    and dict-look each one up. This sidesteps the multi-thousand
+    and dict-look each one up. This replaced a multi-thousand
     alternation regex that Python's ``re`` engine evaluates by
     backtracking through every alternative at every position, which
     profiling showed dominated migration runtime (~60% of total time
@@ -42,7 +44,7 @@ def replace_routine_names(line: str, rename_map: dict[str, str]) -> str:
     captured by ``[A-Za-z_]\\w*`` match exactly the ``\\b...\\b``-
     bounded forms the alternation regex used to find.
     """
-    _, upper_map = _get_rename_pattern(rename_map)
+    upper_map = _get_upper_rename_map(rename_map)
     if not upper_map:
         return line
 
@@ -93,13 +95,18 @@ def replace_include_filenames(line: str, rename_map: dict[str, str]) -> str:
     return f'{m.group("lead")} {m.group("q")}{new_name}{m.group("q")}{m.group("tail")}'
 
 
-# key: id(rename_map) -> (pattern, upper_map, source_dict). The source
-# dict is stored in the value so it stays alive for as long as its cache
-# entry does — this is what makes keying on id() safe (see below).
-_RENAME_PATTERN_CACHE: dict[int, tuple[re.Pattern, dict[str, str], dict[str, str]]] = {}
+# key: id(rename_map) -> (upper_map, source_dict). The source dict is
+# stored in the value so it stays alive for as long as its cache entry
+# does — this is what makes keying on id() safe (see below).
+_UPPER_RENAME_MAP_CACHE: dict[int, tuple[dict[str, str], dict[str, str]]] = {}
 
 
-def _get_rename_pattern(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[str, str]]:
+def _get_upper_rename_map(rename_map: dict[str, str]) -> dict[str, str]:
+    """Upper-cased view of ``rename_map``, cached per source dict.
+
+    Built once per map because :func:`replace_routine_names` is called
+    per source *line* and the maps run to thousands of entries.
+    """
     # Cache key is id(rename_map). id() alone is NOT a safe key across
     # different dicts: CPython reuses the address of a garbage-collected
     # object, so a stale entry could be returned for an unrelated dict
@@ -118,20 +125,18 @@ def _get_rename_pattern(rename_map: dict[str, str]) -> tuple[re.Pattern, dict[st
     #   2. On a hit we still verify identity (``is``); a mismatch forces
     #      a recompute. Belt-and-suspenders against any future eviction.
     key = id(rename_map)
-    cached = _RENAME_PATTERN_CACHE.get(key)
-    if cached is not None and cached[2] is rename_map:
-        return cached[0], cached[1]
+    cached = _UPPER_RENAME_MAP_CACHE.get(key)
+    if cached is not None and cached[1] is rename_map:
+        return cached[0]
     upper_map = {k.upper(): v for k, v in rename_map.items()}
-    names = sorted(upper_map.keys(), key=len, reverse=True)
-    pattern = re.compile(r'\b(' + '|'.join(re.escape(n) for n in names) + r')\b', re.IGNORECASE) if names else re.compile(r'(?!x)x')
     # Bound memory: per-file maps accumulate one entry each over a full
     # stage. Clear wholesale past a generous cap (entries are cheap to
     # rebuild; the hot path is the stable run-wide map, re-cached on the
     # next call).
-    if len(_RENAME_PATTERN_CACHE) > 4096:
-        _RENAME_PATTERN_CACHE.clear()
-    _RENAME_PATTERN_CACHE[key] = (pattern, upper_map, rename_map)
-    return pattern, upper_map
+    if len(_UPPER_RENAME_MAP_CACHE) > 4096:
+        _UPPER_RENAME_MAP_CACHE.clear()
+    _UPPER_RENAME_MAP_CACHE[key] = (upper_map, rename_map)
+    return upper_map
 
 
 def _all_known_constant_renames(target_mode: TargetMode) -> dict[str, str]:
@@ -155,7 +160,7 @@ _DECL_KEYWORD_RE = re.compile(
     # un-masked originals so that subsequent passes (e.g.
     # ``replace_known_constants``) don't try to rewrite identifiers in
     # what is logically still a declaration line.
-    r'__KEEPKIND_DP__\b)',
+    + KEEPKIND_DP + r'\b)',
     re.IGNORECASE,
 )
 

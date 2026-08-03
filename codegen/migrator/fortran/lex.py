@@ -177,16 +177,32 @@ def _looks_like_statement_function(stripped: str, lines: list[str], k: int) -> b
     return False
 
 
-# ``__KEEPKIND_DP__`` is the keep-kind sentinel that stands in for
-# ``DOUBLE PRECISION`` (see fortran/keepkind.py). ``specialize_use_module``
-# scans for locally-declared names while the sentinel is still in place —
-# the restore happens only after migrate_*_form returns — so this pattern
-# must recognise the sentinel too, or a keep-kind-protected local (e.g. a
-# ``DOUBLE PRECISION :: GAMMA`` that collides with a multifloats generic)
-# is missed and wrongly imported via ``USE ..., only:``.
+# --- Keep-kind sentinels ----------------------------------------------
+# The tokens ``fortran/keepkind.py`` swaps in for ``DOUBLE PRECISION`` /
+# ``dble`` / ``dcmplx`` on the lines listed in a recipe's
+# keep-kind.manifest, so those lines survive every type-rewriting regex
+# untouched. They live here rather than in ``keepkind`` because three
+# other modules must recognise them and this is the layer all of them
+# already import; ``keepkind``, which owns the apply/restore passes,
+# takes them from here under its own ``_KK_*`` spellings.
+#
+# Every pass that runs *between* apply and restore has to treat a
+# sentinel exactly as it would treat the token it stands for. Miss one
+# and the effect is silent: ``specialize_use_module``, for instance,
+# scans for locally-declared names while the sentinel is still in place,
+# so a keep-kind-protected ``DOUBLE PRECISION :: GAMMA`` that collides
+# with a multifloats generic would be missed and wrongly imported via
+# ``USE ..., only:``.
+KEEPKIND_DP = '__KEEPKIND_DP__'
+KEEPKIND_DBLE = '__KEEPKIND_DBLE__'
+KEEPKIND_DCMPLX = '__KEEPKIND_DCMPLX__'
+KEEPKIND_MARKERS = (KEEPKIND_DP, KEEPKIND_DBLE, KEEPKIND_DCMPLX)
+
+
 _DECL_LINE_RE = re.compile(
     r'^\s+(?:TYPE\s*\([^)]*\)|INTEGER\b|REAL\b|COMPLEX\b|LOGICAL\b|'
-    r'CHARACTER\b|DOUBLE\s+PRECISION\b|DOUBLE\s+COMPLEX\b|__KEEPKIND_DP__)',
+    r'CHARACTER\b|DOUBLE\s+PRECISION\b|DOUBLE\s+COMPLEX\b|'
+    + KEEPKIND_DP + r')',
     re.IGNORECASE,
 )
 

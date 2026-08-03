@@ -34,7 +34,9 @@ class TargetMode:
     la_constants_map: dict[str, str]   # la_constants rename map
     la_constants_suffix: str           # '_EY' (kind10), '_QX' (kind16), '_MW' (multifloats)
 
-    # Module public names (for building USE...ONLY clauses)
+    # Module public names (for building USE...ONLY clauses). All four are
+    # loaded from the target YAML's ``module:`` block; ``module_public_names``
+    # below is their union and is what the USE-injection passes key off.
     module_type_names: frozenset[str] = field(default_factory=frozenset)
     module_constant_names: frozenset[str] = field(default_factory=frozenset)
     module_generic_names: frozenset[str] = field(default_factory=frozenset)

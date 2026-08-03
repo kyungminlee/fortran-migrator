@@ -8,7 +8,7 @@ import re
 import functools
 
 from ..target_mode import TargetMode
-from .lex import is_continuation_line
+from .lex import is_continuation_line, split_top_level_commas
 
 
 # Pre-compiled patterns for replace_type_decls. The 14 substitutions
@@ -81,6 +81,33 @@ _TD_CMPLX_KIND_8 = re.compile(
 # skippable. Most LAPACK source lines (executable statements,
 # comments, blank lines) hit this gate and return immediately.
 _TD_GATE_RE = re.compile(r'\b(?:REAL|COMPLEX|DOUBLE|WP)\b', re.IGNORECASE)
+
+
+# The various ways an FP type can appear in a source file. Keep this
+# list aligned with the ``_TD_*`` patterns above -- if `replace_type_decls`
+# can rewrite the form, this should recognise it, so that the parser-guided
+# caller's fallback triggers and the rewrite actually runs. It lives here,
+# next to what it must stay aligned with, rather than at the call site.
+#
+# It is currently a *subset*: it catches DOUBLE PRECISION, DOUBLE COMPLEX,
+# COMPLEX*N, REAL*N, COMPLEX(...) and REAL(...) with a numeric kind, but
+# not the ``E0``/``D0``/``WP`` kind spellings that `_TD_REAL_KIND_E0` &
+# co. rewrite. Widening it changes which files take the fallback and so
+# changes migrated output; that is a behavior change, not a refactor.
+_FP_TYPE_SYNTAX_RES = tuple(re.compile(p, re.IGNORECASE) for p in (
+    r'\bDOUBLE\s+PRECISION\b',
+    r'\bDOUBLE\s+COMPLEX\b',
+    r'\bCOMPLEX\s*\*\s*\d+',
+    r'\bREAL\s*\*\s*\d+',
+    r'\bCOMPLEX\s*\(\s*(?:KIND\s*=\s*)?\d+\s*\)',
+    r'\bREAL\s*\(\s*(?:KIND\s*=\s*)?\d+\s*\)',
+))
+
+
+def source_has_fp_type_syntax(source: str) -> bool:
+    """True when ``source`` spells a floating-point type in any form
+    :func:`replace_type_decls` is known to rewrite."""
+    return any(rx.search(source) for rx in _FP_TYPE_SYNTAX_RES)
 
 
 def replace_type_decls(
@@ -264,6 +291,82 @@ def fix_misdeclared_statement_functions(source: str,
     return ''.join(out)
 
 
+def _collect_decl_statement(lines: list[str], start: int, vars_part: str) -> int:
+    """Index one past the last physical line of the declaration that
+    begins at ``lines[start]``.
+
+    Continuations come in two flavours and a single statement may use
+    both: a fixed-form col-6 marker on the *following* line, or a
+    free-form ``&`` at the end of the *preceding* one. ``vars_part`` is
+    the first line's variable list, already separated from the type
+    text, and seeds the free-form look-behind.
+    """
+    j = start + 1
+    prev_amp = vars_part.rstrip().endswith('&')
+    while j < len(lines):
+        nxt = lines[j]
+        if is_continuation_line(nxt):
+            j += 1
+            continue
+        if prev_amp:
+            prev_amp = nxt.rstrip('\n').rstrip().endswith('&')
+            j += 1
+            continue
+        break
+    return j
+
+
+def _strip_trailing_amp(s: str) -> str:
+    s = s.rstrip()
+    return s[:-1].rstrip() if s.endswith('&') else s
+
+
+def _join_decl_var_text(vars_part: str, cont_lines: list[str]) -> tuple[str, str]:
+    """Join a declaration's variable list into one logical string.
+
+    Strips the continuation glue — ``&`` at either end in free form, the
+    col-6 marker in fixed form — and splits off a trailing inline
+    comment, which is returned separately so the caller can re-attach it
+    to the rebuilt declaration.
+    """
+    full = _strip_trailing_amp(vars_part)
+    for cl in cont_lines:
+        body = cl.rstrip('\n')
+        if is_continuation_line(body):
+            body = body[6:]
+        body = body.lstrip()
+        if body.startswith('&'):
+            body = body[1:]
+        full = full + ' ' + _strip_trailing_amp(body)
+
+    bang = full.find('!')
+    if bang < 0:
+        return full, ''
+    return full[:bang], full[bang:]
+
+
+def _filter_known_items(
+    items: list[str], known: dict[str, str], file_complex_names: set[str],
+) -> tuple[list[str], dict[str, str]]:
+    """Split a declaration's entity list into the entities to keep and
+    the known constants to drop.
+
+    Only a *bare* identifier is droppable: ``it == nm.group(1)`` rejects
+    anything carrying an array spec or trailing text. Names some other
+    procedure in the file declares COMPLEX are kept — see the caller.
+    """
+    kept: list[str] = []
+    dropped: dict[str, str] = {}
+    for it in items:
+        nm = re.match(r'^([A-Za-z_]\w*)', it)
+        if (nm and nm.group(1).upper() in known and it == nm.group(1)
+                and nm.group(1).upper() not in file_complex_names):
+            dropped[nm.group(1).upper()] = known[nm.group(1).upper()]
+            continue  # drop bare known-constant name
+        kept.append(it)
+    return kept, dropped
+
+
 def strip_known_constants_from_decls(
     source: str, target_mode: TargetMode,
 ) -> tuple[str, dict[str, str]]:
@@ -331,58 +434,10 @@ def strip_known_constants_from_decls(
         if re.search(r'COMPLEX', type_text, re.IGNORECASE):
             out.append(raw); i += 1; continue
 
-        # Collect continuation lines (fixed-form col-6 marker, OR
-        # previous logical line ends with '&').
-        stmt_lines = [raw]
-        j = i + 1
-        prev_amp = vars_part.rstrip().endswith('&')
-        while j < len(lines):
-            nxt = lines[j]
-            if is_continuation_line(nxt):
-                stmt_lines.append(nxt); j += 1; continue
-            if prev_amp:
-                stmt_lines.append(nxt)
-                prev_amp = nxt.rstrip('\n').rstrip().endswith('&')
-                j += 1; continue
-            break
-
-        # Build the joined var-list text. Strip continuation markers
-        # ('&' free-form, col-6 char fixed-form) and inline comments.
-        def _strip_amp(s: str) -> str:
-            s = s.rstrip()
-            return s[:-1].rstrip() if s.endswith('&') else s
-
-        full = _strip_amp(vars_part)
-        for cl in stmt_lines[1:]:
-            body = cl.rstrip('\n')
-            if is_continuation_line(body):
-                body = body[6:]
-            body = body.lstrip()
-            if body.startswith('&'):
-                body = body[1:]
-            full = full + ' ' + _strip_amp(body)
-
-        comment = ''
-        bang = full.find('!')
-        if bang >= 0:
-            comment = full[bang:]
-            full = full[:bang]
-
-        # Top-level comma split, respecting parentheses.
-        items: list[str] = []
-        cur, depth = '', 0
-        for ch in full:
-            if ch == '(':
-                depth += 1; cur += ch
-            elif ch == ')':
-                depth -= 1; cur += ch
-            elif ch == ',' and depth == 0:
-                if cur.strip(): items.append(cur.strip())
-                cur = ''
-            else:
-                cur += ch
-        if cur.strip():
-            items.append(cur.strip())
+        j = _collect_decl_statement(lines, i, vars_part)
+        stmt_lines = lines[i:j]
+        full, comment = _join_decl_var_text(vars_part, stmt_lines[1:])
+        items = split_top_level_commas(full, strip=True)
 
         # If any item has an '=' initializer, bail out — preserving
         # original is safer than rewriting initializer expressions.
@@ -390,14 +445,8 @@ def strip_known_constants_from_decls(
             for sl in stmt_lines: out.append(sl)
             i = j; continue
 
-        kept: list[str] = []
-        for it in items:
-            nm = re.match(r'^([A-Za-z_]\w*)', it)
-            if (nm and nm.group(1).upper() in known and it == nm.group(1)
-                    and nm.group(1).upper() not in file_complex_names):
-                removed[nm.group(1).upper()] = known[nm.group(1).upper()]
-                continue  # drop bare known-constant name
-            kept.append(it)
+        kept, dropped = _filter_known_items(items, known, file_complex_names)
+        removed.update(dropped)
 
         if len(kept) == len(items):
             for sl in stmt_lines: out.append(sl)
@@ -566,20 +615,11 @@ def _scan_typed_var_names(source: str, decl_re: re.Pattern) -> set[str]:
             rest = rest.split('::', 1)[1]
         if '!' in rest:
             rest = rest.split('!', 1)[0]
-        # Top-level comma split, ignoring parens
-        items, cur, depth = [], '', 0
-        for ch in rest:
-            if ch == '(':
-                depth += 1; cur += ch
-            elif ch == ')':
-                depth -= 1; cur += ch
-            elif ch == ',' and depth == 0:
-                items.append(cur); cur = ''
-            else:
-                cur += ch
-        if cur.strip():
-            items.append(cur)
-        for it in items:
+        # Unstripped: the name regex below tolerates leading blanks, and
+        # a whitespace-only trailing entity (``REAL A, ``) simply fails
+        # to match — which is what the hand-rolled split used to achieve
+        # by dropping it.
+        for it in split_top_level_commas(rest):
             nm = re.match(r'\s*([A-Za-z_]\w*)', it)
             if nm:
                 out.add(nm.group(1).upper())
