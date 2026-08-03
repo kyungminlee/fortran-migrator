@@ -3,9 +3,7 @@ program test_pzlantr
     use compare,          only: rel_err_scalar
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zlantr
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z
     use target_scalapack, only: target_name, target_eps, target_pzlantr
     implicit none
@@ -16,8 +14,7 @@ program test_pzlantr
     character(len=1), parameter :: norms(*) = [character(len=1) :: '1', 'I', 'F', 'M']
     character(len=1), parameter :: uplos(*) = [character(len=1) :: 'U', 'L']
     character(len=1), parameter :: diags(*) = [character(len=1) :: 'N', 'U']
-    integer :: i, j, k, l, m, n, info
-    integer :: locm_a, locn_a, lld_a
+    integer :: i, j, k, l, m, n
     integer :: desca(9)
     complex(ep), allocatable :: A_loc(:,:), A_glob(:,:)
     real(ep), allocatable :: work(:), work_ref(:)
@@ -31,9 +28,7 @@ program test_pzlantr
         m = ms(i); n = ns(i)
         call gen_distrib_matrix_z(m, n, mb, nb, A_loc, A_glob, seed = 16001 + 31*i)
 
-        locm_a = numroc_local(m, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, m, n, mb, nb)
 
         allocate(work(max(1, max(m, n))), work_ref(max(1, max(m, n))))
 

@@ -3,9 +3,7 @@ program test_pzgels
     use compare,          only: max_rel_err_mat_z
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zgels
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z, gather_matrix_z
     use target_scalapack, only: target_name, target_eps, target_pzgels
     implicit none
@@ -17,7 +15,6 @@ program test_pzgels
     integer, parameter :: nrhs = 3
     integer, parameter :: mb = 8, nb = 8
     integer :: ic, m, n, m_big, info, info_ref, lwork
-    integer :: locm_a, locn_a, lld_a, locm_b, lld_b
     integer :: desca(9), descb(9)
     complex(ep), allocatable :: A_loc(:,:), A_glob(:,:), B_loc(:,:), B_glob(:,:)
     complex(ep), allocatable :: B_got(:,:), A_ref(:,:), B_ref(:,:)
@@ -33,11 +30,8 @@ program test_pzgels
         call gen_distrib_matrix_z(m,  n,    mb, nb, A_loc, A_glob, seed = 11101 + 31*ic)
         call gen_distrib_matrix_z(m_big, nrhs, mb, nb, B_loc, B_glob, seed = 11111 + 31*ic)
 
-        locm_a = numroc_local(m,  mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n,  nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        locm_b = numroc_local(m_big, mb, my_row, 0, my_nprow); lld_b = max(1, locm_b)
-        call descinit_local(desca, m,  n,    mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descb, m_big, nrhs, mb, nb, 0, 0, my_context, lld_b, info)
+        call local_desc(desca, m,  n,    mb, nb)
+        call local_desc(descb, m_big, nrhs, mb, nb)
 
         allocate(work(1))
         call target_pzgels(transes(ic), m, n, nrhs, A_loc, 1, 1, desca, &

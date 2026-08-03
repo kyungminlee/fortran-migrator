@@ -9,9 +9,7 @@ program test_pzagemv
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_vec
     use pblas_prec_report,   only: report_init, report_case, report_finalize
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix_z, gen_distrib_vector_z, &
                              gen_distrib_vector, gather_vector
     use target_pblas,  only: target_name, target_eps, target_pzagemv
@@ -21,8 +19,8 @@ program test_pzagemv
     integer, parameter :: ns(*) = [40, 60]
     character(len=1), parameter :: transes(*) = ['N', 'T', 'C']
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, it, m, n, info, ii, jj
-    integer :: lenx, leny, locm_a, locn_a, locn_x, locn_y, lld_a, lld_x, lld_y
+    integer :: i, it, m, n, ii, jj
+    integer :: lenx, leny
     integer :: desca(9), descx(9), descy(9)
     character(len=1) :: trans
     complex(ep), allocatable :: A_loc(:,:), x_loc(:), A_glob(:,:), x_glob(:)
@@ -56,15 +54,9 @@ program test_pzagemv
             call gen_distrib_vector(leny, mb, y_loc, y_glob, &
                                     seed = 7141 + 11 * i + 113 * it)
 
-            locm_a = numroc_local(m, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
-            lld_a  = max(1, locm_a)
-            locn_x = numroc_local(lenx, nb, my_row, 0, my_nprow); lld_x = max(1, locn_x)
-            locn_y = numroc_local(leny, mb, my_row, 0, my_nprow); lld_y = max(1, locn_y)
-
-            call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descx, lenx, 1, nb, 1, 0, 0, my_context, lld_x, info)
-            call descinit_local(descy, leny, 1, mb, 1, 0, 0, my_context, lld_y, info)
+            call local_desc(desca, m, n, mb, nb)
+            call local_desc(descx, lenx, 1, nb, 1)
+            call local_desc(descy, leny, 1, mb, 1)
 
             call target_pzagemv(trans, m, n, alpha, A_loc, 1, 1, desca, &
                                 x_loc, 1, 1, descx, 1, beta, &

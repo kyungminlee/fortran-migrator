@@ -3,9 +3,7 @@ program test_pzlanhe
     use compare,          only: rel_err_scalar
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zlanhe
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z, scatter_matrix_z
     use target_scalapack, only: target_name, target_eps, target_pzlanhe
     implicit none
@@ -14,8 +12,7 @@ program test_pzlanhe
     integer, parameter :: mb = 8, nb = 8
     character(len=1), parameter :: norms(*) = [character(len=1) :: '1', 'I', 'F', 'M']
     character(len=1), parameter :: uplos(*) = [character(len=1) :: 'U', 'L']
-    integer :: i, j, k, n, info
-    integer :: locm_a, locn_a, lld_a
+    integer :: i, j, k, n
     integer :: desca(9)
     complex(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_herm(:,:)
     real(ep), allocatable :: work(:), work_ref(:)
@@ -31,10 +28,8 @@ program test_pzlanhe
         allocate(A_herm(n, n))
         A_herm = 0.5_ep * (A_glob + conjg(transpose(A_glob)))
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
         call scatter_matrix_z(n, n, mb, nb, A_herm, A_loc)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         allocate(work(max(1024, 8 * n)), work_ref(max(1024, 8 * n)))
 

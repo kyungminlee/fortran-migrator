@@ -4,9 +4,7 @@ program test_pztrcon
     use prec_kinds,        only: ep
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,   only: ztrcon
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,     only: gen_distrib_matrix_z, scatter_matrix_z
     use target_scalapack,  only: target_name, target_eps, target_pztrcon
     implicit none
@@ -14,7 +12,6 @@ program test_pztrcon
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref, lwork, lrwork
-    integer :: locm_a, locn_a, lld_a
     integer :: desca(9), ig, jg, owner_r, owner_c, il, jl
     complex(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_ref(:,:)
     complex(ep), allocatable :: work(:), work_ref(:)
@@ -37,9 +34,7 @@ program test_pztrcon
         end do
         call scatter_matrix_z(n, n, mb, nb, A_glob, A_loc)
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         allocate(work(1), rwork(1))
         call target_pztrcon('1', 'U', 'N', n, A_loc, 1, 1, desca, rcond, &

@@ -3,9 +3,7 @@ program test_pdtrsm
     use compare,       only: max_rel_err_mat
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: dtrsm
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix, gather_matrix, &
                              set_local_from_global
     use target_pblas,  only: target_name, target_eps, target_pdtrsm
@@ -23,9 +21,8 @@ program test_pdtrsm
     character(len=1), parameter :: diags(*)   = ['N', 'N', 'N', 'N', 'U', 'N']
     real(ep), parameter :: alphas(*) = [1.0_ep, 1.0_ep, 1.0_ep, 1.0_ep, 1.0_ep, 0.6_ep]
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, j, ic, m, n, info
+    integer :: i, j, ic, m, n
     integer :: ka
-    integer :: locm_a, locn_a, locm_b, locn_b, lld_a, lld_b
     integer :: desca(9), descb(9)
     character(len=1) :: side, uplo, transa, diag
     real(ep) :: bump, alpha, err, tol
@@ -62,13 +59,8 @@ program test_pdtrsm
                 call set_local_from_global(j, j, A_glob(j, j), mb, mb, A_loc)
             end do
 
-            locm_a = numroc_local(ka, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(ka, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-            locm_b = numroc_local(m, mb, my_row, 0, my_nprow)
-            locn_b = numroc_local(n, nb, my_col, 0, my_npcol); lld_b = max(1, locm_b)
-
-            call descinit_local(desca, ka, ka, mb, mb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descb, m, n, mb, nb, 0, 0, my_context, lld_b, info)
+            call local_desc(desca, ka, ka, mb, mb)
+            call local_desc(descb, m, n, mb, nb)
 
             call target_pdtrsm(side, uplo, transa, diag, m, n, alpha, &
                                A_loc, 1, 1, desca, B_loc, 1, 1, descb)

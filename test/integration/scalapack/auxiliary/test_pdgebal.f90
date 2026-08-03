@@ -5,9 +5,7 @@ program test_pdgebal
     use compare,          only: max_rel_err_mat, max_rel_err_vec
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dgebal
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_matrix
     use target_scalapack, only: target_name, target_eps, target_pdgebal
     implicit none
@@ -15,7 +13,6 @@ program test_pdgebal
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref, ilo, ihi, ilo_ref, ihi_ref
-    integer :: locm_a, locn_a, lld_a
     integer :: desca(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:), A_ref(:,:)
     real(ep), allocatable :: scale_got(:), scale_ref(:)
@@ -29,9 +26,7 @@ program test_pdgebal
         n = ns(i)
         call gen_distrib_matrix(n, n, mb, nb, A_loc, A_glob, seed = 22901 + 31*i)
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         allocate(scale_got(n))
         call target_pdgebal('B', n, A_loc, desca, ilo, ihi, scale_got, info)

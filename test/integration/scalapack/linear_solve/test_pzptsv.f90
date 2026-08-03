@@ -15,7 +15,7 @@ program test_pzptsv
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: nrhs  = 2
     integer :: i, n, nb, info, info_ref, lwork, ig, jl, lldB
-    integer :: bytes_per_elem_r, bytes_per_elem_c, ierr, src_rank, peer
+    integer :: bytes_per_elem_c, ierr, src_rank, peer
     integer, parameter :: tag = 7651
     integer :: desca(9), descb(9)
     real(ep),    allocatable :: d_glob(:)
@@ -132,7 +132,6 @@ program test_pzptsv
             call report_case(trim(label), err, tol)
             deallocate(d_ref, e_ref, B_ref, B_got)
         end if
-        bytes_per_elem_r = bytes_per_elem_c
         deallocate(d_loc, e_loc, B_loc, work, d_glob, e_glob, B_glob)
     end do
 

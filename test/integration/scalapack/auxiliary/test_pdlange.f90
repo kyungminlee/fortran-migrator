@@ -3,9 +3,9 @@ program test_pdlange
     use compare,          only: rel_err_scalar
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dlange
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                local_desc
     use pblas_distrib,    only: gen_distrib_matrix
     use target_scalapack, only: target_name, target_eps, target_pdlange
     implicit none
@@ -14,8 +14,8 @@ program test_pdlange
     integer, parameter :: ns(*) = [40, 48, 80]
     integer, parameter :: mb = 8, nb = 8
     character(len=1), parameter :: norms(*) = [character(len=1) :: '1', 'I', 'F', 'M']
-    integer :: i, j, m, n, info
-    integer :: locm_a, locn_a, lld_a
+    integer :: i, j, m, n
+    integer :: locm_a, locn_a
     integer :: desca(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:)
     real(ep), allocatable :: work(:), work_ref(:)
@@ -30,8 +30,8 @@ program test_pdlange
         call gen_distrib_matrix(m, n, mb, nb, A_loc, A_glob, seed = 9901 + 31*i)
 
         locm_a = numroc_local(m, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
+        call local_desc(desca, m, n, mb, nb)
 
         allocate(work(max(1, max(locm_a, locn_a))))
         allocate(work_ref(max(1, max(m, n))))

@@ -3,9 +3,7 @@ program test_pzpotri
     use compare,          only: max_rel_err_mat_z
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zpotrf, zpotri
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z, gather_matrix_z, &
                                 scatter_matrix_z
     use target_scalapack, only: target_name, target_eps, &
@@ -16,7 +14,6 @@ program test_pzpotri
     character(len=1), parameter :: uplos(*) = ['U', 'L', 'U']
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref, k
-    integer :: locm_a, locn_a, lld_a
     integer :: desca(9)
     integer :: ig, jg
     complex(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:)
@@ -36,10 +33,8 @@ program test_pzpotri
             A_herm(k, k) = A_herm(k, k) + cmplx(real(2 * n, ep), 0.0_ep, kind=ep)
         end do
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
         call scatter_matrix_z(n, n, mb, nb, A_herm, A_loc)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         call target_pzpotrf(uplos(i), n, A_loc, 1, 1, desca, info)
         call target_pzpotri(uplos(i), n, A_loc, 1, 1, desca, info)

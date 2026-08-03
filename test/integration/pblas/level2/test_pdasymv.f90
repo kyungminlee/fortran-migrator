@@ -5,9 +5,7 @@ program test_pdasymv
     use prec_kinds,    only: ep
     use compare,       only: max_rel_err_vec
     use pblas_prec_report,   only: report_init, report_case, report_finalize
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix, gen_distrib_vector, &
                              gather_vector
     use target_pblas,  only: target_name, target_eps, target_pdasymv
@@ -16,8 +14,7 @@ program test_pdasymv
     integer, parameter :: ns(*) = [40, 80]
     character(len=1), parameter :: uplos(*) = ['U', 'L']
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, iu, n, info, ii, jj
-    integer :: locm_a, locn_a, locn_x, locn_y, lld_a, lld_x, lld_y
+    integer :: i, iu, n, ii, jj
     integer :: desca(9), descx(9), descy(9)
     character(len=1) :: uplo
     real(ep), allocatable :: A_loc(:,:), x_loc(:), y_loc(:)
@@ -41,15 +38,9 @@ program test_pdasymv
             call gen_distrib_vector(n, mb, y_loc, y_glob, &
                                     seed = 6241 + 11 * i + 113 * iu)
 
-            locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
-            lld_a  = max(1, locm_a)
-            locn_x = numroc_local(n, nb, my_row, 0, my_nprow); lld_x = max(1, locn_x)
-            locn_y = numroc_local(n, mb, my_row, 0, my_nprow); lld_y = max(1, locn_y)
-
-            call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descx, n, 1, nb, 1, 0, 0, my_context, lld_x, info)
-            call descinit_local(descy, n, 1, mb, 1, 0, 0, my_context, lld_y, info)
+            call local_desc(desca, n, n, mb, nb)
+            call local_desc(descx, n, 1, nb, 1)
+            call local_desc(descy, n, 1, mb, 1)
 
             call target_pdasymv(uplo, n, alpha, A_loc, 1, 1, desca, &
                                 x_loc, 1, 1, descx, 1, beta, &

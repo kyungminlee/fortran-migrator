@@ -3,9 +3,9 @@ program test_pzgebrd
     use compare,          only: max_rel_err_mat_z
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zgebrd
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z, gather_matrix_z
     use target_scalapack, only: target_name, target_eps, target_pzgebrd
     implicit none
@@ -14,7 +14,7 @@ program test_pzgebrd
     integer, parameter :: ns(*) = [32, 64, 64]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, m, n, info, info_ref, lwork, mn
-    integer :: locm_a, locn_a, lld_a
+    integer :: locm_a, locn_a
     integer :: desca(9)
     complex(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:), A_ref(:,:)
     complex(ep), allocatable :: tauq(:), taup(:), work(:)
@@ -30,8 +30,8 @@ program test_pzgebrd
         call gen_distrib_matrix_z(m, n, mb, nb, A_loc, A_glob, seed = 13301 + 31*i)
 
         locm_a = numroc_local(m, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
+        call local_desc(desca, m, n, mb, nb)
 
         allocate(d(max(1, locn_a)), e(max(1, locm_a)), &
                  tauq(max(1, locn_a)), taup(max(1, locm_a)), work(1))

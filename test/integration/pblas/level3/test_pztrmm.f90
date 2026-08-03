@@ -3,9 +3,7 @@ program test_pztrmm
     use compare,       only: max_rel_err_mat_z
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: ztrmm
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix_z, gather_matrix_z
     use target_pblas,  only: target_name, target_eps, target_pztrmm
     implicit none
@@ -19,9 +17,8 @@ program test_pztrmm
     character(len=1), parameter :: transas(*) = ['N', 'N', 'T', 'N', 'N', 'C']
     character(len=1), parameter :: diags(*)   = ['N', 'N', 'N', 'N', 'U', 'N']
     integer, parameter :: mb = 8, nb = 8
-    integer :: i, ic, m, n, info
+    integer :: i, ic, m, n
     integer :: ka
-    integer :: locm_a, locn_a, locm_b, locn_b, lld_a, lld_b
     integer :: desca(9), descb(9)
     character(len=1) :: side, uplo, transa, diag
     complex(ep), allocatable :: A_loc(:,:), B_loc(:,:)
@@ -50,13 +47,8 @@ program test_pztrmm
             call gen_distrib_matrix_z(m, n, mb, nb, B_loc, B0, &
                                       seed = 14611 + 59 * i + 311 * ic)
 
-            locm_a = numroc_local(ka, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(ka, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-            locm_b = numroc_local(m, mb, my_row, 0, my_nprow)
-            locn_b = numroc_local(n, nb, my_col, 0, my_npcol); lld_b = max(1, locm_b)
-
-            call descinit_local(desca, ka, ka, mb, mb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descb, m, n, mb, nb, 0, 0, my_context, lld_b, info)
+            call local_desc(desca, ka, ka, mb, mb)
+            call local_desc(descb, m, n, mb, nb)
 
             call target_pztrmm(side, uplo, transa, diag, m, n, alpha, &
                                A_loc, 1, 1, desca, B_loc, 1, 1, descb)

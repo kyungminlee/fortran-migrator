@@ -4,9 +4,9 @@ program test_pzpotrs
     use compare,          only: max_rel_err_mat_z
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: zpotrf, zpotrs
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                local_desc
     use pblas_distrib,    only: gen_distrib_matrix_z, gather_matrix_z, &
                                 scatter_matrix_z
     use target_scalapack, only: target_name, target_eps, &
@@ -17,7 +17,7 @@ program test_pzpotrs
     integer, parameter :: nrhs  = 2
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref
-    integer :: locm_a, locn_a, locm_b, lld_a, lld_b
+    integer :: locm_a, locn_a
     integer :: desca(9), descb(9)
     complex(ep), allocatable :: A_loc(:,:), B_loc(:,:)
     complex(ep), allocatable :: A_glob(:,:), B_glob(:,:), B_got(:,:), B_ref(:,:)
@@ -42,13 +42,12 @@ program test_pzpotrs
         end do
 
         locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        locm_b = numroc_local(n, mb, my_row, 0, my_nprow); lld_b = max(1, locm_b)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
         allocate(A_loc(max(1, locm_a), max(1, locn_a)))
         A_loc = (0.0_ep, 0.0_ep)
         call scatter_matrix_z(n, n, mb, nb, A_glob, A_loc)
-        call descinit_local(desca, n, n,    mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descb, n, nrhs, mb, nb, 0, 0, my_context, lld_b, info)
+        call local_desc(desca, n, n,    mb, nb)
+        call local_desc(descb, n, nrhs, mb, nb)
 
         call target_pzpotrf('U', n, A_loc, 1, 1, desca, info)
         call target_pzpotrs('U', n, nrhs, A_loc, 1, 1, desca, &

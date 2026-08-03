@@ -4,9 +4,9 @@ program test_pdggrqf
     use compare,           only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,   only: dggrqf
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_nprow, &
+                                 my_npcol, my_row, my_col, numroc_local, &
+                                 local_desc
     use pblas_distrib,     only: gen_distrib_matrix, gather_matrix
     use target_scalapack,  only: target_name, target_eps, target_pdggrqf
     implicit none
@@ -16,7 +16,7 @@ program test_pdggrqf
     integer, parameter :: n_v(*) = [48, 64, 96]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, m, p, n, info, info_ref, lwork
-    integer :: locm_a, locn_a, lld_a, locm_b, locn_b, lld_b
+    integer :: locm_a, locn_b
     integer :: desca(9), descb(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:), A_ref(:,:)
     real(ep), allocatable :: B_loc(:,:), B_glob(:,:), B_got(:,:), B_ref(:,:)
@@ -34,11 +34,9 @@ program test_pdggrqf
         call gen_distrib_matrix(p, n, mb, nb, B_loc, B_glob, seed = 27211 + 31*i)
 
         locm_a = numroc_local(m, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        locm_b = numroc_local(p, mb, my_row, 0, my_nprow)
-        locn_b = numroc_local(n, nb, my_col, 0, my_npcol); lld_b = max(1, locm_b)
-        call descinit_local(desca, m, n, mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descb, p, n, mb, nb, 0, 0, my_context, lld_b, info)
+        locn_b = numroc_local(n, nb, my_col, 0, my_npcol)
+        call local_desc(desca, m, n, mb, nb)
+        call local_desc(descb, p, n, mb, nb)
 
         ! pdggrqf TAUA is row-distributed of size LOCr(IA+M-1); TAUB is
         ! column-distributed of size LOCc(JB+MIN(P,N)-1). Use locn_b

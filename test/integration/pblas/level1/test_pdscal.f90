@@ -3,15 +3,14 @@ program test_pdscal
     use compare,       only: max_rel_err_vec
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: dscal
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_row, numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_vector, gather_vector
     use target_pblas,  only: target_name, target_eps, target_pdscal
     implicit none
 
     integer, parameter :: cases(*) = [100, 1000, 5000]
     integer, parameter :: mb = 16
-    integer :: i, n, loc_n, lld, info
+    integer :: i, n
     integer :: descx(9)
     real(ep), allocatable :: x_loc(:), x_glob(:), x_got(:), x_ref(:)
     real(ep) :: alpha, err, tol
@@ -25,9 +24,7 @@ program test_pdscal
         n = cases(i)
         call gen_distrib_vector(n, mb, x_loc, x_glob, seed = 311 + 7 * i)
 
-        loc_n = numroc_local(n, mb, my_row, 0, my_nprow)
-        lld   = max(1, loc_n)
-        call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld, info)
+        call local_desc(descx, n, 1, mb, 1)
 
         call target_pdscal(n, alpha, x_loc, 1, 1, descx, 1)
         call gather_vector(n, mb, x_loc, x_got)

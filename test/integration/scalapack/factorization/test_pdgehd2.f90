@@ -5,9 +5,8 @@ program test_pdgehd2
     use compare,          only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dgehrd
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_npcol, &
+                                my_col, numroc_local, local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_matrix
     use target_scalapack, only: target_name, target_eps, target_pdgehd2
     implicit none
@@ -15,7 +14,7 @@ program test_pdgehd2
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, ilo, ihi, info, info_ref, lwork
-    integer :: locm_a, locn_a, lld_a
+    integer :: locn_a
     integer :: desca(9)
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_got(:,:), A_ref(:,:)
     real(ep), allocatable :: tau_got(:), tau_ref(:), work(:), work_ref(:)
@@ -29,9 +28,8 @@ program test_pdgehd2
         n = ns(i); ilo = 1; ihi = n
         call gen_distrib_matrix(n, n, mb, nb, A_loc, A_glob, seed = 15201 + 31*i)
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
+        call local_desc(desca, n, n, mb, nb)
 
         ! pdgehd2's documented LWORK >= NB + max(NpA0, NB) under-states
         ! actual usage on small grids. Allocate a generous buffer.

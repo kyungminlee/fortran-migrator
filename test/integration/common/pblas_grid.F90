@@ -30,6 +30,7 @@ module pblas_grid
     public :: pick_grid_shape
     public :: numroc_local
     public :: descinit_local
+    public :: local_desc
     public :: g2l
     ! Companion 1xNPROCS BLACS context used by the ScaLAPACK 1D-
     ! distributed routines (the tridiagonal / banded solver families).
@@ -227,6 +228,27 @@ contains
         desc(8)  = icsrc    ! process col that owns A(1,1)
         desc(9)  = max(1, lld)
     end subroutine descinit_local
+
+    ! Descriptor for an m-by-n global matrix distributed over the 2D
+    ! grid with mb-by-nb blocks from process (0,0). Every driver used
+    ! to spell this out as the same three statements:
+    !
+    !   locm = numroc_local(m, mb, my_row, 0, my_nprow)
+    !   locn = numroc_local(n, nb, my_col, 0, my_npcol)
+    !   call descinit_local(desc, m, n, mb, nb, 0, 0, my_context, &
+    !                       max(1, locm), info)
+    !
+    ! — with locn dead at most sites and info never read (descinit_local
+    ! has no failure path). Drivers that need the local extents for
+    ! their own allocations still call numroc_local directly.
+    subroutine local_desc(desc, m, n, mb, nb)
+        integer, intent(out) :: desc(9)
+        integer, intent(in)  :: m, n, mb, nb
+        integer :: locm, info
+        locm = numroc_local(m, mb, my_row, 0, my_nprow)
+        call descinit_local(desc, m, n, mb, nb, 0, 0, my_context, &
+                            max(1, locm), info)
+    end subroutine local_desc
 
     ! Build a 1D ScaLAPACK descriptor (7 integers — sized 9 to share
     ! the same array shape as 2D contexts).

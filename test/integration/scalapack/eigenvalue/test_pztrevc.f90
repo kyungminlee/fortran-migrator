@@ -6,9 +6,9 @@ program test_pztrevc
     ! small for each computed VR(:, k).
     use prec_kinds,        only: ep
     use pblas_prec_report, only: report_init, report_case, report_finalize
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_nprow, &
+                                 my_npcol, my_row, my_col, numroc_local, &
+                                 local_desc
     use pblas_distrib,     only: gen_distrib_matrix_z, gather_matrix_z, &
                                  scatter_matrix_z
     use target_scalapack,  only: target_name, target_eps, target_pztrevc
@@ -48,9 +48,9 @@ program test_pztrevc
 
         locm = numroc_local(n, mb, my_row, 0, my_nprow)
         locn = numroc_local(n, nb, my_col, 0, my_npcol); lld = max(1, locm)
-        call descinit_local(descT,  n, n, mb, nb, 0, 0, my_context, lld, info)
-        call descinit_local(descVL, n, n, mb, nb, 0, 0, my_context, lld, info)
-        call descinit_local(descVR, n, n, mb, nb, 0, 0, my_context, lld, info)
+        call local_desc(descT,  n, n, mb, nb)
+        call local_desc(descVL, n, n, mb, nb)
+        call local_desc(descVR, n, n, mb, nb)
 
         allocate(VL_loc(lld, max(1, locn)), VR_loc(lld, max(1, locn)))
         VL_loc = (0.0_ep, 0.0_ep); VR_loc = (0.0_ep, 0.0_ep)

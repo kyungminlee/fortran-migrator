@@ -3,7 +3,7 @@ program test_qgamx2d_rc
     use prec_kinds,        only: ep
     use blacs_prec_report, only: report_init, report_case, report_finalize
     use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_row, my_col, my_nprow, my_npcol
+                                 my_row, my_col, my_npcol
     use target_blacs,      only: target_name, target_qgamx2d, target_qgamn2d
     use mpi
     implicit none

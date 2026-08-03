@@ -6,9 +6,7 @@ program test_pdtrcon
     use prec_kinds,        only: ep
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,   only: dtrcon
-    use pblas_grid,        only: grid_init, grid_exit, my_rank, my_context, &
-                                 my_nprow, my_npcol, my_row, my_col, &
-                                 numroc_local, descinit_local
+    use pblas_grid,        only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib,     only: gen_distrib_matrix, scatter_matrix
     use target_scalapack,  only: target_name, target_eps, target_pdtrcon
     implicit none
@@ -16,7 +14,6 @@ program test_pdtrcon
     integer, parameter :: ns(*) = [32, 64, 96]
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref, lwork, liwork
-    integer :: locm_a, locn_a, lld_a
     integer :: desca(9), ig, jg, owner_r, owner_c, il, jl
     real(ep), allocatable :: A_loc(:,:), A_glob(:,:), A_ref(:,:)
     real(ep), allocatable :: work(:), work_ref(:)
@@ -40,9 +37,7 @@ program test_pdtrcon
         end do
         call scatter_matrix(n, n, mb, nb, A_glob, A_loc)
 
-        locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
 
         allocate(work(1), iwork(1))
         call target_pdtrcon('1', 'U', 'N', n, A_loc, 1, 1, desca, rcond, &

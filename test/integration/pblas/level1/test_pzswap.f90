@@ -3,15 +3,14 @@ program test_pzswap
     use compare,       only: max_rel_err_vec_z
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: zswap
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_row, numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_vector_z, gather_vector_z
     use target_pblas,  only: target_name, target_eps, target_pzswap
     implicit none
 
     integer, parameter :: cases(*) = [100, 1000, 5000]
     integer, parameter :: mb = 16
-    integer :: i, n, loc_n, lld, info
+    integer :: i, n
     integer :: descx(9), descy(9)
     complex(ep), allocatable :: x_loc(:), y_loc(:)
     complex(ep), allocatable :: x_glob(:), y_glob(:), x_got(:), y_got(:)
@@ -27,10 +26,8 @@ program test_pzswap
         call gen_distrib_vector_z(n, mb, x_loc, x_glob, seed = 2301 + 7 * i)
         call gen_distrib_vector_z(n, mb, y_loc, y_glob, seed = 2401 + 7 * i)
 
-        loc_n = numroc_local(n, mb, my_row, 0, my_nprow)
-        lld   = max(1, loc_n)
-        call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld, info)
-        call descinit_local(descy, n, 1, mb, 1, 0, 0, my_context, lld, info)
+        call local_desc(descx, n, 1, mb, 1)
+        call local_desc(descy, n, 1, mb, 1)
 
         call target_pzswap(n, x_loc, 1, 1, descx, 1, &
                            y_loc, 1, 1, descy, 1)

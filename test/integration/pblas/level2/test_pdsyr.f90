@@ -3,9 +3,7 @@ program test_pdsyr
     use compare,       only: max_rel_err_mat
     use pblas_prec_report,   only: report_init, report_case, report_finalize
     use pblas_ref_quad_blas, only: dsyr
-    use pblas_grid,    only: grid_init, grid_exit, my_rank, my_context, &
-                             my_nprow, my_npcol, my_row, my_col, &
-                             numroc_local, descinit_local
+    use pblas_grid,    only: grid_init, grid_exit, my_rank, local_desc
     use pblas_distrib, only: gen_distrib_matrix, gen_distrib_vector, &
                              gather_matrix
     use target_pblas,  only: target_name, target_eps, target_pdsyr
@@ -14,8 +12,7 @@ program test_pdsyr
     integer, parameter :: ns(*) = [32, 80, 160]
     character(len=1), parameter :: uplos(*) = ['U', 'L']
     integer, parameter :: mb = 8
-    integer :: i, iu, n, info
-    integer :: locm_a, locn_a, locn_x, lld_a, lld_x
+    integer :: i, iu, n
     integer :: desca(9), descx(9)
     character(len=1) :: uplo
     real(ep), allocatable :: A_loc(:,:), x_loc(:)
@@ -39,12 +36,8 @@ program test_pdsyr
             call gen_distrib_vector(n, mb, x_loc, x_glob, &
                                     seed = 5211 + 19 * i + 113 * iu)
 
-            locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-            locn_a = numroc_local(n, mb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
-            locn_x = numroc_local(n, mb, my_row, 0, my_nprow); lld_x = max(1, locn_x)
-
-            call descinit_local(desca, n, n, mb, mb, 0, 0, my_context, lld_a, info)
-            call descinit_local(descx, n, 1, mb, 1, 0, 0, my_context, lld_x, info)
+            call local_desc(desca, n, n, mb, mb)
+            call local_desc(descx, n, 1, mb, 1)
 
             call target_pdsyr(uplo, n, alpha, x_loc, 1, 1, descx, 1, &
                               A_loc, 1, 1, desca)

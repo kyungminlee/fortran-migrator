@@ -6,9 +6,9 @@ program test_pdsygst
     use compare,          only: max_rel_err_mat
     use pblas_prec_report, only: report_init, report_case, report_finalize
     use ref_quad_lapack,  only: dpotrf, dsygst
-    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_context, &
-                                my_nprow, my_npcol, my_row, my_col, &
-                                numroc_local, descinit_local, g2l
+    use pblas_grid,       only: grid_init, grid_exit, my_rank, my_nprow, &
+                                my_npcol, my_row, my_col, numroc_local, &
+                                g2l, local_desc
     use pblas_distrib,    only: gen_distrib_matrix, gather_matrix
     use target_scalapack, only: target_name, target_eps, &
                                 target_pdpotrf, target_pdsygst
@@ -19,7 +19,7 @@ program test_pdsygst
     character(len=1), parameter :: uplos(*) = ['U', 'L', 'U']
     integer, parameter :: mb = 8, nb = 8
     integer :: i, n, info, info_ref, k
-    integer :: locm_a, locn_a, lld_a
+    integer :: locm_a, locn_a
     integer :: desca(9), descb(9)
     integer :: ig, jg, owner_r, owner_c, il, jl
     real(ep), allocatable :: A_loc(:,:), B_loc(:,:)
@@ -44,7 +44,7 @@ program test_pdsygst
         end do
 
         locm_a = numroc_local(n, mb, my_row, 0, my_nprow)
-        locn_a = numroc_local(n, nb, my_col, 0, my_npcol); lld_a = max(1, locm_a)
+        locn_a = numroc_local(n, nb, my_col, 0, my_npcol)
         if (locm_a > 0 .and. locn_a > 0) then
             do jg = 1, n
                 call g2l(jg, nb, my_npcol, owner_c, jl)
@@ -58,8 +58,8 @@ program test_pdsygst
                 end do
             end do
         end if
-        call descinit_local(desca, n, n, mb, nb, 0, 0, my_context, lld_a, info)
-        call descinit_local(descb, n, n, mb, nb, 0, 0, my_context, lld_a, info)
+        call local_desc(desca, n, n, mb, nb)
+        call local_desc(descb, n, n, mb, nb)
 
         ! Cholesky-factor B in place.
         call target_pdpotrf(uplos(i), n, B_loc, 1, 1, descb, info)
