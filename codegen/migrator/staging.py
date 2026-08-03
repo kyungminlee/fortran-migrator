@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .cli_common import (
     dedupe_by_inode, get_target_mode, la_helper_pairs, migrator_project_root,
-    parser_args, target_name,
+    parser_args, route_sources, target_name,
 )
 from .libseq_patch import patch_libseq_mpi_f
 from .pipeline import classify_recipe_symbols, run_migration
@@ -403,87 +403,41 @@ def _route_manifest_sources(files: list[Path], config, target_mode,
     Returns ``(common, precision)`` as ``src/<name>`` strings, in the
     order ``files`` came in. Sources belonging to another target's
     LA_CONSTANTS / LA_XISNAN pair are dropped entirely.
-    """
-    independent = classification.independent
 
-    # Files that the precision-rename map RENAMES are precision-
-    # specific by construction — they were given a precision prefix
-    # (e.g. ``disnan.f`` → ``qisnan.f``, family ``#RISNAN``, d→q).
-    # Their renamed stem can COINCIDE with a name the classifier
-    # marked ``independent``: the split ``la_xisnan_ey.F90`` /
+    The routing chain itself lives in :func:`cli_common.route_sources`,
+    shared with ``cmd_build``. What is left here is the staging half of
+    that call — the fuller ``force_common`` match, the own-LA-pair and
+    rename-target routes, and ``copy_files`` going to COMMON. The
+    ``route_sources`` docstring explains why each differs from
+    ``cmd_build``; this is the only place those choices are made.
+    """
+    la_own, _ = la_helper_pairs(target_mode)
+
+    # Files the precision-rename map RENAMES are precision-specific by
+    # construction — they were given a precision prefix (e.g.
+    # ``disnan.f`` -> ``qisnan.f``, family ``#RISNAN``, d->q). Their
+    # renamed stem can COINCIDE with a name the classifier marked
+    # ``independent``: the split ``la_xisnan_ey.F90`` /
     # ``la_xisnan_qx.F90`` modules define procedures ``EISNAN`` /
     # ``QISNAN`` / ``ELAISNAN`` / ``QLAISNAN``, which land in
-    # ``independent`` because Q/E/X/Y are not S/D/C/Z.
-    # Without this guard the migrated plain-F77 isnan externals
-    # (``qisnan_``/``eisnan_`` — whose bodies differ per target) get
-    # mis-filed into the shared ``lapack_common`` archive and then
-    # collide across targets in a combined release tree (same
-    # filename, different content). A rename target is never a
-    # legitimate common member, so route it to PRECISION regardless
-    # of the polluted independent set.
+    # ``independent`` because Q/E/X/Y are not S/D/C/Z. Without this
+    # guard the migrated plain-F77 isnan externals (``qisnan_`` /
+    # ``eisnan_``, whose bodies differ per target) get mis-filed into
+    # the shared ``lapack_common`` archive and then collide across
+    # targets in a combined release tree (same filename, different
+    # content). A rename target is never a legitimate common member.
     rename_targets = {
         t.upper()
         for t in classification.build_rename_map(target_mode).values()
     }
 
-    # Per-target LA_CONSTANTS / LA_XISNAN precision helpers. Each
-    # extended target owns exactly one prefix-pair module —
-    #   kind10 → *_ey   kind16 → *_qx   multifloats → *_mw
-    # (suffix taken from the target's ``la_constants_suffix``). All
-    # three pairs sit in the shared LAPACK SRC dir; only the
-    # target's own pair belongs in this staging tree — the other
-    # targets' pairs are excluded, so e.g. the *_ey/*_qx SRC files
-    # stay out of a multifloats build.
-    la_own, la_foreign = la_helper_pairs(target_mode)
-
-    common_files, precision_files = [], []
-    for f in files:
-        if f.stem in la_foreign:
-            continue
-        rel = f'src/{f.name}'
-        stem = f.stem.upper()
-        # ``force_common`` is the explicit recipe override that pins a
-        # stem to the family-independent ``_common`` archive no matter
-        # what the symbol scanner decided. It takes priority over every
-        # other route (including the PRECISION defaults below) so a
-        # recipe author can rescue files the scanner mis-assigned to a
-        # non-target family — e.g. the integer BLACS entry points and
-        # the type-agnostic driver, which are family-independent (one
-        # copy serves e/y, q/x, m/w) and must not leak into the
-        # prefixed ``eyblacs`` archive. See ``codegen/recipes/blacs.yaml``.
-        # Match with OR without the trailing Fortran-underscore so a
-        # recipe can list the logical name (``igamx2d``) exactly as
-        # ``skip_files`` does (the C migrator strips it — see
-        # c_migrator.py), keeping the two levers' conventions aligned.
-        stem_nodeco = stem[:-1] if stem.endswith('_') else stem
-        if stem in config.force_common or stem_nodeco in config.force_common:
-            common_files.append(rel)
-        # The target's own LA_CONSTANTS/LA_XISNAN pair is single-
-        # precision (only this target's E/Y or Q/X block), so it is
-        # precision-specific: route it to PRECISION so it lands in
-        # the prefixed archive (libelapack / libqlapack), never the
-        # shared lapack_common. A precision-rename target (e.g. the
-        # migrated qisnan.f, whose renamed stem may collide with an
-        # ``independent`` module-procedure name) is likewise
-        # precision-specific by construction — see ``rename_targets``.
-        elif f.stem in la_own or stem in rename_targets:
-            precision_files.append(rel)
-        # Any ``copy_files`` entry that survives to this branch is
-        # precision-independent (staged verbatim, no prefix rename,
-        # shareable across targets): the target-specific verbatim
-        # copies — LAPACK's LA_CONSTANTS/LA_XISNAN pairs — were
-        # already routed by the ``la_own``/``la_foreign`` checks
-        # above. The symbol scanner may never have visited these —
-        # e.g. a Fortran ``copy_files`` entry in a C recipe — so
-        # they won't appear in ``independent``. Treat them as
-        # common explicitly. (``cmd_build`` in __main__.py lacks
-        # the LA_* special-casing and therefore routes copy_files
-        # to PRECISION instead — see the comment there.)
-        elif stem in independent or stem in config.copy_files:
-            common_files.append(rel)
-        else:
-            precision_files.append(rel)
-    return common_files, precision_files
+    return route_sources(
+        files, target_mode, config, classification.independent,
+        rel=lambda f: f'src/{f.name}',
+        precision_stems={s.upper() for s in la_own} | rename_targets,
+        strip_trailing_underscore=True,
+        copy_files_to='common',
+    )
 
 
 def _detect_dual_entry_sources(files: list[Path], config) -> list[str]:

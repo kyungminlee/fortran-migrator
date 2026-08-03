@@ -21,7 +21,7 @@ from .pipeline import classify_recipe_symbols, run_migration
 from .prepare import prepare_recipe, run_prepare, verify_patches
 from .cli_common import (
     DEFAULT_TARGET, LA_SUFFIXES, dedupe_by_inode, get_target_mode,
-    la_helper_pairs, parser_args, recipe_project_root,
+    parser_args, recipe_project_root, route_sources,
 )
 from .fortran.lex import is_comment_line
 from .staging import cmd_stage
@@ -490,42 +490,24 @@ def _run_build(recipe: Path, output_dir: Path, target_mode,
             p for p in src_dir.iterdir()
             if p.is_file() and p.suffix.lower() in allowed
         )
-    # copy_files are routed to the precision library unconditionally.
-    # This single-target build has no per-target file special-casing,
-    # and some copy_files entries are target-specific verbatim copies
-    # whose bodies USE precision modules (LAPACK's LA_XISNAN_QX USEs
-    # LA_CONSTANTS_QX) — a common-lib copy would create a forbidden
-    # common -> precision module dependency. NOTE this deliberately
-    # differs from ``cmd_stage`` (staging.py), which routes those
-    # LA_* pairs via ``_la_own``/``_la_foreign`` first and can then
-    # safely send the remaining, genuinely shareable copy_files
-    # entries (MUMPS common modules, PBLAS Fortran helpers) to the
-    # shared common archive.
+    # Routing is shared with ``cmd_stage`` (cli_common.route_sources);
+    # the three keyword defaults left off here are exactly what makes
+    # this the single-target build's variant, and the shared docstring
+    # is where the reasons live:
     #
-    # The LA_CONSTANTS/LA_XISNAN pair filter below IS shared with
-    # staging.py (cli_common.la_helper_pairs): only the target's own
-    # suffix pair (_ey/_qx/_mw) may be compiled. Foreign pairs are not
-    # just dead weight — the *_mw pair does ``use multifloats``, which
-    # doesn't exist in a kind10/kind16 build, so compiling it would
-    # break the build.
-    _, _la_foreign = la_helper_pairs(target_mode)
-    common_files, precision_files = [], []
-    for f in files:
-        if f.stem in _la_foreign:
-            continue
-        rel = f.relative_to(output_dir)
-        stem = f.stem.upper()
-        # ``force_common`` pins a stem to the family-independent archive
-        # regardless of scanner assignment (mirror of ``copy_files``,
-        # which forces PRECISION). Highest priority. See config.py.
-        if stem in config.force_common:
-            common_files.append(str(rel))
-        elif stem in config.copy_files:
-            precision_files.append(str(rel))
-        elif stem in independent:
-            common_files.append(str(rel))
-        else:
-            precision_files.append(str(rel))
+    #   - no ``precision_stems``: no LA_* own-pair or rename-target
+    #     special-casing.
+    #   - no ``strip_trailing_underscore``: ``force_common`` matches the
+    #     decorated stem only.
+    #   - ``copy_files_to='precision'``: this build has no per-target
+    #     file special-casing, and some copy_files entries USE precision
+    #     modules (LAPACK's LA_XISNAN_QX USEs LA_CONSTANTS_QX), so a
+    #     common-lib copy would create a forbidden common -> precision
+    #     module dependency.
+    common_files, precision_files = route_sources(
+        files, target_mode, config, independent,
+        rel=lambda f: str(f.relative_to(output_dir)),
+    )
 
     ref_sources = _collect_ref_sources(config)
 
