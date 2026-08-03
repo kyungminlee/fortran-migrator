@@ -79,3 +79,62 @@ def test_non_mapping_top_level_raises(tmp_path):
     """)
     with pytest.raises(ValueError, match='must be a mapping'):
         load_recipe(recipe, project_root=tmp_path)
+
+
+@pytest.mark.parametrize('key', ['asymmetric_patches', 'one_sided_cleanup'])
+def test_patch_classification_of_unlisted_patch_raises(tmp_path, key):
+    # verify_patches() unions both classification lists into a skip set
+    # without checking membership in patches:, so a name left behind
+    # after its patch is dropped would silently weaken the CI check.
+    recipe = _write_recipe(tmp_path, f"""
+        library: blas
+        language: fortran
+        source_dir: src
+        patches: [a.patch]
+        {key}: [a.patch, gone.patch]
+    """)
+    with pytest.raises(ValueError, match='gone.patch'):
+        load_recipe(recipe, project_root=tmp_path)
+
+
+def test_skip_files_manifest_unions_with_inline_list(tmp_path):
+    recipe = _write_recipe(tmp_path, """
+        library: blas
+        language: fortran
+        source_dir: src
+        skip_files: [dsdot]
+        skip_files_manifest: skip.txt
+    """)
+    (recipe.parent / 'skip.txt').write_text(
+        '# generated\n\nBLAS_cdot_c_s\nBLAS_cdot_s_c\n')
+    config = load_recipe(recipe, project_root=tmp_path)
+    assert config.skip_files == {'DSDOT', 'BLAS_CDOT_C_S', 'BLAS_CDOT_S_C'}
+
+
+def _ep_recipe(tmp_path, symbols: str):
+    recipe = _write_recipe(tmp_path, f"""
+        library: mumps
+        language: fortran
+        source_dir: src
+        ep_renames:
+          manifest: privatize.txt
+          symbols: {symbols}
+    """)
+    (recipe.parent / 'privatize.txt').write_text(
+        '# exact linker-level names\ndescinit_\nblacs_gridinit_\n')
+    return recipe
+
+
+def test_ep_renames_resolve_against_manifest(tmp_path):
+    config = load_recipe(_ep_recipe(tmp_path, '[DESCINIT, BLACS_GRIDINIT]'),
+                         project_root=tmp_path)
+    assert config.extra_renames == {'DESCINIT': 'EP_DESCINIT',
+                                    'BLACS_GRIDINIT': 'EP_BLACS_GRIDINIT'}
+
+
+def test_ep_rename_absent_from_manifest_raises(tmp_path):
+    # The point of the key: the manifest owns the scheme, so a symbol it
+    # does not privatize fails the load instead of surfacing as an
+    # undefined ep_descset_ at final executable link.
+    with pytest.raises(ValueError, match='DESCSET is not privatized'):
+        load_recipe(_ep_recipe(tmp_path, '[DESCSET]'), project_root=tmp_path)

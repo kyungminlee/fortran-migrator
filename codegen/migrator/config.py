@@ -24,6 +24,12 @@ class RecipeConfig:
     language: str                     # "fortran" or "c"
     source_dir: Path
     extensions: list[str]
+    # Source stems (uppercase, no extension) dropped from the
+    # migration. Set inline with ``skip_files:``, from a recipe-relative
+    # sidecar manifest with ``skip_files_manifest:`` (one stem per line,
+    # ``#`` comments — the spelling for generated bulk lists, e.g.
+    # XBLAS's 402 mixed-input-precision stems), or both: the two are
+    # unioned.
     skip_files: set[str] = field(default_factory=set)
     copy_files: set[str] = field(default_factory=set)  # Copy unchanged (multi-precision utilities)
     # Source stems (uppercase, no extension) forced into the ``_common``
@@ -103,11 +109,29 @@ class RecipeConfig:
     # rewriting is needed for the kind-correct stride but the bare
     # ``double``/``float`` keywords must stay.
     c_pointer_cast_aliases: list[dict] = field(default_factory=list)
-    # Insert new content into migrated headers after a literal anchor
-    # line. Each entry: ``{'file': <relative path under source_dir>,
-    # 'after': <anchor line>, 'insert': <text>}``. Used to define
+    # Insert new content into migrated headers. Used to define
     # library-specific extended-precision typedefs referenced by
-    # c_type_aliases targets.
+    # c_type_aliases targets. Applied by
+    # ``c_migrator._apply_header_patches``, which reads these keys:
+    #
+    #   ``file``    - path relative to the migrated output directory
+    #                 (missing file → entry skipped).
+    #   ``insert``  - the text to insert (template-substituted; an
+    #                 entry whose text is already present is skipped,
+    #                 so patching is idempotent).
+    #   ``when``    - target gate, one of ``kind`` (any KIND target),
+    #                 ``multifloats``, or an exact target_mode name;
+    #                 absent means always applied.
+    #
+    # plus exactly one insertion-point key, checked in this order:
+    #
+    #   ``at_bof: true``    - prepend at file start.
+    #   ``at_eof: true``    - append at file end.
+    #   ``before: <line>``  - insert on the line before the anchor.
+    #   ``after: <line>``   - insert on the line after the anchor.
+    #
+    # ``before``/``after`` take a literal anchor; an entry whose anchor
+    # is absent from the file is skipped.
     header_patches: list[dict] = field(default_factory=list)
     # Target-gated verbatim file overrides. Structure:
     #
@@ -158,6 +182,11 @@ class RecipeConfig:
     # (clones + caller bodies) but NOT to copy-original sources, so
     # the upstream (un-migrated) entry points keep their original
     # symbol names and link cleanly alongside the renamed clones.
+    #
+    # Calls into the ``ep_``-privatized support engine are declared with
+    # the ``ep_renames:`` key instead of spelled out here — see
+    # ``_load_ep_renames``, which resolves them against the
+    # privatization manifest and merges them into this field.
     extra_renames: dict[str, str] = field(default_factory=dict)
     # Post-migration call-site cast injections, applied to migrated
     # Fortran output only (after intrinsic rewriting, so the injected
@@ -238,7 +267,8 @@ _LOADER_ONLY_FIELDS: frozenset[str] = frozenset({
 })
 _KNOWN_RECIPE_KEYS: frozenset[str] = (
     frozenset(RecipeConfig.__dataclass_fields__) - _LOADER_ONLY_FIELDS
-) | frozenset({'keep_kind_manifest', 'extra_migrate_dirs'})
+) | frozenset({'keep_kind_manifest', 'extra_migrate_dirs',
+               'skip_files_manifest', 'ep_renames'})
 
 # Recipe keys load_recipe() normalizes explicitly (path resolution, case
 # folding, manifest reads, per-entry parsing). Every other key in
@@ -252,7 +282,8 @@ _NORMALIZED_KEYS: frozenset[str] = frozenset({
     'extra_symbol_dirs', 'extra_migrate_files', 'extra_c_dirs',
     'extra_fortran_dirs', 'module_renames', 'extra_renames',
     'call_arg_casts', 'expected_divergences', 'privatize_symbols',
-    'keep_kind_manifest', 'extra_migrate_dirs',
+    'keep_kind_manifest', 'extra_migrate_dirs', 'skip_files_manifest',
+    'ep_renames',
 })
 
 
@@ -319,6 +350,21 @@ def _validate_recipe_data(data, recipe_path: Path) -> None:
         if required not in data:
             raise KeyError(
                 f'{recipe_path}: missing required recipe key {required!r}'
+            )
+
+    # ``asymmetric_patches:`` and ``one_sided_cleanup:`` classify names
+    # that ``patches:`` also lists; the two spellings are only
+    # meaningful together (prepare.verify_patches unions them into a
+    # skip set without ever checking membership in ``patches:``). A
+    # name left behind after its patch is dropped would silently
+    # weaken the symmetric-patch CI check, so reject it at load.
+    known_patches = set(data.get('patches') or [])
+    for key in ('asymmetric_patches', 'one_sided_cleanup'):
+        stale = sorted(set(data.get(key) or []) - known_patches)
+        if stale:
+            raise ValueError(
+                f'{recipe_path}: {key}: names not listed under patches: '
+                f'{stale!r}'
             )
 
     unknown = sorted(set(data) - _KNOWN_RECIPE_KEYS)
@@ -391,6 +437,46 @@ def _load_keep_kind(recipe_path: Path,
     return {k: frozenset(v) for k, v in keep_kind_lines.items()}
 
 
+def _load_ep_renames(recipe_path: Path, spec) -> dict[str, str]:
+    """Resolve the ``ep_renames:`` key into ``extra_renames`` entries.
+
+    ``{manifest: <recipe-relative file>, symbols: [<FORTRAN_NAME>, ...]}``
+    — each name becomes ``NAME → EP_NAME``, the source-level form of the
+    ``name → ep_name`` privatization ``privatize.py`` applies to the
+    recipes that carry ``privatize_symbols:``. For a recipe that calls
+    into the privatized engine without being privatized itself (MUMPS),
+    this consumes the manifest instead of restating the scheme: a name
+    the manifest does not carry is a load error, not an undefined
+    ``ep_<name>_`` at final executable link.
+    """
+    if not spec:
+        return {}
+    manifest = set(_manifest_entries(recipe_path.parent / spec['manifest']))
+    renames: dict[str, str] = {}
+    for name in spec['symbols']:
+        name = str(name).upper()
+        # Manifest entries are exact linker-level names; the Fortran
+        # spelling of NAME is the gfortran-decorated ``name_``.
+        if name.lower() + '_' not in manifest:
+            raise ValueError(
+                f'{recipe_path}: ep_renames: {name} is not privatized by '
+                f'{spec["manifest"]}; the rename would emit calls to '
+                f'ep_{name.lower()}_ with nothing defining it'
+            )
+        renames[name] = 'EP_' + name
+    return renames
+
+
+def _load_skip_manifest(recipe_path: Path, manifest_rel) -> set[str]:
+    """Read the sidecar spelling of ``skip_files:``, if the recipe names
+    one: one source stem per line, returned uppercased like the inline
+    list."""
+    if not manifest_rel:
+        return set()
+    manifest_path = recipe_path.parent / manifest_rel
+    return {entry.upper() for entry in _manifest_entries(manifest_path)}
+
+
 def _load_privatize(recipe_path: Path, privatize_rel) -> set[str]:
     """Read the symbol-privatization manifest, if the recipe names one:
     one exact linker-level symbol name per line."""
@@ -428,7 +514,9 @@ def load_recipe(recipe_path: Path,
     extensions = [e.lower() for e in data.get('extensions', ['.f', '.f90'])]
     extra_migrate = _expand_extra_migrate(data, project_root, extensions)
 
-    skip = set(s.upper() for s in data.get('skip_files', []))
+    skip = (set(s.upper() for s in data.get('skip_files', []))
+            | _load_skip_manifest(recipe_path,
+                                  data.get('skip_files_manifest')))
     copy = set(s.upper() for s in data.get('copy_files', []))
     force_common = set(s.upper() for s in data.get('force_common', []))
     prefer = set(s.upper() for s in data.get('prefer_source', []))
@@ -445,6 +533,17 @@ def load_recipe(recipe_path: Path,
                                        data.get('keep_kind_manifest'))
     privatize_names = _load_privatize(recipe_path,
                                       data.get('privatize_symbols'))
+
+    extra_renames = {str(k).upper(): str(v)
+                     for k, v in (data.get('extra_renames') or {}).items()}
+    ep_renames = _load_ep_renames(recipe_path, data.get('ep_renames'))
+    clash = sorted(set(ep_renames) & set(extra_renames))
+    if clash:
+        raise ValueError(
+            f'{recipe_path}: {clash!r} renamed by both ep_renames: and '
+            f'extra_renames:'
+        )
+    extra_renames.update(ep_renames)
 
     return RecipeConfig(
         library=data['library'],
@@ -468,10 +567,7 @@ def load_recipe(recipe_path: Path,
             str(k).upper(): str(v).upper()
             for k, v in (data.get('module_renames') or {}).items()
         },
-        extra_renames={
-            str(k).upper(): str(v)
-            for k, v in (data.get('extra_renames') or {}).items()
-        },
+        extra_renames=extra_renames,
         call_arg_casts=_parse_call_arg_casts(data.get('call_arg_casts')),
         expected_divergences={
             str(s).upper() for s in (data.get('expected_divergences') or [])
