@@ -78,6 +78,31 @@ FIELD_SHIM: dict[str, tuple[str, str]] = {
     'Ftrsm':     ('TRMM',     'TRSM_T'),
 }
 
+# ``EP_MK_<SHAPE>(tag, fn)`` generator macros defined by the shipped header.
+_EP_MK_RE = re.compile(r'^#define\s+EP_MK_(\w+)\(', re.MULTILINE)
+
+
+def _assert_shim_macros_defined() -> None:
+    """Every ``FIELD_SHIM`` macro must exist in the shipped header.
+
+    ``transform_typeset`` emits ``EP_MK_<macro>(...)`` unconditionally, so
+    a typo in ``FIELD_SHIM`` — or a new callback shape added here but not
+    to ``PBcharshim.h`` — would otherwise surface as a C compile error
+    deep inside a staged build. Checking the two tables against each
+    other at import time makes it immediate and located.
+    """
+    defined = set(_EP_MK_RE.findall(pbcharshim_header_text()))
+    wanted = {macro for macro, _cast in FIELD_SHIM.values()}
+    missing = sorted(wanted - defined)
+    if missing:
+        raise AssertionError(
+            f'PBcharshim.h defines no EP_MK_ generator for: '
+            f'{", ".join(missing)} (referenced by FIELD_SHIM)')
+
+
+_assert_shim_macros_defined()
+
+
 # ``TypeStruct.<Field> = <leaf>_ ;`` — the raw callback assignment produced by
 # the stock typeset (after rename + type substitution).  RHS is a bare Fortran
 # leaf symbol (``ygemm_``, ``etzscal_``, ...); aliased real slots reuse a leaf

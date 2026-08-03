@@ -75,7 +75,7 @@ from .fortran_migrator import (
     migrate_file_to_string,
     target_filename,
 )
-from .c_migrator import migrate_c_directory
+from .c_migrator import CMigrationOptions, migrate_c_directory
 from .templates import (
     build_sub_vars as _build_sub_vars,
     expand_template as _expand_template,
@@ -463,13 +463,15 @@ def run_c_migration(config: RecipeConfig, output_dir: Path,
         config.source_dir, output_dir, target_mode,
         classification=classification,
         rename_map=rename_map,
-        c_type_aliases=config.c_type_aliases,
-        c_pointer_cast_aliases=config.c_pointer_cast_aliases,
-        header_patches=config.header_patches,
+        options=CMigrationOptions(
+            c_type_aliases=config.c_type_aliases,
+            c_pointer_cast_aliases=config.c_pointer_cast_aliases,
+            header_patches=config.header_patches,
+            extra_c_dirs=config.extra_c_dirs,
+            skip_files=config.skip_files,
+            copy_files=config.copy_files,
+        ),
         overrides=overrides,
-        extra_c_dirs=config.extra_c_dirs,
-        skip_files=config.skip_files,
-        copy_files=config.copy_files,
     )
     return result
 

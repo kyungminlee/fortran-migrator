@@ -17,6 +17,7 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 from .prefix_classifier import SymbolClassification
 from .target_mode import TargetMode
@@ -25,6 +26,7 @@ from .c.clone import (
     apply_clone_transform,
     classify_blacs_stem,
     derive_routine_renames,
+    logical_stem,
     rename_c_file,
 )
 from .c.blacs import migrate_blacs_c_directory
@@ -64,6 +66,19 @@ def _strip_decoration(stem: str) -> tuple[str, str]:
         if stem.endswith(deco):
             return stem[: -len(deco)], deco
     return stem, ''
+
+
+_PARENT_INCLUDE_RE = re.compile(r'#include\s*"\.\./([^"]+)"')
+
+
+def _flatten_parent_includes(text: str) -> str:
+    """Rewrite ``#include "../foo.h"`` to ``#include "foo.h"``.
+
+    Sources pulled in from an ``extra_c_dirs`` subdirectory (PBLAS
+    ``PTOOLS/``, ...) all land in one flat output directory, so a
+    parent-relative include no longer resolves.
+    """
+    return _PARENT_INCLUDE_RE.sub(r'#include "\1"', text)
 
 
 def _redist_clone_stem(routine: str,
@@ -112,13 +127,9 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
                         target_mode: TargetMode,
                         classification: SymbolClassification | None = None,
                         rename_map: dict[str, str] | None = None,
-                        c_type_aliases: list[dict] | None = None,
-                        c_pointer_cast_aliases: list[dict] | None = None,
-                        header_patches: list[dict] | None = None,
+                        options: CMigrationOptions | None = None,
                         overrides: list[tuple[Path, str]] | None = None,
-                        extra_c_dirs: list[Path] | None = None,
-                        skip_files: set[str] | None = None,
-                        copy_files: set[str] | None = None) -> dict:
+                        ) -> dict:
     """Migrate a C source directory by cloning real/complex variants.
 
     Two modes:
@@ -131,11 +142,15 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
       whose entry points are Fortran-callable names such as
       ``pdgemm_``, ``pzhemm_``, ``pdznrm2_``.
 
-    - **BLACS** (when neither is supplied): hardcoded ``d → q`` / ``z →
-      x`` file renames with BLACS-specific ``Cd*``/``BI_d*`` routine
-      patterns, MPI type substitutions, ``Bdef.h`` patching, and an
-      MPI_REAL16 check module for KIND=16. Preserved for backward
-      compatibility.
+    - **BLACS** (when neither is supplied — the recipes that set
+      ``legacy_c_migrator``): hardcoded ``d → q`` / ``z → x`` file
+      renames with BLACS-specific ``Cd*``/``BI_d*`` routine patterns,
+      MPI type substitutions, ``Bdef.h`` patching, and an MPI_REAL16
+      check module for KIND=16. Of ``options``, only ``skip_files``
+      crosses into this branch; the rest are generic-path knobs.
+
+    ``options`` bundles the recipe-derived knobs (see
+    :class:`CMigrationOptions`); omit it for the defaults.
 
     ``overrides`` is a list of (src_path, dst_name) pairs that are
     copied verbatim on top of clones after the main migration step
@@ -146,23 +161,16 @@ def migrate_c_directory(src_dir: Path, output_dir: Path,
     ``template_vars``, ``split_headers`` (plus ``overrides`` when
     override files were applied).
     """
+    options = options or CMigrationOptions()
     if classification is not None and rename_map is not None:
         result = _migrate_generic_c_directory(
             src_dir, output_dir, target_mode,
-            classification, rename_map,
-            CMigrationOptions(
-                c_type_aliases=c_type_aliases,
-                c_pointer_cast_aliases=c_pointer_cast_aliases,
-                header_patches=header_patches,
-                extra_c_dirs=extra_c_dirs,
-                skip_files=skip_files,
-                copy_files=copy_files,
-            ),
+            classification, rename_map, options,
         )
     else:
         result = migrate_blacs_c_directory(
             src_dir, output_dir, target_mode,
-            skip_files=skip_files,
+            skip_files=options.skip_files,
         )
     if overrides:
         applied = _apply_overrides(output_dir, overrides)
@@ -548,11 +556,8 @@ def _apply_c_type_subs(text: str, template_vars: dict[str, str],
 def migrate_c_file_to_string(
     src_path: Path,
     target_mode: TargetMode,
-    rename_map: dict[str, str] | None = None,
-    classification: SymbolClassification | None = None,
-    c_type_aliases: list[dict] | None = None,
 ) -> tuple[str, str] | None:
-    """Migrate one C source file in memory — no disk I/O.
+    """Migrate one BLACS-style C source file in memory — no disk I/O.
 
     Mirrors :func:`migrate_file_to_string` for Fortran: returns
     ``(target_filename, migrated_text)`` or ``None`` when the file is
@@ -560,47 +565,20 @@ def migrate_c_file_to_string(
     in-memory single-file harness; exercised by
     ``test/unit/test_c_migrator_multifloats.py``.
 
-    Two modes, mirroring :func:`migrate_c_directory`:
-
-    - **Generic/scalapack** (both ``rename_map`` and ``classification``
-      supplied): file is cloned iff its routine is a family member;
-      in-text renames from ``rename_map`` plus C type upgrades applied.
-    - **BLACS/direct** (both omitted): file's leading precision prefix
-      (``d``/``z``/``s``/``c``, possibly preceded by ``BI_``) selects a
-      substitution rule set via :func:`classify_blacs_stem` — the same
-      classifier and clone transform the directory cloner uses, so the
-      harness cannot drift from the shipped path.
+    The file's leading precision prefix (``d``/``z``, possibly preceded
+    by ``BI_``) selects a substitution rule set via
+    :func:`classify_blacs_stem` — the same classifier and clone
+    transform :func:`migrate_blacs_c_directory` uses, so the harness
+    cannot drift from the shipped path. The generic/scalapack path has
+    no in-memory harness: it is a directory-level pass (skip lists,
+    REDIST fallbacks, include flattening, the PBcharshim typeset pass)
+    that a single-file entry point could only re-implement, which is
+    what the branch deleted from here had started to do.
     """
     if src_path.suffix.lower() != '.c':
         return None
 
     template_vars = build_sub_vars(target_mode)
-
-    if rename_map is not None and classification is not None:
-        # Scalapack mode (PBLAS).
-        stem = src_path.stem
-        has_underscore = stem.endswith('_')
-        routine = stem[:-1] if has_underscore else stem
-        upper_routine = routine.upper()
-        if upper_routine not in rename_map:
-            return None
-        if classification.get_family(upper_routine) is None:
-            return None
-
-        target_upper = rename_map[upper_routine]
-        target_lower = target_upper.lower()
-        new_stem = target_lower + ('_' if has_underscore else '')
-        new_name = new_stem + src_path.suffix
-
-        pattern, combined = _build_rename_regex(rename_map)
-        sub = _make_rename_substituter(combined)
-        text = src_path.read_text(errors='replace')
-        text = pattern.sub(sub, text)
-        text = _apply_c_type_subs(text, template_vars, c_type_aliases,
-                                  target_mode=target_mode)
-        return new_name, text
-
-    # Direct/BLACS mode.
     stem = src_path.stem
     rp = template_vars['RP']
     cp = template_vars['CP']
@@ -730,6 +708,110 @@ def _apply_header_patches(output_dir: Path,
 # ------------------------------------------------------------------ #
 
 
+class _StemSpellings(NamedTuple):
+    """The stem spellings the pass-through filters key on.
+
+    ``upper`` is the logical (underscore-stripped) stem uppercased;
+    ``base_upper`` is the same with any f2c-bridge decoration removed;
+    ``decoration`` is that decoration (``''`` when there is none).
+    """
+    upper: str
+    base_upper: str
+    decoration: str
+
+
+def _stem_spellings(stem: str) -> _StemSpellings:
+    routine = logical_stem(stem)
+    base_stem, decoration = _strip_decoration(routine)
+    return _StemSpellings(routine.upper(), base_stem.upper(), decoration)
+
+
+def _is_dispatcher_source(f: Path, stems: _StemSpellings,
+                          rename_map: dict[str, str],
+                          target_mode: TargetMode) -> bool:
+    """Is this .c file a precision-independent dispatcher?
+
+    True iff the stem is NOT precision-prefixed: not in ``rename_map``,
+    and not matching the ``p<sdcz><root>`` pattern that
+    :func:`_redist_clone_stem` uses to clone files whose
+    Fortran-callable exports live behind ``#define`` macros (REDIST/SRC
+    entry points like pdgemr.c, pztrmr2.c, ScaLAPACK orphan helpers
+    like pdlaiect.c). Both of those classes are owned by the std
+    archive; only true dispatchers (PB_Cconjg, BI_BlacsErr, ...) ride
+    in the migrated archive.
+
+    XBLAS f2c-bridge files (``BLAS_dgemv_x-f2c.c``) are not in
+    rename_map under their decorated stem, but the cloning loop knows
+    how to rewrite them via :func:`_strip_decoration`. They are not
+    dispatchers: the cloning pass produces the correctly-renamed
+    output and an original copy would just collide with it.
+    """
+    if f.suffix.lower() != '.c':
+        return False
+    _renames = rename_map or {}
+    if stems.upper in _renames:
+        return False
+    if stems.decoration and stems.base_upper in _renames:
+        return False  # cloned by the rename-map pass
+    return _redist_clone_stem(f.stem, target_mode) is None
+
+
+def _should_stage_passthrough(f: Path, stems: _StemSpellings, *,
+                              is_c_or_h: bool, is_copy: bool,
+                              rename_map: dict[str, str],
+                              target_mode: TargetMode,
+                              skip: set[str]) -> bool:
+    """Headers, copy_files entries and dispatchers pass through; the
+    recipe's ``skip_files`` (matched on either stem spelling) win."""
+    if not (is_c_or_h or is_copy):
+        return False
+    if stems.upper in skip or stems.base_upper in skip:
+        return False
+    if f.suffix.lower() == '.h' or is_copy:
+        return True
+    return _is_dispatcher_source(f, stems, rename_map, target_mode)
+
+
+def _write_passthrough(f: Path, output_dir: Path, stems: _StemSpellings, *,
+                       from_extra_dir: bool, is_c_or_h: bool, is_copy: bool,
+                       rename_map: dict[str, str], target_mode: TargetMode,
+                       template_vars: dict[str, str],
+                       options: CMigrationOptions) -> None:
+    """Copy one staged file, rewriting includes and widening casts."""
+    text = f.read_text(errors='replace')
+    if is_copy and not is_c_or_h:
+        # Fortran copy-files are staged verbatim: no include
+        # rewrites, no K&R conversion, no stdc-ifdef folding.
+        (output_dir / f.name).write_text(text)
+        return
+    if from_extra_dir:
+        text = _flatten_parent_includes(text)
+    if f.suffix.lower() == '.c':
+        # Aliases (cmplx16 → cmplxQ, (double*) → (REAL_TYPE*))
+        # apply to:
+        #   (a) precision-independent dispatchers (not in
+        #       rename_map, e.g. PB_Cconjg, PB_Ctzher2k) —
+        #       on EVERY target, because cloned entry points
+        #       call them and need the wider types.
+        #   (b) precision-prefixed originals (in rename_map,
+        #       e.g. pdgemm_, pcamax_, PB_Cdtypeset) — only on
+        #       KIND-based targets, where -freal-8-real-16
+        #       promotion means the original is still called
+        #       with quad-stride args and its body must
+        #       widen too. On multifloats targets the
+        #       precision-prefixed originals are dead (callers
+        #       route through clones) and their native
+        #       double*/float* signatures must stay so the
+        #       body still compiles as C++ (struct types
+        #       cannot assign to native scalar lvalues).
+        is_unprefixed = stems.upper not in rename_map
+        if is_unprefixed or target_mode.is_kind_based:
+            text = _apply_aliases_to_original(
+                text, template_vars, options.c_type_aliases,
+                options.c_pointer_cast_aliases)
+    (output_dir / f.name).write_text(text)
+
+
 def _stage_passthrough_files(all_src_dirs: list[Path], src_dir: Path,
                              output_dir: Path, target_mode: TargetMode,
                              rename_map: dict[str, str],
@@ -738,18 +820,14 @@ def _stage_passthrough_files(all_src_dirs: list[Path], src_dir: Path,
     """Stage the pass-through files (headers, copy_files entries,
     precision-independent dispatchers) into ``output_dir``.
 
-    When extra_c_dirs sources contain `#include "../foo.h"` paths
-    (PTOOLS uses ../pblas.h etc.), strip the `..` part since we're
-    flattening into a single output dir.
-
     Only headers, copy_files entries, and precision-independent
     dispatcher .c files are staged. The std archive (built directly
     from upstream sources by the CMake side) carries the S/D/C/Z
     entry points; the migrated archive carries the Q/X/E/Y/M/W
     clones plus the dispatchers (PB_Cconjg, PB_CpswapNN, BI_BlacsErr,
     ...) — files whose stems are NOT in rename_map. Dispatchers must
-    ride in the migrated archive because the migrator's
-    _apply_aliases_to_original pass widens their ``(double*)`` /
+    ride in the migrated archive because
+    :func:`_apply_aliases_to_original` widens their ``(double*)`` /
     ``(float*)`` pointer-casts to ``(QREAL*)`` / ``(EREAL*)`` /
     ``(float64x2_t*)`` for KIND targets, so the byte-stride
     arithmetic matches the wider type carried by callers. The std
@@ -759,86 +837,20 @@ def _stage_passthrough_files(all_src_dirs: list[Path], src_dir: Path,
     _skip = options.skip_files or set()
     _copy = options.copy_files or set()
     for d in all_src_dirs:
-        for f in (p for p in sorted(d.iterdir())):
-            stem_upper = (f.stem[:-1] if f.stem.endswith('_')
-                          else f.stem).upper()
-            # Also consider the decoration-stripped stem for skip
-            # matching. ``BLAS_cdot_c_s-f2c.c`` is a bridge for the
-            # already-skipped ``BLAS_cdot_c_s.c``; both should drop.
-            base_stem_for_skip, _deco_for_skip = _strip_decoration(
-                f.stem[:-1] if f.stem.endswith('_') else f.stem
-            )
-            base_stem_upper = base_stem_for_skip.upper()
+        for f in sorted(d.iterdir()):
+            stems = _stem_spellings(f.stem)
             is_c_or_h = f.suffix.lower() in ('.c', '.h')
-            is_header = f.suffix.lower() == '.h'
-            is_copy = stem_upper in _copy
-            # A .c file is a "dispatcher" iff it is NOT precision-
-            # prefixed: stem not in rename_map AND not matching the
-            # ``p<sdcz><root>`` pattern that ``_redist_clone_stem``
-            # uses to clone files whose Fortran-callable exports live
-            # behind ``#define`` macros (REDIST/SRC entry points like
-            # pdgemr.c, pztrmr2.c, ScaLAPACK orphan helpers like
-            # pdlaiect.c). Both classes are owned by the std archive;
-            # only true dispatchers (PB_Cconjg, BI_BlacsErr, ...) ride
-            # in the migrated archive.
-            is_dispatcher = False
-            if (f.suffix.lower() == '.c'
-                    and stem_upper not in (rename_map or {})):
-                # XBLAS f2c-bridge files (``BLAS_dgemv_x-f2c.c``) are
-                # not in rename_map under their decorated stem, but
-                # the cloning loop knows how to rewrite them via
-                # ``_strip_decoration``. Don't classify them as
-                # dispatchers; the cloning pass will produce the
-                # correctly-renamed output and the original copy
-                # would just collide with that.
-                base_stem, deco = _strip_decoration(
-                    f.stem[:-1] if f.stem.endswith('_') else f.stem
-                )
-                if (deco
-                        and base_stem.upper() in (rename_map or {})):
-                    pass  # cloned by the rename-map pass
-                elif _redist_clone_stem(f.stem, target_mode) is None:
-                    is_dispatcher = True
-            if not (is_c_or_h or is_copy):
+            is_copy = stems.upper in _copy
+            if not _should_stage_passthrough(
+                    f, stems, is_c_or_h=is_c_or_h, is_copy=is_copy,
+                    rename_map=rename_map, target_mode=target_mode,
+                    skip=_skip):
                 continue
-            if stem_upper in _skip or base_stem_upper in _skip:
-                continue
-            if not (is_header or is_copy or is_dispatcher):
-                continue
-            text = f.read_text(errors='replace')
-            if is_copy and not is_c_or_h:
-                # Fortran copy-files are staged verbatim: no include
-                # rewrites, no K&R conversion, no stdc-ifdef folding.
-                (output_dir / f.name).write_text(text)
-                continue
-            if d != src_dir:
-                text = re.sub(
-                    r'#include\s*"\.\./([^"]+)"',
-                    r'#include "\1"', text)
-            if f.suffix.lower() == '.c':
-                # Aliases (cmplx16 → cmplxQ, (double*) → (REAL_TYPE*))
-                # apply to:
-                #   (a) precision-independent dispatchers (not in
-                #       rename_map, e.g. PB_Cconjg, PB_Ctzher2k) —
-                #       on EVERY target, because cloned entry points
-                #       call them and need the wider types.
-                #   (b) precision-prefixed originals (in rename_map,
-                #       e.g. pdgemm_, pcamax_, PB_Cdtypeset) — only on
-                #       KIND-based targets, where -freal-8-real-16
-                #       promotion means the original is still called
-                #       with quad-stride args and its body must
-                #       widen too. On multifloats targets the
-                #       precision-prefixed originals are dead (callers
-                #       route through clones) and their native
-                #       double*/float* signatures must stay so the
-                #       body still compiles as C++ (struct types
-                #       cannot assign to native scalar lvalues).
-                is_unprefixed = stem_upper not in rename_map
-                if is_unprefixed or target_mode.is_kind_based:
-                    text = _apply_aliases_to_original(
-                        text, template_vars, options.c_type_aliases,
-                        options.c_pointer_cast_aliases)
-            (output_dir / f.name).write_text(text)
+            _write_passthrough(
+                f, output_dir, stems, from_extra_dir=(d != src_dir),
+                is_c_or_h=is_c_or_h, is_copy=is_copy,
+                rename_map=rename_map, target_mode=target_mode,
+                template_vars=template_vars, options=options)
 
 
 def _duplicate_header_prototypes(output_dir: Path,
@@ -940,7 +952,7 @@ def _clone_precision_files(all_src_dirs: list[Path], src_dir: Path,
 
     for f in entries:
         has_underscore = f.stem.endswith('_')
-        routine = f.stem[:-1] if has_underscore else f.stem
+        routine = logical_stem(f.stem)
         # XBLAS bridge files (``BLAS_dgemv_x-f2c.c``) share the
         # routine stem of their parent ``BLAS_dgemv_x`` plus a
         # decoration; strip it for the rename-map lookup and reapply
@@ -970,12 +982,8 @@ def _clone_precision_files(all_src_dirs: list[Path], src_dir: Path,
         new_path = output_dir / new_name
 
         text = f.read_text(errors='replace')
-        # Files from extra_c_dirs (e.g. PBLAS PTOOLS/) are flattened
-        # into output_dir, so #include "../foo.h" must become "foo.h".
         if f.parent != src_dir:
-            text = re.sub(
-                r'#include\s*"\.\./([^"]+)"',
-                r'#include "\1"', text)
+            text = _flatten_parent_includes(text)
         # Apply renames first, then type upgrades — the two domains
         # don't overlap but this order preserves identifier names that
         # happen to coincide with generic type keywords.

@@ -75,40 +75,41 @@ def _complex_clone_subs(real_keyword: str, own_struct: str, cross_struct: str,
 
 REAL_CLONE_SUBS = _real_clone_subs('double', 'd')
 COMPLEX_CLONE_SUBS = _complex_clone_subs('double', 'DCOMPLEX', 'SCOMPLEX', 'z', 'd')
-# S/C convergence-only mirror tables: re-derive the Q/X target from the
-# S/C half (sources use ``float``/``MPI_FLOAT``/``Cs*``/``Cc*``) so the
-# in-memory result can be compared against the canonical produced from
-# the D/Z half on disk.
-SINGLE_CLONE_SUBS = _real_clone_subs('float', 's')
-CSINGLE_CLONE_SUBS = _complex_clone_subs('float', 'SCOMPLEX', 'DCOMPLEX', 'c', 's')
+
+
+def logical_stem(stem: str) -> str:
+    """Strip the trailing Fortran-mangling underscore from a file stem.
+
+    ``pdgemm_`` -> ``pdgemm``. This is the logical routine name behind a
+    Fortran-callable C file: what the rename map and the recipe's
+    ``skip_files`` / ``copy_files`` / ``force_common`` lists are all
+    keyed on.
+    """
+    return stem[:-1] if stem.endswith('_') else stem
 
 
 def classify_blacs_stem(stem: str) -> tuple[str, bool, list[tuple[str, str]]] | None:
-    """Identify the precision variant of a BLACS-style source stem.
+    """Identify the clone source variant of a BLACS-style source stem.
 
     Returns ``(src_prefix, is_complex, subs)`` where ``src_prefix`` is
-    the source precision letter (``d``/``z``/``s``/``c``), or ``None``
-    for precision-independent files.  Order matters: check
-    BI_-prefixed names before bare single-letter prefixes.
+    the source precision letter (``d`` or ``z``), or ``None`` for every
+    other stem — precision-independent helpers and the genuine S/C
+    entry points alike. Only D/Z are clone sources: the S/C halves are
+    owned by MKL and the plain ``blacs`` archive, so they are copied
+    through (or dropped via the recipe's ``skip_files``), never cloned.
+    Order matters: check BI_-prefixed names before bare single-letter
+    prefixes.
     """
     if stem.startswith('BI_d'):
         return 'd', False, REAL_CLONE_SUBS
     if stem.startswith('BI_z'):
         return 'z', True, COMPLEX_CLONE_SUBS
-    if stem.startswith('BI_s'):
-        return 's', False, SINGLE_CLONE_SUBS
-    if stem.startswith('BI_c'):
-        return 'c', True, CSINGLE_CLONE_SUBS
     if stem.startswith('BI_'):
         return None  # precision-independent BI_* helper
     if stem.startswith('d'):
         return 'd', False, REAL_CLONE_SUBS
     if stem.startswith('z'):
         return 'z', True, COMPLEX_CLONE_SUBS
-    if stem.startswith('s'):
-        return 's', False, SINGLE_CLONE_SUBS
-    if stem.startswith('c'):
-        return 'c', True, CSINGLE_CLONE_SUBS
     return None
 
 
