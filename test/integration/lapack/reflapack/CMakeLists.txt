@@ -12,9 +12,17 @@
 #   -DLAPACK_REF=netlib  (default) → build from vendored sources
 #   -DLAPACK_REF=system            → link system -llapack (double, capped)
 
-if(LAPACK_REF STREQUAL "system")
+# Bail-out form: reflapack_quad becomes a pass-through to the system
+# -llapack (plus the quad BLAS reference, which is built either way).
+# Every caller still needs its own return() — a return() here would
+# only leave this function.
+function(_reflapack_quad_fallback)
     add_library(reflapack_quad INTERFACE)
     target_link_libraries(reflapack_quad INTERFACE lapack refblas_quad)
+endfunction()
+
+if(LAPACK_REF STREQUAL "system")
+    _reflapack_quad_fallback()
     return()
 endif()
 
@@ -23,8 +31,7 @@ if(NOT CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
     message(STATUS "tests/lapack/reflapack: LAPACK_REF=netlib needs gfortran "
                    "for -freal-8-real-16 promotion. Falling back to "
                    "system -llapack.")
-    add_library(reflapack_quad INTERFACE)
-    target_link_libraries(reflapack_quad INTERFACE lapack refblas_quad)
+    _reflapack_quad_fallback()
     return()
 endif()
 
@@ -33,8 +40,7 @@ if(NOT IS_DIRECTORY ${_reflap_dir})
     message(STATUS "tests/lapack/reflapack: ${_reflap_dir} not found "
                    "(expected to be copied by `migrator stage`); "
                    "falling back to system -llapack.")
-    add_library(reflapack_quad INTERFACE)
-    target_link_libraries(reflapack_quad INTERFACE lapack refblas_quad)
+    _reflapack_quad_fallback()
     return()
 endif()
 
@@ -97,43 +103,12 @@ target_compile_options(reflapack_quad PRIVATE
 )
 
 # Rename exports `<name>_` -> `<name>_quad_` (mirrors refblas_quad —
-# see tests/blas/refblas/CMakeLists.txt for rationale). Consumer side:
+# see refquad_rename_exports() in tests/CMakeLists.txt). Consumer side:
 # tests/lapack/common/ref_quad_lapack.f90 (and the analogous PBLAS /
 # ScaLAPACK ref_quad_*.f90) get a thin module-procedure forward layer.
-find_file(REFQUAD_RENAME_SCRIPT refquad_rename_archive.sh
-    PATHS
-        ${CMAKE_SOURCE_DIR}/scripts
-        ${CMAKE_SOURCE_DIR}/../scripts
-        ${PROJECT_SOURCE_DIR}/scripts
-        ${PROJECT_SOURCE_DIR}/../scripts
-    NO_DEFAULT_PATH)
-if(REFQUAD_RENAME_SCRIPT)
-    # Pass refblas_quad as a sibling (its defs feed the rename set, so
-    # reflapack_quad's U refs to dnrm2_ etc. get renamed in lockstep).
-    # `-x` excludes flag the migrated `*_common` archives: their T/W
-    # defs (la_constants_ep, iparam2stage_ep_, mumps_abort_, …)
-    # are referenced by reflapack_quad and must stay un-renamed so the
-    # migrated link cycle resolves them under their original names.
-    set(_refquad_excludes)
-    foreach(_c blas_common lapack_common scalapack_common
-               pblas_common pbblas_common ptzblas_common blacs_common
-               mumps_common xblas_common)
-        if(TARGET ${_c})
-            list(APPEND _refquad_excludes -x $<TARGET_FILE:${_c}>)
-        endif()
-    endforeach()
-    add_custom_command(TARGET reflapack_quad POST_BUILD
-        COMMAND sh ${REFQUAD_RENAME_SCRIPT}
-                $<TARGET_FILE:reflapack_quad>
-                $<TARGET_FILE:refblas_quad>
-                ${_refquad_excludes}
-        COMMENT "reflapack_quad: rename Fortran symbols -> *_quad_"
-        VERBATIM)
-    add_dependencies(reflapack_quad refblas_quad)
-else()
-    message(WARNING "reflapack_quad: rename script not found; "
-                    "kind4/kind8 baseline tests will see symbol collisions")
-endif()
+# refblas_quad is the sibling: its defs feed the rename set, so
+# reflapack_quad's U refs to dnrm2_ etc. get renamed in lockstep.
+refquad_rename_exports(reflapack_quad SIBLING refblas_quad)
 # LAPACK internally calls BLAS. Link the quad-promoted refblas_quad so
 # every routine in the reference chain operates at KIND=16.
 target_link_libraries(reflapack_quad PUBLIC refblas_quad)

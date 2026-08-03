@@ -47,14 +47,6 @@ if(NOT IS_DIRECTORY ${_wrapper_dir})
     return()
 endif()
 
-# ── Dedicated module directory ──────────────────────────────────────
-# tests/lapack/common reuses the same module names as tests/blas/common
-# (prec_kinds, compare, prec_report, test_data). Placing the LAPACK
-# variants in their own subdirectory under fmod_tests prevents .mod-file
-# collisions when both test trees build together.
-set(_lp_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}/lapack_tests")
-file(MAKE_DIRECTORY ${_lp_moddir})
-
 # ── Common helper modules ───────────────────────────────────────────
 add_library(lapack_test_common STATIC
     ../common/prec_kinds.f90
@@ -63,15 +55,10 @@ add_library(lapack_test_common STATIC
     ../common/test_data.f90
     common/ref_quad_lapack.f90
 )
-set_target_properties(lapack_test_common PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_lp_moddir}"
-)
+fortran_test_module_layout(lapack_test_common SUBDIR lapack_tests)
 # Serial reporter with the bit-exact kind16 gate — see
 # tests/common/prec_report.F90 for the variant matrix.
 target_compile_definitions(lapack_test_common PRIVATE PREC_REPORT_STRICT_EXACT)
-target_include_directories(lapack_test_common PUBLIC
-    $<BUILD_INTERFACE:${_lp_moddir}>
-)
 target_link_libraries(lapack_test_common PUBLIC reflapack_quad)
 
 # ── Per-target wrapper module ───────────────────────────────────────
@@ -80,30 +67,17 @@ add_fypp_source(_lapack_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(lapack_test_target STATIC ${_lapack_wrapper_src})
-set_target_properties(lapack_test_target PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_lp_moddir}"
+fortran_test_module_layout(lapack_test_target SUBDIR lapack_tests)
+# Under a baseline build (kind4/kind8) LIB_PAIR_PREFIX is empty, so these
+# name the standard Netlib lapack/blas archives — which is what baseline
+# wants: LIB_PREFIX is empty under baseline staging, so the migrated
+# archives never get built.
+target_link_libraries(lapack_test_target PUBLIC
+    lapack_test_common
+    target_conv
+    ${LIB_PAIR_PREFIX}lapack
+    ${LIB_PAIR_PREFIX}blas
 )
-target_include_directories(lapack_test_target PUBLIC
-    $<BUILD_INTERFACE:${_lp_moddir}>
-)
-if(BASELINE_BUILD)
-    # kind4/kind8: link the standard Netlib lapack/blas archives. There
-    # is no ${LIB_PAIR_PREFIX}lapack target — LIB_PREFIX is empty under
-    # baseline staging, so the migrated archives never get built.
-    target_link_libraries(lapack_test_target PUBLIC
-        lapack_test_common
-        target_conv
-        lapack
-        blas
-    )
-else()
-    target_link_libraries(lapack_test_target PUBLIC
-        lapack_test_common
-        target_conv
-        ${LIB_PAIR_PREFIX}lapack
-        ${LIB_PAIR_PREFIX}blas
-    )
-endif()
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(lapack_test_target PUBLIC multifloatsf)
 endif()

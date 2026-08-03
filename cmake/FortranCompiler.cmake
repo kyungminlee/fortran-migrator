@@ -413,7 +413,7 @@ function(fortran_module_layout target)
 endfunction()
 
 # ---------------------------------------------------------------------------
-# fortran_test_module_layout(<target>)
+# fortran_test_module_layout(<target> [SUBDIR <name>])
 #
 # Module layout for test-only targets. Modules go to a parallel
 # fmod_tests/ tree instead of the shared fmod/ tree so that
@@ -421,9 +421,22 @@ endfunction()
 # module directory — can never sweep test-harness modules into a
 # release package. No INSTALL_INTERFACE path: test targets are never
 # installed.
+#
+# SUBDIR isolates one suite's modules under fmod_tests/<tag>/<name>. Every
+# suite that compiles its own copy of the tests/common helper modules
+# (prec_kinds, compare, prec_report, test_data — same module names, per-suite
+# reporter macros) needs it, or the .mod files collide in the shared root.
+# Without SUBDIR the target writes to that shared root, which every suite has
+# on its include path.
 # ---------------------------------------------------------------------------
 function(fortran_test_module_layout target)
+  cmake_parse_arguments(PARSE_ARGV 1 _ftml "" "SUBDIR" "")
+
   set(_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}")
+  if(NOT "${_ftml_SUBDIR}" STREQUAL "")
+    string(APPEND _moddir "/${_ftml_SUBDIR}")
+  endif()
+  file(MAKE_DIRECTORY "${_moddir}")
 
   set_target_properties(${target} PROPERTIES
     Fortran_MODULE_DIRECTORY "${_moddir}"

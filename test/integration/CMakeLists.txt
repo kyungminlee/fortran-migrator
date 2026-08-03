@@ -29,6 +29,75 @@ function(add_fypp_source out_var shim_path body_dir)
     set(${out_var} ${_out} PARENT_SCOPE)
 endfunction()
 
+# Export-rename step for the quad reference archives:
+#   refquad_rename_exports(<target> [SIBLING <archive-target>])
+#
+# Renames <target>'s Fortran-mangled exports from `<name>_` to
+# `<name>_quad_` (scripts/refquad_rename_archive.sh as a POST_BUILD
+# step) so the quad reference doesn't collide with the standard
+# ``blas`` / ``lapack`` archive's native-precision symbols when the
+# kind4 / kind8 baseline tests link both. The consumer side lives in
+# tests/common/ref_quad_*.f90: every routine in the interface block is
+# suffixed ``_quad``, with a thin module procedure under the original
+# name forwarding to the renamed external, so test files keep
+# ``use ref_quad_blas, only: dasum`` unchanged.
+#
+# SIBLING names a second archive whose defs join the rename set — and
+# which <target> is made to depend on. reflapack_quad needs it: its U
+# refs to dnrm2_ etc. must be renamed in lockstep with refblas_quad's
+# defs of the same names.
+#
+# The `-x` excludes are the migrated ``*_common`` archives. Their T/W
+# defs (la_constants_ep, iparam2stage_ep_, mumps_abort_, …) are
+# referenced by the quad references and must stay un-renamed, or the
+# migrated link cycle can no longer resolve them.
+#
+# The script is looked for both in-tree (scripts/) and one level up —
+# the staging tree, where ``migrator stage`` plants the cmake/ files
+# alongside ``scripts/``. Skipped with a warning if neither resolves.
+function(refquad_rename_exports target)
+    cmake_parse_arguments(PARSE_ARGV 1 _rqr "" "SIBLING" "")
+
+    find_file(REFQUAD_RENAME_SCRIPT refquad_rename_archive.sh
+        PATHS
+            ${CMAKE_SOURCE_DIR}/scripts
+            ${CMAKE_SOURCE_DIR}/../scripts
+            ${PROJECT_SOURCE_DIR}/scripts
+            ${PROJECT_SOURCE_DIR}/../scripts
+        NO_DEFAULT_PATH)
+    if(NOT REFQUAD_RENAME_SCRIPT)
+        message(WARNING "${target}: rename script not found; "
+                        "kind4/kind8 baseline tests will see symbol collisions")
+        return()
+    endif()
+
+    set(_sibling_archive)
+    if(NOT "${_rqr_SIBLING}" STREQUAL "")
+        set(_sibling_archive $<TARGET_FILE:${_rqr_SIBLING}>)
+    endif()
+
+    set(_refquad_excludes)
+    foreach(_c blas_common lapack_common scalapack_common
+               pblas_common pbblas_common ptzblas_common blacs_common
+               mumps_common xblas_common)
+        if(TARGET ${_c})
+            list(APPEND _refquad_excludes -x $<TARGET_FILE:${_c}>)
+        endif()
+    endforeach()
+
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND sh ${REFQUAD_RENAME_SCRIPT}
+                $<TARGET_FILE:${target}>
+                ${_sibling_archive}
+                ${_refquad_excludes}
+        COMMENT "${target}: rename Fortran exports -> *_quad_"
+        VERBATIM)
+
+    if(NOT "${_rqr_SIBLING}" STREQUAL "")
+        add_dependencies(${target} ${_rqr_SIBLING})
+    endif()
+endfunction()
+
 # Disable the free-form line-length limit for the whole test tree (this
 # directory and every add_subdirectory below it). Test sources are free
 # form (.f90) and some legitimately run past column 132 — ASCII argument

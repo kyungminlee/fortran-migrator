@@ -51,13 +51,6 @@ else()
     endforeach()
 endif()
 
-# ── Dedicated module directory ──────────────────────────────────────
-# The shared tests/common helper modules are compiled once per suite
-# (with per-suite reporter macros), so a per-tree mod dir keeps each
-# tree's .mod files isolated in the shared fmod_tests/ tree.
-set(_sp_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}/scalapack_tests")
-file(MAKE_DIRECTORY ${_sp_moddir})
-
 # ── Common helper modules ───────────────────────────────────────────
 # pblas_distrib is a fypp template (one body instantiated for the real
 # and complex families) — expand it into this suite's binary dir.
@@ -76,30 +69,19 @@ add_library(scalapack_test_common STATIC
     ../common/pblas_grid.F90
     ${_sp_distrib_src}
 )
-set_target_properties(scalapack_test_common PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_sp_moddir}"
-)
+fortran_test_module_layout(scalapack_test_common SUBDIR scalapack_tests)
 # MPI reporter: rank 0 writes the JSON, report_finalize broadcasts the
 # pass/fail flag — see tests/common/prec_report.F90.
 target_compile_definitions(scalapack_test_common PRIVATE PREC_REPORT_MPI)
-target_include_directories(scalapack_test_common PUBLIC
-    $<BUILD_INTERFACE:${_sp_moddir}>
+# Under a baseline build (kind4/kind8) LIB_PAIR_PREFIX is empty, so the
+# prefixed name resolves to the standard Netlib archive — which is what
+# baseline wants; only migrated targets build a prefixed one.
+target_link_libraries(scalapack_test_common PUBLIC
+    refblas_quad
+    reflapack_quad
+    ${LIB_PAIR_PREFIX}blacs
+    MPI::MPI_Fortran
 )
-if(BASELINE_BUILD)
-    target_link_libraries(scalapack_test_common PUBLIC
-        refblas_quad
-        reflapack_quad
-        blacs
-        MPI::MPI_Fortran
-    )
-else()
-    target_link_libraries(scalapack_test_common PUBLIC
-        refblas_quad
-        reflapack_quad
-        ${LIB_PAIR_PREFIX}blacs
-        MPI::MPI_Fortran
-    )
-endif()
 
 # ── Per-target wrapper module ───────────────────────────────────────
 set(_wrapper_dir ${CMAKE_CURRENT_SOURCE_DIR}/target_${TARGET_NAME})
@@ -114,44 +96,23 @@ add_fypp_source(_scalapack_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(scalapack_test_target STATIC ${_scalapack_wrapper_src})
-set_target_properties(scalapack_test_target PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_sp_moddir}"
+fortran_test_module_layout(scalapack_test_target SUBDIR scalapack_tests)
+target_link_libraries(scalapack_test_target PUBLIC
+    scalapack_test_common
+    target_conv
+    ${LIB_PAIR_PREFIX}scalapack
+    ${LIB_PAIR_PREFIX}pblas
+    ${LIB_PAIR_PREFIX}lapack
+    ${LIB_PAIR_PREFIX}blas
 )
-target_include_directories(scalapack_test_target PUBLIC
-    $<BUILD_INTERFACE:${_sp_moddir}>
-)
-if(BASELINE_BUILD)
-    target_link_libraries(scalapack_test_target PUBLIC
-        scalapack_test_common
-        target_conv
-        scalapack
-        pblas
-        lapack
-        blas
-    )
-    foreach(_dep ptzblas pbblas)
-        if(TARGET ${_dep})
-            target_link_libraries(scalapack_test_target PUBLIC ${_dep})
-        endif()
-    endforeach()
-else()
-    target_link_libraries(scalapack_test_target PUBLIC
-        scalapack_test_common
-        target_conv
-        ${LIB_PAIR_PREFIX}scalapack
-        ${LIB_PAIR_PREFIX}pblas
-        ${LIB_PAIR_PREFIX}lapack
-        ${LIB_PAIR_PREFIX}blas
-    )
-    # qxscalapack's Fortran routines call qlamov_/pqgemr2d_ etc.; those C
-    # helpers are now folded into ${LIB_PAIR_PREFIX}scalapack itself, so no
-    # separate qscalapack_c link is needed.
-    foreach(_dep ${LIB_PAIR_PREFIX}ptzblas ${LIB_PAIR_PREFIX}pbblas)
-        if(TARGET ${_dep})
-            target_link_libraries(scalapack_test_target PUBLIC ${_dep})
-        endif()
-    endforeach()
-endif()
+# qxscalapack's Fortran routines call qlamov_/pqgemr2d_ etc.; those C
+# helpers are now folded into ${LIB_PAIR_PREFIX}scalapack itself, so no
+# separate qscalapack_c link is needed.
+foreach(_dep ${LIB_PAIR_PREFIX}ptzblas ${LIB_PAIR_PREFIX}pbblas)
+    if(TARGET ${_dep})
+        target_link_libraries(scalapack_test_target PUBLIC ${_dep})
+    endif()
+endforeach()
 if(NEEDS_MULTIFLOATS AND TARGET multifloatsf)
     target_link_libraries(scalapack_test_target PUBLIC multifloatsf)
 endif()

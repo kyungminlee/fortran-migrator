@@ -37,13 +37,6 @@ if(NOT IS_DIRECTORY ${_wrapper_dir})
     return()
 endif()
 
-# ── Dedicated module directory ──────────────────────────────────────
-# tests/xblas/common reuses the same module names as tests/blas/common
-# (prec_kinds, compare, prec_report, test_data); a separate .mod
-# directory prevents collisions when both test trees build together.
-set(_xb_moddir "${PROJECT_BINARY_DIR}/fmod_tests/${FORTRAN_MOD_COMPAT_TAG}/xblas_tests")
-file(MAKE_DIRECTORY ${_xb_moddir})
-
 # ── Common helper modules ───────────────────────────────────────────
 add_library(xblas_test_common STATIC
     ../common/prec_kinds.f90
@@ -52,15 +45,10 @@ add_library(xblas_test_common STATIC
     ../common/test_data.f90
     common/ref_quad_xblas.f90
 )
-set_target_properties(xblas_test_common PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_xb_moddir}"
-)
+fortran_test_module_layout(xblas_test_common SUBDIR xblas_tests)
 # Serial reporter with the bit-exact kind16 gate — see
 # tests/common/prec_report.F90 for the variant matrix.
 target_compile_definitions(xblas_test_common PRIVATE PREC_REPORT_STRICT_EXACT)
-target_include_directories(xblas_test_common PUBLIC
-    $<BUILD_INTERFACE:${_xb_moddir}>
-)
 target_link_libraries(xblas_test_common PUBLIC refblas_quad)
 
 # ── Per-target wrapper module ───────────────────────────────────────
@@ -69,12 +57,7 @@ add_fypp_source(_xblas_wrapper_src
     ${CMAKE_CURRENT_SOURCE_DIR}/common
 )
 add_library(xblas_test_target STATIC ${_xblas_wrapper_src})
-set_target_properties(xblas_test_target PROPERTIES
-    Fortran_MODULE_DIRECTORY "${_xb_moddir}"
-)
-target_include_directories(xblas_test_target PUBLIC
-    $<BUILD_INTERFACE:${_xb_moddir}>
-)
+fortran_test_module_layout(xblas_test_target SUBDIR xblas_tests)
 target_link_libraries(xblas_test_target PUBLIC
     xblas_test_common
     target_conv

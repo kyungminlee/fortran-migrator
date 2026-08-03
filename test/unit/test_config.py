@@ -58,30 +58,18 @@ def test_unknown_keys_warn_on_stderr(tmp_path, capsys):
     assert config.copy_files == set()
 
 
-def test_empty_symbols_block_loads(tmp_path):
-    recipe = _write_recipe(tmp_path, """
+# Both fields are retired — ``symbols`` (an nm-based archive scan) along
+# with ``library_path``, ``prefix`` in v0.3.3 — but a recipe still carrying
+# the key with an empty body must load without raising, so loader tolerance
+# stays a regression-worthy property.
+@pytest.mark.parametrize('key', ['symbols', 'prefix'])
+def test_empty_retired_block_loads(tmp_path, key):
+    recipe = _write_recipe(tmp_path, f"""
         library: blas
         language: fortran
         source_dir: src
-        symbols:
+        {key}:
     """)
-    # Empty ``symbols:`` block must load without raising; the field
-    # (an nm-based archive scan) was retired along with
-    # ``library_path``, but YAML loader tolerance is still a
-    # regression-worthy property.
-    load_recipe(recipe, project_root=tmp_path)
-
-
-def test_empty_prefix_block_loads(tmp_path):
-    recipe = _write_recipe(tmp_path, """
-        library: blas
-        language: fortran
-        source_dir: src
-        prefix:
-    """)
-    # Empty ``prefix:`` block must load without raising; the field
-    # itself was retired in v0.3.3, but YAML loader tolerance is
-    # still a regression-worthy property.
     load_recipe(recipe, project_root=tmp_path)
 
 
