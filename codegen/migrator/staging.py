@@ -280,20 +280,26 @@ _STD_DIRS: list[tuple[str, str, str | None]] = [
     # single build serves every migrated arithmetic.
     ('_mumps_pord_src',         'MUMPS_5.9.0/PORD/lib',            None),
     ('_mumps_pord_include',     'MUMPS_5.9.0/PORD/include',        None),
-    # METIS 5.1.0 nested-dissection / k-way ordering — vendored under
-    # extern/metis-5.1.0 with every public API symbol privately
+    # METIS 5.2.1 nested-dissection / k-way ordering — vendored under
+    # extern/metis-5.2.1 with every public API symbol privately
     # namespaced (METIS_<X> → METIS_MUMPS_<X>, internal libmetis__ →
-    # libmetis_MUMPS_, and the 25 GKlib names that lack GKlib's own
+    # libmetis_MUMPS_, and the GKlib names that lack GKlib's own
     # gk_ prefix → gk_MUMPS_) so this copy can never clash with a
     # system METIS at link time; the MUMPS caller sites were renamed
-    # to match. Staging GKlib + libmetis sources and the public header
-    # lets cmake build ``libmetis`` and define ``-Dmetis`` so
-    # ICNTL(7)=5 works; without it the mumps_metis*.c compile as inert
-    # stubs. Integer-graph only, so a single 32-bit-idx build serves
-    # every migrated arithmetic.
-    ('_mumps_metis_gklib',      'metis-5.1.0/GKlib',               None),
-    ('_mumps_metis_lib',        'metis-5.1.0/libmetis',            None),
-    ('_mumps_metis_include',    'metis-5.1.0/include',             None),
+    # to match. ``scripts/vendor_metis.sh`` regenerates that tree from
+    # upstream and documents the rename in full. Staging GKlib +
+    # libmetis sources and the public header lets cmake build
+    # ``libmetis`` and define ``-Dmetis`` so ICNTL(7)=5 works; without
+    # it the mumps_metis*.c compile as inert stubs. Integer-graph only,
+    # so a single 32-bit-idx build serves every migrated arithmetic.
+    #
+    # From 5.2.1 on METIS no longer bundles GKlib — it is a separate
+    # upstream repository with its own src/ + include/ split, hence the
+    # fourth staged directory.
+    ('_mumps_metis_gklib',      'metis-5.2.1/GKlib/src',           None),
+    ('_mumps_metis_gklib_inc',  'metis-5.2.1/GKlib/include',       None),
+    ('_mumps_metis_lib',        'metis-5.2.1/libmetis',            None),
+    ('_mumps_metis_include',    'metis-5.2.1/include',             None),
     # Scotch 7.0.4 sequential ordering (ICNTL(7)=3) — vendored under
     # extern/scotch-7.0.4, built with -DSCOTCH_NAME_SUFFIX=_mumps so
     # every public SCOTCH_* and internal _SCOTCH* symbol carries a

@@ -316,7 +316,7 @@ eplinalg/
 │                            # (staged into the build tree as tests/)
 ├── extern/              # Vendored upstream: LAPACK 3.12.1, ScaLAPACK 2.2.3,
 │                        # MUMPS 5.9.0 (5.8.2 kept for reference), XBLAS 1.0.248,
-│                        # METIS 5.1.0, Scotch 7.0.4, impi-headers
+│                        # METIS 5.2.1, Scotch 7.0.4, impi-headers
 ├── example/             # Consumer examples (mmsolve)
 ├── cmake/               # Shared CMake infrastructure (staged tree's build system)
 ├── doc/                 # Documentation
