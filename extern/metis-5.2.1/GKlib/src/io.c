@@ -10,10 +10,12 @@ This file contains various functions that perform I/O.
 */
 
 #ifdef HAVE_GETLINE
-/* Get getline to be defined. */
-#define _GNU_SOURCE
+/* Get getline to be defined. _POSIX_C_SOURCE, not _GNU_SOURCE: the
+   latter also turns on glibc 2.38+ C23 scanf redirects (__isoc23_sscanf),
+   which do not exist in older glibc. See scripts/vendor_metis.sh. */
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
-#undef _GNU_SOURCE
+#undef _POSIX_C_SOURCE
 #endif
 
 #include <GKlib.h>

@@ -636,7 +636,7 @@ MUMPS_INT mumps_io_open_files_for_read(){
     mumps_io_pfile_pointer_array=(mumps_files+j)->mumps_io_pfile_pointer_array;
     for(i=0;i<(mumps_files+j)->mumps_io_nb_file;i++){
 #if ! defined( MUMPS_WIN32 )
-      (mumps_io_pfile_pointer_array+i)->file=open((mumps_io_pfile_pointer_array+i)->name,(mumps_files+j)->mumps_flag_open);
+      (mumps_io_pfile_pointer_array+i)->file=open((mumps_io_pfile_pointer_array+i)->name,(mumps_files+j)->mumps_flag_open,0666);
       if((mumps_io_pfile_pointer_array+i)->file==-1){
         return mumps_io_sys_error(-90,"Problem while opening OOC file");
       }

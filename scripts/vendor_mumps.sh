@@ -3,8 +3,9 @@
 # vendor_mumps.sh — regenerate extern/MUMPS_5.9.1 from upstream.
 #
 # The vendored MUMPS tree is upstream's tarball verbatim except for one
-# mechanical edit: the eight METIS entry points MUMPS calls are rewritten
-# to the private names the vendored METIS actually exports. METIS is
+# mechanical edit and one local patch. The edit: the eight METIS entry
+# points MUMPS calls are rewritten to the private names the vendored
+# METIS actually exports. METIS is
 # namespaced (see scripts/vendor_metis.sh) so the ordering archive cannot
 # clash with a system METIS the final application might also link; MUMPS
 # is the only consumer, so it has to be taught the private names.
@@ -58,6 +59,15 @@
 # proof of the complete delta — any accidental edit anywhere in the tree
 # shows up as a diff. The occurrence count is checked too, so a rule that
 # silently matches nothing cannot pass.
+#
+# The local patch, applied after that proof so it cannot weaken it:
+# mumps_io_basic.c reopens OOC files with a two-argument open() whose
+# flags are a runtime variable, so the fortify headers cannot rule out
+# O_CREAT and emit a call to __open_missing_mode — a diagnostic stub no
+# library defines. Nothing catches it at compile time, and the object
+# links fine until something actually pulls it in. The mode the sibling
+# open() a few hundred lines up already passes is supplied here too;
+# open() ignores it without O_CREAT.
 #
 set -euo pipefail
 
@@ -165,4 +175,25 @@ if ! diff -rq "$pristine" "$rev" > "$work/diff.txt" 2>&1; then
     exit 1
 fi
 say "$before occurrences renamed; reverse round-trip is byte-identical to upstream"
+
+# ── 5. local patches ────────────────────────────────────────────────
+# Deliberately after the round-trip proof above, which is a statement
+# about the rename and stays one.
+#
+# Give the OOC reopen path a mode. Its flags are a runtime variable, so
+# the fortify wrapper for open() cannot prove O_CREAT is absent and
+# leaves behind a reference to __open_missing_mode, which is an error
+# marker rather than a real function: no glibc defines it, at any
+# version. The compile succeeds, the archive ships, and the undefined
+# symbol surfaces at whichever consumer's link first drags this object
+# in. 0666 is what the open() at the top of the file already passes,
+# and is ignored unless the flags really do ask to create.
+io=$dest/src/mumps_io_basic.c
+sed -i 's|=open(\(.*\)->mumps_flag_open);|=open(\1->mumps_flag_open,0666);|' "$io"
+grep -q 'mumps_flag_open,0666)' "$io" || {
+    echo "mumps_io_basic.c open() patch matched nothing" >&2; exit 1; }
+grep -qE '=open\([^;]*mumps_flag_open\)' "$io" && {
+    echo "mumps_io_basic.c still has a modeless open()" >&2; exit 1; }
+say "patched the modeless open() in src/mumps_io_basic.c"
+
 say "done: $dest"
