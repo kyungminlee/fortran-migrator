@@ -121,7 +121,7 @@ macro(_eplinalg_mumps_pord)
     # ── PORD ordering library (ships in-tree with MUMPS) ────────────
     # PORD is a self-contained standard-C nested-dissection ordering
     # (no MPI, no external dependency); its 14 algorithm sources live
-    # under MUMPS_5.9.0/PORD/lib and are staged verbatim into
+    # under MUMPS_5.9.1/PORD/lib and are staged verbatim into
     # _mumps_pord_src. Building ``libpord`` here and defining ``-Dpord``
     # on the MUMPS C runtime + Fortran analysis routines activates the
     # ICNTL(7)=4 ordering; without the define, mumps_pord.c compiles as
@@ -173,15 +173,23 @@ endmacro()
 
 # _eplinalg_mumps_metis(): private METIS ordering archive; defines
 # target ``metis``. Directory scope out: MUMPS_HAVE_METIS,
-# _mumps_metis_{gklib,lib,inc}.
+# _mumps_metis_{gklib,gklib_inc,lib,inc}.
 macro(_eplinalg_mumps_metis)
     # ── METIS ordering library (privately namespaced) ───────────────
-    # METIS 5.1.0, vendored under extern/metis-5.1.0 and staged into
-    # _mumps_metis_{gklib,lib,include}. Every public API symbol was
-    # renamed METIS_<X> → METIS_MUMPS_<X> (and internal libmetis__ →
+    # METIS 5.2.1, vendored under extern/metis-5.2.1 and staged into
+    # _mumps_metis_{gklib,gklib_inc,lib,include}. Every public API symbol
+    # was renamed METIS_<X> → METIS_MUMPS_<X> (and internal libmetis__ →
     # libmetis_MUMPS_) so this private copy can never clash at link time
     # with a system METIS the final application might also pull in; the
     # matching MUMPS caller sites in _mumps_upstream_src were renamed too.
+    # GKlib prefixes its own exports with gk_; the names that escaped
+    # that convention carry gk_MUMPS_ (GKlib/include/GKlib.h), so the
+    # archive defines no bare global at all. scripts/vendor_metis.sh
+    # regenerates the vendored tree and documents the rename in full.
+    #
+    # From 5.2.1 on GKlib is a separate upstream repository rather than
+    # a bundled subdirectory, so its sources and headers stage as two
+    # directories instead of one.
     # Building ``libmetis`` here and defining ``-Dmetis`` on the MUMPS C
     # runtime + Fortran analysis routines activates the ICNTL(7)=5
     # ordering; without the define mumps_metis*.c compile as inert stubs
@@ -190,11 +198,13 @@ macro(_eplinalg_mumps_metis)
     # never touches FP values — so a single 32-bit-idx build
     # (IDXTYPEWIDTH=32) links into every migrated arithmetic and the
     # genuine double MUMPS alike.
-    set(_mumps_metis_gklib ${CMAKE_CURRENT_SOURCE_DIR}/_mumps_metis_gklib)
-    set(_mumps_metis_lib   ${CMAKE_CURRENT_SOURCE_DIR}/_mumps_metis_lib)
-    set(_mumps_metis_inc   ${CMAKE_CURRENT_SOURCE_DIR}/_mumps_metis_include)
+    set(_mumps_metis_gklib     ${CMAKE_CURRENT_SOURCE_DIR}/_mumps_metis_gklib)
+    set(_mumps_metis_gklib_inc ${CMAKE_CURRENT_SOURCE_DIR}/_mumps_metis_gklib_inc)
+    set(_mumps_metis_lib       ${CMAKE_CURRENT_SOURCE_DIR}/_mumps_metis_lib)
+    set(_mumps_metis_inc       ${CMAKE_CURRENT_SOURCE_DIR}/_mumps_metis_include)
     set(MUMPS_HAVE_METIS FALSE)
     if(IS_DIRECTORY ${_mumps_metis_gklib} AND IS_DIRECTORY ${_mumps_metis_lib}
+            AND IS_DIRECTORY ${_mumps_metis_gklib_inc}
             AND IS_DIRECTORY ${_mumps_metis_inc})
         file(GLOB _metis_c CONFIGURE_DEPENDS
             ${_mumps_metis_gklib}/*.c ${_mumps_metis_lib}/*.c)
@@ -207,10 +217,16 @@ macro(_eplinalg_mumps_metis)
             # headers are build-internal — via _install_ordering_package
             # into the INSTALL_INTERFACE dir.
             #
-            # Width macros: 32-bit idx / real — the header default and the
-            # width mumps_metis.c's ``IDXTYPEWIDTH == 32`` path expects.
+            # Width macros: 32-bit idx / real — the width
+            # mumps_metis.c's ``IDXTYPEWIDTH == 32`` path expects.
+            # Upstream 5.2.1 comments the self-defaults out of metis.h
+            # and requires every consumer to supply them; the vendored
+            # header restores them (see scripts/vendor_metis.sh), so
+            # these -D's are a redundant, identical redefinition and
+            # mumps_metis*.c plus installed-header consumers keep
+            # working without naming the widths themselves.
             # NDEBUG* match the upstream (non-ASSERT) GKlib build; the
-            # platform/feature macros mirror GKlib/GKlibSystem.cmake (the
+            # platform/feature macros mirror GKlib's build config (the
             # probe-dependent ones are appended below).
             #
             # OUTPUT_NAME libmetis_mumps.a — filename-namespaced like the
@@ -232,7 +248,7 @@ macro(_eplinalg_mumps_metis)
             _mumps_ordering_archive(metis C99_PIC LIBM
                 OUTPUT_NAME metis_mumps
                 SOURCES ${_metis_c}
-                PUBLIC_INCLUDE ${_mumps_metis_inc} ${_mumps_metis_gklib}
+                PUBLIC_INCLUDE ${_mumps_metis_inc} ${_mumps_metis_gklib_inc}
                                ${_mumps_metis_lib}
                 INSTALL_INCLUDE include/metis_mumps
                 DEFINES IDXTYPEWIDTH=32 REALTYPEWIDTH=32
@@ -812,7 +828,7 @@ macro(_eplinalg_mumps_c_bridge)
             ${_mumps_c_src}/mumps_scotch.c
             ${_mumps_c_src}/mumps_scotch64.c
             ${_mumps_c_src}/mumps_scotch_int.c
-            # MUMPS 5.9.0: shared OpenMP solver-workspace arena. Called from
+            # MUMPS 5.9.1: shared OpenMP solver-workspace arena. Called from
             # the per-arith *sol_driver.F / *sol_lr.F (genuine s/d/c/z AND the
             # migrated ey/qx/mw, which are templated from the same .F) via
             # mumps_sol_omp_mem_manager_{init_workspaces,release_workspaces,

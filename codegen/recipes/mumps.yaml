@@ -1,6 +1,6 @@
 library: mumps
 language: fortran
-source_dir: extern/MUMPS_5.9.0/src
+source_dir: extern/MUMPS_5.9.1/src
 extensions: [.F, .h]
 
 # Per-arithmetic headers (*mumps_struc.h) live in a parallel include/
@@ -9,7 +9,7 @@ extensions: [.F, .h]
 # dmumps_struc_def.F resolves against the renamed output header
 # (qmumps_struc.h for kind16).
 extra_fortran_dirs:
-  - extern/MUMPS_5.9.0/include
+  - extern/MUMPS_5.9.1/include
 
 depends:
   - blas.yaml
@@ -52,7 +52,7 @@ skip_files:
   - MUMPS_SCOTCH_INT
   - MUMPS_THREAD_AFFINITY
   # src/ — MPI-to-OpenMP work-distribution module (grew from a 16-line stub
-  # in 5.8.2 to a 1007-line real module in 5.9.0). The whole module body and
+  # in 5.8.2 to a 1010-line real module in 5.9.1). The whole module body and
   # all ~20 USE sites are wrapped in ``#if defined(MPI_TO_K_OMP)``, an opt-in
   # experimental feature never defined anywhere in the tree, so gfortran
   # preprocesses it all away: empty .o, no .mod, no consumers. It must be
@@ -135,7 +135,7 @@ copy_files:
   # arithmetics (cv_costw / cv_costm, subtree traversal costs). Integer
   # mapping tables plus DP accumulators — no working-precision interface.
   - MUMPS_STATIC_MAPPING
-  # MUMPS_LR_COMMON: integer-only constants / size helpers. In 5.9.0 the
+  # MUMPS_LR_COMMON: integer-only constants / size helpers. In 5.9.1 the
   # file ALSO carries the mixed-precision low-rank (LRMIXED) FP helpers
   # (MUMPS_LRMIXED_CAST_*/PLUS_*/?GEMM), but only for the genuine s/d/c/z
   # arithmetics — the file is precision-multiplexed and hardcodes every

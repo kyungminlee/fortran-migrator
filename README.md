@@ -157,7 +157,7 @@ for the sidecar conventions.
 | item                   | source                                      |
 |------------------------|---------------------------------------------|
 | LAPACK 3.12.1          | vendored under `extern/lapack-3.12.1/`    |
-| MUMPS 5.9.0            | vendored under `extern/MUMPS_5.9.0/`      |
+| MUMPS 5.9.1            | vendored under `extern/MUMPS_5.9.1/`      |
 | ScaLAPACK 2.2.3        | vendored under `extern/scalapack-2.2.3/`  |
 | Intel MPI headers      | vendored under `extern/impi-headers/` (compile-time only — link/run against Intel oneAPI MPI via the `linux-impi` preset; other MPIs are best-effort) |
 | multifloats            | fetched at CMake time from GitHub (`FetchContent`) |

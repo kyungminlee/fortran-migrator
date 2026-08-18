@@ -141,7 +141,7 @@ def patch_libseq_mpi_f(path: Path) -> None:
     ScaLAPACK descriptor checks libseq is missing.
 
     Patches the staged copy at ``_mpiseq_src/mpi.f``; upstream's
-    ``extern/MUMPS_5.9.0/libseq/mpi.f`` stays read-only. BLACS /
+    ``extern/MUMPS_5.9.1/libseq/mpi.f`` stays read-only. BLACS /
     ScaLAPACK forwarders inside the same file are deliberately KEPT
     — libmpiseq stands in for those archives in the ``_seq`` test
     link, and the real BLACS / ScaLAPACK archives aren't linked there

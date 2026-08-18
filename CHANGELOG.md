@@ -4,6 +4,33 @@ Release notes live on the [GitHub releases page](https://github.com/kyungminlee/
 this file summarizes each tagged version. The current version is in
 [VERSION](VERSION).
 
+## v0.22.0
+
+- Vendored METIS upgraded 5.1.0 -> 5.2.1. From 5.2.1 on METIS no longer
+  bundles GKlib — it is a separate upstream repository with a `src/` +
+  `include/` split — so the vendored tree keeps that split and the staged
+  layout gains a fourth directory, `_mumps_metis_gklib_inc`. 5.2.1
+  comments the `IDXTYPEWIDTH` / `REALTYPEWIDTH` self-defaults out of
+  `metis.h`; the vendored copy restores them to 32, so translation units
+  including the installed header still need no `-D`.
+- Vendored MUMPS upgraded 5.9.0 -> 5.9.1.
+- Both vendored trees are now reproducible: `scripts/vendor_metis.sh` and
+  `scripts/vendor_mumps.sh` fetch pinned upstreams, prune, apply the
+  mechanical private rename, and verify their own output. Each was
+  previously pristine-upstream-plus-edits recoverable only by
+  archaeology, which is how three METIS internals stayed unrenamed for
+  the life of the vendored copy. The next upgrade is editing two
+  constants.
+- The METIS archive no longer exports a single generic symbol. A census
+  found 28 globals with no prefix at all (three of them live on the
+  `ICNTL(7)=5` ordering path, where a stock system METIS defines the same
+  bare names and link order decided which copy won), and a further ~640
+  under GKlib's own `gk_` prefix — GKlib's, not ours, and shared with any
+  other GKlib in the link. All of them now carry one of four private
+  prefixes: `METIS_MUMPS_`, `metis_mumps_`, `libmetis_MUMPS_`, `MUMPS_`.
+  The rename is verified on every regeneration, and an unprefixed name a
+  future upstream introduces aborts the run and names itself.
+
 ## v0.21.0
 
 - Behavior-preserving cleanup across the codebase from an 81-finding
