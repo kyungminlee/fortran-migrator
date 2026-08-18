@@ -24,6 +24,15 @@ this file summarizes each tagged version. The current version is in
   built archive before publishing, then links a program against the
   whole METIS archive there. A symbol that raises the floor now fails the
   release instead of reaching users.
+- MUMPS's out-of-core reopen path calls `open()` with runtime flags and
+  no mode. Under the fortify headers of the glibc the release is built
+  on, that leaves `mumps_io_basic.c.o` referencing
+  `__open_missing_mode` — a diagnostic marker no library anywhere
+  defines — so any consumer whose link pulled that object in got an
+  undefined reference, on every glibc, not just old ones. The vendored
+  source now passes the same `0666` the file's other `open()` already
+  does; it is ignored unless the flags really ask to create. Found by
+  the new floor check, which is where it was first visible.
 - The METIS ordering archives pin `C_STANDARD_REQUIRED` at the target
   rather than inheriting it, so a compiler defaulting to C23 (GCC 15)
   cannot reintroduce the `__isoc23_*` redirects.

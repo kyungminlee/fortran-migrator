@@ -68,6 +68,21 @@ for soname in libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 \
     nm -D --defined-only "$path" 2>/dev/null \
         | awk 'NF == 3 { sub(/@.*/, "", $3); print $3 }' >> "$work/provided"
 done
+# -lc is a linker script, not just libc.so.6: it pulls libc_nonshared.a
+# alongside it. That archive is where glibc keeps the symbols it never
+# exported dynamically, and its contents shrink over time — stat, fstat,
+# lstat and mknod live there through 2.32 and only become real exports
+# in 2.33. Reading libc.so.6 alone therefore reports a plain stat() as
+# missing on exactly the old glibc we are trying to support, which is
+# backwards. The static halves are counted too.
+for stub in libc_nonshared.a libpthread_nonshared.a; do
+    path=$( (gcc -print-file-name="$stub") 2>/dev/null || true)
+    [[ -n ${path:-} && $path != "$stub" && -e $path ]] || continue
+    echo "  runtime:  $path"
+    nm --defined-only "$path" 2>/dev/null \
+        | awk 'NF == 3 && $2 ~ /^[A-Za-z]$/ { print $3 }' >> "$work/provided"
+done
+
 sort -u -o "$work/provided" "$work/provided"
 
 # ── symbols that are somebody else's problem ────────────────────────
