@@ -121,7 +121,7 @@ macro(_eplinalg_mumps_pord)
     # ── PORD ordering library (ships in-tree with MUMPS) ────────────
     # PORD is a self-contained standard-C nested-dissection ordering
     # (no MPI, no external dependency); its 14 algorithm sources live
-    # under MUMPS_5.9.0/PORD/lib and are staged verbatim into
+    # under MUMPS_5.9.1/PORD/lib and are staged verbatim into
     # _mumps_pord_src. Building ``libpord`` here and defining ``-Dpord``
     # on the MUMPS C runtime + Fortran analysis routines activates the
     # ICNTL(7)=4 ordering; without the define, mumps_pord.c compiles as
@@ -828,7 +828,7 @@ macro(_eplinalg_mumps_c_bridge)
             ${_mumps_c_src}/mumps_scotch.c
             ${_mumps_c_src}/mumps_scotch64.c
             ${_mumps_c_src}/mumps_scotch_int.c
-            # MUMPS 5.9.0: shared OpenMP solver-workspace arena. Called from
+            # MUMPS 5.9.1: shared OpenMP solver-workspace arena. Called from
             # the per-arith *sol_driver.F / *sol_lr.F (genuine s/d/c/z AND the
             # migrated ey/qx/mw, which are templated from the same .F) via
             # mumps_sol_omp_mem_manager_{init_workspaces,release_workspaces,

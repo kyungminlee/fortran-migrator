@@ -132,7 +132,7 @@ target-mode-specific knobs.
 | `ptzblas.yaml` | blas | Parallel transpose-on-demand BLAS Fortran helpers. Pulls `ZZDOTC`/`ZZDOTU` from `_scalapack_tools_src/` via `extra_symbol_dirs`. |
 | `scalapack.yaml` | lapack, blacs, pblas | ScaLAPACK Fortran. Patches for `pdlanhs`/`pzlanhs` (NPROW=1 norm bug, see `doc/upstream-bugs/scalapack.md`). Four `extra_renames` (`PJLAENV`/`PILAENVX` and `PDLAIECTB`/`PDLAIECTL`). |
 | `scalapack_c.yaml` | lapack, blacs, pblas, scalapack | ScaLAPACK C-side wrappers. Mirrors `scalapack`'s `PDLAIECTB`/`PDLAIECTL` renames. |
-| `mumps.yaml` | blas, lapack, scalapack | MUMPS 5.9.0 sparse direct solver. 32-entry `skip_files` (C headers, GPU code), 8-entry `copy_files` (integer-only helpers), per-line `keep_kind_lines` manifest preserving `DOUBLE PRECISION` declarations that mean "wall-clock seconds" rather than "working precision". |
+| `mumps.yaml` | blas, lapack, scalapack | MUMPS 5.9.1 sparse direct solver. 32-entry `skip_files` (C headers, GPU code), 8-entry `copy_files` (integer-only helpers), per-line `keep_kind_lines` manifest preserving `DOUBLE PRECISION` declarations that mean "wall-clock seconds" rather than "working precision". |
 
 ### Targets — `codegen/targets/<target>.yaml`
 
@@ -233,7 +233,7 @@ sections:
    PBLAS, ScaLAPACK (its `scalapack_c` C-side clones are compiled as
    OBJECT libraries and folded into the ScaLAPACK archive, not built
    as a standalone library), MUMPS.
-6. **libmpiseq** — sequential MPI stub built from MUMPS 5.9.0's
+6. **libmpiseq** — sequential MPI stub built from MUMPS 5.9.1's
    `libseq/`. Provides `mpi_init_`, `mpi_send_`, `blacs_pinfo_`,
    etc. so single-rank tests can link cleanly without a real MPI.
    Conditionally compiled if `_mpiseq_src/` is present in the stage.
@@ -315,7 +315,7 @@ eplinalg/
 │   └── integration/         # 10 differential-precision suites (1125 tests)
 │                            # (staged into the build tree as tests/)
 ├── extern/              # Vendored upstream: LAPACK 3.12.1, ScaLAPACK 2.2.3,
-│                        # MUMPS 5.9.0 (5.8.2 kept for reference), XBLAS 1.0.248,
+│                        # MUMPS 5.9.1 (5.8.2 kept for reference), XBLAS 1.0.248,
 │                        # METIS 5.2.1, Scotch 7.0.4, impi-headers
 ├── example/             # Consumer examples (mmsolve)
 ├── cmake/               # Shared CMake infrastructure (staged tree's build system)

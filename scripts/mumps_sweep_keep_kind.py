@@ -1,4 +1,4 @@
-"""Sweep every s/d and c/z pair under extern/MUMPS_5.9.0/src/ and
+"""Sweep every s/d and c/z pair under extern/MUMPS_5.9.1/src/ and
 classify DOUBLE PRECISION declarations as keep-kind or promote.
 
 Keep-kind rule (paired files only): a DP declaration in a d*/z* file is
@@ -28,8 +28,8 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SRC = REPO / "extern" / "MUMPS_5.9.0" / "src"
-INCLUDE = REPO / "extern" / "MUMPS_5.9.0" / "include"
+SRC = REPO / "extern" / "MUMPS_5.9.1" / "src"
+INCLUDE = REPO / "extern" / "MUMPS_5.9.1" / "include"
 DEFAULT_MANIFEST = REPO / "codegen" / "recipes" / "mumps" / "keep-kind.manifest"
 DP_RE = re.compile(r"^\s*DOUBLE\s+PRECISION\b", re.IGNORECASE)
 PAIRS = [("s", "d"), ("c", "z")]

@@ -257,7 +257,7 @@ _STD_DIRS: list[tuple[str, str, str | None]] = [
     # executables. Stubs print a "should not be called" error if a
     # collective/comm primitive that requires multi-rank coordination
     # is invoked, so libseq is NPROCS=1-only by construction.
-    ('_mpiseq_src',           'MUMPS_5.9.0/libseq',                None),
+    ('_mpiseq_src',           'MUMPS_5.9.1/libseq',                None),
     # MUMPS upstream src/ + include/. The recipe (which is fortran-
     # only) skips every *MUMPS_C / MUMPS_C_TYPES header and every
     # *.c file, so the migrated qxmumps archive ships without a C
@@ -269,8 +269,8 @@ _STD_DIRS: list[tuple[str, str, str | None]] = [
     # type-agnostic and compile verbatim. Staging the whole src/
     # tree (including the .F siblings we don't need here) is
     # cheaper than per-file plumbing and matches the convention.
-    ('_mumps_upstream_src',     'MUMPS_5.9.0/src',                 'mumps'),
-    ('_mumps_upstream_include', 'MUMPS_5.9.0/include',             None),
+    ('_mumps_upstream_src',     'MUMPS_5.9.1/src',                 'mumps'),
+    ('_mumps_upstream_include', 'MUMPS_5.9.1/include',             None),
     # PORD nested-dissection ordering — ships in-tree with MUMPS and
     # is self-contained standard C (no MPI / external dep). Staging
     # its algorithm sources (PORD/lib) + headers (PORD/include) lets
@@ -278,8 +278,8 @@ _STD_DIRS: list[tuple[str, str, str | None]] = [
     # works; without it mumps_pord.c compiles as an inert stub.
     # Precision-agnostic (permutes the integer adjacency graph), so a
     # single build serves every migrated arithmetic.
-    ('_mumps_pord_src',         'MUMPS_5.9.0/PORD/lib',            None),
-    ('_mumps_pord_include',     'MUMPS_5.9.0/PORD/include',        None),
+    ('_mumps_pord_src',         'MUMPS_5.9.1/PORD/lib',            None),
+    ('_mumps_pord_include',     'MUMPS_5.9.1/PORD/include',        None),
     # METIS 5.2.1 nested-dissection / k-way ordering — vendored under
     # extern/metis-5.2.1 with every public API symbol privately
     # namespaced (METIS_<X> → METIS_MUMPS_<X>, internal libmetis__ →
