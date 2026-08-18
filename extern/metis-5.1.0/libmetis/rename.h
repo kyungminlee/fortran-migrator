@@ -33,6 +33,7 @@
 
 /* coarsen.c */
 #define CoarsenGraph			libmetis_MUMPS_CoarsenGraph
+#define CoarsenGraphNlevels             libmetis_MUMPS_CoarsenGraphNlevels
 #define Match_RM                        libmetis_MUMPS_Match_RM
 #define Match_SHEM                      libmetis_MUMPS_Match_SHEM
 #define Match_2Hop                      libmetis_MUMPS_Match_2Hop
@@ -51,6 +52,7 @@
 
 /* contig.c */
 #define FindPartitionInducedComponents  libmetis_MUMPS_FindPartitionInducedComponents   
+#define ComputeBFSOrdering              libmetis_MUMPS_ComputeBFSOrdering
 #define IsConnected                     libmetis_MUMPS_IsConnected
 #define IsConnectedSubdomain            libmetis_MUMPS_IsConnectedSubdomain
 #define FindSepInducedComponents        libmetis_MUMPS_FindSepInducedComponents
@@ -105,6 +107,7 @@
 #define McRandomBisection               libmetis_MUMPS_McRandomBisection
 #define McGrowBisection                 libmetis_MUMPS_McGrowBisection
 #define GrowBisectionNode		libmetis_MUMPS_GrowBisectionNode
+#define GrowBisectionNode2              libmetis_MUMPS_GrowBisectionNode2
 
 /* kmetis.c */
 #define MlevelKWayPartitioning		libmetis_MUMPS_MlevelKWayPartitioning

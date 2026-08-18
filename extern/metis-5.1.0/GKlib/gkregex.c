@@ -19,7 +19,7 @@
    02111-1307 USA.  */
 
 /* this is for removing a compiler warning */
-void gkfooo() { return; }
+void gk_MUMPS_gkfooo() { return; }
 
 #ifdef USE_GKREGEX
 

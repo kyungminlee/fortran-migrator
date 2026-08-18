@@ -283,9 +283,10 @@ _STD_DIRS: list[tuple[str, str, str | None]] = [
     # METIS 5.1.0 nested-dissection / k-way ordering — vendored under
     # extern/metis-5.1.0 with every public API symbol privately
     # namespaced (METIS_<X> → METIS_MUMPS_<X>, internal libmetis__ →
-    # libmetis_MUMPS_) so this copy can never clash with a system
-    # METIS at link time; the MUMPS caller sites were renamed to
-    # match. Staging GKlib + libmetis sources and the public header
+    # libmetis_MUMPS_, and the 25 GKlib names that lack GKlib's own
+    # gk_ prefix → gk_MUMPS_) so this copy can never clash with a
+    # system METIS at link time; the MUMPS caller sites were renamed
+    # to match. Staging GKlib + libmetis sources and the public header
     # lets cmake build ``libmetis`` and define ``-Dmetis`` so
     # ICNTL(7)=5 works; without it the mumps_metis*.c compile as inert
     # stubs. Integer-graph only, so a single 32-bit-idx build serves

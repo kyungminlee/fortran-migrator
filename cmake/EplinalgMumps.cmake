@@ -182,6 +182,9 @@ macro(_eplinalg_mumps_metis)
     # libmetis_MUMPS_) so this private copy can never clash at link time
     # with a system METIS the final application might also pull in; the
     # matching MUMPS caller sites in _mumps_upstream_src were renamed too.
+    # The bundled GKlib prefixes its own exports with gk_; the 25 names
+    # that escaped that convention carry gk_MUMPS_ (GKlib/GKlib.h), so
+    # the archive defines no bare global at all.
     # Building ``libmetis`` here and defining ``-Dmetis`` on the MUMPS C
     # runtime + Fortran analysis routines activates the ICNTL(7)=5
     # ordering; without the define mumps_metis*.c compile as inert stubs
