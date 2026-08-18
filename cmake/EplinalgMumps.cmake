@@ -98,7 +98,18 @@ function(_mumps_ordering_archive target)
     endif()
     set(_moa_props OUTPUT_NAME ${_MOA_OUTPUT_NAME})
     if(_MOA_C99_PIC)
-        list(APPEND _moa_props C_STANDARD 99 POSITION_INDEPENDENT_CODE ON)
+        # C_STANDARD_REQUIRED is pinned here rather than left to the
+        # CMAKE_C_STANDARD_REQUIRED default set in cmake/CMakeLists.txt.
+        # Without it CMake reads C_STANDARD as a floor and emits no -std
+        # flag when the compiler already defaults to something newer — and
+        # GCC 15 defaults to gnu23, under which glibc 2.38+ redirects
+        # scanf/strtol to __isoc23_* symbols absent from older glibc. That
+        # is the same C23 trap patched out of GKlib's io.c, reached through
+        # the compiler default instead of a feature macro; these archives
+        # ship to a glibc 2.28 floor, so the standard is nailed down where
+        # it is chosen instead of depending on a setting three files away.
+        list(APPEND _moa_props C_STANDARD 99 C_STANDARD_REQUIRED ON
+                               POSITION_INDEPENDENT_CODE ON)
     endif()
     set_target_properties(${target} PROPERTIES ${_moa_props})
     if(_MOA_OPTIONS)
@@ -245,6 +256,18 @@ macro(_eplinalg_mumps_metis)
             # `undefined reference to sqrt`. This is the one archive in the
             # stack where the missing declaration is a live failure rather
             # than latent, precisely because it is pure C.
+            #
+            # _FILE_OFFSET_BITS=64 is a no-op on LP64 — off_t is 64-bit
+            # there already — but it is not free: glibc 2.33+ headers
+            # redirect stat() to the stat64 export, which does not exist
+            # before 2.33, so it would pin the archive to a build host at
+            # least that new for nothing. Ask for large-file support only
+            # where it actually buys something, i.e. 32-bit targets.
+            if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+                set(_metis_lfs _FILE_OFFSET_BITS=64)
+            else()
+                set(_metis_lfs "")
+            endif()
             _mumps_ordering_archive(metis C99_PIC LIBM
                 OUTPUT_NAME metis_mumps
                 SOURCES ${_metis_c}
@@ -252,7 +275,7 @@ macro(_eplinalg_mumps_metis)
                                ${_mumps_metis_lib}
                 INSTALL_INCLUDE include/metis_mumps
                 DEFINES IDXTYPEWIDTH=32 REALTYPEWIDTH=32
-                        NDEBUG NDEBUG2 _FILE_OFFSET_BITS=64
+                        NDEBUG NDEBUG2 ${_metis_lfs}
                 NON_MSVC_OPTIONS -w -fno-strict-aliasing)
             if(UNIX AND NOT APPLE)
                 target_compile_definitions(metis PRIVATE LINUX)

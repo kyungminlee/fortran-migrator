@@ -24,7 +24,7 @@
 #
 # Environment:
 #   CC       compiler used to enumerate GKlib's exports and to verify the
-#            result (default: cc). Required — see step 4; the rename it
+#            result (default: cc). Required — see step 5; the rename it
 #            drives is part of producing the tree, not just checking it.
 #   WORKDIR  scratch directory for the upstream clones (default: a mktemp
 #            dir, removed on exit). Point it at a persistent path to
@@ -69,6 +69,16 @@
 #      comments out, are restored to 32 — the width this project builds
 #      and the 5.1.0 behavior. Without them every translation unit that
 #      includes the *installed* metis.h would have to supply -D itself.
+#
+#   6. GKlib's io.c defines _GNU_SOURCE around its <stdio.h> include,
+#      purely to get getline(). Since glibc 2.38 that same macro also
+#      switches on the C23 scanf redirects, so io.c alone in the whole
+#      tree emits a call to __isoc23_sscanf — a symbol that simply does
+#      not exist in older glibc, which makes the archive unlinkable
+#      against them (this project targets a glibc 2.28 floor). getline
+#      is POSIX-2008, so _POSIX_C_SOURCE=200809L declares it without
+#      dragging in the GNU extensions, and sscanf stays __isoc99_sscanf
+#      (glibc 2.7+).
 #
 # Everything else is upstream verbatim; `diff -r` against a pristine
 # checkout with the rename reversed comes back empty.
@@ -156,12 +166,25 @@ cp "$work/GKlib"/src/*.c                  "$dest/GKlib/src/"
 cp "$work/GKlib"/{LICENSE.txt,LICENSES.md,README.md} "$dest/GKlib/"
 cp -r "$work/GKlib/LICENSES"              "$dest/GKlib/"
 
-# ── 3. restore the width self-defaults ──────────────────────────────
+# ── 3. local patches ────────────────────────────────────────────────
+# 3a. restore the width self-defaults
 sed -i -e 's|^//#define IDXTYPEWIDTH 32$|#define IDXTYPEWIDTH 32|' \
        -e 's|^//#define REALTYPEWIDTH 32$|#define REALTYPEWIDTH 32|' \
        "$dest/include/metis.h"
 grep -q '^#define IDXTYPEWIDTH 32$'  "$dest/include/metis.h" || { echo "IDXTYPEWIDTH patch failed" >&2; exit 1; }
 grep -q '^#define REALTYPEWIDTH 32$' "$dest/include/metis.h" || { echo "REALTYPEWIDTH patch failed" >&2; exit 1; }
+
+# 3b. keep glibc's C23 scanf redirects out of io.c. Upstream reaches for
+# _GNU_SOURCE only to declare getline(); since glibc 2.38 that macro also
+# redirects sscanf to __isoc23_sscanf, which does not exist before 2.38
+# and so pins the archive to a build host at least that new. getline is
+# POSIX-2008 — ask for exactly that instead.
+sed -i -e 's|^/\* Get getline to be defined\. \*/$|/* Get getline to be defined. _POSIX_C_SOURCE, not _GNU_SOURCE: the\n   latter also turns on glibc 2.38+ C23 scanf redirects (__isoc23_sscanf),\n   which do not exist in older glibc. See scripts/vendor_metis.sh. */|' \
+       -e 's|^#define _GNU_SOURCE$|#define _POSIX_C_SOURCE 200809L|' \
+       -e 's|^#undef _GNU_SOURCE$|#undef _POSIX_C_SOURCE|' \
+       "$dest/GKlib/src/io.c"
+grep -q '^#define _POSIX_C_SOURCE 200809L$' "$dest/GKlib/src/io.c" || { echo "io.c _GNU_SOURCE patch failed" >&2; exit 1; }
+grep -qE '^#(define|undef) _GNU_SOURCE$' "$dest/GKlib/src/io.c" && { echo "io.c still defines _GNU_SOURCE" >&2; exit 1; }
 
 # ── 4. rename ───────────────────────────────────────────────────────
 # Public API stems, straight out of the header.
